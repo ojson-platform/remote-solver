@@ -1,0 +1,12 @@
+{
+  "extends": "@ojson/infra/tsconfig/base",
+  "include": [
+    "*.ts",
+    "machine/**/*.ts",
+    "adapters/**/*.ts"
+  ],
+  "exclude": [
+    "**/*.spec.ts",
+    "**/*.test.ts"
+  ]
+}

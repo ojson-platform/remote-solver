@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "tool": {
+    "name": "@ojson/infra",
+    "version": "1.0.1"
+  },
+  "applied": [
+    {
+      "id": "0001_add_infra_configs",
+      "appliedAt": "2026-09-22T20:20:39.492Z"
+    }
+  ],
+  "lastRun": {
+    "at": "2026-09-22T20:20:39.492Z",
+    "version": "1.0.1",
+    "command": "migrate"
+  }
+}

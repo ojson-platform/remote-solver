@@ -1,12 +1,25 @@
 {
   "name": "remote-solver",
   "private": true,
+  "version": "0.0.0",
+  "description": "SDLC machine: one issue, one pull request, one change",
   "type": "module",
+  "packageManager": "pnpm@10.30.0",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "test": "tsx --test machine/*.test.ts adapters/*.test.ts"
+    "test": "tsx --test machine/*.test.ts adapters/*.test.ts",
+    "test:types": "tsc --noEmit",
+    "lint": "eslint .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@ai-hero/sandcastle": "latest",
+    "@ai-hero/sandcastle": "0.12.0",
     "tsx": "4.23.15"
+  },
+  "devDependencies": {
+    "@ojson/infra": "^1.0.1",
+    "@types/node": "^26.6.2"
   }
 }

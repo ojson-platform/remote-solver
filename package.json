@@ -1,0 +1,12 @@
+{
+  "name": "remote-solver",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "tsx --test machine/*.test.ts adapters/*.test.ts"
+  },
+  "dependencies": {
+    "@ai-hero/sandcastle": "latest",
+    "tsx": "4.23.15"
+  }
+}

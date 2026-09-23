@@ -1,7 +1,7 @@
-import {closeSync, existsSync, mkdirSync, openSync, readSync, statSync, symlinkSync} from 'node:fs';
+import {existsSync, mkdirSync, symlinkSync} from 'node:fs';
 import path from 'node:path';
 
-import {Output, cursor, run} from '@ai-hero/sandcastle';
+import {Output, cursor, run, type AgentStreamEvent} from '@ai-hero/sandcastle';
 
 import {branchName} from '../machine/naming.ts';
 import type {Runtime, RuntimeAsk, SkillRun} from '../machine/port.ts';
@@ -60,58 +60,31 @@ export function agentLogPath(root: string, branch: string, name: string): string
   return path.join(root, '.sandcastle', 'logs', `${safeBranch}-${suffix}.log`);
 }
 
+export type AgentLogPiece = {text: string; atLineStart: boolean};
+
 /**
- * Copies new bytes from a log file to `write` until `stop`. A missing file is
- * waited on, and `stop` reads whatever landed after the last tick.
+ * Text stays in the open log. A tool call becomes a GitHub Actions group, so
+ * the step shows the model's words and hides the call until it is expanded.
+ * Raw stream JSON is dropped.
  */
-export function followFile(
-  file: string,
-  write: (chunk: string) => void,
-  intervalMs = 200,
-): {stop: () => void} {
-  let offset = 0;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const pull = () => {
-    try {
-      const size = statSync(file).size;
-      if (size < offset) {
-        offset = 0;
-      }
-      if (size <= offset) {
-        return;
-      }
-      const fd = openSync(file, 'r');
-      try {
-        const length = size - offset;
-        const buf = Buffer.alloc(length);
-        const read = readSync(fd, buf, 0, length, offset);
-        offset += read;
-        if (read > 0) {
-          write(buf.subarray(0, read).toString('utf8'));
-        }
-      } finally {
-        closeSync(fd);
-      }
-    } catch {
-      // The file appears when sandcastle opens the run.
-    }
-  };
-  const tick = () => {
-    pull();
-    timer = setTimeout(tick, intervalMs);
-    timer.unref();
-  };
-  timer = setTimeout(tick, intervalMs);
-  timer.unref();
-  return {
-    stop() {
-      if (timer) {
-        clearTimeout(timer);
-        timer = undefined;
-      }
-      pull();
-    },
-  };
+export function renderAgentEvent(event: AgentStreamEvent, atLineStart: boolean): AgentLogPiece {
+  if (event.type === 'raw') {
+    return {text: '', atLineStart};
+  }
+  if (event.type === 'text') {
+    return {
+      text: event.message,
+      atLineStart: event.message.endsWith('\n') ? true : event.message.length === 0 ? atLineStart : false,
+    };
+  }
+  const name = event.name.replace(/[\r\n]/g, ' ').trim() || 'tool';
+  const args = event.formattedArgs.trim();
+  const short = args.length > 0 && args.length <= 100 && !args.includes('\n');
+  const title = short ? `${name} ${args}` : name;
+  const body = short ? '' : args;
+  const lead = atLineStart ? '' : '\n';
+  const inside = body ? `${body}\n` : '';
+  return {text: `${lead}::group::${title}\n${inside}::endgroup::\n`, atLineStart: true};
 }
 
 /** The sandcastle library reads `<service>/.sandcastle/.env`. Point that at this package. */
@@ -135,7 +108,7 @@ export function sandcastleRuntime(config: SandcastleRuntimeConfig): Runtime {
       ensureServiceEnv(config.root, config.solverRoot);
       const logPath = agentLogPath(config.root, request.branch, request.name);
       console.log(`::group::${request.name} agent`);
-      const follow = followFile(logPath, chunk => process.stdout.write(chunk));
+      let atLineStart = true;
       try {
         const result = await run({
           name: request.name,
@@ -145,7 +118,17 @@ export function sandcastleRuntime(config: SandcastleRuntimeConfig): Runtime {
           promptArgs: request.promptArgs,
           output: Output.string({tag: request.outputTag}),
           maxIterations: 1,
-          logging: {type: 'file', path: logPath, verbose: true},
+          logging: {
+            type: 'file',
+            path: logPath,
+            onAgentStreamEvent(event) {
+              const piece = renderAgentEvent(event, atLineStart);
+              atLineStart = piece.atLineStart;
+              if (piece.text) {
+                process.stdout.write(piece.text);
+              }
+            },
+          },
           branchStrategy: {
             type: 'branch',
             branch: request.branch,
@@ -155,7 +138,9 @@ export function sandcastleRuntime(config: SandcastleRuntimeConfig): Runtime {
         });
         return result.output;
       } finally {
-        follow.stop();
+        if (!atLineStart) {
+          process.stdout.write('\n');
+        }
         console.log('::endgroup::');
       }
     },

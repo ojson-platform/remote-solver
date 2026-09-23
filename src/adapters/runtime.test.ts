@@ -4,7 +4,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
-import {agentLogPath, ensureServiceEnv, followFile, linkCommand} from './runtime.ts';
+import {agentLogPath, ensureServiceEnv, linkCommand, renderAgentEvent} from './runtime.ts';
 
 test('the worktree hook links the package into .sandcastle and keeps the service node_modules', () => {
   const parent = mkdtempSync(path.join(tmpdir(), 'sdd-link-'));
@@ -49,14 +49,22 @@ test('the agent log path matches the sandcastle file name', () => {
   );
 });
 
-test('followFile copies the log as it grows and flushes on stop', async () => {
-  const root = mkdtempSync(path.join(tmpdir(), 'agent-log-'));
-  const file = path.join(root, 'review.log');
-  const chunks: string[] = [];
-  const follow = followFile(file, chunk => chunks.push(chunk), 15);
-  writeFileSync(file, 'one\n');
-  await new Promise(resolve => setTimeout(resolve, 40));
-  writeFileSync(file, 'one\ntwo\n');
-  follow.stop();
-  assert.equal(chunks.join(''), 'one\ntwo\n');
+test('agent events keep the model text and fold tool calls', () => {
+  const text = renderAgentEvent({type: 'text', message: 'looks fine', iteration: 1, timestamp: new Date()}, true);
+  const raw = renderAgentEvent(
+    {type: 'raw', line: '{"type":"system"}', iteration: 1, timestamp: new Date()},
+    text.atLineStart,
+  );
+  const tool = renderAgentEvent(
+    {type: 'toolCall', name: 'Read', formattedArgs: 'src/cache.ts', iteration: 1, timestamp: new Date()},
+    raw.atLineStart,
+  );
+  const folded = renderAgentEvent(
+    {type: 'toolCall', name: 'Bash', formattedArgs: 'git diff\n--stat', iteration: 1, timestamp: new Date()},
+    true,
+  );
+  assert.equal(text.text, 'looks fine');
+  assert.equal(raw.text, '');
+  assert.equal(tool.text, '\n::group::Read src/cache.ts\n::endgroup::\n');
+  assert.equal(folded.text, '::group::Bash\ngit diff\n--stat\n::endgroup::\n');
 });

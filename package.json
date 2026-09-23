@@ -9,7 +9,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "tsx --test machine/*.test.ts adapters/*.test.ts",
+    "test": "tsx --test src/machine/*.test.ts src/adapters/*.test.ts",
     "test:types": "tsc --noEmit",
     "lint": "eslint .",
     "format:check": "prettier --check ."

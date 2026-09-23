@@ -5,7 +5,7 @@ import {test} from 'node:test';
 
 import {modelFor, skillMode} from './skill.ts';
 
-const root = path.join(import.meta.dirname, '..', 'skills');
+const root = path.join(import.meta.dirname, '..', '..', 'skills');
 const mechanical = new Set(['sdd-tasks', 'sdd-implement', 'sdd-pr-comments']);
 
 test('every skill declares a mode and the runtime maps it to a model', () => {

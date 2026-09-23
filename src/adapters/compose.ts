@@ -45,7 +45,8 @@ export function machine(root = process.cwd(), options: MachineOptions = {}): Mac
     prBase: 'master',
     ...options.config,
   };
-  const github = options.tracker && options.review ? undefined : githubAdapters({prBase: config.prBase});
+  const github =
+    options.tracker && options.review ? undefined : githubAdapters({prBase: config.prBase, root});
   return {
     root,
     config,

@@ -12,11 +12,6 @@ export type {Judge};
  */
 /** `1` when a ready issue stayed unjudged. Wait, skip, clean, and remarks stay `0`. */
 export async function runReview(box: Machine, judge?: Judge): Promise<number> {
-  const login = box.tracker.login();
-  if (login.endsWith('[bot]')) {
-    console.log('reviewer login is a bot');
-    return 0;
-  }
   const chosen = judge ?? (dossier => sandcastleJudge(box.runtime, dossier));
   const items = reviewQueue(box.tracker.listOpen(), key => box.review.pulls(key));
   if (items.length === 0) {
@@ -29,7 +24,7 @@ export async function runReview(box: Machine, judge?: Judge): Promise<number> {
       console.log(describe(item));
       continue;
     }
-    const result = await passReview({login, review: box.review, vcs: box.vcs, judge: chosen}, item);
+    const result = await passReview({review: box.review, vcs: box.vcs, judge: chosen}, item);
     console.log(describe(item, result));
     if (result.action === 'unjudged') {
       annotate('error', `#${item.issue} unjudged`, result.reason);

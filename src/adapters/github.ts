@@ -1,5 +1,6 @@
 import {execFileSync, spawnSync} from 'node:child_process';
 
+import {authorIgnored, loadIgnoredAuthors} from '../machine/ignore.ts';
 import {pullTitlePrefix} from '../machine/naming.ts';
 import {publishChoice} from '../machine/policy.ts';
 import {markRobot, spokeByRobot} from '../machine/review.ts';
@@ -126,10 +127,13 @@ function asRecord(issue: RawIssue): IssueRecord {
 export type GitHubAdapters = {
   /** Base branch passed to `gh pr create`. */
   prBase?: string;
+  /** Service root that holds `sandcastle.yaml`. */
+  root?: string;
 };
 
 export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker; review: Review} {
   const prBase = options.prBase ?? 'master';
+  const ignored = loadIgnoredAuthors(options.root ?? process.cwd());
   let slug: string | null = null;
   let user: string | null = null;
   const repoSlug = () => {
@@ -268,16 +272,24 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
         data: {
           repository: {
             pullRequest: {
-              reviewThreads: {nodes: {isResolved: boolean; comments: {nodes: {body: string}[]}}[]};
+              reviewThreads: {
+                nodes: {
+                  isResolved: boolean;
+                  comments: {nodes: {author: {login: string} | null; body: string}[]};
+                }[];
+              };
             } | null;
           };
         };
       };
       const nodes = data.data.repository.pullRequest?.reviewThreads.nodes ?? [];
-      return nodes.map(node => ({
-        resolved: node.isResolved,
-        body: node.comments.nodes[0]?.body ?? '',
-      }));
+      return nodes.flatMap(node => {
+        const comment = node.comments.nodes[0];
+        if (authorIgnored(comment?.author?.login ?? '', ignored)) {
+          return [];
+        }
+        return [{resolved: node.isResolved, body: comment?.body ?? ''}];
+      });
     },
     comments(pull) {
       const comments = JSON.parse(
@@ -290,7 +302,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       ) as {login: string; body: string}[];
       return comments.map(comment => ({
         body: comment.body,
-        robot: spokeByRobot(comment.body, comment.login),
+        robot: spokeByRobot(comment.body, comment.login, ignored),
       }));
     },
     ensurePull(key, title, body) {

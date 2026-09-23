@@ -75,12 +75,9 @@ export function applyReview(
  * through the ports it was given.
  */
 export async function passReview(
-  deps: {login: string; review: Review; vcs: Vcs; judge: Judge},
+  deps: {review: Review; vcs: Vcs; judge: Judge},
   item: {issue: string; pull: string},
 ): Promise<ReviewPass> {
-  if (deps.login.endsWith('[bot]')) {
-    return {action: 'wait', reason: 'reviewer login is a bot'};
-  }
   const pulls = deps.review.pulls(item.issue);
   const range = deps.review.range(item.pull);
   const step = reviewStep({

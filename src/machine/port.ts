@@ -30,7 +30,7 @@ export type Pull = {
 /** A review thread after the adapter has decided whether the machine wrote it. */
 export type Thread = {resolved: boolean; body: string};
 
-/** A conversation comment. `robot` is a spy mark or a `[bot]` login. */
+/** A conversation comment. `robot` is a spy mark or an ignored commenter. */
 export type Conversation = {body: string; robot: boolean};
 
 /** One remark. `path` and `line` are set only when they sit on the pull request diff. */

@@ -77,7 +77,6 @@ test('a pull request with pending checks waits, and an open layer does not call 
   });
   const passed = await passReview(
     {
-      login: '3y3',
       review: box.review,
       vcs: box.vcs,
       judge: () => {
@@ -102,7 +101,6 @@ test('a reviewed head merges without the judge', async () => {
   });
   const passed = await passReview(
     {
-      login: '3y3',
       review: box.review,
       vcs: box.vcs,
       judge: () => {
@@ -123,7 +121,7 @@ test('an empty head waits, and does not match a note for some other head', async
     comments: {'15': [{robot: true, body: `🤖 sdd:note reviewed ${head}`}]},
   });
   const passed = await passReview(
-    {login: '3y3', review: box.review, vcs: box.vcs, judge: () => ({kind: 'clean'})},
+    {review: box.review, vcs: box.vcs, judge: () => ({kind: 'clean'})},
     {issue: '11', pull: '15'},
   );
   assert.deepEqual(passed, {action: 'wait', reason: 'head does not resolve'});
@@ -135,7 +133,6 @@ test('a pull request with no base waits before the diff', async () => {
   const box = surface({...green, ranges: {'15': {head, base: null}}});
   const passed = await passReview(
     {
-      login: '3y3',
       review: box.review,
       vcs: box.vcs,
       judge: () => {
@@ -154,7 +151,6 @@ test('a missing git range waits and does not call the judge', async () => {
   const box = surface(green, tree({'openspec/changes/archive/issue-11/proposal.md': 'why'}), null);
   const passed = await passReview(
     {
-      login: '3y3',
       review: box.review,
       vcs: box.vcs,
       judge: () => {
@@ -250,7 +246,7 @@ test('a clean verdict notes the head and merges, and remarks stay one person com
   const span = {commits: 'abc change', diff: 'diff --git a/a'};
   const clean = surface(green, source, span);
   const cleaned = await passReview(
-    {login: '3y3', review: clean.review, vcs: clean.vcs, judge: () => ({kind: 'clean'})},
+    {review: clean.review, vcs: clean.vcs, judge: () => ({kind: 'clean'})},
     {issue: '11', pull: '15'},
   );
   assert.deepEqual(cleaned, {action: 'clean'});
@@ -261,7 +257,6 @@ test('a clean verdict notes the head and merges, and remarks stay one person com
   const remarks = surface(green, source, span);
   const remarked = await passReview(
     {
-      login: '3y3',
       review: remarks.review,
       vcs: remarks.vcs,
       judge: () => ({kind: 'remarks', items: [{body: 'Scenario TTL is missing'}]}),
@@ -273,23 +268,4 @@ test('a clean verdict notes the head and merges, and remarks stay one person com
   assert.ok(remarks.calls.includes('body:Scenario TTL is missing'));
   assert.equal(remarks.calls.includes('say'), false);
   assert.equal(remarks.calls.includes('merge:15'), false);
-});
-
-test('a bot login waits and does not merge', async () => {
-  const box = surface(green, tree({'openspec/changes/archive/issue-11/proposal.md': 'why'}), {
-    commits: 'abc',
-    diff: 'diff',
-  });
-  const passed = await passReview(
-    {
-      login: 'github-actions[bot]',
-      review: box.review,
-      vcs: box.vcs,
-      judge: () => ({kind: 'clean'}),
-    },
-    {issue: '11', pull: '15'},
-  );
-  assert.deepEqual(passed, {action: 'wait', reason: 'reviewer login is a bot'});
-  assert.equal(box.calls.includes('merge:15'), false);
-  assert.equal(box.calls.includes('say'), false);
 });

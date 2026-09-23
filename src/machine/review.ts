@@ -1,3 +1,4 @@
+import {authorIgnored} from './ignore.ts';
 import {phaseRank, type Phase} from './phase.ts';
 import type {Conversation, Thread} from './port.ts';
 
@@ -7,8 +8,9 @@ export function markRobot(body: string): string {
   return body.startsWith('🤖') ? body : `${ROBOT_MARK}${body}`;
 }
 
-export function spokeByRobot(body: string, login: string): boolean {
-  return body.startsWith('🤖') || login.endsWith('[bot]');
+/** The spy mark, or a commenter named in `sandcastle.yaml`. A `[bot]` login is a person. */
+export function spokeByRobot(body: string, login: string, ignored: readonly RegExp[]): boolean {
+  return body.startsWith('🤖') || authorIgnored(login, ignored);
 }
 
 function conversationLayer(comments: Conversation[]): string | null {

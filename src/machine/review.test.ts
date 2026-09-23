@@ -35,10 +35,12 @@ test('a conversation from someone else is unanswered, and the machine login is n
   assert.equal(noted.unanswered, false);
 });
 
-test('the spy mark and a bot login are the robot, the shared login is not', () => {
-  assert.equal(spokeByRobot('Нужно поребейзить ПР', '3y3'), false);
-  assert.equal(spokeByRobot('🤖 sdd:layer=code → implementing', '3y3'), true);
-  assert.equal(spokeByRobot('Quality Gate passed', 'sonarqubecloud[bot]'), true);
+test('the spy mark and an ignored commenter are the robot, a bot login is not', () => {
+  const sonar = [/sonarqubecloud/i];
+  assert.equal(spokeByRobot('Нужно поребейзить ПР', '3y3', sonar), false);
+  assert.equal(spokeByRobot('🤖 sdd:layer=code → implementing', '3y3', sonar), true);
+  assert.equal(spokeByRobot('Quality Gate passed', 'sonarqubecloud[bot]', sonar), true);
+  assert.equal(spokeByRobot('please rename the cache', 'reviewer[bot]', sonar), false);
   assert.equal(markRobot('sdd:layer=code → implementing'), '🤖 sdd:layer=code → implementing');
   assert.equal(markRobot('🤖 sdd:note fyi'), '🤖 sdd:note fyi');
 });

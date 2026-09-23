@@ -3,6 +3,7 @@ import {execFileSync, spawnSync} from 'node:child_process';
 import {pullTitlePrefix} from '../machine/naming.ts';
 import {publishChoice} from '../machine/policy.ts';
 import {markRobot, spokeByRobot} from '../machine/review.ts';
+import type {ReviewNote} from '../machine/port.ts';
 import type {
   CheckState,
   Conversation,
@@ -32,8 +33,40 @@ export function repo(): Repo {
   return {owner: match[1], name: match[2], slug: `${match[1]}/${match[2]}`};
 }
 
-export function gh(args: string[]): string {
-  return execFileSync('gh', args, {encoding: 'utf8'});
+export type ReviewComment = {
+  path: string;
+  body: string;
+  line?: number;
+  side?: 'RIGHT';
+  subject_type?: 'file';
+};
+
+/** The body GitHub publishes as one review. Inline notes are threads; the rest is the review summary. */
+export function changesPayload(head: string, notes: ReviewNote[]): {
+  commit_id: string;
+  event: 'REQUEST_CHANGES';
+  body: string;
+  comments: ReviewComment[];
+} {
+  const comments: ReviewComment[] = [];
+  const loose: string[] = [];
+  for (const note of notes) {
+    if (!note.path) {
+      loose.push(note.body);
+      continue;
+    }
+    if (note.line) {
+      comments.push({path: note.path, body: note.body, line: note.line, side: 'RIGHT'});
+      continue;
+    }
+    comments.push({path: note.path, body: note.body, subject_type: 'file'});
+  }
+  const body = comments.length === 0 ? loose.join('\n\n') : '';
+  return {commit_id: head, event: 'REQUEST_CHANGES', body, comments};
+}
+
+export function gh(args: string[], input?: string): string {
+  return execFileSync('gh', args, {encoding: 'utf8', input});
 }
 
 /** GitHub check vocabulary stays in this adapter. The machine sees CheckState. */
@@ -321,6 +354,37 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
     speak(pull, body) {
       gh(['issue', 'comment', pull, '--repo', repoSlug(), '--body', body]);
     },
+    flag(pull, head, notes) {
+      const payload = changesPayload(head, notes);
+      const post = () =>
+        gh(
+          ['api', '--method', 'POST', '--input', '-', `repos/${repoSlug()}/pulls/${pull}/reviews`],
+          JSON.stringify(payload),
+        );
+      try {
+        post();
+      } catch {
+        const text = notes.map(note => note.body).join('\n\n');
+        try {
+          gh(
+            ['api', '--method', 'POST', '--input', '-', `repos/${repoSlug()}/pulls/${pull}/reviews`],
+            JSON.stringify(changesPayload(head, notes.map(note => ({body: note.body})))),
+          );
+        } catch {
+          this.speak(pull, text);
+          return;
+        }
+        this.speak(pull, text);
+        return;
+      }
+      if (payload.comments.length === 0 && payload.body) {
+        this.speak(pull, payload.body);
+      }
+      const loose = notes.filter(note => !note.path).map(note => note.body).join('\n\n');
+      if (payload.comments.length > 0 && loose) {
+        this.speak(pull, loose);
+      }
+    },
     range(pull) {
       const view = JSON.parse(gh(['pr', 'view', pull, '--repo', repoSlug(), '--json', 'headRefOid,baseRefOid'])) as {
         headRefOid?: string;
@@ -489,6 +553,23 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
     speak(_pull, body) {
       calls.push('speak');
       calls.push(`body:${body}`);
+    },
+    flag(_pull, head, notes) {
+      calls.push('flag');
+      calls.push(`head:${head}`);
+      const loose: string[] = [];
+      for (const note of notes) {
+        if (note.path) {
+          calls.push(`at:${note.path}:${note.line ?? ''}:${note.body}`);
+          continue;
+        }
+        loose.push(note.body);
+        calls.push(`loose:${note.body}`);
+      }
+      if (loose.length > 0) {
+        calls.push('speak');
+        calls.push(`body:${loose.join('\n\n')}`);
+      }
     },
     range(pull) {
       calls.push('range');

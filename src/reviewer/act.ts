@@ -1,7 +1,8 @@
 import {reviewOf} from '../machine/review.ts';
 import type {CheckState, Conversation, Review, Thread, Vcs} from '../machine/port.ts';
+import {placeOnDiff} from './place.ts';
 import {assembleDossier, type Dossier} from './dossier.ts';
-import type {Verdict} from './verdict.ts';
+import type {Remark, Verdict} from './verdict.ts';
 
 export type Judge = (dossier: Dossier) => Promise<Verdict> | Verdict;
 
@@ -9,7 +10,7 @@ export type ReviewPass =
   | {action: 'wait'; reason: string}
   | {action: 'unjudged'; reason: string}
   | {action: 'clean'}
-  | {action: 'remarks'; items: string[]};
+  | {action: 'remarks'; items: Remark[]};
 
 export function reviewedNote(head: string): string {
   return `sdd:note reviewed ${head}`;
@@ -42,16 +43,18 @@ export function reviewStep(input: {
 }
 
 /** Remarks that are posted. Blank lines are dropped. */
-export function spokenRemarks(items: string[]): string[] {
-  return items.map(remark => remark.trim()).filter(remark => remark.length > 0);
+export function spokenRemarks(items: Remark[]): Remark[] {
+  return items
+    .map(item => ({...item, body: item.body.trim()}))
+    .filter(item => item.body.length > 0);
 }
 
-/** `unjudged` posts nothing. A clean verdict notes the head, then merges. Remarks are one person comment. */
+/** `unjudged` posts nothing. A clean verdict notes the head, then merges. Remarks are one review. */
 export function applyReview(
   verdict: Verdict,
   pull: string,
   head: string,
-  review: Pick<Review, 'say' | 'speak' | 'merge'>,
+  review: Pick<Review, 'say' | 'flag' | 'merge'>,
 ): void {
   if (verdict.kind === 'unjudged') {
     return;
@@ -61,9 +64,9 @@ export function applyReview(
     review.merge(pull);
     return;
   }
-  const body = spokenRemarks(verdict.items).join('\n\n');
-  if (body) {
-    review.speak(pull, body);
+  const notes = spokenRemarks(verdict.items);
+  if (notes.length > 0) {
+    review.flag(pull, head, notes);
   }
 }
 
@@ -110,12 +113,16 @@ export async function passReview(
     return {action: 'wait', reason: built.reason};
   }
   const verdict = await deps.judge(built.dossier);
-  applyReview(verdict, item.pull, range.head, deps.review);
-  if (verdict.kind === 'remarks') {
-    return {action: 'remarks', items: spokenRemarks(verdict.items)};
+  const placed =
+    verdict.kind === 'remarks'
+      ? {kind: 'remarks' as const, items: verdict.items.map(item => placeOnDiff(span?.diff ?? '', item))}
+      : verdict;
+  applyReview(placed, item.pull, range.head, deps.review);
+  if (placed.kind === 'remarks') {
+    return {action: 'remarks', items: spokenRemarks(placed.items)};
   }
-  if (verdict.kind === 'clean') {
+  if (placed.kind === 'clean') {
     return {action: 'clean'};
   }
-  return {action: 'unjudged', reason: verdict.reason};
+  return {action: 'unjudged', reason: placed.reason};
 }

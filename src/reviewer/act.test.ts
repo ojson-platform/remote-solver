@@ -48,7 +48,15 @@ test('an empty model answer is unjudged, and a forbidden remark is dropped', () 
   assert.deepEqual(parseVerdict('clean'), {kind: 'clean'});
   assert.deepEqual(parseVerdict('remark: sdd:layer=code\nremark: Scenario TTL is missing'), {
     kind: 'remarks',
-    items: ['Scenario TTL is missing'],
+    items: [{body: 'Scenario TTL is missing'}],
+  });
+  assert.deepEqual(parseVerdict('remark: @src/cache.ts:12 disableCache repeats update'), {
+    kind: 'remarks',
+    items: [{body: 'disableCache repeats update', path: 'src/cache.ts', line: 12}],
+  });
+  assert.deepEqual(parseVerdict('remark: @CONTRIBUTING.md Commit Guidelines'), {
+    kind: 'remarks',
+    items: [{body: 'Commit Guidelines', path: 'CONTRIBUTING.md'}],
   });
 });
 
@@ -214,12 +222,16 @@ test('unjudged posts nothing, clean notes then merges, remarks speak once', () =
 
   const remarks = memoryPorts();
   applyReview(
-    {kind: 'remarks', items: ['  ', 'Scenario TTL is missing', 'The diff skips the requirement']},
+    {kind: 'remarks', items: [{body: '  '}, {body: 'Scenario TTL is missing'}, {body: 'The diff skips the requirement'}]},
     '15',
     head,
     remarks.review,
   );
   assert.deepEqual(remarks.calls, [
+    'flag',
+    `head:${head}`,
+    'loose:Scenario TTL is missing',
+    'loose:The diff skips the requirement',
     'speak',
     'body:Scenario TTL is missing\n\nThe diff skips the requirement',
   ]);
@@ -252,11 +264,11 @@ test('a clean verdict notes the head and merges, and remarks stay one person com
       login: '3y3',
       review: remarks.review,
       vcs: remarks.vcs,
-      judge: () => ({kind: 'remarks', items: ['Scenario TTL is missing']}),
+      judge: () => ({kind: 'remarks', items: [{body: 'Scenario TTL is missing'}]}),
     },
     {issue: '11', pull: '15'},
   );
-  assert.deepEqual(remarked, {action: 'remarks', items: ['Scenario TTL is missing']});
+  assert.deepEqual(remarked, {action: 'remarks', items: [{body: 'Scenario TTL is missing'}]});
   assert.ok(remarks.calls.includes('speak'));
   assert.ok(remarks.calls.includes('body:Scenario TTL is missing'));
   assert.equal(remarks.calls.includes('say'), false);

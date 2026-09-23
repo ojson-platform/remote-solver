@@ -37,7 +37,7 @@ export async function runReview(box: Machine, judge?: Judge): Promise<number> {
     }
     if (result.action === 'remarks') {
       for (const remark of result.items) {
-        annotate('error', `#${item.issue} remark`, remark);
+        annotate('error', `#${item.issue} remark`, remark.body);
       }
     }
     if (result.action === 'wait') {

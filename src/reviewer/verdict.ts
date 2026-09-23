@@ -1,4 +1,8 @@
-export type Verdict = {kind: 'unjudged'; reason: string} | {kind: 'clean'} | {kind: 'remarks'; items: string[]};
+import type {ReviewNote} from '../machine/port.ts';
+
+export type Remark = ReviewNote;
+
+export type Verdict = {kind: 'unjudged'; reason: string} | {kind: 'clean'} | {kind: 'remarks'; items: Remark[]};
 
 const FORBIDDEN = ['sdd:layer=', 'sdd:note', 'sdd:fixed', 'sdd:begin', '🤖'];
 
@@ -19,8 +23,8 @@ export function parseVerdict(text: string): Verdict {
   }
   const items = lines
     .filter(line => line.startsWith('remark:'))
-    .map(line => line.slice('remark:'.length).trim())
-    .filter(body => body.length > 0 && !FORBIDDEN.some(token => body.includes(token)))
+    .map(line => parseRemark(line.slice('remark:'.length).trim()))
+    .filter(item => item.body.length > 0 && !FORBIDDEN.some(token => item.body.includes(token)))
     .slice(0, 5);
   if (items.length === 0) {
     const sample = excerpt(text);
@@ -30,4 +34,14 @@ export function parseVerdict(text: string): Verdict {
     };
   }
   return {kind: 'remarks', items};
+}
+
+/** `@file:line text`, `@file text`, or plain text. The line is the right side of the diff. */
+export function parseRemark(text: string): Remark {
+  const placed = text.match(/^@(\S+?)(?::(\d+))?\s+(\S[\s\S]*)$/);
+  if (!placed) {
+    return {body: text};
+  }
+  const line = placed[2] ? Number(placed[2]) : undefined;
+  return {body: placed[3], path: placed[1], ...(line ? {line} : {})};
 }

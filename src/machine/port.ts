@@ -1,10 +1,10 @@
-import type {SkillMode} from './skill.ts';
-
 /**
  * Ports the machine needs. Adapters live elsewhere: GitHub issues, GitHub pull
  * requests, git, sandcastle — and, later, Tracker, Arcanum, arc, another runtime.
  * Marker grammar stays above these seams.
  */
+
+import type {SkillMode} from './skill.ts';
 
 export type IssueKey = string;
 
@@ -33,6 +33,9 @@ export type Thread = {resolved: boolean; body: string};
 /** A conversation comment. `robot` is a spy mark or a `[bot]` login. */
 export type Conversation = {body: string; robot: boolean};
 
+/** One remark. `path` and `line` are set only when they sit on the pull request diff. */
+export type ReviewNote = {body: string; path?: string; line?: number};
+
 export type Tracker = {
   login(): string;
   listOpen(): IssueRecord[];
@@ -57,6 +60,11 @@ export type Review = {
   say(pull: string, body: string): void;
   /** Issue comment on the pull request. The body is posted unchanged. */
   speak(pull: string, body: string): void;
+  /**
+   * One published review that requests changes. A note with a file becomes a
+   * thread on that file or line. Notes without a file stay in the review body.
+   */
+  flag(pull: string, head: string, notes: ReviewNote[]): void;
   /** Head and base commits of an open pull request. */
   range(pull: string): {head: string; base: string | null};
   resolveThread(thread: string): void;

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import {classifyChecks, linkedTitle, linksFrom, memoryPorts, type CheckRollup} from './github.ts';
+import {changesPayload, classifyChecks, linkedTitle, linksFrom, memoryPorts, type CheckRollup} from './github.ts';
 import {setPhase} from '../machine/labels.ts';
 import {loadCycle} from '../machine/snapshot.ts';
 import type {FileSource} from '../machine/port.ts';
@@ -11,6 +11,26 @@ function rollup(over: Partial<CheckRollup> = {}): CheckRollup {
 }
 
 const files: FileSource = {exists: () => false, read: () => '', list: () => []};
+
+test('a review requests changes on a line, a file, or the review body', () => {
+  assert.deepEqual(
+    changesPayload('abc', [
+      {body: 'on the line', path: 'src/cache.ts', line: 13},
+      {body: 'on the file', path: 'CONTRIBUTING.md'},
+      {body: 'commit message'},
+    ]),
+    {
+      commit_id: 'abc',
+      event: 'REQUEST_CHANGES',
+      body: '',
+      comments: [
+        {path: 'src/cache.ts', body: 'on the line', line: 13, side: 'RIGHT'},
+        {path: 'CONTRIBUTING.md', body: 'on the file', subject_type: 'file'},
+      ],
+    },
+  );
+  assert.equal(changesPayload('abc', [{body: 'commit message'}]).body, 'commit message');
+});
 
 test('a merged pull request is green', () => {
   assert.equal(classifyChecks(rollup({state: 'MERGED'})), 'green');

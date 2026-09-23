@@ -1,6 +1,31 @@
 import {phaseRank, type Phase} from './phase.ts';
 import type {Conversation, Thread} from './port.ts';
 
+export const ROBOT_MARK = '🤖 ';
+
+export function markRobot(body: string): string {
+  return body.startsWith('🤖') ? body : `${ROBOT_MARK}${body}`;
+}
+
+export function spokeByRobot(body: string, login: string): boolean {
+  return body.startsWith('🤖') || login.endsWith('[bot]');
+}
+
+function conversationLayer(comments: Conversation[]): string | null {
+  let layer: string | null = null;
+  for (const comment of comments) {
+    if (comment.body.includes('sdd:fixed')) {
+      layer = null;
+      continue;
+    }
+    const found = comment.body.match(/sdd:layer=([a-z]+)/)?.[1];
+    if (found) {
+      layer = found;
+    }
+  }
+  return layer;
+}
+
 const LAYER_PHASE: Record<string, Phase> = {
   proposal: 'proposing',
   spec: 'specifying',
@@ -39,6 +64,10 @@ export function reviewOf(threads: Thread[], comments: Conversation[]): ReviewVie
       continue;
     }
     layers.push(layer);
+  }
+  const fromConversation = conversationLayer(comments);
+  if (fromConversation) {
+    layers.push(fromConversation);
   }
   const last = comments.at(-1);
   if (

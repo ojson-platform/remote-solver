@@ -21,6 +21,21 @@ export type Decision =
   | {kind: 'advance'; issue: string; to: Phase; reason: string}
   | {kind: 'merge'; issue: string; pull: string; reason: string};
 
+/** Several open pull requests stop the cycle until a person leaves one. */
+export function severalOpenReason(ids: string[]): string {
+  return `cycle stopped until one open PR remains: ${ids.join(', ')}`;
+}
+
+/** One open pull request is reused. None means create. Several is the stop above. */
+export function publishChoice(
+  openIds: string[],
+): {ok: true; id: string | null} | {ok: false; reason: string} {
+  if (openIds.length > 1) {
+    return {ok: false, reason: severalOpenReason(openIds)};
+  }
+  return {ok: true, id: openIds[0] ?? null};
+}
+
 export type PullSnapshot = {
   id: string;
   title: string;
@@ -96,7 +111,14 @@ function atLeast(issue: IssueRecord, phase: Phase): boolean {
   return phaseRank(current) >= phaseRank(phase);
 }
 
-function agent(issue: string, action: string, skill: string, phase: Phase, pr: string, reason: string): Decision {
+function agent(
+  issue: string,
+  action: string,
+  skill: string,
+  phase: Phase,
+  pr: string,
+  reason: string,
+): Decision {
   return {kind: 'agent', issue, action, skill, phase, pr, reason};
 }
 
@@ -114,7 +136,11 @@ function mergeOrWait(
     return {kind: 'wait', issue: issueKey, reason: 'accepted needs a merged pull request'};
   }
   if (pr.checks !== 'green' || pr.reviewCheck !== 'green') {
-    return {kind: 'wait', issue: issueKey, reason: `wait for green checks before merge of PR #${pr.id}`};
+    return {
+      kind: 'wait',
+      issue: issueKey,
+      reason: `wait for green checks before merge of PR #${pr.id}`,
+    };
   }
   if (!autoMerge) {
     return {kind: 'wait', issue: issueKey, reason: `wait for merge of PR #${pr.id}`};
@@ -143,7 +169,7 @@ export function decide(
       return {
         kind: 'wait',
         issue: issue.key,
-        reason: `several open PRs: ${acceptedOpen.map(item => item.id).join(', ')}`,
+        reason: severalOpenReason(acceptedOpen.map(item => item.id)),
       };
     }
     const acceptedPr = acceptedMerged[0] ?? acceptedOpen[0];
@@ -180,7 +206,7 @@ export function decide(
     return {
       kind: 'wait',
       issue: issue.key,
-      reason: `several open PRs: ${open.map(pr => pr.id).join(', ')}`,
+      reason: severalOpenReason(open.map(pr => pr.id)),
     };
   }
   const pr = open[0];
@@ -202,7 +228,7 @@ export function decide(
     return {
       kind: 'wait',
       issue: issue.key,
-      reason: `sdd:wait-human is set on ${phase}. Review, then npx tsx .sandcastle/sdd.ts unwait ${issue.key}`,
+      reason: `sdd:wait-human is set on ${phase}. Review, then remote-solver unwait ${issue.key}`,
     };
   }
 
@@ -271,7 +297,7 @@ export function decide(
     return {
       kind: 'wait',
       issue: issue.key,
-      reason: 'wait for proposal review (npx tsx .sandcastle/accept.ts <issue>)',
+      reason: 'wait for proposal review (remote-solver accept <issue>)',
     };
   }
 
@@ -296,7 +322,9 @@ export function decide(
         'sdd-specify',
         phase,
         pr ? String(pr.id) : '',
-        change.delta ? 'publish the delta spec to the pull request' : 'write the delta spec and publish it',
+        change.delta
+          ? 'publish the delta spec to the pull request'
+          : 'write the delta spec and publish it',
       );
     }
     if (auto('sdd:auto-spec')) {
@@ -305,7 +333,7 @@ export function decide(
     return {
       kind: 'wait',
       issue: issue.key,
-      reason: 'wait for spec review (npx tsx .sandcastle/accept.ts <issue>)',
+      reason: 'wait for spec review (remote-solver accept <issue>)',
     };
   }
 
@@ -336,7 +364,7 @@ export function decide(
     return {
       kind: 'wait',
       issue: issue.key,
-      reason: 'wait for design review (npx tsx .sandcastle/accept.ts <issue>)',
+      reason: 'wait for design review (remote-solver accept <issue>)',
     };
   }
 
@@ -413,7 +441,14 @@ export function decide(
           reason: 'review thread sent the change back',
         };
       }
-      return agent(issue.key, 'classify-failures', 'sdd-verify', phase, String(pr.id), 'red checks');
+      return agent(
+        issue.key,
+        'classify-failures',
+        'sdd-verify',
+        phase,
+        String(pr.id),
+        'red checks',
+      );
     }
     if (pr.checks !== 'green') {
       return {kind: 'wait', issue: issue.key, reason: `checks are ${pr.checks}`};
@@ -422,7 +457,10 @@ export function decide(
       return {
         kind: 'wait',
         issue: issue.key,
-        reason: pr.reviewCheck === 'none' ? 'wait for cursor-review' : `cursor-review is ${pr.reviewCheck}`,
+        reason:
+          pr.reviewCheck === 'none'
+            ? 'wait for cursor-review'
+            : `cursor-review is ${pr.reviewCheck}`,
       };
     }
     if (back) {
@@ -475,7 +513,8 @@ export function accept(issue: IssueRecord, change: ChangeView): Decision {
     };
   }
   const gate = writingGate(phase, change);
-  const required = phase === 'proposing' ? 'proposal.md' : phase === 'specifying' ? 'specs' : 'design.md';
+  const required =
+    phase === 'proposing' ? 'proposal.md' : phase === 'specifying' ? 'specs' : 'design.md';
   if (!gate.artifact) {
     return {
       kind: 'wait',
@@ -517,7 +556,11 @@ export function settle(
     transitions.push(decision);
     // Closing the issue is not a label change the next decide can see.
     if (decision.to === 'accepted') {
-      return {decision: {kind: 'done', issue: issue.key, reason: decision.reason}, transitions, labels};
+      return {
+        decision: {kind: 'done', issue: issue.key, reason: decision.reason},
+        transitions,
+        labels,
+      };
     }
   }
   return {

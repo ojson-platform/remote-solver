@@ -42,8 +42,9 @@ Do not open other changes, other skills, `machine/flow.ts`, ADRs, or a directory
 ## fix-implementation
 
 1. Threads marked `sdd:layer=code`, from a reviewer or from `sdd-verify`. A remark about behavior: stop.
-2. Read only the files those threads cite and the task file for that code. A separate commit with no new open checkbox, then Publish. A coverage gap: add the test and a closed `- [x]` line in `tasks.md` in that same commit.
-3. In each thread, reply `sdd:fixed <commit>` and resolve it.
+2. A conversation comment with an open `sdd:layer=code` is the same work. A request to rebase or to resolve a merge conflict: rebase `sdd/<issue>` onto the pull request base, edit only files git marks conflicted, Publish. Then `npx remote-solver thread say <pull> 'sdd:fixed <commit>'`. There is no thread to resolve. A remark about behavior: stop.
+3. Read only the files those threads cite and the task file for that code. A separate commit with no new open checkbox, then Publish. A coverage gap: add the test and a closed `- [x]` line in `tasks.md` in that same commit.
+4. In each thread, reply `sdd:fixed <commit>` and resolve it.
 
 ## Check
 

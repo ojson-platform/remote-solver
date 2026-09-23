@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import {reviewOf} from './review.ts';
+import {markRobot, reviewOf, spokeByRobot} from './review.ts';
 
 test('a note is skipped, an unlabeled thread is unanswered, and the earliest marker wins', () => {
   const review = reviewOf(
@@ -33,4 +33,37 @@ test('a conversation from someone else is unanswered, and the machine login is n
   assert.equal(mine.unanswered, false);
   const noted = reviewOf([], [{robot: false, body: 'sdd:note fyi'}]);
   assert.equal(noted.unanswered, false);
+});
+
+test('the spy mark and a bot login are the robot, the shared login is not', () => {
+  assert.equal(spokeByRobot('Нужно поребейзить ПР', '3y3'), false);
+  assert.equal(spokeByRobot('🤖 sdd:layer=code → implementing', '3y3'), true);
+  assert.equal(spokeByRobot('Quality Gate passed', 'sonarqubecloud[bot]'), true);
+  assert.equal(markRobot('sdd:layer=code → implementing'), '🤖 sdd:layer=code → implementing');
+  assert.equal(markRobot('🤖 sdd:note fyi'), '🤖 sdd:note fyi');
+});
+
+test('a conversation layer stays open until a later sdd:fixed', () => {
+  const open = reviewOf(
+    [],
+    [
+      {robot: false, body: 'Нужно поребейзить ПР'},
+      {robot: true, body: '🤖 sdd:layer=code → implementing'},
+    ],
+  );
+  assert.equal(open.unanswered, false);
+  assert.equal(open.rollback, 'implementing');
+  assert.deepEqual(open.layers, ['code']);
+
+  const closed = reviewOf(
+    [],
+    [
+      {robot: false, body: 'Нужно поребейзить ПР'},
+      {robot: true, body: '🤖 sdd:layer=code → implementing'},
+      {robot: true, body: '🤖 sdd:fixed abc'},
+    ],
+  );
+  assert.equal(closed.unanswered, false);
+  assert.equal(closed.rollback, null);
+  assert.deepEqual(closed.layers, []);
 });

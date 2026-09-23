@@ -2,7 +2,15 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import type {ChangeView} from './change.ts';
-import {accept, decide, settle, writingGate, type PullSnapshot} from './policy.ts';
+import {
+  accept,
+  decide,
+  publishChoice,
+  settle,
+  severalOpenReason,
+  writingGate,
+  type PullSnapshot,
+} from './policy.ts';
 import type {IssueRecord} from './port.ts';
 import {emptyReview} from './review.ts';
 
@@ -21,8 +29,20 @@ function change(over: Partial<ChangeView> = {}): ChangeView {
   };
 }
 
-function issue(key: number | string, labels: string[], extra: Partial<IssueRecord> = {}): IssueRecord {
-  return {key: String(key), title: `#${key}: title`, body: '', state: 'OPEN', labels, dependsOn: [], ...extra};
+function issue(
+  key: number | string,
+  labels: string[],
+  extra: Partial<IssueRecord> = {},
+): IssueRecord {
+  return {
+    key: String(key),
+    title: `#${key}: title`,
+    body: '',
+    state: 'OPEN',
+    labels,
+    dependsOn: [],
+    ...extra,
+  };
 }
 
 function pull(id: number | string, over: Partial<PullSnapshot> = {}): PullSnapshot {
@@ -41,7 +61,12 @@ const ready = change({proposal: true, delta: true, design: true, tasks: true});
 
 test('a cycle with no phase enters proposing', () => {
   const decision = decide(issue(1, ['Sandcastle', 'sdd:cycle']), [], [], change());
-  assert.deepEqual(decision, {kind: 'advance', issue: '1', to: 'proposing', reason: 'enter the cycle'});
+  assert.deepEqual(decision, {
+    kind: 'advance',
+    issue: '1',
+    to: 'proposing',
+    reason: 'enter the cycle',
+  });
 });
 
 test('cancelled is done', () => {
@@ -79,7 +104,12 @@ test('auto-plan advances once the proposal has no open questions', () => {
     [pull(9)],
     change({proposal: true}),
   );
-  assert.deepEqual(decision, {kind: 'advance', issue: '1', to: 'specifying', reason: 'sdd:auto-plan'});
+  assert.deepEqual(decision, {
+    kind: 'advance',
+    issue: '1',
+    to: 'specifying',
+    reason: 'sdd:auto-plan',
+  });
 });
 
 test('wait-human holds unless the auto gate artifact is already ready', () => {
@@ -96,7 +126,12 @@ test('wait-human holds unless the auto gate artifact is already ready', () => {
     [pull(9)],
     change({proposal: true, delta: true}),
   );
-  assert.deepEqual(released, {kind: 'advance', issue: '1', to: 'designing', reason: 'sdd:auto-spec'});
+  assert.deepEqual(released, {
+    kind: 'advance',
+    issue: '1',
+    to: 'designing',
+    reason: 'sdd:auto-spec',
+  });
 });
 
 test('an unlabeled thread is classified before the phase moves', () => {
@@ -182,7 +217,12 @@ test('verifying classifies red checks, and follows a marker once one exists', ()
   const back = decide(
     issue(1, ['sdd:verifying']),
     [],
-    [pull(9, {checks: 'red', review: {unanswered: false, rollback: 'implementing', layers: ['code']}})],
+    [
+      pull(9, {
+        checks: 'red',
+        review: {unanswered: false, rollback: 'implementing', layers: ['code']},
+      }),
+    ],
     ready,
   );
   assert.deepEqual(back, {
@@ -207,14 +247,25 @@ test('verifying waits for cursor-review, then accepts a clean pull request', () 
     [pull(9, {checks: 'green', reviewCheck: 'green'})],
     ready,
   );
-  assert.deepEqual(accepted, {kind: 'advance', issue: '1', to: 'accepting', reason: 'checks are green'});
+  assert.deepEqual(accepted, {
+    kind: 'advance',
+    issue: '1',
+    to: 'accepting',
+    reason: 'checks are green',
+  });
 });
 
 test('a green cursor-review with a marker rolls back', () => {
   const decision = decide(
     issue(1, ['sdd:verifying']),
     [],
-    [pull(9, {checks: 'green', reviewCheck: 'green', review: {unanswered: false, rollback: 'designing', layers: ['design']}})],
+    [
+      pull(9, {
+        checks: 'green',
+        reviewCheck: 'green',
+        review: {unanswered: false, rollback: 'designing', layers: ['design']},
+      }),
+    ],
     ready,
   );
   assert.deepEqual(decision, {
@@ -225,26 +276,67 @@ test('a green cursor-review with a marker rolls back', () => {
   });
 });
 
-test('several open pull requests wait', () => {
-  const decision = decide(issue(1, ['sdd:proposing']), [], [pull(3), pull(4)], change({proposal: true}));
+test('several open pull requests stop the cycle until one remains', () => {
+  const decision = decide(
+    issue(1, ['sdd:proposing']),
+    [],
+    [pull(3), pull(4)],
+    change({proposal: true}),
+  );
   assert.equal(decision.kind, 'wait');
   if (decision.kind === 'wait') {
-    assert.match(decision.reason, /3, 4/);
+    assert.equal(decision.reason, severalOpenReason(['3', '4']));
   }
+  const accepted = decide(
+    issue(1, ['sdd:accepted']),
+    [],
+    [pull(3), pull(4)],
+    change({archived: true}),
+  );
+  assert.equal(accepted.reason, severalOpenReason(['3', '4']));
+});
+
+test('publish reuses one open pull request and refuses several', () => {
+  assert.deepEqual(publishChoice(['9']), {ok: true, id: '9'});
+  assert.deepEqual(publishChoice([]), {ok: true, id: null});
+  assert.deepEqual(publishChoice(['3', '4']), {ok: false, reason: severalOpenReason(['3', '4'])});
 });
 
 test('accepted archives a change that is still open, then closes only a merged pull request', () => {
-  const archive = decide(issue(1, ['sdd:accepted']), [], [pull(9, {state: 'MERGED'})], change({proposal: true}));
+  const archive = decide(
+    issue(1, ['sdd:accepted']),
+    [],
+    [pull(9, {state: 'MERGED'})],
+    change({proposal: true}),
+  );
   assert.equal(archive.kind, 'agent');
   if (archive.kind === 'agent') {
     assert.equal(archive.action, 'archive');
   }
   const open = decide(issue(1, ['sdd:accepted']), [], [pull(9)], change({archived: true}));
-  assert.deepEqual(open, {kind: 'wait', issue: '1', reason: 'wait for green checks before merge of PR #9'});
+  assert.deepEqual(open, {
+    kind: 'wait',
+    issue: '1',
+    reason: 'wait for green checks before merge of PR #9',
+  });
   const missing = decide(issue(1, ['sdd:accepted']), [], [], change({archived: true}));
-  assert.deepEqual(missing, {kind: 'wait', issue: '1', reason: 'accepted needs a merged pull request'});
-  const close = decide(issue(1, ['sdd:accepted']), [], [pull(9, {state: 'MERGED'})], change({archived: true}));
-  assert.deepEqual(close, {kind: 'advance', issue: '1', to: 'accepted', reason: 'pull request merged'});
+  assert.deepEqual(missing, {
+    kind: 'wait',
+    issue: '1',
+    reason: 'accepted needs a merged pull request',
+  });
+  const close = decide(
+    issue(1, ['sdd:accepted']),
+    [],
+    [pull(9, {state: 'MERGED'})],
+    change({archived: true}),
+  );
+  assert.deepEqual(close, {
+    kind: 'advance',
+    issue: '1',
+    to: 'accepted',
+    reason: 'pull request merged',
+  });
 });
 
 test('a green archived pull request waits for a person to merge, and sdd:auto-merge merges', () => {
@@ -266,10 +358,12 @@ test('a green archived pull request waits for a person to merge, and sdd:auto-me
     issue: '1',
     reason: 'wait for merge of PR #9',
   });
-  assert.deepEqual(
-    decide(issue(1, ['sdd:accepting']), [], [pull(9, {state: 'MERGED'})], ready),
-    {kind: 'advance', issue: '1', to: 'accepted', reason: 'pull request merged'},
-  );
+  assert.deepEqual(decide(issue(1, ['sdd:accepting']), [], [pull(9, {state: 'MERGED'})], ready), {
+    kind: 'advance',
+    issue: '1',
+    to: 'accepted',
+    reason: 'pull request merged',
+  });
   const pending = decide(
     issue(1, ['sdd:accepting', 'sdd:auto-merge']),
     [],
@@ -277,6 +371,27 @@ test('a green archived pull request waits for a person to merge, and sdd:auto-me
     ready,
   );
   assert.equal(pending.kind, 'wait');
+});
+
+test('an accepting pull request rolls back when a conversation layer is open', () => {
+  const decision = decide(
+    issue(1, ['sdd:accepting']),
+    [],
+    [
+      pull(9, {
+        checks: 'green',
+        reviewCheck: 'green',
+        review: {unanswered: false, rollback: 'implementing', layers: ['code']},
+      }),
+    ],
+    change({proposal: true, delta: true, design: true, tasks: true, archived: true}),
+  );
+  assert.deepEqual(decision, {
+    kind: 'advance',
+    issue: '1',
+    to: 'implementing',
+    reason: 'review thread sent the change back',
+  });
 });
 
 test('the human gate and the auto tag share one writing gate', () => {
@@ -339,7 +454,12 @@ test('settle walks mechanical advances on labels and stops to close an accepted 
   assert.deepEqual(held.transitions, []);
   assert.equal(held.decision.kind, 'wait');
 
-  const closing = settle(issue(1, ['sdd:accepted']), [], [pull(9, {state: 'MERGED'})], change({archived: true}));
+  const closing = settle(
+    issue(1, ['sdd:accepted']),
+    [],
+    [pull(9, {state: 'MERGED'})],
+    change({archived: true}),
+  );
   assert.deepEqual(
     closing.transitions.map(transition => transition.to),
     ['accepted'],

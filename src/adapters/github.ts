@@ -1,7 +1,17 @@
 import {execFileSync, spawnSync} from 'node:child_process';
 
 import {pullTitlePrefix} from '../machine/naming.ts';
-import type {CheckState, Conversation, IssueRecord, Review, Thread, ThreadTarget, Tracker} from '../machine/port.ts';
+import {publishChoice} from '../machine/policy.ts';
+import {markRobot, spokeByRobot} from '../machine/review.ts';
+import type {
+  CheckState,
+  Conversation,
+  IssueRecord,
+  Review,
+  Thread,
+  ThreadTarget,
+  Tracker,
+} from '../machine/port.ts';
 
 export type CheckRollup = {
   state: string;
@@ -104,7 +114,9 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
     return user;
   };
   const readIssue = (key: string): RawIssue =>
-    JSON.parse(gh(['issue', 'view', key, '--repo', repoSlug(), '--json', 'number,title,body,state,labels'])) as RawIssue;
+    JSON.parse(
+      gh(['issue', 'view', key, '--repo', repoSlug(), '--json', 'number,title,body,state,labels']),
+    ) as RawIssue;
 
   const tracker: Tracker = {
     login,
@@ -144,10 +156,10 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       gh(['issue', 'edit', key, '--repo', repoSlug(), '--body', body]);
     },
     comment(key, body) {
-      gh(['issue', 'comment', key, '--repo', repoSlug(), '--body', body]);
+      gh(['issue', 'comment', key, '--repo', repoSlug(), '--body', markRobot(body)]);
     },
     close(key, comment) {
-      gh(['issue', 'close', key, '--repo', repoSlug(), '--comment', comment]);
+      gh(['issue', 'close', key, '--repo', repoSlug(), '--comment', markRobot(comment)]);
     },
   };
 
@@ -176,7 +188,13 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       return linked(key).map(pr => {
         const id = String(pr.number);
         if (pr.state !== 'OPEN') {
-          return {id, title: pr.title, state: pr.state, checks: 'none' as const, reviewCheck: 'none' as const};
+          return {
+            id,
+            title: pr.title,
+            state: pr.state,
+            checks: 'none' as const,
+            reviewCheck: 'none' as const,
+          };
         }
         const view = JSON.parse(
           gh(['pr', 'view', id, '--repo', repoSlug(), '--json', 'statusCheckRollup,state']),
@@ -234,18 +252,28 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
     },
     comments(pull) {
       const comments = JSON.parse(
-        gh(['api', `repos/${repoSlug()}/issues/${pull}/comments`, '--jq', '[.[] | {login: .user.login, body}]']),
+        gh([
+          'api',
+          `repos/${repoSlug()}/issues/${pull}/comments`,
+          '--jq',
+          '[.[] | {login: .user.login, body}]',
+        ]),
       ) as {login: string; body: string}[];
-      const me = login();
       return comments.map(comment => ({
         body: comment.body,
-        robot: comment.login === me || comment.login.endsWith('[bot]'),
+        robot: spokeByRobot(comment.body, comment.login),
       }));
     },
     ensurePull(key, title, body) {
-      const open = linked(key).find(pr => pr.state === 'OPEN');
-      if (open) {
-        return String(open.number);
+      const open = linked(key)
+        .filter(pr => pr.state === 'OPEN')
+        .map(pr => String(pr.number));
+      const choice = publishChoice(open);
+      if (!choice.ok) {
+        throw new Error(choice.reason);
+      }
+      if (choice.id) {
+        return choice.id;
       }
       const url = gh([
         'pr',
@@ -278,11 +306,21 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
         '-F',
         `line=${target.line}`,
         '-f',
-        `body=${target.body}`,
+        `body=${markRobot(target.body)}`,
       ]);
     },
     reply(pull, comment, body) {
-      gh(['api', '--method', 'POST', `repos/${repoSlug()}/pulls/${pull}/comments/${comment}/replies`, '-f', `body=${body}`]);
+      gh([
+        'api',
+        '--method',
+        'POST',
+        `repos/${repoSlug()}/pulls/${pull}/comments/${comment}/replies`,
+        '-f',
+        `body=${markRobot(body)}`,
+      ]);
+    },
+    say(pull, body) {
+      gh(['issue', 'comment', pull, '--repo', repoSlug(), '--body', markRobot(body)]);
     },
     resolveThread(thread) {
       const query =
@@ -290,14 +328,17 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       gh(['api', 'graphql', '-f', `query=${query}`, '-f', `id=${thread}`]);
     },
     checksText(pull) {
-      const result = spawnSync('gh', ['pr', 'checks', pull, '--repo', repoSlug()], {encoding: 'utf8'});
+      const result = spawnSync('gh', ['pr', 'checks', pull, '--repo', repoSlug()], {
+        encoding: 'utf8',
+      });
       return `${result.stdout ?? ''}${result.stderr ?? ''}`;
     },
     merge(pull) {
       try {
         gh(['pr', 'merge', pull, '--repo', repoSlug(), '--rebase']);
       } catch (error) {
-        const stderr = error && typeof error === 'object' && 'stderr' in error ? String(error.stderr) : '';
+        const stderr =
+          error && typeof error === 'object' && 'stderr' in error ? String(error.stderr) : '';
         const message = error instanceof Error ? error.message : String(error);
         if (/already merged/i.test(`${message}\n${stderr}`)) {
           return;
@@ -389,11 +430,13 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
       calls.push('updateBody');
       find(key).body = body;
     },
-    comment() {
+    comment(_key, body) {
       calls.push('comment');
+      calls.push(`body:${markRobot(body)}`);
     },
     close(key, comment) {
       calls.push(`close:${comment}`);
+      calls.push(`body:${markRobot(comment)}`);
       find(key).state = 'CLOSED';
     },
   };
@@ -401,7 +444,10 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
     pulls(key) {
       calls.push('pulls');
       return (seed.pulls?.[key] ?? []).map(pr => {
-        const checks = seed.checks?.[pr.id] ?? {checks: 'none' as const, reviewCheck: 'none' as const};
+        const checks = seed.checks?.[pr.id] ?? {
+          checks: 'none' as const,
+          reviewCheck: 'none' as const,
+        };
         return {...pr, ...checks};
       });
     },
@@ -415,17 +461,24 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
     },
     ensurePull(key) {
       calls.push('ensurePull');
-      const existing = (seed.pulls?.[key] ?? []).find(pr => pr.state === 'OPEN');
-      if (existing) {
-        return existing.id;
+      const open = (seed.pulls?.[key] ?? []).filter(pr => pr.state === 'OPEN').map(pr => pr.id);
+      const choice = publishChoice(open);
+      if (!choice.ok) {
+        throw new Error(choice.reason);
       }
-      return 'new';
+      return choice.id ?? 'new';
     },
-    openThread() {
+    openThread(_pull, target) {
       calls.push('openThread');
+      calls.push(`body:${markRobot(target.body)}`);
     },
-    reply() {
+    reply(_pull, _comment, body) {
       calls.push('reply');
+      calls.push(`body:${markRobot(body)}`);
+    },
+    say(_pull, body) {
+      calls.push('say');
+      calls.push(`body:${markRobot(body)}`);
     },
     resolveThread() {
       calls.push('resolveThread');

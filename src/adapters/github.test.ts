@@ -100,3 +100,25 @@ test('setPhase keeps a single phase label and refuses a gate label', () => {
   assert.deepEqual(tracker.labels('7'), ['Sandcastle', 'sdd:specifying']);
   assert.throws(() => setPhase('7', 'proposed', tracker), /gate label sdd:proposed/);
 });
+
+test('posted bodies carry the spy mark, and the shared login is not the robot', () => {
+  const {tracker, review, calls} = memoryPorts({
+    user: '3y3',
+    issues: [{key: '7', title: '#7: title', body: '', state: 'OPEN', labels: []}],
+  });
+  tracker.comment('7', 'sdd:accept proposal accepted by @3y3');
+  review.openThread('15', {commit: 'abc', path: 'src/a.ts', line: 1, body: 'sdd:note baseline'});
+  review.reply('15', '9', 'sdd:fixed abc');
+  review.say('15', 'sdd:layer=code → implementing');
+  tracker.close('7', 'SDLC accepted');
+  assert.deepEqual(
+    calls.filter(call => call.startsWith('body:')),
+    [
+      'body:🤖 sdd:accept proposal accepted by @3y3',
+      'body:🤖 sdd:note baseline',
+      'body:🤖 sdd:fixed abc',
+      'body:🤖 sdd:layer=code → implementing',
+      'body:🤖 SDLC accepted',
+    ],
+  );
+});

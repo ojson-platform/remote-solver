@@ -14,6 +14,7 @@ import {loadCycle} from './machine/snapshot.ts';
 //   sdd.ts checks <pull>
 //   sdd.ts thread open <pull> <path> <line> <body>
 //   sdd.ts thread reply <pull> <comment> <body>
+//   sdd.ts thread say <pull> <body>
 //   sdd.ts thread resolve <thread>
 //   sdd.ts mirror <key> <Layer> <text>
 
@@ -30,7 +31,7 @@ function need(value: string | undefined, usage: string): string {
 }
 
 const usage =
-  'Usage: remote-solver plan | set <key> <phase> | wait <key> | unwait <key> | accept <key> | publish <key> "<title>" | checks <pull> | thread open|reply|resolve ... | mirror <key> <Layer> <text>';
+  'Usage: remote-solver plan | set <key> <phase> | wait <key> | unwait <key> | accept <key> | publish <key> "<title>" | checks <pull> | thread open|reply|say|resolve ... | mirror <key> <Layer> <text>';
 
 export function runSdd(argv: string[]): void {
   const box = machine();
@@ -93,6 +94,13 @@ function dispatch(box: ReturnType<typeof machine>, command: string | undefined, 
         fail(usage);
       }
       box.review.reply(pull, comment, body);
+    } else if (sub === 'say') {
+      const pull = need(rest[1], usage);
+      const body = rest.slice(2).join(' ');
+      if (!body) {
+        fail(usage);
+      }
+      box.review.say(pull, body);
     } else if (sub === 'resolve') {
       box.review.resolveThread(need(rest[1], usage));
     } else {

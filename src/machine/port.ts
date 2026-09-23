@@ -29,7 +29,7 @@ export type Pull = {
 /** A review thread after the adapter has decided whether the machine wrote it. */
 export type Thread = {resolved: boolean; body: string};
 
-/** A conversation comment. `robot` is the machine's login or a bot. */
+/** A conversation comment. `robot` is a spy mark or a `[bot]` login. */
 export type Conversation = {body: string; robot: boolean};
 
 export type Tracker = {
@@ -52,6 +52,8 @@ export type Review = {
   ensurePull(key: IssueKey, title: string, body: string): string;
   openThread(pull: string, target: ThreadTarget): void;
   reply(pull: string, comment: string, body: string): void;
+  /** Issue comment on the pull request. The adapter adds the spy mark. */
+  say(pull: string, body: string): void;
   resolveThread(thread: string): void;
   /** Text the agent reads: check names, conclusions, logs. */
   checksText(pull: string): string;

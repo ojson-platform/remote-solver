@@ -8,6 +8,8 @@ pnpm test
 pnpm run test:types
 ```
 
+From the service repository: `remote-solver accept <key>`, `remote-solver issue <key>`, `remote-solver spy`. The bin is `bin/remote-solver.mjs`.
+
 Secrets belong in `.env` and are not committed.
 
 <!-- OJSON_INFRA_AGENTS:BEGIN -->

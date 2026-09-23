@@ -27,7 +27,7 @@ Writes observable behavior. Zoom is the black box.
 5. A local proposal change: edit only the scenarios it touches.
 6. `improve-specs`: a thread marked `sdd:layer=spec` gets its own commit, reply `sdd:fixed <commit>`, then resolve the thread.
 7. Publish: the delta and any uncommitted `openspec/` of this issue, message `#<issue>: <what changed>`.
-8. Issue mirror (`context.md`): the Specify line. The issue has `sdd:auto-spec`: do not set `sdd:wait-human`. Otherwise `npx tsx .sandcastle/sdd.ts wait <issue>`.
+8. Issue mirror (`context.md`): the Specify line. The issue has `sdd:auto-spec`: do not set `sdd:wait-human`. Otherwise `npx remote-solver wait <issue>`.
 
 ## Check
 

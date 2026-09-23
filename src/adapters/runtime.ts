@@ -1,4 +1,4 @@
-import {existsSync} from 'node:fs';
+import {existsSync, mkdirSync, symlinkSync} from 'node:fs';
 import path from 'node:path';
 
 import {run, cursor} from '@ai-hero/sandcastle';
@@ -9,7 +9,13 @@ import {modelFor, modeOfSkill} from '../machine/skill.ts';
 import {hostSandbox} from './host-sandbox.ts';
 import {ensureIssueBranch} from './vcs.ts';
 
-const LINKED = ['context.md', 'skills', 'prompts', 'sdd.ts', 'accept.ts', '.env'] as const;
+const LINKED = [
+  ['skills', 'skills'],
+  ['prompts', 'prompts'],
+  ['src/sdd.ts', 'sdd.ts'],
+  ['src/accept.ts', 'accept.ts'],
+  ['.env', '.env'],
+] as const;
 
 export type SandcastleRuntimeConfig = {
   /** Repository the worktrees are created in. */
@@ -18,8 +24,8 @@ export type SandcastleRuntimeConfig = {
   branchPrefix: string;
   /** Ref a missing issue branch is cut from. */
   baseBranch: string;
-  /** Checkout whose `.sandcastle` and `node_modules` the worktree links. */
-  linkRoot: string;
+  /** This package. Its files are linked into the issue worktree. */
+  solverRoot: string;
 };
 
 function shQuote(value: string): string {
@@ -28,35 +34,55 @@ function shQuote(value: string): string {
 
 /**
  * Host hook sandcastle runs with cwd set to the issue worktree. The worktree
- * does not contain this gitignored machine, so the agent reaches it through
- * these links. Node resolves a symlinked `sdd.ts` from its real path.
+ * is a checkout of the service, so the agent reaches this package through
+ * these links. Node resolves a symlinked `sdd.ts` from its real path, and the
+ * service `node_modules` stays the worktree's own.
  */
-export function linkCommand(linkRoot: string): string {
+export function linkCommand(solverRoot: string, serviceRoot: string): string {
   const steps = ['mkdir -p .sandcastle'];
-  const box = path.join(linkRoot, '.sandcastle');
-  for (const name of LINKED) {
-    const from = path.join(box, name);
+  for (const [fromName, toName] of LINKED) {
+    const from = path.join(solverRoot, fromName);
     if (existsSync(from)) {
-      steps.push(`ln -sfn ${shQuote(from)} .sandcastle/${name}`);
+      steps.push(`ln -sfn ${shQuote(from)} .sandcastle/${toName}`);
     }
   }
-  const modules = path.join(linkRoot, 'node_modules');
+  const modules = path.join(serviceRoot, 'node_modules');
   if (existsSync(modules)) {
     steps.push(`ln -sfn ${shQuote(modules)} node_modules`);
   }
   return steps.join(' && ');
 }
 
+/** The sandcastle library reads `<service>/.sandcastle/.env`. Point that at this package. */
+export function ensureServiceEnv(serviceRoot: string, solverRoot: string): void {
+  const from = path.join(solverRoot, '.env');
+  if (!existsSync(from)) {
+    return;
+  }
+  const dir = path.join(serviceRoot, '.sandcastle');
+  mkdirSync(dir, {recursive: true});
+  const to = path.join(dir, '.env');
+  if (existsSync(to)) {
+    return;
+  }
+  symlinkSync(from, to);
+}
+
 export function sandcastleRuntime(config: SandcastleRuntimeConfig): Runtime {
   return {
     async run(skill: SkillRun) {
-      ensureIssueBranch(config.root, skill.key, {branchPrefix: config.branchPrefix, defaultBranch: config.baseBranch});
+      ensureIssueBranch(config.root, skill.key, {
+        branchPrefix: config.branchPrefix,
+        defaultBranch: config.baseBranch,
+      });
+      ensureServiceEnv(config.root, config.solverRoot);
       const mode = modeOfSkill(config.skillsDir, skill.skill);
+      const branch = branchName(skill.key, config.branchPrefix);
       const result = await run({
         name: skill.action,
         sandbox: hostSandbox(),
         agent: cursor(modelFor(mode)),
-        promptFile: path.join(config.root, '.sandcastle', 'prompts', 'sdd.md'),
+        promptFile: path.join(config.solverRoot, 'prompts', 'sdd.md'),
         promptArgs: {
           ISSUE: skill.key,
           ACTION: skill.action,
@@ -67,13 +93,13 @@ export function sandcastleRuntime(config: SandcastleRuntimeConfig): Runtime {
         maxIterations: 1,
         branchStrategy: {
           type: 'branch',
-          branch: branchName(skill.key, config.branchPrefix),
+          branch,
           baseBranch: config.baseBranch,
         },
         cwd: config.root,
         hooks: {
           host: {
-            onWorktreeReady: [{command: linkCommand(config.linkRoot)}],
+            onWorktreeReady: [{command: linkCommand(config.solverRoot, config.root)}],
           },
         },
       });

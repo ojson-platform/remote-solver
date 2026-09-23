@@ -21,7 +21,7 @@ const isDirect = process.argv[1]?.endsWith('accept.ts');
 if (isDirect) {
   const key = process.argv[2];
   if (!key) {
-    console.error('Usage: npx tsx .sandcastle/accept.ts <key>');
+    console.error('Usage: tsx sdd.ts accept <key>  # working directory is the service');
     process.exit(1);
   }
   try {

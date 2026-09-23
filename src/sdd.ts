@@ -30,12 +30,19 @@ function need(value: string | undefined, usage: string): string {
 }
 
 const usage =
-  'Usage: sdd.ts plan | set <key> <phase> | wait <key> | unwait <key> | accept <key> | publish <key> "<title>" | checks <pull> | thread open|reply|resolve ... | mirror <key> <Layer> <text>';
+  'Usage: remote-solver plan | set <key> <phase> | wait <key> | unwait <key> | accept <key> | publish <key> "<title>" | checks <pull> | thread open|reply|resolve ... | mirror <key> <Layer> <text>';
 
-const box = machine();
-const [command, ...rest] = process.argv.slice(2);
+export function runSdd(argv: string[]): void {
+  const box = machine();
+  const [command, ...rest] = argv;
+  try {
+    dispatch(box, command, rest);
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
+}
 
-try {
+function dispatch(box: ReturnType<typeof machine>, command: string | undefined, rest: string[]): void {
   if (command === 'plan') {
     const snapshot = loadCycle(box.tracker, box.review, key => box.vcs.filesAt(key), box.config.queueLabel);
     const decision = pick(resolveCycle(snapshot, box.tracker, box.config.queueLabel));
@@ -103,6 +110,8 @@ try {
   } else {
     fail(usage);
   }
-} catch (error) {
-  fail(error instanceof Error ? error.message : String(error));
+}
+
+if (process.argv[1]?.endsWith('sdd.ts')) {
+  runSdd(process.argv.slice(2));
 }

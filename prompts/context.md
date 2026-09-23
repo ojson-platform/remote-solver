@@ -1,6 +1,6 @@
 # Context
 
-Skills talk to the tracker, the review, and the repository only through `sdd.ts`.
+Skills talk to the tracker, the review, and the repository only through `npx remote-solver`.
 
 ## Capability
 
@@ -21,23 +21,24 @@ another id and stays out.
 ## Review threads
 
 ```bash
-npx tsx .sandcastle/sdd.ts thread open <pull> <file> <line> '<body>'
-npx tsx .sandcastle/sdd.ts thread reply <pull> <comment> '<body>'
-npx tsx .sandcastle/sdd.ts thread resolve <thread>
+npx remote-solver thread open <pull> <file> <line> '<body>'
+npx remote-solver thread reply <pull> <comment> '<body>'
+npx remote-solver thread say <pull> '<body>'
+npx remote-solver thread resolve <thread>
 ```
 
-`<thread>` is the review thread id. `<comment>` is the comment id the reply hangs from. The line is a line on the pull request head.
+`<thread>` is the review thread id. `<comment>` is the comment id the reply hangs from. The line is a line on the pull request head. `thread say` posts an issue comment on the pull request. The command adds `🤖 ` at the start of the body.
 
 ## Worktree
 
-The agent for an issue runs on branch `sdd/<key>`. Sandcastle keeps that checkout under `.sandcastle/worktrees/`, named from the branch with `/` replaced by `-`, and reuses it on the next run. A branch is checked out in only one worktree, so an older checkout of `sdd/<key>` has to be removed before that issue can run. A run that records no commit leaves the issue idle.
+The agent for an issue runs on branch `sdd/<key>`. The library keeps that checkout in the service under `.sandcastle/worktrees/`, named from the branch with `/` replaced by `-`, and reuses it on the next run. This package is linked into that checkout as `.sandcastle/`. A branch is checked out in only one worktree, so an older checkout of `sdd/<key>` has to be removed before that issue can run. A run that records no commit leaves the issue idle.
 
 ## Issue mirror
 
 Keep the author's text. Replace only the block between `<!-- sdd:begin -->`
 and `<!-- sdd:end -->`. Create the block at the end if it is missing. One
 line per layer; a layer keeps its line once written. Update one line with
-`npx tsx .sandcastle/sdd.ts mirror <key> <Layer> "<text>"`, where `<Layer>` is `Change`, `Plan`, `Specify`, `Design`, or `Tasks`:
+`npx remote-solver mirror <key> <Layer> "<text>"`, where `<Layer>` is `Change`, `Plan`, `Specify`, `Design`, or `Tasks`:
 
 ```md
 <!-- sdd:begin -->

@@ -10,31 +10,37 @@ import {loadCycle} from './machine/snapshot.ts';
 // request. sdd:auto-merge rebases it without that person. Once the pull request
 // is merged, the machine sets sdd:accepted and closes the issue.
 //
-// One issue: npx tsx .sandcastle/main.ts --issue <key>
-// Spy:       npx tsx .sandcastle/main.ts [--parallel 2] [--interval 20]
+// From the service repository:
+// One issue: remote-solver issue <key>
+// Spy:       remote-solver spy [--parallel 2] [--interval 20]
 
-function flag(name: string, fallback: number): number {
-  const index = process.argv.indexOf(name);
+function flag(argv: string[], name: string, fallback: number): number {
+  const index = argv.indexOf(name);
   if (index === -1) {
     return fallback;
   }
-  const value = Number(process.argv[index + 1]);
+  const value = Number(argv[index + 1]);
   return Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
-function issueArg(): string | null {
-  const index = process.argv.indexOf('--issue');
+function issueArg(argv: string[]): string | null {
+  const index = argv.indexOf('--issue');
   if (index === -1) {
     return null;
   }
-  const key = process.argv[index + 1];
+  const key = argv[index + 1];
   if (!key || key.startsWith('--')) {
-    throw new Error('Usage: npx tsx .sandcastle/main.ts --issue <key>');
+    throw new Error('Usage: remote-solver issue <key>');
   }
   return key;
 }
 
-async function work(box: Machine, key: string): Promise<number> {
+export async function runIssue(key: string): Promise<number> {
+  return driveIssue(machine(), key);
+}
+
+/** One issue, up to 40 steps. */
+export async function driveIssue(box: Machine, key: string): Promise<number> {
   for (let step = 1; step <= 40; step += 1) {
     const decision = resolveIssue(key, {
       tracker: box.tracker,
@@ -68,10 +74,10 @@ async function work(box: Machine, key: string): Promise<number> {
   return 3;
 }
 
-async function spy(): Promise<void> {
+export async function runSpy(argv: string[]): Promise<void> {
   const box = machine();
-  const parallel = flag('--parallel', 2);
-  const intervalMs = flag('--interval', 20) * 1000;
+  const parallel = flag(argv, '--parallel', 2);
+  const intervalMs = flag(argv, '--interval', 20) * 1000;
   let state: State = {running: [], idle: {}, reported: {}};
   const sigs = new Map<string, string>();
   let wake: (() => void) | null = null;
@@ -91,8 +97,18 @@ async function spy(): Promise<void> {
 
   for (;;) {
     try {
-      const snapshot = loadCycle(box.tracker, box.review, key => box.vcs.filesAt(key), box.config.queueLabel);
-      const decisions = resolveCycle(snapshot, box.tracker, box.config.queueLabel, new Set(state.running));
+      const snapshot = loadCycle(
+        box.tracker,
+        box.review,
+        key => box.vcs.filesAt(key),
+        box.config.queueLabel,
+      );
+      const decisions = resolveCycle(
+        snapshot,
+        box.tracker,
+        box.config.queueLabel,
+        new Set(state.running),
+      );
       for (const decision of decisions) {
         if (decision.kind === 'merge') {
           box.review.merge(decision.pull);
@@ -108,7 +124,7 @@ async function spy(): Promise<void> {
         const sig = signature(decision);
         state = {...state, running: [...state.running, decision.issue]};
         sigs.set(decision.issue, sig);
-        void work(box, decision.issue).then(
+        void driveIssue(box, decision.issue).then(
           code => finish(decision.issue, code, sig),
           error => {
             console.error(error instanceof Error ? error.message : String(error));
@@ -136,9 +152,11 @@ async function spy(): Promise<void> {
   }
 }
 
-const issue = issueArg();
-if (issue === null) {
-  await spy();
-} else {
-  process.exit(await work(machine(), issue));
+if (process.argv[1]?.endsWith('main.ts')) {
+  const issue = issueArg(process.argv);
+  if (issue === null) {
+    await runSpy(process.argv);
+  } else {
+    process.exit(await runIssue(issue));
+  }
 }

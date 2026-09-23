@@ -1,4 +1,5 @@
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 
 import {githubAdapters} from './github.ts';
 import type {Review, Runtime, Tracker, Vcs} from '../machine/port.ts';
@@ -32,6 +33,11 @@ export type MachineOptions = {
   runtime?: Runtime;
 };
 
+/** This package, not the service the machine is pointed at. */
+export function solverRoot(): string {
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+}
+
 export function machine(root = process.cwd(), options: MachineOptions = {}): Machine {
   const config: MachineConfig = {
     queueLabel: 'Sandcastle',
@@ -52,10 +58,10 @@ export function machine(root = process.cwd(), options: MachineOptions = {}): Mac
       options.runtime ??
       sandcastleRuntime({
         root,
-        skillsDir: path.join(root, '.sandcastle', 'skills'),
+        skillsDir: path.join(solverRoot(), 'skills'),
         branchPrefix: config.branchPrefix,
         baseBranch: config.defaultBranch,
-        linkRoot: root,
+        solverRoot: solverRoot(),
       }),
   };
 }

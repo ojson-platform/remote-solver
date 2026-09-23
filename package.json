@@ -4,12 +4,15 @@
   "version": "0.0.0",
   "description": "SDLC machine: one issue, one pull request, one change",
   "type": "module",
+  "bin": {
+    "remote-solver": "./bin/remote-solver.mjs"
+  },
   "packageManager": "pnpm@10.30.0",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "test": "tsx --test src/machine/*.test.ts src/adapters/*.test.ts",
+    "test": "tsx --test src/cli.test.ts src/machine/*.test.ts src/adapters/*.test.ts",
     "test:types": "tsc --noEmit",
     "lint": "eslint .",
     "format:check": "prettier --check ."

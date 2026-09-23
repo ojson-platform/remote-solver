@@ -27,7 +27,7 @@ Records why and the scope. Zoom is context, not implementation. The commit and t
 5. `improve-proposal`: a thread marked `sdd:layer=proposal` gets its own commit, reply `sdd:fixed <commit>`, then resolve the thread.
 6. Publish: the proposal and any uncommitted `openspec/` of this issue, message `#<issue>: <what changed>`. Open questions do not delay the pull request.
 7. Issue mirror (`context.md`): the Change and Plan lines.
-8. The issue has `sdd:auto-plan`: do not set `sdd:wait-human`. Otherwise `npx tsx .sandcastle/sdd.ts wait <issue>`.
+8. The issue has `sdd:auto-plan`: do not set `sdd:wait-human`. Otherwise `npx remote-solver wait <issue>`.
 
 ## Check
 

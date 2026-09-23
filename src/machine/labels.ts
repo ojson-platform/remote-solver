@@ -5,7 +5,7 @@ const LABEL = (phase: string) => `sdd:${phase}`;
 
 export function setPhase(key: string, phase: Phase, tracker: Tracker, options?: {allowGate?: boolean}): void {
   if (!options?.allowGate && (GATE_PHASES as readonly string[]).includes(phase)) {
-    throw new Error(`Refusing to set gate label sdd:${phase}. A person runs npx tsx .sandcastle/sdd.ts accept ${key}.`);
+    throw new Error(`Refusing to set gate label sdd:${phase}. A person runs remote-solver accept ${key}.`);
   }
   const names = tracker.labels(key);
   const remove = removedPhaseLabels(names, phase);

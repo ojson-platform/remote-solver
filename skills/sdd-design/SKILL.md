@@ -25,7 +25,7 @@ Writes the technical decision for this change.
 4. No decision yet: a `- [ ]` item under `## Open decisions`. Leave it open.
 5. `improve-design`: a thread marked `sdd:layer=design` gets its own commit, reply `sdd:fixed <commit>`, then resolve the thread.
 6. Publish: `design.md` and any uncommitted `openspec/` of this issue, message `#<issue>: <what changed>`. Open decisions do not delay the push.
-7. Issue mirror (`context.md`): the Design line. The issue has `sdd:auto-design` and `## Open decisions` has no `- [ ]`: do not set `sdd:wait-human`. Otherwise `npx tsx .sandcastle/sdd.ts wait <issue>`.
+7. Issue mirror (`context.md`): the Design line. The issue has `sdd:auto-design` and `## Open decisions` has no `- [ ]`: do not set `sdd:wait-human`. Otherwise `npx remote-solver wait <issue>`.
 
 ## Check
 

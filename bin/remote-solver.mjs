@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 import {spawnSync} from 'node:child_process';
+import {createRequire} from 'node:module';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const require = createRequire(path.join(root, 'package.json'));
 const child = spawnSync(
   process.execPath,
   [
-    path.join(root, 'node_modules', 'tsx', 'dist', 'cli.mjs'),
+    require.resolve('tsx/cli'),
     '--tsconfig',
     path.join(root, 'tsconfig.json'),
     path.join(root, 'src', 'cli.ts'),

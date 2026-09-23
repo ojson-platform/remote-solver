@@ -42,7 +42,6 @@ export type PullSnapshot = {
   state: string;
   review: ReviewView;
   checks: CheckState;
-  reviewCheck: CheckState;
 };
 
 const PROMPT_SKILL: Record<string, string> = {
@@ -135,7 +134,7 @@ function mergeOrWait(
   if (!pr) {
     return {kind: 'wait', issue: issueKey, reason: 'accepted needs a merged pull request'};
   }
-  if (pr.checks !== 'green' || pr.reviewCheck !== 'green') {
+  if (pr.checks !== 'green') {
     return {
       kind: 'wait',
       issue: issueKey,
@@ -453,22 +452,12 @@ export function decide(
     if (pr.checks !== 'green') {
       return {kind: 'wait', issue: issue.key, reason: `checks are ${pr.checks}`};
     }
-    if (pr.reviewCheck !== 'green') {
-      return {
-        kind: 'wait',
-        issue: issue.key,
-        reason:
-          pr.reviewCheck === 'none'
-            ? 'wait for cursor-review'
-            : `cursor-review is ${pr.reviewCheck}`,
-      };
-    }
     if (back) {
       return {
         kind: 'advance',
         issue: issue.key,
         to: back,
-        reason: 'cursor-review sent the change back',
+        reason: 'review thread sent the change back',
       };
     }
     return {kind: 'advance', issue: issue.key, to: 'accepting', reason: 'checks are green'};

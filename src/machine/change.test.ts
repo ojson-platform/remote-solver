@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
-import {readChange} from './change.ts';
+import {changeText, readChange} from './change.ts';
 import type {FileSource} from './port.ts';
 import {gitFiles} from '../adapters/vcs.ts';
 
@@ -30,9 +30,15 @@ test('reads a proposal, its open questions, and a missing baseline from the work
   mkdirSync(change, {recursive: true});
   writeFileSync(
     path.join(change, 'proposal.md'),
-    ['## Capabilities', '### Modified', '- cache-first keep the first hit', '', '## Open questions', '- [ ] who owns eviction', ''].join(
-      '\n',
-    ),
+    [
+      '## Capabilities',
+      '### Modified',
+      '- cache-first keep the first hit',
+      '',
+      '## Open questions',
+      '- [ ] who owns eviction',
+      '',
+    ].join('\n'),
   );
   const view = readChange('4', gitFiles(root, '4', 'sdd'));
   assert.equal(view.proposal, true);
@@ -75,6 +81,27 @@ test('a numeric change directory is not the issue change', () => {
   assert.equal(view.proposal, false);
   assert.equal(view.openQuestions, 0);
   rmSync(root, {recursive: true, force: true});
+});
+
+test('change text prefers the active directory and otherwise reads the archive', () => {
+  const archived: FileSource = {
+    exists: rel => rel === 'openspec/changes/archive/issue-11/proposal.md',
+    read: rel => (rel.endsWith('proposal.md') ? 'why\n' : ''),
+    list: () => [],
+  };
+  assert.equal(changeText('11', archived), '# openspec/changes/archive/issue-11/proposal.md\nwhy');
+
+  const active: FileSource = {
+    exists: rel =>
+      rel === 'openspec/changes/issue-11/proposal.md' ||
+      rel === 'openspec/changes/archive/issue-11/proposal.md',
+    read: rel => (rel.startsWith('openspec/changes/issue-11/') ? 'active\n' : 'archived\n'),
+    list: () => [],
+  };
+  assert.match(
+    changeText('11', active) ?? '',
+    /^# openspec\/changes\/issue-11\/proposal.md\nactive/,
+  );
 });
 
 test('reads a change from a file source that is not git', () => {

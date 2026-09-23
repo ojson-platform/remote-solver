@@ -1,10 +1,10 @@
 import {existsSync, mkdirSync, symlinkSync} from 'node:fs';
 import path from 'node:path';
 
-import {run, cursor} from '@ai-hero/sandcastle';
+import {Output, cursor, run} from '@ai-hero/sandcastle';
 
 import {branchName} from '../machine/naming.ts';
-import type {Runtime, SkillRun} from '../machine/port.ts';
+import type {Runtime, RuntimeAsk, SkillRun} from '../machine/port.ts';
 import {modelFor, modeOfSkill} from '../machine/skill.ts';
 import {hostSandbox} from './host-sandbox.ts';
 import {ensureIssueBranch} from './vcs.ts';
@@ -70,6 +70,25 @@ export function ensureServiceEnv(serviceRoot: string, solverRoot: string): void 
 
 export function sandcastleRuntime(config: SandcastleRuntimeConfig): Runtime {
   return {
+    async ask(request: RuntimeAsk) {
+      ensureServiceEnv(config.root, config.solverRoot);
+      const result = await run({
+        name: request.name,
+        sandbox: hostSandbox(),
+        agent: cursor(modelFor(request.mode)),
+        promptFile: request.promptFile,
+        promptArgs: request.promptArgs,
+        output: Output.string({tag: request.outputTag}),
+        maxIterations: 1,
+        branchStrategy: {
+          type: 'branch',
+          branch: request.branch,
+          baseBranch: config.baseBranch,
+        },
+        cwd: config.root,
+      });
+      return result.output;
+    },
     async run(skill: SkillRun) {
       ensureIssueBranch(config.root, skill.key, {
         branchPrefix: config.branchPrefix,

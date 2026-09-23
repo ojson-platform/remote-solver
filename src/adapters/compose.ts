@@ -11,7 +11,6 @@ export type MachineConfig = {
   branchPrefix: string;
   /** Ref a missing issue branch is cut from. */
   defaultBranch: string;
-  reviewCheck: string;
   prBase: string;
 };
 
@@ -43,11 +42,10 @@ export function machine(root = process.cwd(), options: MachineOptions = {}): Mac
     queueLabel: 'Sandcastle',
     branchPrefix: 'sdd',
     defaultBranch: 'origin/master',
-    reviewCheck: 'cursor-review',
     prBase: 'master',
     ...options.config,
   };
-  const github = options.tracker && options.review ? undefined : githubAdapters({reviewCheck: config.reviewCheck, prBase: config.prBase});
+  const github = options.tracker && options.review ? undefined : githubAdapters({prBase: config.prBase});
   return {
     root,
     config,

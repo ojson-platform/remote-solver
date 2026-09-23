@@ -88,7 +88,7 @@ test('resolveIssue closes an accepted issue once the pull request is merged', ()
       },
     ],
     pulls: {'424242': [{id: '9', title: '#424242: title', state: 'OPEN'}]},
-    checks: {'9': {checks: 'green', reviewCheck: 'green'}},
+    checks: {'9': {checks: 'green'}},
   });
   const held = resolveIssue('424242', {
     tracker: green.tracker,

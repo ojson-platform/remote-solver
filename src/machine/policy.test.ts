@@ -52,7 +52,6 @@ function pull(id: number | string, over: Partial<PullSnapshot> = {}): PullSnapsh
     state: 'OPEN',
     review: emptyReview,
     checks: 'none',
-    reviewCheck: 'none',
     ...over,
   };
 }
@@ -233,18 +232,18 @@ test('verifying classifies red checks, and follows a marker once one exists', ()
   });
 });
 
-test('verifying waits for cursor-review, then accepts a clean pull request', () => {
+test('verifying accepts a pull request once its checks are green', () => {
   const waiting = decide(
     issue(1, ['sdd:verifying']),
     [],
-    [pull(9, {checks: 'green', reviewCheck: 'pending'})],
+    [pull(9, {checks: 'pending'})],
     ready,
   );
   assert.equal(waiting.kind, 'wait');
   const accepted = decide(
     issue(1, ['sdd:verifying']),
     [],
-    [pull(9, {checks: 'green', reviewCheck: 'green'})],
+    [pull(9, {checks: 'green'})],
     ready,
   );
   assert.deepEqual(accepted, {
@@ -255,14 +254,13 @@ test('verifying waits for cursor-review, then accepts a clean pull request', () 
   });
 });
 
-test('a green cursor-review with a marker rolls back', () => {
+test('a green pull request with a marker rolls back', () => {
   const decision = decide(
     issue(1, ['sdd:verifying']),
     [],
     [
       pull(9, {
         checks: 'green',
-        reviewCheck: 'green',
         review: {unanswered: false, rollback: 'designing', layers: ['design']},
       }),
     ],
@@ -272,7 +270,7 @@ test('a green cursor-review with a marker rolls back', () => {
     kind: 'advance',
     issue: '1',
     to: 'designing',
-    reason: 'cursor-review sent the change back',
+    reason: 'review thread sent the change back',
   });
 });
 
@@ -340,7 +338,7 @@ test('accepted archives a change that is still open, then closes only a merged p
 });
 
 test('a green archived pull request waits for a person to merge, and sdd:auto-merge merges', () => {
-  const green = pull(9, {checks: 'green', reviewCheck: 'green'});
+  const green = pull(9, {checks: 'green'});
   const ready = change({archived: true});
   assert.deepEqual(decide(issue(1, ['sdd:accepting']), [], [green], ready), {
     kind: 'wait',
@@ -367,7 +365,7 @@ test('a green archived pull request waits for a person to merge, and sdd:auto-me
   const pending = decide(
     issue(1, ['sdd:accepting', 'sdd:auto-merge']),
     [],
-    [pull(9, {checks: 'pending', reviewCheck: 'green'})],
+    [pull(9, {checks: 'pending'})],
     ready,
   );
   assert.equal(pending.kind, 'wait');
@@ -380,7 +378,6 @@ test('an accepting pull request rolls back when a conversation layer is open', (
     [
       pull(9, {
         checks: 'green',
-        reviewCheck: 'green',
         review: {unanswered: false, rollback: 'implementing', layers: ['code']},
       }),
     ],

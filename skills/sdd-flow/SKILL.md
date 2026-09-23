@@ -32,4 +32,4 @@ One worker step is one phase action. The commit and the push onto the PR are par
 
 Human gate: `remote-solver accept <key>` on `proposing`, `specifying`, and `designing`. The robot does not set `proposed`, `specified`, or `designed`. On `accepting` a person merges the pull request. A human comment in the pull request conversation is classified first and rolls the issue back to the marker's phase before that wait. `sdd:auto-merge` lets the machine rebase it. The machine sets `accepted` only after that merge.
 
-Signal order inside a phase: archive on an early phase, then unlabeled threads, then a marker for an earlier phase, then this phase's threads, then a missing file, otherwise wait or a mechanical advance. On `verifying`, green checks and `cursor-review` come before a marker, unless the checks are red and a marker is already there.
+Signal order inside a phase: archive on an early phase, then unlabeled threads, then a marker for an earlier phase, then this phase's threads, then a missing file, otherwise wait or a mechanical advance. On `verifying`, green checks come before a marker, unless the checks are red and a marker is already there.

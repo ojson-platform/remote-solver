@@ -1,3 +1,5 @@
+import type {SkillMode} from './skill.ts';
+
 /**
  * Ports the machine needs. Adapters live elsewhere: GitHub issues, GitHub pull
  * requests, git, sandcastle — and, later, Tracker, Arcanum, arc, another runtime.
@@ -23,7 +25,6 @@ export type Pull = {
   title: string;
   state: string;
   checks: CheckState;
-  reviewCheck: CheckState;
 };
 
 /** A review thread after the adapter has decided whether the machine wrote it. */
@@ -54,6 +55,10 @@ export type Review = {
   reply(pull: string, comment: string, body: string): void;
   /** Issue comment on the pull request. The adapter adds the spy mark. */
   say(pull: string, body: string): void;
+  /** Issue comment on the pull request. The body is posted unchanged. */
+  speak(pull: string, body: string): void;
+  /** Head and base commits of an open pull request. */
+  range(pull: string): {head: string; base: string | null};
   resolveThread(thread: string): void;
   /** Text the agent reads: check names, conclusions, logs. */
   checksText(pull: string): string;
@@ -70,6 +75,11 @@ export type FileSource = {
 
 export type Vcs = {
   filesAt(key: IssueKey): FileSource;
+  /**
+   * Commits on `base..head` and the three-dot diff.
+   * A missing object is a failed range, not an empty diff.
+   */
+  compare(base: string, head: string): {commits: string; diff: string} | null;
   /** Push the issue branch `sdd/<key>` and set its upstream. */
   push(key: IssueKey): void;
   /** HEAD of the checkout this adapter was opened on. */
@@ -89,6 +99,19 @@ export type SkillOutcome = {
   commits: number;
 };
 
+/** One prompt, one answer. The runtime owns the sandbox, the model, and the base branch. */
+export type RuntimeAsk = {
+  name: string;
+  mode: SkillMode;
+  promptFile: string;
+  promptArgs: Record<string, string>;
+  /** Worktree branch, cut from the runtime's base branch. */
+  branch: string;
+  /** The answer is the text inside this tag. */
+  outputTag: string;
+};
+
 export type Runtime = {
   run(skill: SkillRun): Promise<SkillOutcome>;
+  ask(request: RuntimeAsk): Promise<string>;
 };

@@ -11,6 +11,7 @@ test('route sends spy and issue to the machine and everything else to sdd', () =
   assert.deepEqual(route(['--help']), {kind: 'help'});
   assert.deepEqual(route(['issue']), {kind: 'help'});
   assert.deepEqual(route(['spy', '--parallel', '2']), {kind: 'spy', argv: ['--parallel', '2']});
+  assert.deepEqual(route(['review']), {kind: 'review'});
   assert.deepEqual(route(['issue', '12']), {kind: 'issue', key: '12'});
   assert.deepEqual(route(['accept', '12']), {kind: 'sdd', argv: ['accept', '12']});
 });

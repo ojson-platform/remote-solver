@@ -91,13 +91,11 @@ function asRecord(issue: RawIssue): IssueRecord {
 }
 
 export type GitHubAdapters = {
-  reviewCheck?: string;
   /** Base branch passed to `gh pr create`. */
   prBase?: string;
 };
 
 export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker; review: Review} {
-  const reviewCheck = options.reviewCheck ?? 'cursor-review';
   const prBase = options.prBase ?? 'master';
   let slug: string | null = null;
   let user: string | null = null;
@@ -193,7 +191,6 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
             title: pr.title,
             state: pr.state,
             checks: 'none' as const,
-            reviewCheck: 'none' as const,
           };
         }
         const view = JSON.parse(
@@ -204,7 +201,6 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
           title: pr.title,
           state: pr.state,
           checks: classifyChecks(view),
-          reviewCheck: classifyChecks(view, reviewCheck),
         };
       });
     },
@@ -322,6 +318,16 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
     say(pull, body) {
       gh(['issue', 'comment', pull, '--repo', repoSlug(), '--body', markRobot(body)]);
     },
+    speak(pull, body) {
+      gh(['issue', 'comment', pull, '--repo', repoSlug(), '--body', body]);
+    },
+    range(pull) {
+      const view = JSON.parse(gh(['pr', 'view', pull, '--repo', repoSlug(), '--json', 'headRefOid,baseRefOid'])) as {
+        headRefOid?: string;
+        baseRefOid?: string;
+      };
+      return {head: view.headRefOid ?? '', base: view.baseRefOid ?? null};
+    },
     resolveThread(thread) {
       const query =
         'mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}) { thread { isResolved } } }';
@@ -367,8 +373,9 @@ export type MemorySeed = {
   pulls?: Record<string, {id: string; title: string; state: string}[]>;
   threads?: Record<string, Thread[]>;
   comments?: Record<string, Conversation[]>;
-  checks?: Record<string, {checks: CheckState; reviewCheck: CheckState}>;
+  checks?: Record<string, {checks: CheckState}>;
   checksText?: Record<string, string>;
+  ranges?: Record<string, {head: string; base: string | null}>;
 };
 
 export type MemoryPorts = {tracker: Tracker; review: Review; calls: string[]};
@@ -446,7 +453,6 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
       return (seed.pulls?.[key] ?? []).map(pr => {
         const checks = seed.checks?.[pr.id] ?? {
           checks: 'none' as const,
-          reviewCheck: 'none' as const,
         };
         return {...pr, ...checks};
       });
@@ -479,6 +485,14 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
     say(_pull, body) {
       calls.push('say');
       calls.push(`body:${markRobot(body)}`);
+    },
+    speak(_pull, body) {
+      calls.push('speak');
+      calls.push(`body:${body}`);
+    },
+    range(pull) {
+      calls.push('range');
+      return seed.ranges?.[pull] ?? {head: '', base: null};
     },
     resolveThread() {
       calls.push('resolveThread');

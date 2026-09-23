@@ -71,7 +71,9 @@ export function gitFiles(root: string, key: string, prefix: string): FileSource 
         walk(abs, root, found);
       }
       if (ref) {
-        for (const line of git(root, ['ls-tree', '-r', '--name-only', ref, rel], true).split('\n')) {
+        for (const line of git(root, ['ls-tree', '-r', '--name-only', ref, rel], true).split(
+          '\n',
+        )) {
           if (line) {
             found.add(line);
           }
@@ -92,7 +94,11 @@ function existsOnRef(root: string, ref: string, rel: string): boolean {
 }
 
 /** Make `sdd/<key>` exist locally: fetch it, or cut it from `defaultBranch`. Does not check it out. */
-export function ensureIssueBranch(root: string, key: string, config: {branchPrefix: string; defaultBranch: string}): void {
+export function ensureIssueBranch(
+  root: string,
+  key: string,
+  config: {branchPrefix: string; defaultBranch: string},
+): void {
   const branch = branchName(key, config.branchPrefix);
   if (git(root, ['rev-parse', '--verify', '--quiet', branch], true).trim()) {
     return;
@@ -108,11 +114,23 @@ export function gitVcs(root: string, config: GitVcsConfig = {}): Vcs {
   const prefix = config.branchPrefix ?? 'sdd';
   return {
     filesAt: key => gitFiles(root, key, prefix),
+    compare(base, head) {
+      try {
+        const commits = git(root, ['log', '--oneline', `${base}..${head}`]);
+        const diff = git(root, ['diff', `${base}...${head}`]);
+        return {commits, diff};
+      } catch {
+        return null;
+      }
+    },
     head() {
       return execFileSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'}).trim();
     },
     push(key) {
-      execFileSync('git', ['push', '-u', 'origin', branchName(key, prefix)], {cwd: root, stdio: 'inherit'});
+      execFileSync('git', ['push', '-u', 'origin', branchName(key, prefix)], {
+        cwd: root,
+        stdio: 'inherit',
+      });
     },
   };
 }

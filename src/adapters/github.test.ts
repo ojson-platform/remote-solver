@@ -20,11 +20,11 @@ test('a named check is red, pending, or missing on its own', () => {
   const view = rollup({
     statusCheckRollup: [
       {name: 'units', conclusion: 'SUCCESS', status: 'COMPLETED'},
-      {name: 'cursor-review', status: 'IN_PROGRESS'},
+      {name: 'audit', status: 'IN_PROGRESS'},
     ],
   });
   assert.equal(classifyChecks(view), 'pending');
-  assert.equal(classifyChecks(view, 'cursor-review'), 'pending');
+  assert.equal(classifyChecks(view, 'audit'), 'pending');
   assert.equal(classifyChecks(rollup({statusCheckRollup: [{name: 'units', conclusion: 'FAILURE'}]}), 'units'), 'red');
   assert.equal(classifyChecks(view, 'missing'), 'none');
 });
@@ -110,6 +110,7 @@ test('posted bodies carry the spy mark, and the shared login is not the robot', 
   review.openThread('15', {commit: 'abc', path: 'src/a.ts', line: 1, body: 'sdd:note baseline'});
   review.reply('15', '9', 'sdd:fixed abc');
   review.say('15', 'sdd:layer=code → implementing');
+  review.speak('15', 'rebase onto master');
   tracker.close('7', 'SDLC accepted');
   assert.deepEqual(
     calls.filter(call => call.startsWith('body:')),
@@ -118,6 +119,7 @@ test('posted bodies carry the spy mark, and the shared login is not the robot', 
       'body:🤖 sdd:note baseline',
       'body:🤖 sdd:fixed abc',
       'body:🤖 sdd:layer=code → implementing',
+      'body:rebase onto master',
       'body:🤖 SDLC accepted',
     ],
   );

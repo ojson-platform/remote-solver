@@ -5,8 +5,15 @@ import type {Runtime} from '../machine/port.ts';
 import type {Dossier} from './dossier.ts';
 import {parseVerdict, type Verdict} from './verdict.ts';
 
+function failureReason(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /** One runtime pass. A missing or broken answer is unjudged, never a clean merge. */
-export async function sandcastleJudge(runtime: Runtime, dossier: Dossier): Promise<Verdict> {
+export async function sandcastleJudge(
+  runtime: Pick<Runtime, 'ask'>,
+  dossier: Dossier,
+): Promise<Verdict> {
   try {
     const text = await runtime.ask({
       name: 'review',
@@ -22,7 +29,7 @@ export async function sandcastleJudge(runtime: Runtime, dossier: Dossier): Promi
       outputTag: 'verdict',
     });
     return parseVerdict(text);
-  } catch {
-    return {kind: 'unjudged'};
+  } catch (error) {
+    return {kind: 'unjudged', reason: failureReason(error)};
   }
 }

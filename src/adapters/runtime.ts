@@ -1,4 +1,4 @@
-import {existsSync, mkdirSync, symlinkSync} from 'node:fs';
+import {closeSync, existsSync, mkdirSync, openSync, readSync, statSync, symlinkSync} from 'node:fs';
 import path from 'node:path';
 
 import {Output, cursor, run} from '@ai-hero/sandcastle';
@@ -53,6 +53,67 @@ export function linkCommand(solverRoot: string, serviceRoot: string): string {
   return steps.join(' && ');
 }
 
+/** Same path sandcastle uses for a file log: `/` in the branch becomes `-`. */
+export function agentLogPath(root: string, branch: string, name: string): string {
+  const safeBranch = branch.replace(/[/\\:*?"<>|]/g, '-');
+  const suffix = name.toLowerCase().replace(/[^a-z0-9_.-]/g, '-');
+  return path.join(root, '.sandcastle', 'logs', `${safeBranch}-${suffix}.log`);
+}
+
+/**
+ * Copies new bytes from a log file to `write` until `stop`. A missing file is
+ * waited on, and `stop` reads whatever landed after the last tick.
+ */
+export function followFile(
+  file: string,
+  write: (chunk: string) => void,
+  intervalMs = 200,
+): {stop: () => void} {
+  let offset = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const pull = () => {
+    try {
+      const size = statSync(file).size;
+      if (size < offset) {
+        offset = 0;
+      }
+      if (size <= offset) {
+        return;
+      }
+      const fd = openSync(file, 'r');
+      try {
+        const length = size - offset;
+        const buf = Buffer.alloc(length);
+        const read = readSync(fd, buf, 0, length, offset);
+        offset += read;
+        if (read > 0) {
+          write(buf.subarray(0, read).toString('utf8'));
+        }
+      } finally {
+        closeSync(fd);
+      }
+    } catch {
+      // The file appears when sandcastle opens the run.
+    }
+  };
+  const tick = () => {
+    pull();
+    timer = setTimeout(tick, intervalMs);
+    timer.unref();
+  };
+  timer = setTimeout(tick, intervalMs);
+  timer.unref();
+  return {
+    stop() {
+      if (timer) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
+      pull();
+    },
+  };
+}
+
 /** The sandcastle library reads `<service>/.sandcastle/.env`. Point that at this package. */
 export function ensureServiceEnv(serviceRoot: string, solverRoot: string): void {
   const from = path.join(solverRoot, '.env');
@@ -72,22 +133,31 @@ export function sandcastleRuntime(config: SandcastleRuntimeConfig): Runtime {
   return {
     async ask(request: RuntimeAsk) {
       ensureServiceEnv(config.root, config.solverRoot);
-      const result = await run({
-        name: request.name,
-        sandbox: hostSandbox(),
-        agent: cursor(modelFor(request.mode)),
-        promptFile: request.promptFile,
-        promptArgs: request.promptArgs,
-        output: Output.string({tag: request.outputTag}),
-        maxIterations: 1,
-        branchStrategy: {
-          type: 'branch',
-          branch: request.branch,
-          baseBranch: config.baseBranch,
-        },
-        cwd: config.root,
-      });
-      return result.output;
+      const logPath = agentLogPath(config.root, request.branch, request.name);
+      console.log(`::group::${request.name} agent`);
+      const follow = followFile(logPath, chunk => process.stdout.write(chunk));
+      try {
+        const result = await run({
+          name: request.name,
+          sandbox: hostSandbox(),
+          agent: cursor(modelFor(request.mode)),
+          promptFile: request.promptFile,
+          promptArgs: request.promptArgs,
+          output: Output.string({tag: request.outputTag}),
+          maxIterations: 1,
+          logging: {type: 'file', path: logPath, verbose: true},
+          branchStrategy: {
+            type: 'branch',
+            branch: request.branch,
+            baseBranch: config.baseBranch,
+          },
+          cwd: config.root,
+        });
+        return result.output;
+      } finally {
+        follow.stop();
+        console.log('::endgroup::');
+      }
     },
     async run(skill: SkillRun) {
       ensureIssueBranch(config.root, skill.key, {

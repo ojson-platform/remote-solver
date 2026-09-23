@@ -6,7 +6,10 @@ import type {Verdict} from './verdict.ts';
 export type Judge = (dossier: Dossier) => Promise<Verdict> | Verdict;
 
 export type ReviewPass =
-  {action: 'wait'; reason: string} | {action: 'unjudged'} | {action: 'clean'} | {action: 'remarks'};
+  | {action: 'wait'; reason: string}
+  | {action: 'unjudged'; reason: string}
+  | {action: 'clean'}
+  | {action: 'remarks'; items: string[]};
 
 export function reviewedNote(head: string): string {
   return `sdd:note reviewed ${head}`;
@@ -38,6 +41,11 @@ export function reviewStep(input: {
   return {kind: 'judge'};
 }
 
+/** Remarks that are posted. Blank lines are dropped. */
+export function spokenRemarks(items: string[]): string[] {
+  return items.map(remark => remark.trim()).filter(remark => remark.length > 0);
+}
+
 /** `unjudged` posts nothing. A clean verdict notes the head, then merges. Remarks are one person comment. */
 export function applyReview(
   verdict: Verdict,
@@ -53,10 +61,7 @@ export function applyReview(
     review.merge(pull);
     return;
   }
-  const body = verdict.items
-    .map(remark => remark.trim())
-    .filter(remark => remark.length > 0)
-    .join('\n\n');
+  const body = spokenRemarks(verdict.items).join('\n\n');
   if (body) {
     review.speak(pull, body);
   }
@@ -107,10 +112,10 @@ export async function passReview(
   const verdict = await deps.judge(built.dossier);
   applyReview(verdict, item.pull, range.head, deps.review);
   if (verdict.kind === 'remarks') {
-    return {action: 'remarks'};
+    return {action: 'remarks', items: spokenRemarks(verdict.items)};
   }
   if (verdict.kind === 'clean') {
     return {action: 'clean'};
   }
-  return {action: 'unjudged'};
+  return {action: 'unjudged', reason: verdict.reason};
 }

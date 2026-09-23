@@ -40,7 +40,11 @@ const green = {
 };
 
 test('an empty model answer is unjudged, and a forbidden remark is dropped', () => {
-  assert.deepEqual(parseVerdict(''), {kind: 'unjudged'});
+  assert.deepEqual(parseVerdict(''), {kind: 'unjudged', reason: 'empty answer'});
+  assert.deepEqual(parseVerdict('looks fine'), {
+    kind: 'unjudged',
+    reason: 'answer is not a verdict: looks fine',
+  });
   assert.deepEqual(parseVerdict('clean'), {kind: 'clean'});
   assert.deepEqual(parseVerdict('remark: sdd:layer=code\nremark: Scenario TTL is missing'), {
     kind: 'remarks',
@@ -201,7 +205,7 @@ test('a change with no files waits', () => {
 
 test('unjudged posts nothing, clean notes then merges, remarks speak once', () => {
   const quiet = memoryPorts();
-  applyReview({kind: 'unjudged'}, '15', head, quiet.review);
+  applyReview({kind: 'unjudged', reason: 'empty answer'}, '15', head, quiet.review);
   assert.deepEqual(quiet.calls, []);
 
   const clean = memoryPorts();
@@ -252,7 +256,7 @@ test('a clean verdict notes the head and merges, and remarks stay one person com
     },
     {issue: '11', pull: '15'},
   );
-  assert.deepEqual(remarked, {action: 'remarks'});
+  assert.deepEqual(remarked, {action: 'remarks', items: ['Scenario TTL is missing']});
   assert.ok(remarks.calls.includes('speak'));
   assert.ok(remarks.calls.includes('body:Scenario TTL is missing'));
   assert.equal(remarks.calls.includes('say'), false);

@@ -1,6 +1,12 @@
-export type Verdict = {kind: 'unjudged'} | {kind: 'clean'} | {kind: 'remarks'; items: string[]};
+export type Verdict = {kind: 'unjudged'; reason: string} | {kind: 'clean'} | {kind: 'remarks'; items: string[]};
 
 const FORBIDDEN = ['sdd:layer=', 'sdd:note', 'sdd:fixed', 'sdd:begin', '🤖'];
+
+/** One line of the model text, short enough for the action log. */
+export function excerpt(text: string): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length > 160 ? `${flat.slice(0, 160)}...` : flat;
+}
 
 /** Model text becomes a verdict. Anything that is not `clean` or a safe remark stays unjudged. */
 export function parseVerdict(text: string): Verdict {
@@ -17,7 +23,11 @@ export function parseVerdict(text: string): Verdict {
     .filter(body => body.length > 0 && !FORBIDDEN.some(token => body.includes(token)))
     .slice(0, 5);
   if (items.length === 0) {
-    return {kind: 'unjudged'};
+    const sample = excerpt(text);
+    return {
+      kind: 'unjudged',
+      reason: sample ? `answer is not a verdict: ${sample}` : 'empty answer',
+    };
   }
   return {kind: 'remarks', items};
 }

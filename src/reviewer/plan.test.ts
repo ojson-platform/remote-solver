@@ -27,6 +27,10 @@ test('auto-merge stands the reviewer down, and a ready issue names its one open 
   ]);
   assert.equal(describe(items[1], {action: 'clean'}), '#12 clean');
   assert.equal(
+    describe(items[1], {action: 'unjudged', reason: 'empty answer'}),
+    '#12 unjudged: empty answer',
+  );
+  assert.equal(
     describe(items[1], {action: 'wait', reason: 'checks are pending'}),
     '#12 wait: checks are pending',
   );

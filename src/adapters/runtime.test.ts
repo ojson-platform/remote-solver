@@ -4,7 +4,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
-import {ensureServiceEnv, linkCommand} from './runtime.ts';
+import {agentLogPath, ensureServiceEnv, followFile, linkCommand} from './runtime.ts';
 
 test('the worktree hook links the package into .sandcastle and keeps the service node_modules', () => {
   const parent = mkdtempSync(path.join(tmpdir(), 'sdd-link-'));
@@ -40,4 +40,23 @@ test('the service env link points at the package and does not replace an existin
   ensureServiceEnv(other, solver);
   assert.equal(lstatSync(path.join(other, '.sandcastle', '.env')).isSymbolicLink(), false);
   assert.equal(readFileSync(path.join(other, '.sandcastle', '.env'), 'utf8'), 'CURSOR_API_KEY=local\n');
+});
+
+test('the agent log path matches the sandcastle file name', () => {
+  assert.equal(
+    agentLogPath('/work', 'reviewer/24143f8848df', 'review'),
+    path.join('/work', '.sandcastle', 'logs', 'reviewer-24143f8848df-review.log'),
+  );
+});
+
+test('followFile copies the log as it grows and flushes on stop', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'agent-log-'));
+  const file = path.join(root, 'review.log');
+  const chunks: string[] = [];
+  const follow = followFile(file, chunk => chunks.push(chunk), 15);
+  writeFileSync(file, 'one\n');
+  await new Promise(resolve => setTimeout(resolve, 40));
+  writeFileSync(file, 'one\ntwo\n');
+  follow.stop();
+  assert.equal(chunks.join(''), 'one\ntwo\n');
 });

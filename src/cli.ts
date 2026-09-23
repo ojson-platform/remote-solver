@@ -51,8 +51,7 @@ export async function runCli(argv: string[]): Promise<number> {
     return 0;
   }
   if (chosen.kind === 'review') {
-    await runReview(machine());
-    return 0;
+    return runReview(machine());
   }
   if (chosen.kind === 'issue') {
     return runIssue(chosen.key);

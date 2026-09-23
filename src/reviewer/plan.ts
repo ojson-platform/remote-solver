@@ -45,9 +45,10 @@ export function reviewQueue(issues: Issue[], pullsOf: (key: string) => Pull[]): 
 /** One line for the queue, or for a pass once the reviewer has run. */
 export function describe(item: ReviewQueueItem, pass?: ReviewPass): string {
   if (pass) {
-    return pass.action === 'wait'
-      ? `#${item.issue} wait: ${pass.reason}`
-      : `#${item.issue} ${pass.action}`;
+    if (pass.action === 'wait' || pass.action === 'unjudged') {
+      return `#${item.issue} ${pass.action}: ${pass.reason}`;
+    }
+    return `#${item.issue} ${pass.action}`;
   }
   if (item.kind === 'ready') {
     return `#${item.issue} review pull ${item.pull}`;

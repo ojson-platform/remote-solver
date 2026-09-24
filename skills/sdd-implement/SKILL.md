@@ -37,7 +37,7 @@ Do not open other changes, other skills, `machine/flow.ts`, ADRs, or a directory
 5. Write the test only. Each test name contains its Scenario title. The test observes only what `## Доказательство` says.
 6. Run `pnpm run test:units:fast`. Exit 0: the test does not pin the behavior. Rewrite the test. Do not edit `src` until a run exits non-zero.
 7. Edit `src` only as `## Сделать` says. Run `pnpm run test:units:fast` and `pnpm run test:types`. Both exit 0. A failure outside this task: revert the code and stop.
-8. Check this task's `- [x]` only. One commit `#<issue>: <id>`, then Publish. Issue mirror: the Tasks line.
+8. Check this task's `- [x]` only. One commit, message from the Commit section in `context.md`, naming `<id>`. Then Publish. Issue mirror: the Tasks line.
 
 ## fix-implementation
 

@@ -33,6 +33,20 @@ npx remote-solver thread resolve <thread>
 
 The agent for an issue runs on branch `sdd/<key>`. The library keeps that checkout in the service under `.sandcastle/worktrees/`, named from the branch with `/` replaced by `-`, and reuses it on the next run. This package is linked into that checkout as `.sandcastle/`. A branch is checked out in only one worktree, so an older checkout of `sdd/<key>` has to be removed before that issue can run. A run that records no commit leaves the issue idle.
 
+Before Publish, `git status` is empty aside from the files of this commit. Anything else is an artifact the task did not name. Find why it appeared and remove that cause in the same run: a generated directory goes into the service `.gitignore`, a stray file is deleted, a file that belongs to the task joins the commit. Do not publish while the tree is dirty. A dirty tree is reused as-is and is not fast-forwarded from origin.
+
+## Commit
+
+The default subject is `#<issue>: <what changed>`.
+
+The repository's own commit rule wins. Read it where the repository states commit messages (`CONTRIBUTING`, the agent style guide, a commitlint config). The subject follows that rule and says what this commit changed. The body contains a line `#<issue>`.
+
+The pull request title stays `#<issue>: <what changed>`. That string is the `publish` argument, not the commit subject.
+
+## Wait
+
+`npx remote-solver wait <issue> '<what the person does>'` sets `sdd:wait-human` and comments on the issue. The comment is the ask: the decision, the review, or the broken check, and the next command. A wait without that sentence is refused.
+
 ## Issue mirror
 
 Keep the author's text. Replace only the block between `<!-- sdd:begin -->`

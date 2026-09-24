@@ -9,7 +9,7 @@ import {loadCycle} from './machine/snapshot.ts';
 
 // Verbs the skills call. The GitHub and git adapters sit behind them.
 //   sdd.ts plan
-//   sdd.ts set <key> <phase> | wait <key> | unwait <key> | accept <key>
+//   sdd.ts set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key>
 //   sdd.ts publish <key> "<pull title>"
 //   sdd.ts checks <pull>
 //   sdd.ts thread open <pull> <path> <line> <body>
@@ -31,7 +31,7 @@ function need(value: string | undefined, usage: string): string {
 }
 
 const usage =
-  'Usage: remote-solver plan | set <key> <phase> | wait <key> | unwait <key> | accept <key> | publish <key> "<title>" | checks <pull> | thread open|reply|say|resolve ... | mirror <key> <Layer> <text>';
+  'Usage: remote-solver plan | set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key> | publish <key> "<title>" | checks <pull> | thread open|reply|say|resolve ... | mirror <key> <Layer> <text>';
 
 export function runSdd(argv: string[]): void {
   const box = machine();
@@ -56,7 +56,13 @@ function dispatch(box: ReturnType<typeof machine>, command: string | undefined, 
     }
     setPhase(key, phase as Phase, box.tracker);
   } else if (command === 'wait') {
-    setWait(need(rest[0], usage), true, box.tracker);
+    const key = need(rest[0], usage);
+    const reason = rest.slice(1).join(' ').trim();
+    if (!reason) {
+      fail(usage);
+    }
+    setWait(key, true, box.tracker);
+    box.tracker.comment(key, reason);
   } else if (command === 'unwait') {
     setWait(need(rest[0], usage), false, box.tracker);
   } else if (command === 'accept') {

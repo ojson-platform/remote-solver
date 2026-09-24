@@ -25,8 +25,8 @@ Writes the current behavior of a capability that has no baseline. One commit, be
 3. Write `openspec/specs/<id>/spec.md` for each `### Modified` id that has no file yet.
 4. The spec holds today's behavior of that rule, from code and tests, including disagreements between helpers. Requirement and Scenario. Leave a disputed point as the code behaves.
 5. `## Out of scope` is another id. It stays out of this spec even when the code sits in the same file. An older proposal keeps that list inside its scope section under `Вне change`.
-6. When the code does not show the behavior, stop and set `sdd:wait-human`.
-7. Publish: the baseline spec and the id edit in the proposal, one commit `#<issue>: baseline <capability>`. Do not set `wait`.
+6. When the code does not show the behavior, stop and `npx remote-solver wait <issue> '<what the code does not show>'`.
+7. Publish: the baseline spec and the id edit in the proposal, one commit, message from the Commit section in `context.md`, naming the capability. Do not set `wait`.
 8. After the push, open an `sdd:note` thread on each disputed line of the pushed commit.
 
 ## Check

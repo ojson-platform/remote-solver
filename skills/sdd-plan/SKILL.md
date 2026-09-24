@@ -25,9 +25,9 @@ Records why and the scope. Zoom is context, not implementation. The commit and t
 3. `proposal.md` already exists: leave it.
 4. A question below the context zoom stays out of the proposal.
 5. `improve-proposal`: a thread marked `sdd:layer=proposal` gets its own commit, reply `sdd:fixed <commit>`, then resolve the thread.
-6. Publish: the proposal and any uncommitted `openspec/` of this issue, message `#<issue>: <what changed>`. Open questions do not delay the pull request.
+6. Publish: the proposal and any uncommitted `openspec/` of this issue, message from the Commit section in `context.md`. Open questions do not delay the pull request.
 7. Issue mirror (`context.md`): the Change and Plan lines.
-8. The issue has `sdd:auto-plan`: do not set `sdd:wait-human`. Otherwise `npx remote-solver wait <issue>`.
+8. The issue has `sdd:auto-plan`: do not set `sdd:wait-human`. Otherwise `npx remote-solver wait <issue> 'Review the proposal, then remote-solver accept <issue>.'`
 
 ## Check
 

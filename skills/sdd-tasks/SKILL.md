@@ -35,7 +35,7 @@ Files are named only in the task card. The cut follows the caller path.
 5. A foreign contract: a child issue labeled `Sandcastle` and `sdd:cycle`, body line `Parent: #<issue>`. A neighbor cycle already covers that contract: do not duplicate it, add `Depends: #<issue>`. A service with no cycle: an ordinary issue and `Depends: #<issue>`.
 6. A scenario in two tasks, a scenario in none, or a task with no anchor: fix that before the commit.
 7. `improve-tasks`: a thread marked `sdd:layer=tasks` gets its own commit, reply `sdd:fixed <commit>`, then resolve the thread.
-8. Publish: `tasks.md`, `tasks/*.md`, and any uncommitted `openspec/` of this issue, message `#<issue>: <what changed>`. Issue mirror: the Tasks line. Do not set `wait`.
+8. Publish: `tasks.md`, `tasks/*.md`, and any uncommitted `openspec/` of this issue, message from the Commit section in `context.md`. Issue mirror: the Tasks line. Do not set `wait`.
 
 ## Check
 

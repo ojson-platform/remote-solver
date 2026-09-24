@@ -7,7 +7,7 @@ const usage = `Usage:
   remote-solver spy [--parallel N] [--interval S]
   remote-solver review
   remote-solver issue <key>
-  remote-solver plan | set <key> <phase> | wait <key> | unwait <key> | accept <key> | publish <key> "<title>" | checks <pull> | thread open|reply|say|resolve ... | mirror <key> <Layer> <text>
+  remote-solver plan | set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key> | publish <key> "<title>" | checks <pull> | thread open|reply|say|resolve ... | mirror <key> <Layer> <text>
 
 Working directory is the service repository.`;
 

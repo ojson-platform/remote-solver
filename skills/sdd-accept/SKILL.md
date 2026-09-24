@@ -21,7 +21,7 @@ Folds the delta into the baseline on the same PR. A person merges that PR. `sdd:
 
 1. Move Requirement and Scenario from `openspec/changes/issue-<issue>/specs/` into `openspec/specs/<capability>/spec.md`. Keep the scenario meaning.
 2. Move the change directory to `openspec/changes/archive/issue-<issue>/`.
-3. Commit `#<issue>: archive change` and Publish.
+3. Commit the archive, message from the Commit section in `context.md`, and Publish.
 4. Issue mirror: the Change line points at the archive path. Leave the phase. When the checks are green, a person merges the pull request, unless `sdd:auto-merge` is set. The machine sets `sdd:accepted` after the merge.
 
 ## unarchive
@@ -39,4 +39,4 @@ Folds the delta into the baseline on the same PR. A person merges that PR. `sdd:
 
 - Archive is on the PR and the checks are green: a person merges the pull request, or `sdd:auto-merge` is set and the machine merges.
 - Unarchive is on the PR: the machine runs again.
-- A conflict with a baseline already on `master`: stop and set `sdd:wait-human`.
+- A conflict with a baseline already on `master`: stop and `npx remote-solver wait <issue> '<which baseline conflicts>'`.

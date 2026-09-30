@@ -8,36 +8,32 @@ mode: judgment
 
 # sdd-specify
 
-Writes observable behavior. Zoom is the black box.
+Writes observable behavior. Zoom is the black box. The delta grammar is `context.md` § Delta.
 
 ## Out of this action
 
 - Tests, commands, source paths, function names
 - Code, and edits to `proposal.md`
 - The verification boundary: that is `design.md`
-- Restoring a baseline: that is `sdd-baseline`
+- The baseline of a capability
 - The `sdd:specified` label
 
 ## Steps
 
-1. No accepted `proposal.md`: stop.
-2. A `### Modified` capability has no `openspec/specs/<id>/spec.md`: stop. That action is `sdd-baseline`.
-3. The delta exists and still matches the proposal: leave it and go to the `openspec validate` step.
-4. Run `openspec instructions specs --change issue-<issue> --json`. Write `openspec/changes/issue-<issue>/specs/<capability>/spec.md` from its `template`. A scenario is checked from outside, without reading code.
-5. A local proposal change: edit only the scenarios it touches.
-6. `improve-specs`: a thread marked `sdd:layer=spec` gets its own commit, reply `sdd:fixed <commit>`, then resolve the thread.
-7. Run `openspec validate --all --strict --no-interactive`. Exit non-zero: fix every spec file the output names, then run it again. Do not publish while it fails.
-8. Publish: the delta and any uncommitted `openspec/` of this issue, message from the Commit section in `context.md`.
-9. Issue mirror (`context.md`): the Specify line. The issue has `sdd:auto-spec`: do not set `sdd:wait-human`. Otherwise `npx remote-solver wait <issue> 'Review the spec, then remote-solver accept <issue>.'`
+1. The delta exists, still matches the proposal, and `threads <pull> --layer spec` is empty: go to step 5.
+2. Run `openspec instructions specs --change issue-<issue> --json`. Write `openspec/changes/issue-<issue>/specs/<capability>/spec.md` from its `template`, sections by § Delta. A scenario is checked from outside, without reading code.
+3. A local proposal change: edit the requirements and scenarios it changes, including ones it drops.
+4. `improve-specs`: Fix thread (`context.md`), layer `spec`. A thread that drops a requirement or scenario writes that drop in the delta. `proposal.md` stays.
+5. Run `openspec validate --all --strict --no-interactive`. Exit non-zero: fix every spec file the output names, then run it again. Do not publish while it fails.
+6. Publish (`context.md`). Mirror: `Specify`.
 
 ## Check
 
-- Every Requirement has a Scenario
+- Every ADDED or MODIFIED Requirement has a Scenario. A dropped requirement is a name under `## REMOVED Requirements`. A dropped scenario is absent from the requirement that stays
 - No stack and no verification boundary
-- Old scenarios stay unless the proposal dropped them
 - `openspec validate --all --strict --no-interactive` exits 0
 
 ## Stop
 
-- The spec is on the PR. With `sdd:auto-spec`, stop without a wait. Without it, wait for review.
-- The proposal needs a change: stop. Keep the spec files.
+- Publish. The machine opens the review gate.
+- The capability list, problem, or scope is wrong, or the delta would remove the last requirement of a baseline: Hand-off to `proposal` on the line of `proposal.md` that is wrong. Keep the spec files as they are. Dropping a requirement or scenario of a named capability stays in this action.

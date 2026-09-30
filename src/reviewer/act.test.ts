@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {test} from 'node:test';
+import {test} from 'vitest';
 
 import {memoryPorts, type MemorySeed} from '../adapters/github.ts';
 import type {FileSource, Vcs} from '../machine/port.ts';
@@ -29,6 +29,8 @@ function surface(
     compare: () => span,
     push() {},
     head: () => '',
+    published: () => true,
+    dirty: () => [],
   };
   return {review: memory.review, calls: memory.calls, vcs};
 }

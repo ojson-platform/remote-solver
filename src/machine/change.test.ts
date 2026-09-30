@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {mkdtempSync, mkdirSync, rmSync, writeFileSync} from 'node:fs';
+import {mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {test} from 'node:test';
+import {test} from 'vitest';
 
-import {changeText, readChange} from './change.ts';
+import {changeText, HEADINGS, readChange} from './change.ts';
 import type {FileSource} from './port.ts';
 import {gitFiles} from '../adapters/vcs.ts';
 
@@ -114,6 +114,25 @@ test('reads a change from a file source that is not git', () => {
   assert.equal(view.proposal, true);
   assert.equal(view.openQuestions, 1);
   assert.equal(view.delta, false);
+});
+
+test('context.md § Artifacts states every heading the machine and the implementer read', () => {
+  const context = readFileSync(
+    path.join(import.meta.dirname, '..', '..', 'prompts', 'context.md'),
+    'utf8',
+  );
+  const artifacts = context.split(/^## /m).find(section => section.startsWith('Artifacts\n'));
+  assert.ok(artifacts, 'context.md has § Artifacts');
+  const read = [
+    `## ${HEADINGS.capabilities}`,
+    `### ${HEADINGS.modified}`,
+    `## ${HEADINGS.openQuestions}`,
+    `## ${HEADINGS.openDecisions}`,
+    '## Verification boundary',
+  ];
+  for (const heading of read) {
+    assert.ok(artifacts.includes(`\`${heading}\``), `§ Artifacts names ${heading}`);
+  }
 });
 
 function existsOnMaster(root: string, rel: string): boolean {

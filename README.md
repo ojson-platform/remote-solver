@@ -12,6 +12,8 @@ Copy `.env.example` to `.env` for a live run. That file is not committed.
 
 Run from the service repository. The working directory stays the service: that is the repository the machine reads.
 
+A person closes a review gate on the issue by moving its phase, e.g. `sdd:proposing` to `sdd:proposed`. `accept` does the same from the command line.
+
 ```bash
 npx remote-solver accept <key>
 npx remote-solver issue <key>

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
-import {test} from 'node:test';
+import {test} from 'vitest';
 
+import {readChange} from './change.ts';
 import {resolveCycle, resolveIssue} from './flow.ts';
+import {markRobot} from './marker.ts';
 import {loadCycle} from './snapshot.ts';
 import {memoryPorts} from '../adapters/github.ts';
 import type {FileSource} from './port.ts';
@@ -33,6 +35,77 @@ test('resolveIssue loads the cycle once and flushes mechanical advances in one w
     assert.equal(decision.action, 'create-proposal');
   }
   assert.deepEqual(tracker.labels('424242'), ['Sandcastle', 'sdd:cycle', 'sdd:proposing']);
+});
+
+test('the machine opens the review gate with one ask and does not repeat it', () => {
+  const {tracker, review, calls} = memoryPorts({
+    issues: [
+      {
+        key: '5',
+        title: '#5: title',
+        body: '',
+        state: 'OPEN',
+        labels: ['Sandcastle', 'sdd:cycle', 'sdd:proposing'],
+      },
+    ],
+    pulls: {'5': [{id: '9', title: '#5: title', state: 'OPEN'}]},
+  });
+  const options = {
+    tracker,
+    review,
+    files,
+    queueLabel: 'Sandcastle',
+    change: {...readChange('5', files), proposal: true},
+  };
+  const opened = resolveIssue('5', options);
+  assert.equal(opened.kind, 'wait');
+  assert.ok(tracker.labels('5').includes('sdd:wait-human'));
+  const asks = () => calls.filter(call => call.startsWith('body:') && call.includes('Review the proposal'));
+  assert.equal(asks().length, 1);
+  assert.match(
+    asks()[0],
+    /Review the proposal\. To accept it, replace the label `sdd:proposing` with `sdd:proposed` on this issue, or run `remote-solver accept 5`\./,
+  );
+
+  const held = resolveIssue('5', options);
+  assert.equal(held.kind, 'wait');
+  assert.equal(asks().length, 1);
+});
+
+test('a person who moves the gate label on the issue gets a record, or the change goes back', () => {
+  const seed = (labels: string[]) =>
+    memoryPorts({
+      issues: [{key: '5', title: '#5: title', body: '', state: 'OPEN', labels}],
+      pulls: {'5': [{id: '9', title: '#5: title', state: 'OPEN'}]},
+    });
+  const base = readChange('5', files);
+
+  const accepted = seed(['Sandcastle', 'sdd:cycle', 'sdd:proposing', 'sdd:proposed', 'sdd:wait-human']);
+  resolveIssue('5', {
+    ...accepted,
+    files,
+    queueLabel: 'Sandcastle',
+    change: {...base, proposal: true},
+  });
+  assert.ok(accepted.tracker.labels('5').includes('sdd:specifying'));
+  assert.ok(!accepted.tracker.labels('5').includes('sdd:wait-human'));
+  assert.ok(accepted.calls.includes('body:' + markRobot('sdd:accept proposing → specifying')));
+
+  const open = seed(['Sandcastle', 'sdd:cycle', 'sdd:proposed']);
+  const options = {...open, files, queueLabel: 'Sandcastle', change: {...base, proposal: true, openQuestions: 1}};
+  const held = resolveIssue('5', options);
+  assert.equal(held.kind, 'wait');
+  assert.deepEqual(open.tracker.labels('5'), ['Sandcastle', 'sdd:cycle', 'sdd:proposing']);
+  const notes = () => open.calls.filter(call => call.startsWith('body:'));
+  assert.equal(notes().length, 1);
+  assert.match(notes()[0], /back to proposing/);
+  assert.match(notes()[0], /## Open questions in openspec\/changes\/issue-5\/proposal\.md/);
+
+  resolveIssue('5', options);
+  assert.equal(notes().length, 1);
+  resolveIssue('5', {...options, change: {...base, proposal: true}});
+  assert.equal(notes().length, 2);
+  assert.match(notes()[1], /Review the proposal/);
 });
 
 test('resolveCycle leaves an issue a worker already runs', () => {

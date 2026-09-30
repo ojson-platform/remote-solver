@@ -1,0 +1,8 @@
+schema: spec-driven
+
+context: |
+  @ojson/remote-solver moves one cycle: an issue, its pull request, and its OpenSpec change.
+  A baseline spec states behavior the machine already enforces. Requirement text uses MUST or SHALL.
+  A scenario is WHEN and THEN, observed from the issue, the pull request, or a remote-solver verb.
+  A change directory is openspec/changes/issue-<key>/.
+  Delta specs use the sections ADDED, MODIFIED, REMOVED, and RENAMED Requirements.

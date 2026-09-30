@@ -1,27 +1,30 @@
 import path from 'node:path';
 
-import type {ChangeView} from './change.ts';
+import {HEADINGS, type ChangeView} from './change.ts';
 import {changeDir} from './naming.ts';
-import {labelsAfterAdvance, phaseOf, phaseRank, type Phase} from './phase.ts';
+import {GATE_CLOSES, labelsAfterAdvance, phaseOf, phaseRank, type Phase} from './phase.ts';
 import type {CheckState, IssueRecord} from './port.ts';
 import {emptyReview, layerOfPhase, type ReviewView} from './review.ts';
+import {ACTION_SKILL, LAYER_ACTION, type AgentAction, type Skill} from './route.ts';
 
 export type Decision =
   | {
       kind: 'agent';
       issue: string;
-      action: string;
-      skill: string;
+      action: AgentAction;
+      skill: Skill;
       phase: Phase;
       pr: string;
       reason: string;
     }
-  | {kind: 'wait'; issue: string | null; reason: string}
+  /** `gate` opens the wait: the machine sets `sdd:wait-human` and posts the ask the tracker renders. */
+  | {kind: 'wait'; issue: string | null; reason: string; gate?: Gate}
   | {kind: 'done'; issue: string | null; reason: string}
-  | {kind: 'advance'; issue: string; to: Phase; reason: string}
+  /** `comment` is posted on the issue after the move. */
+  | {kind: 'advance'; issue: string; to: Phase; reason: string; comment?: string}
   | {kind: 'merge'; issue: string; pull: string; reason: string};
 
-/** Several open pull requests stop the cycle until a person leaves one. */
+/** Several open pull requests stop the cycle before any step, until a person leaves one. */
 export function severalOpenReason(ids: string[]): string {
   return `cycle stopped until one open PR remains: ${ids.join(', ')}`;
 }
@@ -44,16 +47,6 @@ export type PullSnapshot = {
   checks: CheckState;
 };
 
-const PROMPT_SKILL: Record<string, string> = {
-  proposing: 'sdd-plan',
-  specifying: 'sdd-specify',
-  designing: 'sdd-design',
-  tasking: 'sdd-tasks',
-  implementing: 'sdd-implement',
-  verifying: 'sdd-verify',
-  accepting: 'sdd-accept',
-};
-
 export function writingGate(phase: Phase, change: ChangeView): {artifact: boolean; open: number} {
   if (phase === 'proposing') {
     return {artifact: change.proposal, open: change.openQuestions};
@@ -67,29 +60,61 @@ export function writingGate(phase: Phase, change: ChangeView): {artifact: boolea
   return {artifact: true, open: 0};
 }
 
-function autoGateReady(
-  phase: Phase,
-  names: string[],
-  change: ChangeView,
-  pr: PullSnapshot | undefined,
-): boolean {
-  if (!pr) {
-    return false;
-  }
+/** The review gate a person closes: `from` is the writing phase, `to` the gate phase. */
+export type Gate = {artifact: string; from: Phase; to: Phase};
+
+/** A published artifact without an auto tag: the machine opens the human gate once. */
+function reviewGate(issue: string, artifact: string, from: Phase, to: Phase): Decision {
+  return {
+    kind: 'wait',
+    issue,
+    reason: `review the ${artifact}, then a person moves ${from} to ${to}`,
+    gate: {artifact, from, to},
+  };
+}
+
+const HUMAN_NEXT: Partial<Record<Phase, Phase>> = {
+  proposing: 'specifying',
+  specifying: 'designing',
+  designing: 'tasking',
+};
+
+/** What still stops a person from closing a writing phase. Null when nothing does. */
+export function gateBlocker(key: string, phase: Phase, change: ChangeView): string | null {
   const gate = writingGate(phase, change);
-  if (!gate.artifact || gate.open > 0) {
-    return false;
+  const required =
+    phase === 'proposing' ? 'proposal.md' : phase === 'specifying' ? 'specs' : 'design.md';
+  const file = path.join(changeDir(key), required);
+  if (!gate.artifact) {
+    return `Missing ${file}`;
   }
-  if (phase === 'proposing' && names.includes('sdd:auto-plan')) {
-    return true;
+  if (gate.open) {
+    const heading = phase === 'designing' ? HEADINGS.openDecisions : HEADINGS.openQuestions;
+    return `#${key} still has open items under ## ${heading} in ${file}`;
   }
-  if (phase === 'specifying' && names.includes('sdd:auto-spec')) {
-    return true;
+  return null;
+}
+
+/** A person set the gate phase. The machine checks it, then moves on or back to the closed phase. */
+function closeGate(key: string, gate: Phase, closed: Phase, change: ChangeView): Decision {
+  const blocker = gateBlocker(key, closed, change);
+  if (blocker) {
+    return {
+      kind: 'advance',
+      issue: key,
+      to: closed,
+      reason: `${gate} refused: ${blocker}`,
+      comment: `The phase moved to ${gate}, but ${closed} is not done. ${blocker}. The machine moved the issue back to ${closed}.`,
+    };
   }
-  if (phase === 'designing' && names.includes('sdd:auto-design')) {
-    return true;
-  }
-  return false;
+  const next = HUMAN_NEXT[closed] as Phase;
+  return {
+    kind: 'advance',
+    issue: key,
+    to: next,
+    reason: `${closed} → ${next}`,
+    comment: `sdd:accept ${closed} → ${next}`,
+  };
 }
 
 function children(parent: string, issues: IssueRecord[]): IssueRecord[] {
@@ -112,13 +137,12 @@ function atLeast(issue: IssueRecord, phase: Phase): boolean {
 
 function agent(
   issue: string,
-  action: string,
-  skill: string,
+  action: AgentAction,
   phase: Phase,
   pr: string,
   reason: string,
 ): Decision {
-  return {kind: 'agent', issue, action, skill, phase, pr, reason};
+  return {kind: 'agent', issue, action, skill: ACTION_SKILL[action], phase, pr, reason};
 }
 
 /** A merged pull request closes the cycle. `sdd:auto-merge` is the only path where the machine merges. */
@@ -157,50 +181,7 @@ export function decide(
   if (names.includes('sdd:cancelled')) {
     return {kind: 'done', issue: issue.key, reason: 'cancelled'};
   }
-  const phase = phaseOf(names);
-  if (!phase) {
-    return {kind: 'advance', issue: issue.key, to: 'proposing', reason: 'enter the cycle'};
-  }
-  if (phase === 'accepted') {
-    const acceptedOpen = pulls.filter(item => item.state === 'OPEN');
-    const acceptedMerged = pulls.filter(item => item.state === 'MERGED');
-    if (acceptedOpen.length > 1) {
-      return {
-        kind: 'wait',
-        issue: issue.key,
-        reason: severalOpenReason(acceptedOpen.map(item => item.id)),
-      };
-    }
-    const acceptedPr = acceptedMerged[0] ?? acceptedOpen[0];
-    if (!change.archived && (change.proposal || change.delta)) {
-      return agent(
-        issue.key,
-        'archive',
-        'sdd-accept',
-        phase,
-        acceptedPr ? String(acceptedPr.id) : '',
-        'archive the change',
-      );
-    }
-    return mergeOrWait(issue.key, acceptedOpen[0], acceptedMerged, false);
-  }
-  if (phase === 'proposed') {
-    return {kind: 'advance', issue: issue.key, to: 'specifying', reason: 'proposal accepted'};
-  }
-  if (phase === 'specified') {
-    return {kind: 'advance', issue: issue.key, to: 'designing', reason: 'spec accepted'};
-  }
-  if (phase === 'designed') {
-    return {kind: 'advance', issue: issue.key, to: 'tasking', reason: 'design accepted'};
-  }
-
-  const early = phaseRank(phase) <= phaseRank('tasking');
-  if (early && change.archived) {
-    return agent(issue.key, 'unarchive', 'sdd-accept', phase, '', 'return the delta to the change');
-  }
-
   const open = pulls.filter(pr => pr.state === 'OPEN');
-  const merged = pulls.filter(pr => pr.state === 'MERGED');
   if (open.length > 1) {
     return {
       kind: 'wait',
@@ -208,26 +189,54 @@ export function decide(
       reason: severalOpenReason(open.map(pr => pr.id)),
     };
   }
+  const phase = phaseOf(names);
+  if (!phase) {
+    return {kind: 'advance', issue: issue.key, to: 'proposing', reason: 'enter the cycle'};
+  }
+  if (phase === 'accepted') {
+    const acceptedOpen = open;
+    const acceptedMerged = pulls.filter(item => item.state === 'MERGED');
+    const acceptedPr = acceptedMerged[0] ?? acceptedOpen[0];
+    if (!change.archived && (change.proposal || change.delta)) {
+      return agent(
+        issue.key,
+        'archive',
+        phase,
+        acceptedPr ? String(acceptedPr.id) : '',
+        'archive the change',
+      );
+    }
+    return mergeOrWait(issue.key, acceptedOpen[0], acceptedMerged, false);
+  }
+  const closed = GATE_CLOSES[phase];
+  if (closed) {
+    return closeGate(issue.key, phase, closed, change);
+  }
+
+  const early = phaseRank(phase) <= phaseRank('tasking');
+  if (early && change.archived) {
+    return agent(issue.key, 'unarchive', phase, '', 'return the delta to the change');
+  }
+
+  const merged = pulls.filter(pr => pr.state === 'MERGED');
   const pr = open[0];
   const feedback = pr?.review ?? emptyReview;
   if (feedback.unanswered && pr) {
     return agent(
       issue.key,
       'classify-comments',
-      'sdd-pr-comments',
       phase,
       String(pr.id),
       'unclassified review threads',
     );
   }
 
-  // A layer skill stopped for a person. An auto gate whose artifact is already
-  // on the pull request is not that stop: the machine advances and clears the label.
-  if (names.includes('sdd:wait-human') && !autoGateReady(phase, names, change, pr)) {
+  // A skill stopped for a person, or the machine opened the review gate.
+  if (names.includes('sdd:wait-human')) {
     return {
       kind: 'wait',
       issue: issue.key,
-      reason: `sdd:wait-human is set on ${phase}. Review, then remote-solver unwait ${issue.key}`,
+      reason: `sdd:wait-human is set on ${phase}. Do the ask on the issue and change the phase there, or run remote-solver accept or unwait ${issue.key}`,
     };
   }
 
@@ -245,27 +254,28 @@ export function decide(
     }
   }
 
+  // A spec thread cannot be fixed against a capability that has no baseline.
+  if (phase === 'specifying' && change.missingBaseline.length) {
+    return agent(
+      issue.key,
+      'restore-baseline',
+      phase,
+      pr ? String(pr.id) : '',
+      `no baseline for ${change.missingBaseline.join(', ')}`,
+    );
+  }
+
   const layer = layerOfPhase(phase);
   if (layer && feedback.layers.includes(layer) && pr) {
-    const action =
-      layer === 'proposal'
-        ? 'improve-proposal'
-        : layer === 'spec'
-          ? 'improve-specs'
-          : layer === 'design'
-            ? 'improve-design'
-            : layer === 'tasks'
-              ? 'improve-tasks'
-              : 'fix-implementation';
-    const skill = layer === 'code' ? 'sdd-implement' : PROMPT_SKILL[phase];
-    if (!skill || !pr) {
+    const action = LAYER_ACTION[layer];
+    if (!action) {
       return {
         kind: 'wait',
         issue: issue.key,
-        reason: `threads on ${layer} but no skill or pull request`,
+        reason: `threads on ${layer} but no action`,
       };
     }
-    return agent(issue.key, action, skill, phase, String(pr.id), `threads on ${layer}`);
+    return agent(issue.key, action, phase, String(pr.id), `threads on ${layer}`);
   }
 
   const auto = (tag: string) => names.includes(tag);
@@ -275,7 +285,6 @@ export function decide(
       return agent(
         issue.key,
         'create-proposal',
-        'sdd-plan',
         phase,
         pr ? String(pr.id) : '',
         change.proposal
@@ -293,32 +302,17 @@ export function decide(
     if (auto('sdd:auto-plan')) {
       return {kind: 'advance', issue: issue.key, to: 'specifying', reason: 'sdd:auto-plan'};
     }
-    return {
-      kind: 'wait',
-      issue: issue.key,
-      reason: 'wait for proposal review (remote-solver accept <issue>)',
-    };
+    return reviewGate(issue.key, 'proposal', 'proposing', 'proposed');
   }
 
   if (phase === 'specifying') {
     if (!change.proposal) {
       return {kind: 'advance', issue: issue.key, to: 'proposing', reason: 'proposal.md is missing'};
     }
-    if (change.missingBaseline.length) {
-      return agent(
-        issue.key,
-        'restore-baseline',
-        'sdd-baseline',
-        phase,
-        pr ? String(pr.id) : '',
-        `no baseline for ${change.missingBaseline.join(', ')}`,
-      );
-    }
     if (!change.delta || !pr) {
       return agent(
         issue.key,
         'create-initial-specs',
-        'sdd-specify',
         phase,
         pr ? String(pr.id) : '',
         change.delta
@@ -329,11 +323,7 @@ export function decide(
     if (auto('sdd:auto-spec')) {
       return {kind: 'advance', issue: issue.key, to: 'designing', reason: 'sdd:auto-spec'};
     }
-    return {
-      kind: 'wait',
-      issue: issue.key,
-      reason: 'wait for spec review (remote-solver accept <issue>)',
-    };
+    return reviewGate(issue.key, 'spec', 'specifying', 'specified');
   }
 
   if (phase === 'designing') {
@@ -344,7 +334,6 @@ export function decide(
       return agent(
         issue.key,
         'create-design',
-        'sdd-design',
         phase,
         pr ? String(pr.id) : '',
         change.design ? 'publish design.md to the pull request' : 'write design.md and publish it',
@@ -360,11 +349,7 @@ export function decide(
     if (auto('sdd:auto-design')) {
       return {kind: 'advance', issue: issue.key, to: 'tasking', reason: 'sdd:auto-design'};
     }
-    return {
-      kind: 'wait',
-      issue: issue.key,
-      reason: 'wait for design review (remote-solver accept <issue>)',
-    };
+    return reviewGate(issue.key, 'design', 'designing', 'designed');
   }
 
   if (phase === 'tasking') {
@@ -375,7 +360,6 @@ export function decide(
       return agent(
         issue.key,
         'create-tasks',
-        'sdd-tasks',
         phase,
         pr ? String(pr.id) : '',
         change.tasks ? 'publish tasks.md to the pull request' : 'write tasks.md and publish it',
@@ -401,7 +385,6 @@ export function decide(
       return agent(
         issue.key,
         'implement-next-task',
-        'sdd-implement',
         phase,
         pr ? String(pr.id) : '',
         'next open task',
@@ -443,7 +426,6 @@ export function decide(
       return agent(
         issue.key,
         'classify-failures',
-        'sdd-verify',
         phase,
         String(pr.id),
         'red checks',
@@ -473,7 +455,6 @@ export function decide(
     return agent(
       issue.key,
       'archive',
-      'sdd-accept',
       phase,
       pr ? String(pr.id) : String(merged[0].id),
       'archive the change',
@@ -481,12 +462,6 @@ export function decide(
   }
   return mergeOrWait(issue.key, pr, merged, names.includes('sdd:auto-merge'));
 }
-
-const HUMAN_NEXT: Partial<Record<Phase, Phase>> = {
-  proposing: 'specifying',
-  specifying: 'designing',
-  designing: 'tasking',
-};
 
 export function accept(issue: IssueRecord, change: ChangeView): Decision {
   if (!issue.labels.includes('sdd:cycle')) {
@@ -501,23 +476,9 @@ export function accept(issue: IssueRecord, change: ChangeView): Decision {
       reason: `#${issue.key} is ${phase ?? 'without a phase'}. Accept closes only proposing, specifying, or designing.`,
     };
   }
-  const gate = writingGate(phase, change);
-  const required =
-    phase === 'proposing' ? 'proposal.md' : phase === 'specifying' ? 'specs' : 'design.md';
-  if (!gate.artifact) {
-    return {
-      kind: 'wait',
-      issue: issue.key,
-      reason: `Missing ${path.join(changeDir(issue.key), required)}`,
-    };
-  }
-  if (gate.open) {
-    const heading = phase === 'designing' ? 'Open decisions' : 'Open questions';
-    return {
-      kind: 'wait',
-      issue: issue.key,
-      reason: `#${issue.key} still has open items under ${heading}`,
-    };
+  const blocker = gateBlocker(issue.key, phase, change);
+  if (blocker) {
+    return {kind: 'wait', issue: issue.key, reason: blocker};
   }
   return {kind: 'advance', issue: issue.key, to: next, reason: `${phase} → ${next}`};
 }

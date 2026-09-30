@@ -1,4 +1,5 @@
 import {readChange, type ChangeView} from './change.ts';
+import {gateAsk, openWait} from './labels.ts';
 import {settle, type Decision, type PullSnapshot} from './policy.ts';
 import type {FileSource, Review, Tracker} from './port.ts';
 import {emptyReview, reviewOf} from './review.ts';
@@ -42,8 +43,16 @@ function applySettlement(
 ): void {
   applyLabels(tracker, key, before, settled.labels);
   const closing = settled.transitions.find(transition => transition.to === 'accepted');
+  for (const transition of settled.transitions) {
+    if (transition.comment) {
+      tracker.comment(key, transition.comment);
+    }
+  }
   if (closing) {
     closeAccepted(tracker, key);
+  }
+  if (settled.decision.kind === 'wait' && settled.decision.gate) {
+    openWait(key, gateAsk(key, settled.decision.gate, tracker), tracker);
   }
 }
 

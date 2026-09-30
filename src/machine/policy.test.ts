@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {test} from 'node:test';
+import {test} from 'vitest';
 
 import type {ChangeView} from './change.ts';
 import {
@@ -111,26 +111,87 @@ test('auto-plan advances once the proposal has no open questions', () => {
   });
 });
 
-test('wait-human holds unless the auto gate artifact is already ready', () => {
+test('wait-human holds even when the auto tag is set', () => {
   const held = decide(
-    issue(1, ['sdd:proposing', 'sdd:wait-human', 'sdd:auto-plan']),
-    [],
-    [pull(9)],
-    change({proposal: true, openQuestions: 1}),
-  );
-  assert.equal(held.kind, 'wait');
-  const released = decide(
     issue(1, ['sdd:specifying', 'sdd:wait-human', 'sdd:auto-spec']),
     [],
     [pull(9)],
     change({proposal: true, delta: true}),
   );
-  assert.deepEqual(released, {
-    kind: 'advance',
-    issue: '1',
-    to: 'designing',
-    reason: 'sdd:auto-spec',
+  assert.equal(held.kind, 'wait');
+  if (held.kind === 'wait') {
+    assert.equal(held.gate, undefined);
+  }
+});
+
+const gates = [
+  {phase: 'proposing', gate: 'proposed', artifact: 'proposal', tag: 'sdd:auto-plan', next: 'specifying'},
+  {phase: 'specifying', gate: 'specified', artifact: 'spec', tag: 'sdd:auto-spec', next: 'designing'},
+  {phase: 'designing', gate: 'designed', artifact: 'design', tag: 'sdd:auto-design', next: 'tasking'},
+] as const;
+
+for (const gate of gates) {
+  test(`a published ${gate.artifact} without ${gate.tag} opens the review gate once`, () => {
+    const opened = decide(issue(1, [`sdd:${gate.phase}`]), [], [pull(9)], ready);
+    assert.equal(opened.kind, 'wait');
+    if (opened.kind === 'wait') {
+      assert.deepEqual(opened.gate, {artifact: gate.artifact, from: gate.phase, to: gate.gate});
+    }
+
+    const held = decide(issue(1, [`sdd:${gate.phase}`, 'sdd:wait-human']), [], [pull(9)], ready);
+    assert.equal(held.kind, 'wait');
+    if (held.kind === 'wait') {
+      assert.equal(held.gate, undefined);
+    }
+
+    const auto = decide(issue(1, [`sdd:${gate.phase}`, gate.tag]), [], [pull(9)], ready);
+    assert.deepEqual(auto, {kind: 'advance', issue: '1', to: gate.next, reason: gate.tag});
   });
+
+  test(`a person who sets ${gate.gate} on a ready change moves it to ${gate.next}`, () => {
+    const labels = [`sdd:${gate.phase}`, `sdd:${gate.gate}`, 'sdd:wait-human'];
+    const decision = decide(issue(1, labels), [], [pull(9)], ready);
+    assert.deepEqual(decision, {
+      kind: 'advance',
+      issue: '1',
+      to: gate.next,
+      reason: `${gate.phase} → ${gate.next}`,
+      comment: `sdd:accept ${gate.phase} → ${gate.next}`,
+    });
+  });
+}
+
+test('a gate phase over a missing artifact goes back and names the file', () => {
+  const decision = decide(issue(1, ['sdd:specified']), [], [pull(9)], change({proposal: true}));
+  assert.equal(decision.kind, 'advance');
+  if (decision.kind === 'advance') {
+    assert.equal(decision.to, 'specifying');
+    assert.match(decision.comment ?? '', /Missing openspec\/changes\/issue-1\/specs/);
+  }
+});
+
+test('a gate phase over open items goes back, waits without an ask, and asks once they are closed', () => {
+  const open = change({proposal: true, delta: true, design: true, openDecisions: 1});
+  const reverted = settle(issue(1, ['sdd:cycle', 'sdd:designed']), [], [pull(9)], open);
+  assert.deepEqual(
+    reverted.transitions.map(transition => transition.to),
+    ['designing'],
+  );
+  assert.match(
+    reverted.transitions[0].comment ?? '',
+    /open items under ## Open decisions in openspec\/changes\/issue-1\/design\.md/,
+  );
+  assert.ok(reverted.labels.includes('sdd:designing'));
+  assert.equal(reverted.decision.kind, 'wait');
+  if (reverted.decision.kind === 'wait') {
+    assert.equal(reverted.decision.gate, undefined);
+  }
+
+  const closed = settle(issue(1, reverted.labels), [], [pull(9)], ready);
+  assert.equal(closed.decision.kind, 'wait');
+  if (closed.decision.kind === 'wait') {
+    assert.deepEqual(closed.decision.gate, {artifact: 'design', from: 'designing', to: 'designed'});
+  }
 });
 
 test('an unlabeled thread is classified before the phase moves', () => {
@@ -171,6 +232,7 @@ test('out does not move the phase, and a code marker fixes implementation', () =
   assert.equal(decision.kind, 'agent');
   if (decision.kind === 'agent') {
     assert.equal(decision.action, 'fix-implementation');
+    assert.equal(decision.skill, 'sdd-fix');
   }
 });
 
@@ -185,6 +247,20 @@ test('specifying restores a missing baseline before writing a delta', () => {
   if (decision.kind === 'agent') {
     assert.equal(decision.action, 'restore-baseline');
     assert.match(decision.reason, /cache-first/);
+  }
+});
+
+test('specifying restores a missing baseline before it improves the specs', () => {
+  const decision = decide(
+    issue(1, ['sdd:specifying']),
+    [],
+    [pull(9, {review: {unanswered: false, rollback: 'specifying', layers: ['spec']}})],
+    change({proposal: true, delta: true, missingBaseline: ['cache-first']}),
+  );
+  assert.equal(decision.kind, 'agent');
+  if (decision.kind === 'agent') {
+    assert.equal(decision.action, 'restore-baseline');
+    assert.equal(decision.skill, 'sdd-baseline');
   }
 });
 
@@ -274,7 +350,7 @@ test('a green pull request with a marker rolls back', () => {
   });
 });
 
-test('several open pull requests stop the cycle until one remains', () => {
+test('several open pull requests stop the cycle before any step', () => {
   const decision = decide(
     issue(1, ['sdd:proposing']),
     [],
@@ -292,6 +368,18 @@ test('several open pull requests stop the cycle until one remains', () => {
     change({archived: true}),
   );
   assert.equal(accepted.reason, severalOpenReason(['3', '4']));
+  const gate = decide(
+    issue(1, ['sdd:proposing', 'sdd:proposed']),
+    [],
+    [pull(3), pull(4)],
+    change({proposal: true}),
+  );
+  assert.equal(gate.kind, 'wait');
+  if (gate.kind === 'wait') {
+    assert.equal(gate.reason, severalOpenReason(['3', '4']));
+  }
+  const entering = decide(issue(1, ['sdd:cycle']), [], [pull(3), pull(4)], change());
+  assert.equal(entering.kind, 'wait');
 });
 
 test('publish reuses one open pull request and refuses several', () => {
@@ -411,7 +499,7 @@ test('the human gate advances a reviewed proposal and refuses an open question',
   const blocked = accept(issue(1, issueLabels), change({proposal: true, openQuestions: 1}));
   assert.equal(blocked.kind, 'wait');
   if (blocked.kind === 'wait') {
-    assert.match(blocked.reason, /Open questions/);
+    assert.match(blocked.reason, /## Open questions in openspec\/changes\/issue-1\/proposal\.md/);
   }
 });
 

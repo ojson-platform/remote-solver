@@ -3,7 +3,8 @@ import {execFileSync, spawnSync} from 'node:child_process';
 import {authorIgnored, loadIgnoredAuthors} from '../machine/ignore.ts';
 import {pullTitlePrefix} from '../machine/naming.ts';
 import {publishChoice} from '../machine/policy.ts';
-import {markRobot, spokeByRobot} from '../machine/review.ts';
+import {markRobot} from '../machine/marker.ts';
+import {spokeByRobot} from '../machine/review.ts';
 import type {ReviewNote} from '../machine/port.ts';
 import type {
   CheckState,
@@ -11,6 +12,7 @@ import type {
   IssueRecord,
   Review,
   Thread,
+  ThreadRecord,
   ThreadTarget,
   Tracker,
 } from '../machine/port.ts';
@@ -22,6 +24,11 @@ export type CheckRollup = {
 
 const FAILED = ['FAILURE', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED'];
 const PENDING = ['QUEUED', 'IN_PROGRESS', 'PENDING', 'WAITING', 'REQUESTED'];
+
+/** On GitHub the phase is an `sdd:<phase>` label. */
+export function labelHint(from: string, to: string): string {
+  return `replace the label \`sdd:${from}\` with \`sdd:${to}\``;
+}
 
 export type Repo = {owner: string; name: string; slug: string};
 
@@ -64,6 +71,28 @@ export function changesPayload(head: string, notes: ReviewNote[]): {
   }
   const body = comments.length === 0 ? loose.join('\n\n') : '';
   return {commit_id: head, event: 'REQUEST_CHANGES', body, comments};
+}
+
+/** One review thread as GitHub GraphQL returns it. */
+export type ThreadNode = {
+  id: string;
+  isResolved: boolean;
+  path: string;
+  line: number | null;
+  comments: {nodes: {databaseId: number; author: {login: string} | null; body: string}[]};
+};
+
+/** The handles a skill answers with: the thread id resolves, the latest comment id takes the reply. */
+export function threadRecord(node: ThreadNode): ThreadRecord {
+  const comment = node.comments.nodes[0];
+  return {
+    id: node.id,
+    comment: comment ? String(comment.databaseId) : '',
+    path: node.path,
+    line: node.line,
+    resolved: node.isResolved,
+    body: comment?.body ?? '',
+  };
 }
 
 export function gh(args: string[], input?: string): string {
@@ -196,6 +225,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
     close(key, comment) {
       gh(['issue', 'close', key, '--repo', repoSlug(), '--comment', markRobot(comment)]);
     },
+    phaseHint: labelHint,
   };
 
   const linked = (key: string) => {
@@ -242,14 +272,20 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       });
     },
     threads(pull) {
+      return this.threadList(pull).map(thread => ({resolved: thread.resolved, body: thread.body}));
+    },
+    threadList(pull) {
       const {owner, name} = repo();
       const query = `query($owner:String!,$name:String!,$number:Int!){
         repository(owner:$owner, name:$name) {
           pullRequest(number:$number) {
             reviewThreads(first:100) {
               nodes {
+                id
                 isResolved
-                comments(last:1) { nodes { author { login } body } }
+                path
+                line
+                comments(last:1) { nodes { databaseId author { login } body } }
               }
             }
           }
@@ -272,23 +308,15 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
         data: {
           repository: {
             pullRequest: {
-              reviewThreads: {
-                nodes: {
-                  isResolved: boolean;
-                  comments: {nodes: {author: {login: string} | null; body: string}[]};
-                }[];
-              };
+              reviewThreads: {nodes: ThreadNode[]};
             } | null;
           };
         };
       };
       const nodes = data.data.repository.pullRequest?.reviewThreads.nodes ?? [];
       return nodes.flatMap(node => {
-        const comment = node.comments.nodes[0];
-        if (authorIgnored(comment?.author?.login ?? '', ignored)) {
-          return [];
-        }
-        return [{resolved: node.isResolved, body: comment?.body ?? ''}];
+        const record = threadRecord(node);
+        return authorIgnored(node.comments.nodes[0]?.author?.login ?? '', ignored) ? [] : [record];
       });
     },
     comments(pull) {
@@ -448,6 +476,8 @@ export type MemorySeed = {
   issues?: MemoryIssue[];
   pulls?: Record<string, {id: string; title: string; state: string}[]>;
   threads?: Record<string, Thread[]>;
+  /** Full records. When absent, `threads` are served with placeholder handles. */
+  threadList?: Record<string, ThreadRecord[]>;
   comments?: Record<string, Conversation[]>;
   checks?: Record<string, {checks: CheckState}>;
   checksText?: Record<string, string>;
@@ -522,6 +552,7 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
       calls.push(`body:${markRobot(comment)}`);
       find(key).state = 'CLOSED';
     },
+    phaseHint: labelHint,
   };
   const review: Review = {
     pulls(key) {
@@ -535,7 +566,21 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
     },
     threads(pull) {
       calls.push('threads');
-      return seed.threads?.[pull] ?? [];
+      return seed.threads?.[pull] ?? seed.threadList?.[pull] ?? [];
+    },
+    threadList(pull) {
+      calls.push('threadList');
+      const full = seed.threadList?.[pull];
+      if (full) {
+        return full;
+      }
+      return (seed.threads?.[pull] ?? []).map((thread, index) => ({
+        ...thread,
+        id: `T${index + 1}`,
+        comment: `C${index + 1}`,
+        path: '',
+        line: null,
+      }));
     },
     comments(pull) {
       calls.push('comments');

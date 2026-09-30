@@ -36,10 +36,13 @@ function shQuote(value: string): string {
  * Host hook sandcastle runs with cwd set to the issue worktree. The worktree
  * is a checkout of the service, so the agent reaches this package through
  * these links. Node resolves a symlinked `sdd.ts` from its real path, and the
- * service `node_modules` stays the worktree's own.
+ * service `node_modules` stays the worktree's own. The links go into the
+ * repository's `info/exclude`: they are not dirt, and a `node_modules/` rule
+ * in the service `.gitignore` does not match a symlink.
  */
 export function linkCommand(solverRoot: string, serviceRoot: string): string {
   const steps = ['mkdir -p .sandcastle'];
+  const excluded = ['/.sandcastle/'];
   for (const [fromName, toName] of LINKED) {
     const from = path.join(solverRoot, fromName);
     if (existsSync(from)) {
@@ -49,6 +52,11 @@ export function linkCommand(solverRoot: string, serviceRoot: string): string {
   const modules = path.join(serviceRoot, 'node_modules');
   if (existsSync(modules)) {
     steps.push(`ln -sfn ${shQuote(modules)} node_modules`);
+    excluded.push('/node_modules');
+  }
+  steps.push('exclude="$(git rev-parse --git-path info/exclude)"', 'mkdir -p "$(dirname "$exclude")"');
+  for (const rule of excluded) {
+    steps.push(`{ grep -qxF ${shQuote(rule)} "$exclude" 2>/dev/null || echo ${shQuote(rule)} >> "$exclude"; }`);
   }
   return steps.join(' && ');
 }

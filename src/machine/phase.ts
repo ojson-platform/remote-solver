@@ -18,6 +18,13 @@ export type Phase = (typeof PHASES)[number];
 /** Closed by a person. The robot CLI cannot set these. */
 export const GATE_PHASES = ['proposed', 'specified', 'designed', 'accepted'] as const;
 
+/** The writing phase each review gate closes. */
+export const GATE_CLOSES: Partial<Record<Phase, Phase>> = {
+  proposed: 'proposing',
+  specified: 'specifying',
+  designed: 'designing',
+};
+
 const LABEL = (phase: string) => `sdd:${phase}`;
 
 export function phaseOf(labels: string[]): Phase | null {
@@ -27,7 +34,9 @@ export function phaseOf(labels: string[]): Phase | null {
   if (found.includes('accepted')) {
     return 'accepted';
   }
-  return found.length === 1 ? found[0] : (found[0] ?? null);
+  // A person who adds the gate label may leave the phase it closes on.
+  const kept = found.filter(phase => !found.some(gate => GATE_CLOSES[gate] === phase));
+  return kept[0] ?? null;
 }
 
 export function phaseRank(phase: Phase): number {

@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
-import {test} from 'node:test';
+import {test} from 'vitest';
 
-import {changesPayload, classifyChecks, linkedTitle, linksFrom, memoryPorts, type CheckRollup} from './github.ts';
+import {
+  changesPayload,
+  classifyChecks,
+  linkedTitle,
+  linksFrom,
+  memoryPorts,
+  threadRecord,
+  type CheckRollup,
+} from './github.ts';
 import {setPhase} from '../machine/labels.ts';
 import {loadCycle} from '../machine/snapshot.ts';
 import type {FileSource} from '../machine/port.ts';
@@ -68,6 +76,29 @@ test('a pull title links to an issue only with the key prefix', () => {
   assert.equal(linkedTitle('7', '#7 leftover'), true);
   assert.equal(linkedTitle('7', 'unrelated'), false);
   assert.equal(linkedTitle('7', '#70: other'), false);
+});
+
+test('a thread record carries the handles a skill replies and resolves with', () => {
+  assert.deepEqual(
+    threadRecord({
+      id: 'PRRT_1',
+      isResolved: false,
+      path: 'src/a.ts',
+      line: 7,
+      comments: {nodes: [{databaseId: 4094804166, author: {login: 'me'}, body: 'why?'}]},
+    }),
+    {id: 'PRRT_1', comment: '4094804166', path: 'src/a.ts', line: 7, resolved: false, body: 'why?'},
+  );
+  const empty = threadRecord({id: 'PRRT_2', isResolved: true, path: 'f', line: null, comments: {nodes: []}});
+  assert.deepEqual(empty, {id: 'PRRT_2', comment: '', path: 'f', line: null, resolved: true, body: ''});
+});
+
+test('memory ports serve thread records from a plain thread seed', () => {
+  const {review} = memoryPorts({threads: {5: [{resolved: false, body: 'sdd:layer=spec'}]}});
+  assert.deepEqual(review.threadList('5'), [
+    {resolved: false, body: 'sdd:layer=spec', id: 'T1', comment: 'C1', path: '', line: null},
+  ]);
+  assert.deepEqual(review.threads('5'), [{resolved: false, body: 'sdd:layer=spec'}]);
 });
 
 test('loadCycle keeps marker grammar above the port', () => {

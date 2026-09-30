@@ -1,7 +1,6 @@
 {
-  "name": "remote-solver",
-  "private": true,
-  "version": "0.0.0",
+  "name": "@ojson/remote-solver",
+  "version": "0.0.1",
   "description": "SDLC machine: one issue, one pull request, one change",
   "type": "module",
   "bin": {
@@ -12,7 +11,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "tsx --test src/cli.test.ts src/machine/*.test.ts src/adapters/*.test.ts src/reviewer/*.test.ts",
+    "test": "vitest --run",
     "test:types": "tsc --noEmit",
     "lint": "eslint .",
     "format:check": "prettier --check ."
@@ -23,6 +22,8 @@
   },
   "devDependencies": {
     "@ojson/infra": "^1.0.1",
-    "@types/node": "^26.6.2"
+    "@ojson/spec-coverage": "workspace:*",
+    "@types/node": "^26.6.2",
+    "vitest": "^3.2.4"
   }
 }

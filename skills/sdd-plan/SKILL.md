@@ -16,18 +16,16 @@ Records why and the scope. Zoom is context, not implementation. The commit and t
 - A new issue
 - A problem statement that lives only in the issue body
 - The `sdd:proposed` label, and merging
-- A run whose only job is the pull request
 
 ## Steps
 
 1. Branch `sdd/<issue>` from `master` when it is missing. Commits land only there.
-2. No `proposal.md` yet: move the issue text into `openspec/changes/issue-<issue>/proposal.md`. An empty description stays a scaffold with `## Open questions` as `- [ ]` items. Sections: `## Problem`, `## Outcome`, `## Scope`, `## Out of scope`, `## Constraints`, `## Capabilities`, `## Open questions`. `## Capabilities` has `### Added` and `### Modified`, lines `- <id> <gist>`. Cut ids by the Capability section in `context.md`. Several services: what this change needs from each, no contracts. No child issues.
+2. No `proposal.md` yet: move the issue text into `openspec/changes/issue-<issue>/proposal.md`. Headings: `context.md` § Artifacts. An empty description stays a scaffold with its open questions as `- [ ]` items. Ids cut by `context.md` § Capability. Several services: what this change needs from each, no contracts. No child issues.
 3. `proposal.md` already exists: leave it.
 4. A question below the context zoom stays out of the proposal.
-5. `improve-proposal`: a thread marked `sdd:layer=proposal` gets its own commit, reply `sdd:fixed <commit>`, then resolve the thread.
-6. Publish: the proposal and any uncommitted `openspec/` of this issue, message from the Commit section in `context.md`. Open questions do not delay the pull request.
-7. Issue mirror (`context.md`): the Change and Plan lines.
-8. The issue has `sdd:auto-plan`: do not set `sdd:wait-human`. Otherwise `npx remote-solver wait <issue> 'Review the proposal, then remote-solver accept <issue>.'`
+5. `improve-proposal`: Fix thread (`context.md`), layer `proposal`.
+6. Publish (`context.md`). Mirror: `Change` and `Plan`. Open questions do not delay the pull request.
+7. Open questions remain: Wait (`context.md`) with the questions.
 
 ## Check
 
@@ -40,5 +38,5 @@ Records why and the scope. Zoom is context, not implementation. The commit and t
 
 ## Stop
 
-- The proposal is on the PR. With `sdd:auto-plan`, stop without a wait. Without it, wait for review. Leave `sdd:proposed` unset.
-- Open questions at the context zoom: wait the same way. Leave the phase open.
+- Publish. The machine opens the review gate. Leave `sdd:proposed` unset.
+- Open questions at the context zoom: Publish, then Wait with the questions. Leave the phase open.

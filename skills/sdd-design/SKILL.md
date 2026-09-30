@@ -19,22 +19,22 @@ Writes the technical decision for this change.
 
 ## Steps
 
-1. No delta spec: stop.
-2. `design.md` is already right: leave it and go to Publish.
-3. Otherwise three sections, each filled or `none`: the verification boundary per capability; external contracts (what another service must provide, not its API); technical prerequisites. Each prerequisite is code in this PR, an issue `Depends: #N`, or a flag with a safe default.
-4. No decision yet: a `- [ ]` item under `## Open decisions`. Leave it open.
-5. `improve-design`: a thread marked `sdd:layer=design` gets its own commit, reply `sdd:fixed <commit>`, then resolve the thread.
-6. Publish: `design.md` and any uncommitted `openspec/` of this issue, message from the Commit section in `context.md`. Open decisions do not delay the push.
-7. Issue mirror (`context.md`): the Design line. The issue has `sdd:auto-design` and `## Open decisions` has no `- [ ]`: do not set `sdd:wait-human`. Otherwise `npx remote-solver wait <issue> '<the open decision, or review the design and remote-solver accept <issue>>'`.
+1. `design.md` is already right and `threads <pull> --layer design` is empty: go to step 5.
+2. Otherwise write `design.md` by `context.md` § Artifacts. The verification boundary names every capability.
+3. No decision yet: an open decision item. Leave it open.
+4. `improve-design`: Fix thread (`context.md`), layer `design`.
+5. Publish (`context.md`). Mirror: `Design`. Open decisions do not delay the push.
+6. An open decision remains: Wait (`context.md`) with the open decision.
 
 ## Check
 
-- The three sections are present
+- Every § Artifacts section of `design.md` is present
 - Every capability names its verification boundary
 - The text agrees with the proposal and the spec
 - Nothing manual remains after merge
 
 ## Stop
 
-- The design is on the PR. With `sdd:auto-design` and no open decision, stop without a wait. Without the tag, wait for the reviewer.
-- An open decision: leave the phase open.
+- Publish. The machine opens the review gate.
+- An open decision: Publish, then Wait with the open decision.
+- The spec does not give a capability enough behavior to name its boundary: Hand-off to `spec` on that requirement.

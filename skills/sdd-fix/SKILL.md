@@ -1,0 +1,42 @@
+---
+name: sdd-fix
+description: >
+  Answers review threads of layer code: a defect, a coverage gap, a rebase
+  or a merge conflict. One commit per thread.
+  Trigger: fix-implementation. Phase sdd:implementing.
+mode: mechanical
+---
+
+# sdd-fix
+
+Fixes what the review found in the code. The threads are the instruction; the task file of that code is the boundary.
+
+## Out of this action
+
+- Behavior the scenarios do not describe
+- A new task, a new scenario, an edit to spec, design, or proposal
+- Threads of other layers
+
+## Read only
+
+1. `threads <pull> --layer code`, and `conversation` from the same output.
+2. The files those threads cite, and the task file under `tasks/` for that code.
+3. The Scenario blocks that task names, in the delta spec only.
+
+## Steps
+
+1. Fix thread (`context.md`), layer `code`. One commit per thread, no new open checkbox. A coverage gap: the test and a closed `- [x]` line in `tasks.md` in that same commit.
+2. `conversation.layer` is `code`: a rebase or a merge conflict. Rebase `sdd/<issue>` onto the pull request base, edit only files git marks conflicted, Publish, then `thread fix <issue> <pull> --conversation`.
+3. A thread that asks for behavior the scenarios do not describe: Hand-off to `spec` by replying in that thread. Leave it open.
+4. Publish (`context.md`). Mirror: `Tasks` when a checkbox changed.
+
+## Check
+
+- Every `code` thread is closed by `thread fix`, or carries a Hand-off
+- The code adds no behavior outside the scenarios of its task
+- The tree is rebased when the conversation asked for it
+
+## Stop
+
+- Publish. The phase stays `implementing`.
+- Hand-off to `spec` for a remark about behavior.

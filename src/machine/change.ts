@@ -15,6 +15,14 @@ export type ChangeView = {
   missingBaseline: string[];
 };
 
+/** Change-file headings the machine reads; `prompts/context.md` § Artifacts states them. */
+export const HEADINGS = {
+  capabilities: 'Capabilities',
+  modified: 'Modified',
+  openQuestions: 'Open questions',
+  openDecisions: 'Open decisions',
+} as const;
+
 function section(text: string, heading: string): string {
   const match = new RegExp(`^## ${heading}\\s*$`, 'm').exec(text);
   if (!match) {
@@ -29,10 +37,6 @@ function unchecked(text: string, heading: string): number {
   return section(text, heading)
     .split('\n')
     .filter(line => line.trimStart().startsWith('- [ ]')).length;
-}
-
-function openCount(text: string, headings: string[]): number {
-  return headings.reduce((count, heading) => count + unchecked(text, heading), 0);
 }
 
 const CHANGE_FILES = ['proposal.md', 'design.md', 'tasks.md'];
@@ -59,8 +63,9 @@ export function changeText(key: string, files: FileSource): string | null {
 }
 
 function modifiedCapabilities(proposal: string): string[] {
-  const body = section(proposal, 'Capabilities');
-  const modified = /### Modified\s*([\s\S]*?)(?:\n### |\s*$)/.exec(body);
+  const body = section(proposal, HEADINGS.capabilities);
+  const subsection = new RegExp(`### ${HEADINGS.modified}\\s*([\\s\\S]*?)(?:\\n### |\\s*$)`);
+  const modified = subsection.exec(body);
   if (!modified) {
     return [];
   }
@@ -86,8 +91,8 @@ export function readChange(key: string, files: FileSource): ChangeView {
     design: docs.has(designPath),
     tasks: docs.has(tasksPath),
     archived: files.exists(archiveDir(key)) || files.list(archiveDir(key)).length > 0,
-    openQuestions: openCount(proposal, ['Open questions', 'Открытые вопросы']),
-    openDecisions: openCount(files.read(designPath), ['Open decisions', 'Открытые решения']),
+    openQuestions: unchecked(proposal, HEADINGS.openQuestions),
+    openDecisions: unchecked(files.read(designPath), HEADINGS.openDecisions),
     openTasks: files
       .read(tasksPath)
       .split('\n')

@@ -1,31 +1,33 @@
 import {authorIgnored} from './ignore.ts';
+import {markerName, parseMarker} from './marker.ts';
 import {phaseRank, type Phase} from './phase.ts';
-import type {Conversation, Thread} from './port.ts';
+import type {Conversation, Thread, ThreadRecord} from './port.ts';
 
-export const ROBOT_MARK = '🤖 ';
-
-export function markRobot(body: string): string {
-  return body.startsWith('🤖') ? body : `${ROBOT_MARK}${body}`;
-}
+export {markRobot, ROBOT_MARK} from './marker.ts';
 
 /** The spy mark, or a commenter named in `sandcastle.yaml`. A `[bot]` login is a person. */
 export function spokeByRobot(body: string, login: string, ignored: readonly RegExp[]): boolean {
   return body.startsWith('🤖') || authorIgnored(login, ignored);
 }
 
+/** Comments in order: a layer opens, `fixed` closes, other markers leave it as it is. */
 function conversationLayer(comments: Conversation[]): string | null {
   let layer: string | null = null;
   for (const comment of comments) {
-    if (comment.body.includes('sdd:fixed')) {
+    const marker = parseMarker(comment.body);
+    if (marker?.kind === 'fixed') {
       layer = null;
-      continue;
-    }
-    const found = comment.body.match(/sdd:layer=([a-z]+)/)?.[1];
-    if (found) {
-      layer = found;
+    } else if (marker?.kind === 'layer') {
+      layer = marker.layer;
     }
   }
   return layer;
+}
+
+/** The last conversation comment is a person's and carries no marker. */
+function conversationUnanswered(comments: Conversation[]): boolean {
+  const last = comments.at(-1);
+  return Boolean(last && !last.robot && parseMarker(last.body) === null);
 }
 
 const LAYER_PHASE: Record<string, Phase> = {
@@ -53,33 +55,79 @@ export function layerOfPhase(phase: Phase): string | null {
   return Object.entries(LAYER_PHASE).find(([, value]) => value === phase)?.[0] ?? null;
 }
 
+/** The marker the latest reply carries: a layer, `note`, `fixed`, `begin`, or nothing. */
+export function markerOf(body: string): string | null {
+  return markerName(parseMarker(body));
+}
+
+export type ThreadLine = {
+  thread: string;
+  comment: string;
+  file: string;
+  line: number | null;
+  marker: string | null;
+  body: string;
+};
+
+export type ThreadsReport = {
+  threads: ThreadLine[];
+  /**
+   * The last conversation comment, the layer the conversation still asks for,
+   * and whether that last comment still waits for a marker.
+   */
+  conversation: {last: Conversation | null; layer: string | null; unanswered: boolean};
+};
+
+/**
+ * What `remote-solver threads <pull>` prints. Open threads only. `layer`
+ * keeps the threads whose latest reply carries that marker; `unmarked` keeps
+ * the ones with no marker at all.
+ */
+export function threadsReport(
+  threads: ThreadRecord[],
+  comments: Conversation[],
+  filter?: {layer?: string; unmarked?: boolean},
+): ThreadsReport {
+  const lines = threads
+    .filter(thread => !thread.resolved)
+    .map(thread => ({
+      thread: thread.id,
+      comment: thread.comment,
+      file: thread.path,
+      line: thread.line,
+      marker: markerOf(thread.body),
+      body: thread.body,
+    }))
+    .filter(line => (filter?.layer ? line.marker === filter.layer : true))
+    .filter(line => (filter?.unmarked ? line.marker === null : true));
+  return {
+    threads: lines,
+    conversation: {
+      last: comments.at(-1) ?? null,
+      layer: conversationLayer(comments),
+      unanswered: conversationUnanswered(comments),
+    },
+  };
+}
+
+/** An open thread without a marker is unanswered; only a layer marker opens a phase. */
 export function reviewOf(threads: Thread[], comments: Conversation[]): ReviewView {
   const layers: string[] = [];
-  let unanswered = false;
+  let unanswered = conversationUnanswered(comments);
   for (const thread of threads) {
-    if (thread.resolved || thread.body.includes('sdd:note')) {
+    if (thread.resolved) {
       continue;
     }
-    const layer = thread.body.match(/sdd:layer=([a-z]+)/)?.[1];
-    if (!layer) {
+    const marker = parseMarker(thread.body);
+    if (!marker) {
       unanswered = true;
-      continue;
+    } else if (marker.kind === 'layer') {
+      layers.push(marker.layer);
     }
-    layers.push(layer);
   }
   const fromConversation = conversationLayer(comments);
   if (fromConversation) {
     layers.push(fromConversation);
-  }
-  const last = comments.at(-1);
-  if (
-    last &&
-    !last.robot &&
-    !last.body.includes('sdd:layer=') &&
-    !last.body.includes('sdd:note') &&
-    !last.body.includes('sdd:begin')
-  ) {
-    unanswered = true;
   }
   let rollback: Phase | null = null;
   for (const layer of layers) {

@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 import {lstatSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {test} from 'node:test';
+import {test} from 'vitest';
 
 import {agentLogPath, ensureServiceEnv, linkCommand, renderAgentEvent} from './runtime.ts';
+import {gitVcs} from './vcs.ts';
 
 test('the worktree hook links the package into .sandcastle and keeps the service node_modules', () => {
   const parent = mkdtempSync(path.join(tmpdir(), 'sdd-link-'));
@@ -21,6 +23,32 @@ test('the worktree hook links the package into .sandcastle and keeps the service
   assert.ok(command.includes(`ln -sfn '${modules}' node_modules`));
   assert.equal(command.includes('.env'), false);
   assert.equal(command.includes('sdd.ts'), false);
+});
+
+test('the links the hook makes in a sandcastle worktree are not dirt, and the exclude rules are written once', () => {
+  const parent = mkdtempSync(path.join(tmpdir(), 'sdd-link-'));
+  const solver = path.join(parent, 'solver');
+  const service = path.join(parent, 'service');
+  mkdirSync(path.join(solver, 'prompts'), {recursive: true});
+  writeFileSync(path.join(solver, 'prompts', 'context.md'), '#');
+  mkdirSync(service);
+  const git = (cwd: string, args: string[]) => execFileSync('git', args, {cwd, encoding: 'utf8'}).trim();
+  git(service, ['init', '-q']);
+  writeFileSync(path.join(service, '.gitignore'), 'node_modules/\n');
+  git(service, ['add', '.']);
+  git(service, ['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'base']);
+  mkdirSync(path.join(service, 'node_modules'));
+  git(service, ['worktree', 'add', '-q', '-b', 'sdd/1', '.sandcastle/worktrees/sdd-1']);
+  const worktree = path.join(service, '.sandcastle', 'worktrees', 'sdd-1');
+  const command = linkCommand(solver, service);
+  execFileSync('sh', ['-c', command], {cwd: worktree});
+  execFileSync('sh', ['-c', command], {cwd: worktree});
+  assert.equal(lstatSync(path.join(worktree, 'node_modules')).isSymbolicLink(), true);
+  assert.deepEqual(gitVcs(worktree).dirty(), []);
+  assert.deepEqual(gitVcs(service).dirty(), []);
+  const exclude = readFileSync(path.join(service, '.git', 'info', 'exclude'), 'utf8').split('\n');
+  assert.equal(exclude.filter(line => line === '/.sandcastle/').length, 1);
+  assert.equal(exclude.filter(line => line === '/node_modules').length, 1);
 });
 
 test('the service env link points at the package and does not replace an existing file', () => {

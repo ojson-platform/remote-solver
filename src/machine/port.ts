@@ -4,6 +4,7 @@
  * Marker grammar stays above these seams.
  */
 
+import type {Phase} from './phase.ts';
 import type {SkillMode} from './skill.ts';
 
 export type IssueKey = string;
@@ -30,6 +31,17 @@ export type Pull = {
 /** A review thread after the adapter has decided whether the machine wrote it. */
 export type Thread = {resolved: boolean; body: string};
 
+/**
+ * The same thread with the handles a skill needs to answer it: the thread id
+ * for `thread resolve`, the latest comment id for `thread reply`, and where it sits.
+ */
+export type ThreadRecord = Thread & {
+  id: string;
+  comment: string;
+  path: string;
+  line: number | null;
+};
+
 /** A conversation comment. `robot` is a spy mark or an ignored commenter. */
 export type Conversation = {body: string; robot: boolean};
 
@@ -45,6 +57,8 @@ export type Tracker = {
   updateBody(key: IssueKey, body: string): void;
   comment(key: IssueKey, body: string): void;
   close(key: IssueKey, comment: string): void;
+  /** How a person moves the phase in this tracker, e.g. "replace the label `sdd:proposing` with `sdd:proposed`". */
+  phaseHint(from: Phase, to: Phase): string;
 };
 
 export type ThreadTarget = {commit: string; path: string; line: number; body: string};
@@ -52,6 +66,8 @@ export type ThreadTarget = {commit: string; path: string; line: number; body: st
 export type Review = {
   pulls(key: IssueKey): Pull[];
   threads(pull: string): Thread[];
+  /** The threads with their handles. What `remote-solver threads` prints for a skill. */
+  threadList(pull: string): ThreadRecord[];
   comments(pull: string): Conversation[];
   ensurePull(key: IssueKey, title: string, body: string): string;
   openThread(pull: string, target: ThreadTarget): void;
@@ -92,6 +108,10 @@ export type Vcs = {
   push(key: IssueKey): void;
   /** HEAD of the checkout this adapter was opened on. */
   head(): string;
+  /** `commit` is the tip of the remote issue branch `sdd/<key>`, or behind it. */
+  published(key: IssueKey, commit: string): boolean;
+  /** Paths `git status` reports in this checkout: changed, staged, or untracked. Empty on a clean tree. */
+  dirty(): string[];
 };
 
 export type SkillRun = {

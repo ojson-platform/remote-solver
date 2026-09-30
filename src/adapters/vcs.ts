@@ -93,6 +93,15 @@ function existsOnRef(root: string, ref: string, rel: string): boolean {
   }
 }
 
+function isAncestor(root: string, commit: string, tip: string): boolean {
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', commit, tip], {cwd: root, stdio: 'ignore'});
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Make `sdd/<key>` exist locally: fetch it, or cut it from `defaultBranch`. Does not check it out. */
 export function ensureIssueBranch(
   root: string,
@@ -131,6 +140,30 @@ export function gitVcs(root: string, config: GitVcsConfig = {}): Vcs {
         cwd: root,
         stdio: 'inherit',
       });
+    },
+    published(key, commit) {
+      const tip = git(root, ['ls-remote', 'origin', `refs/heads/${branchName(key, prefix)}`])
+        .trim()
+        .split(/\s+/)[0];
+      if (!tip) {
+        return false;
+      }
+      return tip === commit || isAncestor(root, commit, tip);
+    },
+    dirty() {
+      const entries = git(root, ['status', '--porcelain', '-z']).split('\0');
+      const paths: string[] = [];
+      for (let index = 0; index < entries.length; index += 1) {
+        const entry = entries[index];
+        if (!entry) {
+          continue;
+        }
+        paths.push(entry.slice(3));
+        if (entry[0] === 'R' || entry[0] === 'C') {
+          index += 1;
+        }
+      }
+      return paths;
     },
   };
 }

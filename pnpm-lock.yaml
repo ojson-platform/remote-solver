@@ -18,9 +18,15 @@ importers:
       '@ojson/infra':
         specifier: ^1.0.1
         version: 1.0.1(@types/node@26.6.2)(tsx@4.23.15)
+      '@ojson/spec-coverage':
+        specifier: workspace:*
+        version: link:../spec-coverage
       '@types/node':
         specifier: ^26.6.2
         version: 26.6.2
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@26.6.2)(tsx@4.23.15)
 
 packages:
 

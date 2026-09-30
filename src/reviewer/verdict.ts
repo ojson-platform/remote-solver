@@ -1,10 +1,9 @@
+import {mentionsGrammar} from '../machine/marker.ts';
 import type {ReviewNote} from '../machine/port.ts';
 
 export type Remark = ReviewNote;
 
 export type Verdict = {kind: 'unjudged'; reason: string} | {kind: 'clean'} | {kind: 'remarks'; items: Remark[]};
-
-const FORBIDDEN = ['sdd:layer=', 'sdd:note', 'sdd:fixed', 'sdd:begin', '🤖'];
 
 /** One line of the model text, short enough for the action log. */
 export function excerpt(text: string): string {
@@ -24,7 +23,7 @@ export function parseVerdict(text: string): Verdict {
   const items = lines
     .filter(line => line.startsWith('remark:'))
     .map(line => parseRemark(line.slice('remark:'.length).trim()))
-    .filter(item => item.body.length > 0 && !FORBIDDEN.some(token => item.body.includes(token)))
+    .filter(item => item.body.length > 0 && !mentionsGrammar(item.body))
     .slice(0, 5);
   if (items.length === 0) {
     const sample = excerpt(text);

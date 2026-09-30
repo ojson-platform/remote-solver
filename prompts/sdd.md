@@ -2,6 +2,6 @@
 
 Issue `#{{ISSUE}}`. Phase `{{PHASE}}`. Action `{{ACTION}}`. Pull request: `{{PR}}`.
 
-Read `.sandcastle/prompts/context.md` and `.sandcastle/skills/{{SKILL}}/SKILL.md`. Do that action and nothing else. When the skill says Publish, commit, then `npx remote-solver publish {{ISSUE}} "#{{ISSUE}}: <title>"`. Nothing to commit: skip the commit and still publish. Do not pick another skill. Do not merge.
+Read `.sandcastle/prompts/context.md` and `.sandcastle/skills/{{SKILL}}/SKILL.md`. Do that action and nothing else. The skill names a section of `context.md` for every procedure it shares with other skills: Publish, Fix thread, Hand-off, Wait, Delta. Do not pick another skill. Do not merge.
 
-When the skill's Stop condition is met, stop.
+The run ends in one signal from `context.md` § Outcome: Publish, Wait, or Hand-off. When the skill's Stop condition is met, emit that signal and stop.

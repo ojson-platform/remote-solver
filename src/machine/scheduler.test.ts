@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {test} from 'node:test';
+import {test} from 'vitest';
 
 import type {Decision} from './policy.ts';
 import {exited, signature, tick, type State} from './scheduler.ts';

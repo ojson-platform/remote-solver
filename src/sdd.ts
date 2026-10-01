@@ -10,7 +10,7 @@ import {parseMarker} from './machine/marker.ts';
 import {updateMirror} from './machine/mirror.ts';
 import {changeDir} from './machine/naming.ts';
 import {labelsAfterAdvance, PHASES, type Phase} from './machine/phase.ts';
-import {accept as acceptGate, publishChoice} from './machine/policy.ts';
+import {accept as acceptGate, publishChoice, type Decision} from './machine/policy.ts';
 import {threadsReport} from './machine/review.ts';
 import {loadCycle} from './machine/snapshot.ts';
 
@@ -228,15 +228,20 @@ function step(box: Machine, rest: string[]): void {
   const inCycle =
     record.labels.includes(box.config.queueLabel) && record.labels.includes('sdd:cycle');
   if (!inCycle) {
-    console.log(
-      JSON.stringify({kind: 'done', issue: args.key, reason: 'not in the open cycle'}, null, 2),
-    );
+    printStep({kind: 'done', issue: args.key, reason: 'not in the open cycle'}, box);
     return;
   }
   if (args.labels.length) {
     box.tracker.editLabels(args.key, args.labels, []);
   }
-  console.log(JSON.stringify(turn(box, args.key), null, 2));
+  printStep(turn(box, args.key), box);
+}
+
+/** The chat reads these two fields. The spy run receives the same values as prompt placeholders. */
+function printStep(decision: Decision, box: Machine): void {
+  console.log(
+    JSON.stringify({...decision, queue: box.config.queueLabel, base: box.config.prBase}, null, 2),
+  );
 }
 
 function worktree(box: Machine, rest: string[]): void {

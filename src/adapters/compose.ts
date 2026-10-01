@@ -61,6 +61,8 @@ export function machine(root = process.cwd(), options: MachineOptions = {}): Mac
         skillsDir: path.join(solverRoot(), 'skills'),
         branchPrefix: config.branchPrefix,
         baseBranch: config.defaultBranch,
+        queueLabel: config.queueLabel,
+        prBase: config.prBase,
         solverRoot: solverRoot(),
       }),
   };

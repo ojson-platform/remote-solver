@@ -70,16 +70,17 @@ The other files of `openspec/changes/issue-<issue>/`, with these headings exactl
 - `## Open questions`: `- [ ]` items. The machine counts them.
 
 `design.md`, every section filled or `none`:
-- `## Verification boundary`: where each capability's Scenarios are observed.
+- `## Verification boundary`: where each capability's Scenarios are observed, and the commands. For each capability: a narrow command that runs one test file and contains `<test-file>`, and the fast suite. The last line of the section is the type check, once for the change, or `none`. The trace line and the test path rule, when the service named them, are copied once after that.
 - `## External contracts`: what another service must provide, not its API.
 - `## Technical prerequisites`: each one code in this PR, an issue `Depends: #N`, or a flag with a safe default.
+- `## Approach`: how this change is built. Module boundaries, risks, rejected alternatives, or `none`. The machine does not read it.
 - `## Open decisions`: `- [ ]` items. The machine counts them.
 
 `tasks.md`: lines `- [ ] \`<id>\`` in work order, each naming its Scenario titles. The machine counts every `- [ ]`.
 
 `tasks/<id>.md`: the Scenario titles, then
-- `## Сделать`: what changes, what the task leaves untouched, every file the implementer may edit.
-- `## Доказательство`: what the test observes, which files it may read, the commands that must exit 0.
+- `## Source`: what changes, what the task leaves untouched, every file the implementer may edit. The test file is not here.
+- `## Proof`: the test file path, what the test observes, which files it may read, the commands that must exit 0 (the narrow command and the fast suite, and the type check when the card names it), and the trace line when the boundary copied one.
 
 ## Threads
 
@@ -138,7 +139,7 @@ line per layer; a layer keeps its line once written. Update one line with
 Change: `openspec/changes/issue-<issue>/` · PR #<pr>
 Plan: <outcome in one line>
 Specify: <capabilities, baseline restored or not>
-Design: <verification boundary in one line>
+Design: <verification boundary in one line, the kinds of boundaries, not the commands>
 Tasks: <done>/<total>
 <!-- sdd:end -->
 ```

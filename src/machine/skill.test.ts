@@ -10,6 +10,8 @@ const root = path.join(import.meta.dirname, '..', '..', 'skills');
 const mechanical = new Set(['sdd-tasks', 'sdd-implement', 'sdd-fix', 'sdd-pr-comments']);
 /** The routing table. The only skill allowed to name the others. */
 const router = 'sdd-flow';
+/** Outside the route: no Trigger, and its run does not end in a cycle signal. */
+const outside = new Set(['sdd-flow', 'sdd-init']);
 
 const skills = readdirSync(root);
 const text = (skill: string) => readFileSync(path.join(root, skill, 'SKILL.md'), 'utf8');
@@ -26,7 +28,7 @@ test('every skill declares a mode and the runtime maps it to a model', () => {
 });
 
 test('every action skill ends in a signal from context.md', () => {
-  for (const skill of skills.filter(name => name !== router)) {
+  for (const skill of skills.filter(name => !outside.has(name))) {
     const body = text(skill);
     const stop = body
       .split(/^## /m)
@@ -53,7 +55,7 @@ const triggers = (skill: string) => {
 
 test('each skill Trigger lists the actions the route sends to it', () => {
   const seen: string[] = [];
-  for (const skill of skills.filter(name => name !== router)) {
+  for (const skill of skills.filter(name => !outside.has(name))) {
     assert.deepEqual(triggers(skill), routed(skill), `${skill} Trigger`);
     seen.push(...triggers(skill));
   }
@@ -82,7 +84,20 @@ test('only the router names other skills', () => {
   for (const skill of skills.filter(name => name !== router)) {
     const body = text(skill);
     for (const other of skills.filter(name => name !== skill)) {
+      // sdd-init is not on the route. A skill may name it as the chat a person runs.
+      // sdd-init may name the router: that is the chat entry it tells the person, not a call.
+      if (other === 'sdd-init') continue;
+      if (skill === 'sdd-init' && other === router) continue;
       assert.doesNotMatch(body, new RegExp(`\\b${other}\\b`), `${skill} names ${other}`);
     }
+  }
+});
+
+test('no skill hardcodes a package command, the queue label, or the base branch', () => {
+  for (const skill of skills) {
+    const body = text(skill);
+    assert.doesNotMatch(body, /\bpnpm\b/, skill);
+    assert.doesNotMatch(body, /\bSandcastle\b/, skill);
+    assert.doesNotMatch(body, /\bmaster\b/, skill);
   }
 });

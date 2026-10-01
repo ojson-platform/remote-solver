@@ -25,7 +25,7 @@ Fixes what the review found in the code. The threads are the instruction; the ta
 
 ## Steps
 
-1. Fix thread (`context.md`), layer `code`. One commit per thread, no new open checkbox. A coverage gap: the test and a closed `- [x]` line in `tasks.md` in that same commit.
+1. Fix thread (`context.md`), layer `code`. One commit per thread, no new open checkbox. A coverage gap takes **Implement the task**: **Write the test red**, then **Edit source code**, for the scenario the gap names. The commands are the ones in that code's task card. Do not look them up again. The commit also closes a `- [x]` line in `tasks.md`. A defect a CI check names, when no task card lists that check: repair it with the command in the Hand-off cause.
 2. `conversation.layer` is `code`: a rebase or a merge conflict. Rebase `sdd/<issue>` onto the pull request base, edit only files git marks conflicted, Publish, then `thread fix <issue> <pull> --conversation`.
 3. A thread that asks for behavior the scenarios do not describe: Hand-off to `spec` by replying in that thread. Leave it open.
 4. Publish (`context.md`). Mirror: `Tasks` when a checkbox changed.

@@ -24,7 +24,7 @@ The issue is already in the cycle: the queue label and `sdd:cycle` are set befor
 
 ## Act
 
-- `agent`: run `sdd worktree <key>`. The printed path is the cwd for every edit and commit in this issue. Follow the named skill for the printed action. A commit was made: run `sdd step <key>` again and follow Act. No commit: stop and say that the action made no commit.
+- `agent`: run `sdd worktree <key>`. The printed path is the cwd for every edit and commit in this issue. Follow the named skill for the printed action. The printed decision's `queue` and `base` are the queue label and the base branch for that skill. A commit was made: run `sdd step <key>` again and follow Act. No commit: stop and say that the action made no commit.
 - `wait` or `done`: stop and say the reason.
 
 ## The next message

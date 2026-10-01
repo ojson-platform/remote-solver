@@ -17,7 +17,7 @@ Classifies red PR checks. Writes no files and makes no commits. The result is a 
 
 ## Steps
 
-1. Run `npx sdd checks <pr>` and read the failed job logs.
+1. `checks <pull>`, then read the failed job logs.
 2. For each check failure: an implementation defect, a coverage gap, infrastructure, or an OpenSpec validate failure. Match a Scenario when one exists.
 3. Defect or coverage gap: Hand-off (`context.md`) to `code` on the file the failure points at. Behavior that differs from the Scenario is a behavior change, not a defect: Hand-off to `spec` on that scenario.
 4. An OpenSpec validate failure names spec files in the log: one Hand-off to `spec` per file, on that file, with the validator line as the cause. A validate failure that names no file is infrastructure.

@@ -1926,6 +1926,23 @@ spec('step', () => {
       assert.ok(labels('2').includes('sdd:implementing'));
       assert.equal(calls.includes('runtime'), false);
     });
+    scenario('The printed decision names the queue and the base', () => {
+      const {printed} = runStep(
+        ['step', '1'],
+        [planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposed'])],
+        planFiles,
+      );
+      const named = printed as typeof printed & {queue?: string; base?: string};
+      assert.equal(named.queue, 'Sandcastle');
+      assert.equal(named.base, 'master');
+    });
+    scenario('A decision outside the cycle still names them', () => {
+      const {printed} = runStep(['step', '7'], [planIssue('7', ['sdd:proposing'])], planFiles);
+      assert.equal(printed.kind, 'done');
+      const named = printed as typeof printed & {queue?: string; base?: string};
+      assert.equal(named.queue, 'Sandcastle');
+      assert.equal(named.base, 'master');
+    });
     scenario('A merge is performed', () => {
       const {printed, labels, calls} = runStep(
         ['step', '3'],

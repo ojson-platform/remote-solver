@@ -22,6 +22,9 @@ export type SandcastleRuntimeConfig = {
   branchPrefix: string;
   /** Ref a missing issue branch is cut from. */
   baseBranch: string;
+  /** Queue label and pull request base. The prompt names them for the skill. */
+  queueLabel: string;
+  prBase: string;
   /** This package. Its files are linked into the issue worktree. */
   solverRoot: string;
 };
@@ -168,6 +171,8 @@ export function sandcastleRuntime(config: SandcastleRuntimeConfig): Runtime {
           PHASE: skill.phase,
           PR: skill.pull,
           SKILL: skill.skill,
+          QUEUE: config.queueLabel,
+          BASE: config.prBase,
         },
         maxIterations: 1,
         branchStrategy: {

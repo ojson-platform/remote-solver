@@ -8,7 +8,7 @@
 
 ### Requirement: Step settles one issue and prints its decision
 
-`step <key>` SHALL apply that issue's mechanical phase moves and print the decision that stops the settlement. When that decision is a merge, `step` SHALL merge the pull request and print the following decision: the issue is `accepted` and closed, and the printed decision is `done`. It SHALL NOT start a skill. It SHALL NOT settle any other issue.
+`step <key>` SHALL apply that issue's mechanical phase moves and print the decision that stops the settlement. When that decision is a merge, `step` SHALL merge the pull request and print the following decision: the issue is `accepted` and closed, and the printed decision is `done`. It SHALL NOT start a skill. It SHALL NOT settle any other issue. Every printed decision SHALL carry `queue`, the machine's queue label, and `base`, the pull request base branch, including a decision printed because the issue is outside the cycle.
 
 #### Scenario: One issue moves and another stays
 
@@ -21,6 +21,16 @@
 
 - **WHEN** the issue's decision is a merge
 - **THEN** `step` merges that pull request once, the issue is `accepted` and closed, and the printed decision is `done`
+
+#### Scenario: The printed decision names the queue and the base
+
+- **WHEN** `step` is run for an issue in the cycle
+- **THEN** the printed decision carries `queue` as the machine's queue label and `base` as the pull request base branch
+
+#### Scenario: A decision outside the cycle still names them
+
+- **WHEN** the issue is not in the cycle and `step` is run
+- **THEN** the printed decision is `done` and still carries `queue` and `base`
 
 ### Requirement: Auto tags are written only inside the cycle
 

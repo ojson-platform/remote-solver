@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
+import {existsSync, lstatSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
 import {vi} from 'vitest';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
@@ -149,9 +153,42 @@ spec('review-gate', () => {
       const asks = () => calls.filter(call => call.includes('Review the proposal'));
       assert.equal(asks().length, 1);
       assert.match(asks()[0], /replace the label `sdd:proposing` with `sdd:proposed`/);
-      assert.match(asks()[0], /remote-solver accept 5/);
-      resolveIssue('5', options);
+      assert.match(asks()[0], /sdd accept 5/);
+      const held = resolveIssue('5', options);
       assert.equal(asks().length, 1);
+      assert.equal(held.kind, 'wait');
+      if (held.kind === 'wait') {
+        assert.deepEqual(held.gate, {artifact: 'proposal', from: 'proposing', to: 'proposed'});
+      }
+    });
+    scenario('An open question is not the review gate', () => {
+      const held = decide(
+        issue(1, ['sdd:proposing', 'sdd:wait-human']),
+        [],
+        [pull(9)],
+        change({proposal: true, openQuestions: 1}),
+      );
+      assert.equal(held.kind, 'wait');
+      if (held.kind === 'wait') {
+        assert.equal(held.gate, undefined);
+        assert.equal(held.reason, 'sdd:wait-human is set on proposing. Do the ask on the issue.');
+      }
+    });
+    scenario('A wait on implementing points at the ask', () => {
+      const held = decide(
+        issue(1, ['sdd:implementing', 'sdd:wait-human']),
+        [],
+        [pull(9)],
+        change(),
+      );
+      assert.equal(held.kind, 'wait');
+      if (held.kind === 'wait') {
+        assert.equal(held.gate, undefined);
+        assert.equal(
+          held.reason,
+          'sdd:wait-human is set on implementing. Do the ask on the issue.',
+        );
+      }
     });
   });
 
@@ -178,6 +215,9 @@ spec('review-gate', () => {
         change({proposal: true, delta: true}),
       );
       assert.equal(held.kind, 'wait');
+      if (held.kind === 'wait') {
+        assert.deepEqual(held.gate, {artifact: 'spec', from: 'specifying', to: 'specified'});
+      }
     });
     scenario('Auto-spec advances a ready delta', () => {
       const decision = decide(
@@ -447,10 +487,7 @@ spec('marker', () => {
     });
     scenario('A bot login that is not ignored stays unanswered', () => {
       const body = 'please rename the cache';
-      const review = reviewOf(
-        [],
-        [{robot: spokeByRobot(body, 'reviewer[bot]', ignored), body}],
-      );
+      const review = reviewOf([], [{robot: spokeByRobot(body, 'reviewer[bot]', ignored), body}]);
       assert.equal(review.unanswered, true);
     });
   });
@@ -711,7 +748,13 @@ spec('dependencies', () => {
     scenario('A Parent line holds tasking', () => {
       const {tracker} = memoryPorts({
         issues: [
-          {key: '1', title: '#1: title', body: '', state: 'OPEN', labels: ['sdd:cycle', 'sdd:tasking']},
+          {
+            key: '1',
+            title: '#1: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['sdd:cycle', 'sdd:tasking'],
+          },
           {
             key: '2',
             title: '#2: title',
@@ -1264,7 +1307,9 @@ spec('reviewer', () => {
       assert.equal(items[0]?.kind, 'wait');
     });
     scenario('One open pull request is ready', () => {
-      const items = reviewQueue([{key: '12', labels: accepting}], () => [{id: '15', state: 'OPEN'}]);
+      const items = reviewQueue([{key: '12', labels: accepting}], () => [
+        {id: '15', state: 'OPEN'},
+      ]);
       assert.deepEqual(items, [{kind: 'ready', issue: '12', pull: '15'}]);
     });
     scenario('An empty queue says so', () => {
@@ -1463,18 +1508,29 @@ spec('reviewer', () => {
       applyReview(
         {
           kind: 'remarks',
-          items: [{body: '  '}, {body: 'Scenario TTL is missing'}, {body: 'The diff skips the requirement'}],
+          items: [
+            {body: '  '},
+            {body: 'Scenario TTL is missing'},
+            {body: 'The diff skips the requirement'},
+          ],
         },
         '15',
         reviewedHead,
         remarks.review,
       );
-      assert.ok(remarks.calls.includes('body:Scenario TTL is missing\n\nThe diff skips the requirement'));
-      assert.equal(remarks.calls.some(call => call.includes('🤖')), false);
+      assert.ok(
+        remarks.calls.includes('body:Scenario TTL is missing\n\nThe diff skips the requirement'),
+      );
+      assert.equal(
+        remarks.calls.some(call => call.includes('🤖')),
+        false,
+      );
       assert.equal(remarks.calls.includes('merge:15'), false);
     });
     scenario('A remark that carries a marker is dropped', () => {
-      const verdict = parseVerdict('remark: sdd:layer=code\nremark: 🤖 rebase\nremark: Scenario TTL is missing');
+      const verdict = parseVerdict(
+        'remark: sdd:layer=code\nremark: 🤖 rebase\nremark: Scenario TTL is missing',
+      );
       assert.deepEqual(verdict, {kind: 'remarks', items: [{body: 'Scenario TTL is missing'}]});
     });
     scenario('At most five remarks are kept', () => {
@@ -1497,22 +1553,31 @@ spec('reviewer', () => {
 
   requirement('A remark lands on a diff line only when that line is in the diff', () => {
     scenario('A line in the diff stays on that line', () => {
-      assert.deepEqual(placeOnDiff(reviewDiff, {body: 'on the addition', path: 'src/cache.ts', line: 13}), {
-        body: 'on the addition',
-        path: 'src/cache.ts',
-        line: 13,
-      });
+      assert.deepEqual(
+        placeOnDiff(reviewDiff, {body: 'on the addition', path: 'src/cache.ts', line: 13}),
+        {
+          body: 'on the addition',
+          path: 'src/cache.ts',
+          line: 13,
+        },
+      );
     });
     scenario('A line outside the hunk keeps the file', () => {
-      assert.deepEqual(placeOnDiff(reviewDiff, {body: 'elsewhere', path: 'src/cache.ts', line: 99}), {
-        body: 'elsewhere',
-        path: 'src/cache.ts',
-      });
+      assert.deepEqual(
+        placeOnDiff(reviewDiff, {body: 'elsewhere', path: 'src/cache.ts', line: 99}),
+        {
+          body: 'elsewhere',
+          path: 'src/cache.ts',
+        },
+      );
     });
     scenario('A file outside the diff is left on the conversation', () => {
-      assert.deepEqual(placeOnDiff(reviewDiff, {body: 'no such file', path: 'src/other.ts', line: 1}), {
-        body: 'no such file',
-      });
+      assert.deepEqual(
+        placeOnDiff(reviewDiff, {body: 'no such file', path: 'src/other.ts', line: 1}),
+        {
+          body: 'no such file',
+        },
+      );
     });
   });
 
@@ -1616,15 +1681,24 @@ spec('reviewer', () => {
 });
 
 spec('mirror', () => {
-  requirement('Mirror keeps the author\'s text', () => {
+  requirement("Mirror keeps the author's text", () => {
     scenario('A missing block is appended', () => {
       const next = updateMirror('Please look at cache.\n', 'Plan', 'one line');
-      assert.match(next, /^Please look at cache\.\n\n<!-- sdd:begin -->\nPlan: one line\n<!-- sdd:end -->\n$/);
+      assert.match(
+        next,
+        /^Please look at cache\.\n\n<!-- sdd:begin -->\nPlan: one line\n<!-- sdd:end -->\n$/,
+      );
     });
     scenario('An existing layer line is replaced', () => {
-      const body = ['intro', '', '<!-- sdd:begin -->', 'Plan: old', 'Specify: kept', '<!-- sdd:end -->', ''].join(
-        '\n',
-      );
+      const body = [
+        'intro',
+        '',
+        '<!-- sdd:begin -->',
+        'Plan: old',
+        'Specify: kept',
+        '<!-- sdd:end -->',
+        '',
+      ].join('\n');
       const next = updateMirror(body, 'Plan', 'new');
       assert.match(next, /Plan: new/);
       assert.match(next, /Specify: kept/);
@@ -1691,7 +1765,11 @@ function runPlan(
   } finally {
     console.log = logged;
   }
-  return {printed: JSON.parse(lines.at(-1) ?? '{}') as Decision, labels: key => tracker.labels(key), calls};
+  return {
+    printed: JSON.parse(lines.at(-1) ?? '{}') as Decision,
+    labels: key => tracker.labels(key),
+    calls,
+  };
 }
 
 spec('plan', () => {
@@ -1736,6 +1814,186 @@ spec('plan', () => {
         assert.match(printed.reason, /#1/);
         assert.match(printed.reason, /#4/);
       }
+    });
+  });
+});
+
+function proposalFiles(key: string): FileSource {
+  const proposal = `openspec/changes/issue-${key}/proposal.md`;
+  return {
+    exists: rel => rel === proposal,
+    read: () => '# Proposal\n\n## Why\n\nBecause.\n',
+    list: () => [],
+  };
+}
+
+function runStep(
+  argv: string[],
+  issues: {key: string; title: string; body: string; state: string; labels: string[]}[],
+  filesAt: (key: string) => FileSource,
+  pulls: Record<string, {id: string; title: string; state: string}[]> = {},
+): {printed: Decision; labels: (key: string) => string[]; calls: string[]} {
+  const {tracker, review, calls} = memoryPorts({
+    issues,
+    pulls,
+    checks: {'9': {checks: 'green'}},
+  });
+  const box = machine(process.cwd(), {
+    tracker,
+    review,
+    vcs: {
+      filesAt,
+      compare: () => null,
+      push() {},
+      head: () => '',
+      published: () => true,
+      dirty: () => [],
+    },
+    runtime: {
+      async run() {
+        calls.push('runtime');
+        return {commits: 0};
+      },
+      async ask() {
+        return '';
+      },
+    },
+  });
+  const logged = console.log;
+  const lines: string[] = [];
+  console.log = line => {
+    lines.push(String(line));
+  };
+  try {
+    runSdd(argv, box);
+  } finally {
+    console.log = logged;
+  }
+  return {
+    printed: JSON.parse(lines.at(-1) ?? '{}') as Decision,
+    labels: key => tracker.labels(key),
+    calls,
+  };
+}
+
+function serviceRepo(): string {
+  const service = mkdtempSync(path.join(tmpdir(), 'sdd-wt-'));
+  const git = (args: string[]) => execFileSync('git', args, {cwd: service, encoding: 'utf8'});
+  git(['init', '-q']);
+  git(['symbolic-ref', 'HEAD', 'refs/heads/master']);
+  writeFileSync(path.join(service, 'README'), 'x\n');
+  git(['add', '.']);
+  git(['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'base']);
+  return service;
+}
+
+function runWorktree(service: string, key: string): string {
+  const {tracker, review} = memoryPorts({issues: [planIssue(key, ['sdd:cycle'])]});
+  const box = machine(service, {
+    config: {defaultBranch: 'master'},
+    tracker,
+    review,
+  });
+  const logged = console.log;
+  const lines: string[] = [];
+  console.log = line => {
+    lines.push(String(line));
+  };
+  try {
+    runSdd(['worktree', key], box);
+  } finally {
+    console.log = logged;
+  }
+  return lines.at(-1) ?? '';
+}
+
+spec('step', () => {
+  requirement('Step settles one issue and prints its decision', () => {
+    scenario('One issue moves and another stays', () => {
+      const {printed, labels, calls} = runStep(
+        ['step', '1'],
+        [
+          planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposed']),
+          planIssue('2', ['Sandcastle', 'sdd:cycle', 'sdd:implementing']),
+        ],
+        planFiles,
+      );
+      assert.ok(labels('1').includes('sdd:proposing'));
+      assert.equal(printed.kind, 'agent');
+      if (printed.kind === 'agent') {
+        assert.equal(printed.issue, '1');
+      }
+      assert.ok(labels('2').includes('sdd:implementing'));
+      assert.equal(calls.includes('runtime'), false);
+    });
+    scenario('A merge is performed', () => {
+      const {printed, labels, calls} = runStep(
+        ['step', '3'],
+        [planIssue('3', ['Sandcastle', 'sdd:cycle', 'sdd:accepting', 'sdd:auto-merge'])],
+        planFiles,
+        {'3': [{id: '9', title: '#3: title', state: 'OPEN'}]},
+      );
+      assert.equal(printed.kind, 'done');
+      if (printed.kind === 'done') {
+        assert.equal(printed.reason, 'pull request merged');
+      }
+      assert.ok(labels('3').includes('sdd:accepted'));
+      assert.equal(labels('3').includes('sdd:accepting'), false);
+      assert.equal(calls.filter(call => call === 'merge:9').length, 1);
+      assert.ok(calls.some(call => call.startsWith('close:')));
+    });
+  });
+
+  requirement('Auto tags are written only inside the cycle', () => {
+    scenario('Auto-plan advances a ready proposal', () => {
+      const {labels} = runStep(
+        ['step', '1', '--auto-plan', '--auto-spec', '--auto-design'],
+        [planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposing'])],
+        proposalFiles,
+        {'1': [{id: '8', title: '#1: title', state: 'OPEN'}]},
+      );
+      assert.ok(labels('1').includes('sdd:auto-plan'));
+      assert.ok(labels('1').includes('sdd:auto-spec'));
+      assert.ok(labels('1').includes('sdd:auto-design'));
+      assert.ok(labels('1').includes('sdd:specifying'));
+    });
+    scenario('A flag outside the cycle writes nothing', () => {
+      const {printed, labels} = runStep(
+        ['step', '7', '--auto-plan'],
+        [planIssue('7', ['sdd:proposing'])],
+        proposalFiles,
+      );
+      assert.equal(printed.kind, 'done');
+      assert.equal(labels('7').includes('sdd:auto-plan'), false);
+    });
+  });
+
+  requirement('Worktree prepares the session checkout', () => {
+    scenario('A missing checkout is created', () => {
+      const service = serviceRepo();
+      const printed = runWorktree(service, '1');
+      const checkout = path.join(service, '.worktrees', 'sdd-1');
+      assert.equal(printed, checkout);
+      assert.equal(existsSync(checkout), true);
+      const head = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd: checkout,
+        encoding: 'utf8',
+      }).trim();
+      assert.equal(head, 'sdd/1');
+      assert.equal(lstatSync(path.join(checkout, '.sandcastle', 'prompts')).isSymbolicLink(), true);
+      const status = execFileSync('git', ['status', '--porcelain'], {
+        cwd: service,
+        encoding: 'utf8',
+      });
+      assert.equal(status.includes('.worktrees'), false);
+    });
+    scenario('A dirty checkout is reused', () => {
+      const service = serviceRepo();
+      const checkout = runWorktree(service, '1');
+      writeFileSync(path.join(checkout, 'note.txt'), 'keep\n');
+      const again = runWorktree(service, '1');
+      assert.equal(again, checkout);
+      assert.equal(readFileSync(path.join(checkout, 'note.txt'), 'utf8'), 'keep\n');
     });
   });
 });

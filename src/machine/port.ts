@@ -66,9 +66,13 @@ export type ThreadTarget = {commit: string; path: string; line: number; body: st
 export type Review = {
   pulls(key: IssueKey): Pull[];
   threads(pull: string): Thread[];
-  /** The threads with their handles. What `remote-solver threads` prints for a skill. */
+  /** The threads with their handles. What `sdd threads` prints for a skill. */
   threadList(pull: string): ThreadRecord[];
   comments(pull: string): Conversation[];
+  /**
+   * The open pull request, or a new one. Several open pull requests are the
+   * machine's stop, applied before this is called.
+   */
   ensurePull(key: IssueKey, title: string, body: string): string;
   openThread(pull: string, target: ThreadTarget): void;
   reply(pull: string, comment: string, body: string): void;

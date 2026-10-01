@@ -1,9 +1,8 @@
 import {readChange, type ChangeView} from './change.ts';
 import {gateAsk, openWait} from './labels.ts';
-import {settle, type Decision, type PullSnapshot} from './policy.ts';
+import {settle, type Decision} from './policy.ts';
 import type {FileSource, Review, Tracker} from './port.ts';
-import {emptyReview, reviewOf} from './review.ts';
-import type {CycleSnapshot} from './snapshot.ts';
+import {pullSnapshots, type CycleSnapshot} from './snapshot.ts';
 
 function queueLabelOf(snapshot: CycleSnapshot, queueLabel: string): Decision[] {
   if (snapshot.cycles.length > 0) {
@@ -23,7 +22,12 @@ function queueLabelOf(snapshot: CycleSnapshot, queueLabel: string): Decision[] {
   ];
 }
 
-export function applyLabels(tracker: Tracker, key: string, before: string[], after: string[]): void {
+export function applyLabels(
+  tracker: Tracker,
+  key: string,
+  before: string[],
+  after: string[],
+): void {
   const add = after.filter(label => !before.includes(label));
   const remove = before.filter(label => !after.includes(label));
   if (add.length || remove.length) {
@@ -51,7 +55,11 @@ function applySettlement(
   if (closing) {
     closeAccepted(tracker, key);
   }
-  if (settled.decision.kind === 'wait' && settled.decision.gate) {
+  if (
+    settled.decision.kind === 'wait' &&
+    settled.decision.gate &&
+    !before.includes('sdd:wait-human')
+  ) {
     openWait(key, gateAsk(key, settled.decision.gate, tracker), tracker);
   }
 }
@@ -67,32 +75,35 @@ export function resolveCycle(
     return empty;
   }
   // A running worker already owns the issue. Settling it again would move labels under the agent.
-  return snapshot.cycles.filter(record => !busy.has(record.key)).map(record => {
-    const change = snapshot.changes.get(record.key);
-    if (!change) {
-      return {kind: 'wait' as const, issue: record.key, reason: 'change was not loaded'};
-    }
-    const settled = settle(record, snapshot.issues, snapshot.pulls.get(record.key) ?? [], change);
-    applySettlement(tracker, record.labels, settled, record.key);
-    return settled.decision;
-  });
-}
-
-function pullsOf(review: Review, key: string): PullSnapshot[] {
-  return review.pulls(key).map(pull => ({
-    ...pull,
-    review: pull.state === 'OPEN' ? reviewOf(review.threads(pull.id), review.comments(pull.id)) : emptyReview,
-  }));
+  return snapshot.cycles
+    .filter(record => !busy.has(record.key))
+    .map(record => {
+      const change = snapshot.changes.get(record.key);
+      if (!change) {
+        return {kind: 'wait' as const, issue: record.key, reason: 'change was not loaded'};
+      }
+      const settled = settle(record, snapshot.issues, snapshot.pulls.get(record.key) ?? [], change);
+      applySettlement(tracker, record.labels, settled, record.key);
+      return settled.decision;
+    });
 }
 
 export function resolveIssue(
   key: string,
-  options: {tracker: Tracker; review: Review; files: FileSource; queueLabel: string; change?: ChangeView},
+  options: {
+    tracker: Tracker;
+    review: Review;
+    files: FileSource;
+    queueLabel: string;
+    change?: ChangeView;
+  },
 ): Decision {
   const issues = options.tracker.listOpen();
   const record = issues.find(
     issue =>
-      issue.key === key && issue.labels.includes(options.queueLabel) && issue.labels.includes('sdd:cycle'),
+      issue.key === key &&
+      issue.labels.includes(options.queueLabel) &&
+      issue.labels.includes('sdd:cycle'),
   );
   if (!record) {
     return {kind: 'done', issue: key, reason: 'not in the open cycle'};
@@ -100,11 +111,61 @@ export function resolveIssue(
   const settled = settle(
     record,
     issues,
-    pullsOf(options.review, key),
+    pullSnapshots(options.review, key),
     options.change ?? readChange(key, options.files),
   );
   applySettlement(options.tracker, record.labels, settled, key);
   return settled.decision;
+}
+
+/**
+ * The reading the spy and the session share. A merge is performed here, then
+ * the issue is read again. `plan` stays on `resolveCycle` and does not merge.
+ */
+export function performIssue(
+  key: string,
+  options: {
+    tracker: Tracker;
+    review: Review;
+    files: FileSource;
+    queueLabel: string;
+    change?: ChangeView;
+  },
+): Decision {
+  const decision = resolveIssue(key, options);
+  if (decision.kind !== 'merge') {
+    return decision;
+  }
+  options.review.merge(decision.pull);
+  const settled = resolveIssue(key, options);
+  if (settled.kind === 'merge') {
+    throw new Error(`merge of PR #${decision.pull} did not settle`);
+  }
+  return settled;
+}
+
+/** One poll. Mechanical moves come from `resolveCycle`; a merge is performed. */
+export function performCycle(
+  snapshot: CycleSnapshot,
+  options: {
+    tracker: Tracker;
+    review: Review;
+    filesAt: (key: string) => FileSource;
+    queueLabel: string;
+  },
+  busy: ReadonlySet<string> = new Set(),
+): Decision[] {
+  return resolveCycle(snapshot, options.tracker, options.queueLabel, busy).map(decision => {
+    if (decision.kind !== 'merge') {
+      return decision;
+    }
+    return performIssue(decision.issue, {
+      tracker: options.tracker,
+      review: options.review,
+      files: options.filesAt(decision.issue),
+      queueLabel: options.queueLabel,
+    });
+  });
 }
 
 export function pick(decisions: Decision[]): Decision {

@@ -1,9 +1,10 @@
+import type {FileSource, Vcs} from '../machine/port.ts';
+
 import {execFileSync} from 'node:child_process';
-import {existsSync, readdirSync, readFileSync} from 'node:fs';
+import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 
 import {branchName} from '../machine/naming.ts';
-import type {FileSource, Vcs} from '../machine/port.ts';
 
 export type GitVcsConfig = {
   branchPrefix?: string;
@@ -34,52 +35,26 @@ function issueRef(root: string, key: string, prefix: string): string | null {
   return null;
 }
 
-function walk(dir: string, root: string, into: Set<string>): void {
-  for (const entry of readdirSync(dir, {withFileTypes: true})) {
-    const abs = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      walk(abs, root, into);
-    } else {
-      into.add(path.relative(root, abs));
-    }
-  }
-}
-
+/** The issue branch only. A file that exists only in the checkout is not the change. */
 export function gitFiles(root: string, key: string, prefix: string): FileSource {
   const ref = issueRef(root, key, prefix);
   return {
     exists(rel) {
-      if (existsSync(path.join(root, rel))) {
-        return true;
-      }
       return ref !== null && existsOnRef(root, ref, rel);
     },
     read(rel) {
-      const abs = path.join(root, rel);
-      if (existsSync(abs)) {
-        return readFileSync(abs, 'utf8');
-      }
       if (!ref) {
         return '';
       }
       return git(root, ['show', `${ref}:${rel}`], true);
     },
     list(rel) {
-      const found = new Set<string>();
-      const abs = path.join(root, rel);
-      if (existsSync(abs)) {
-        walk(abs, root, found);
+      if (!ref) {
+        return [];
       }
-      if (ref) {
-        for (const line of git(root, ['ls-tree', '-r', '--name-only', ref, rel], true).split(
-          '\n',
-        )) {
-          if (line) {
-            found.add(line);
-          }
-        }
-      }
-      return [...found];
+      return git(root, ['ls-tree', '-r', '--name-only', ref, rel], true)
+        .split('\n')
+        .filter(line => line.length > 0);
     },
   };
 }
@@ -100,6 +75,43 @@ function isAncestor(root: string, commit: string, tip: string): boolean {
   } catch {
     return false;
   }
+}
+
+function ignorePath(root: string, rule: string): void {
+  const rel = git(root, ['rev-parse', '--git-path', 'info/exclude']).trim();
+  const file = path.resolve(root, rel);
+  mkdirSync(path.dirname(file), {recursive: true});
+  const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  if (text.split('\n').includes(rule)) {
+    return;
+  }
+  const body = text.length === 0 || text.endsWith('\n') ? text : `${text}\n`;
+  writeFileSync(file, `${body}${rule}\n`);
+}
+
+/**
+ * Check out `sdd/<key>` under `worktreesDir`, creating the worktree when it is
+ * missing and reusing it when it exists. Runs `link` inside the checkout.
+ * Does not fast-forward a dirty tree.
+ */
+export function prepareCheckout(
+  root: string,
+  key: string,
+  config: {branchPrefix: string; defaultBranch: string; worktreesDir: string; link: string},
+): string {
+  ensureIssueBranch(root, key, config);
+  const leaf = branchName(key, config.branchPrefix).replaceAll('/', '-');
+  const dir = path.join(root, config.worktreesDir, leaf);
+  if (!existsSync(dir)) {
+    mkdirSync(path.dirname(dir), {recursive: true});
+    execFileSync('git', ['worktree', 'add', '-q', dir, branchName(key, config.branchPrefix)], {
+      cwd: root,
+      stdio: 'ignore',
+    });
+  }
+  ignorePath(root, `/${config.worktreesDir}/`);
+  execFileSync('sh', ['-c', config.link], {cwd: dir, stdio: 'ignore'});
+  return dir;
 }
 
 /** Make `sdd/<key>` exist locally: fetch it, or cut it from `defaultBranch`. Does not check it out. */

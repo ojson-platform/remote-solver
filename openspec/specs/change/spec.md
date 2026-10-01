@@ -20,6 +20,16 @@ The change SHALL be `openspec/changes/issue-<key>/`. The archive SHALL be `opens
 - **WHEN** the proposal is committed on `sdd/<key>` and the checkout is another branch
 - **THEN** the machine still reads that proposal
 
+#### Scenario: A file only in the checkout is not the change
+
+- **WHEN** a proposal sits in the checkout and `sdd/<key>` has no such file
+- **THEN** the machine reads no proposal
+
+#### Scenario: The issue branch wins over the checkout
+
+- **WHEN** `sdd/<key>` has a proposal and the checkout has a different proposal at the same path
+- **THEN** the machine reads the proposal from the issue branch
+
 ### Requirement: The active change wins over the archive
 
 When both the active directory and the archive contain the change, the machine SHALL read the active directory. When only the archive contains it, the machine SHALL read the archive.

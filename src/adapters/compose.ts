@@ -1,8 +1,9 @@
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-import {githubAdapters} from './github.ts';
+import {performIssue} from '../machine/flow.ts';
 import type {Review, Runtime, Tracker, Vcs} from '../machine/port.ts';
+import {githubAdapters} from './github.ts';
 import {sandcastleRuntime} from './runtime.ts';
 import {gitVcs} from './vcs.ts';
 
@@ -63,4 +64,14 @@ export function machine(root = process.cwd(), options: MachineOptions = {}): Mac
         solverRoot: solverRoot(),
       }),
   };
+}
+
+/** One settlement of one issue. The reading performs a merge and settles again. */
+export function turn(box: Machine, key: string): ReturnType<typeof performIssue> {
+  return performIssue(key, {
+    tracker: box.tracker,
+    review: box.review,
+    files: box.vcs.filesAt(key),
+    queueLabel: box.config.queueLabel,
+  });
 }

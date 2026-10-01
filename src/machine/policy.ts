@@ -17,7 +17,7 @@ export type Decision =
       pr: string;
       reason: string;
     }
-  /** `gate` opens the wait: the machine sets `sdd:wait-human` and posts the ask the tracker renders. */
+  /** `gate` names the open review. The ask is posted only when `sdd:wait-human` is not already set. */
   | {kind: 'wait'; issue: string | null; reason: string; gate?: Gate}
   | {kind: 'done'; issue: string | null; reason: string}
   /** `comment` is posted on the issue after the move. */
@@ -233,10 +233,21 @@ export function decide(
 
   // A skill stopped for a person, or the machine opened the review gate.
   if (names.includes('sdd:wait-human')) {
+    const review =
+      phase === 'proposing'
+        ? {artifact: 'proposal', to: 'proposed' as const}
+        : phase === 'specifying'
+          ? {artifact: 'spec', to: 'specified' as const}
+          : phase === 'designing'
+            ? {artifact: 'design', to: 'designed' as const}
+            : null;
+    if (review && !gateBlocker(issue.key, phase, change)) {
+      return reviewGate(issue.key, review.artifact, phase, review.to);
+    }
     return {
       kind: 'wait',
       issue: issue.key,
-      reason: `sdd:wait-human is set on ${phase}. Do the ask on the issue and change the phase there, or run remote-solver accept or unwait ${issue.key}`,
+      reason: `sdd:wait-human is set on ${phase}. Do the ask on the issue.`,
     };
   }
 
@@ -423,13 +434,7 @@ export function decide(
           reason: 'review thread sent the change back',
         };
       }
-      return agent(
-        issue.key,
-        'classify-failures',
-        phase,
-        String(pr.id),
-        'red checks',
-      );
+      return agent(issue.key, 'classify-failures', phase, String(pr.id), 'red checks');
     }
     if (pr.checks !== 'green') {
       return {kind: 'wait', issue: issue.key, reason: `checks are ${pr.checks}`};

@@ -2,9 +2,9 @@
 status: accepted
 ---
 
-# Skills reach the tracker, the review, and the repository only through `remote-solver` verbs
+# Skills reach the tracker, the review, and the repository only through `sdd` verbs
 
-Every read and every write a skill needs is a `remote-solver` verb, including reads: `threads <pull>` prints the open review threads with the handles `thread reply`, `thread resolve`, and `thread fix` take, plus the last conversation comment and whether it is unanswered (`conversation.unanswered`). The package source, `gh`, and the GitHub API are not part of a skill.
+Every read and every write a skill needs is an `sdd` verb, including reads: `threads <pull>` prints the open review threads with the handles `thread reply`, `thread resolve`, and `thread fix` take, plus the last conversation comment and whether it is unanswered (`conversation.unanswered`). The package source, `gh`, and the GitHub API are not part of a skill. `remote-solver` launches `spy`, `review`, and `issue`. It is not a skill verb.
 
 Until `threads` existed the write verbs were there and the read was not. Agents filled the gap by reading `src/adapters/github.ts` and `sdd.ts` from the linked package, calling `remote-solver issue` (which fails inside an occupied worktree), or posting through `gh api` directly; one `archive` run read the solver source eighteen times. Every such path bypasses the ignored-author filter and the spy mark, and none of it is testable.
 

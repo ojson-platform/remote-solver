@@ -23,7 +23,7 @@ Labels unanswered PR threads and one conversation comment. Leaves change files u
 2. On each, reply with one line: `sdd:layer=<layer> → <phase>`, or `sdd:layer=out — #<new issue>`. The layer is the change file the remark is about. A rebase or a merge conflict is `code`.
 3. `conversation.unanswered` is true: `conversation.last` is one request. `thread say <pull> 'sdd:layer=<layer> → <phase>'`.
 4. Leave every thread open. The skill of that layer closes it with `thread fix`. `out`: open the issue, then `thread resolve` yourself.
-5. `npx remote-solver unwait <issue>`. Do not set the phase label.
+5. `npx sdd unwait <issue>`. Do not set the phase label.
 
 ## Check
 

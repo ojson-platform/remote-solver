@@ -1,29 +1,31 @@
 import type {Review, Vcs} from './machine/port.ts';
 
-import {acceptIssue} from './accept.ts';
-import {machine} from './adapters/compose.ts';
-import {pick, resolveCycle} from './machine/flow.ts';
+import {machine, solverRoot, turn, type Machine} from './adapters/compose.ts';
+import {linkCommand} from './adapters/runtime.ts';
+import {prepareCheckout} from './adapters/vcs.ts';
+import {readChange} from './machine/change.ts';
+import {applyLabels, pick, resolveCycle} from './machine/flow.ts';
 import {openWait, setPhase, setWait} from './machine/labels.ts';
 import {parseMarker} from './machine/marker.ts';
 import {updateMirror} from './machine/mirror.ts';
 import {changeDir} from './machine/naming.ts';
-import {PHASES, type Phase} from './machine/phase.ts';
-import {publishChoice} from './machine/policy.ts';
+import {labelsAfterAdvance, PHASES, type Phase} from './machine/phase.ts';
+import {accept as acceptGate, publishChoice} from './machine/policy.ts';
 import {threadsReport} from './machine/review.ts';
 import {loadCycle} from './machine/snapshot.ts';
 
 // Verbs the skills call. The GitHub and git adapters sit behind them.
-//   sdd.ts plan
-//   sdd.ts set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key>
-//   sdd.ts publish <key> "<pull title>"
-//   sdd.ts checks <pull>
-//   sdd.ts threads <pull> [--layer <layer>] [--unmarked]
-//   sdd.ts thread open <pull> <path> <line> <body>
-//   sdd.ts thread reply <pull> <comment> <body>
-//   sdd.ts thread say <pull> <body>
-//   sdd.ts thread resolve <thread>
-//   sdd.ts thread fix <key> <pull> <thread> | thread fix <key> <pull> --conversation
-//   sdd.ts mirror <key> <Layer> <text>
+//   sdd plan
+//   sdd set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key>
+//   sdd publish <key> "<pull title>"
+//   sdd checks <pull>
+//   sdd threads <pull> [--layer <layer>] [--unmarked]
+//   sdd thread open <pull> <path> <line> <body>
+//   sdd thread reply <pull> <comment> <body>
+//   sdd thread say <pull> <body>
+//   sdd thread resolve <thread>
+//   sdd thread fix <key> <pull> <thread> | thread fix <key> <pull> --conversation
+//   sdd mirror <key> <Layer> <text>
 
 function fail(message: string): never {
   console.error(message);
@@ -38,7 +40,31 @@ function need(value: string | undefined, usage: string): string {
 }
 
 const usage =
-  'Usage: remote-solver plan | set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key> | publish <key> "<title>" | checks <pull> | threads <pull> [--layer <layer>] [--unmarked] | thread open|reply|say|resolve ... | thread fix <key> <pull> <thread>|--conversation | mirror <key> <Layer> <text>';
+  'Usage: sdd plan | step <key> [--auto-plan] [--auto-spec] [--auto-design] | worktree <key> | set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key> | publish <key> "<title>" | checks <pull> | threads <pull> [--layer <layer>] [--unmarked] | thread open|reply|say|resolve ... | thread fix <key> <pull> <thread>|--conversation | mirror <key> <Layer> <text>';
+
+const AUTO_LABEL: Record<string, string> = {
+  '--auto-plan': 'sdd:auto-plan',
+  '--auto-spec': 'sdd:auto-spec',
+  '--auto-design': 'sdd:auto-design',
+};
+
+const SESSION_WORKTREES = '.worktrees';
+
+function stepArgs(rest: string[]): {key: string; labels: string[]} | null {
+  const [key, ...flags] = rest;
+  if (!key || key.startsWith('-')) {
+    return null;
+  }
+  const labels: string[] = [];
+  for (const flag of flags) {
+    const label = AUTO_LABEL[flag];
+    if (!label || labels.includes(label)) {
+      return null;
+    }
+    labels.push(label);
+  }
+  return {key, labels};
+}
 
 /** `threads <pull> [--layer X] [--unmarked]`. */
 export function threadsArgs(
@@ -146,6 +172,10 @@ export function publish(
 
 export function runSdd(argv: string[], box = machine()): void {
   const [command, ...rest] = argv;
+  if (command === 'help' || command === '--help' || command === '-h') {
+    console.error(usage);
+    return;
+  }
   try {
     dispatch(box, command, rest);
   } catch (error) {
@@ -153,109 +183,207 @@ export function runSdd(argv: string[], box = machine()): void {
   }
 }
 
-function dispatch(
-  box: ReturnType<typeof machine>,
-  command: string | undefined,
-  rest: string[],
-): void {
-  if (command === 'plan') {
-    const snapshot = loadCycle(
-      box.tracker,
-      box.review,
-      key => box.vcs.filesAt(key),
-      box.config.queueLabel,
-    );
-    const decision = pick(resolveCycle(snapshot, box.tracker, box.config.queueLabel));
-    console.log(JSON.stringify(decision, null, 2));
-  } else if (command === 'set') {
-    const key = need(rest[0], usage);
-    const phase = need(rest[1], usage);
-    if (!PHASES.includes(phase as Phase)) {
-      fail(usage);
-    }
-    setPhase(key, phase as Phase, box.tracker);
-  } else if (command === 'wait') {
-    const key = need(rest[0], usage);
-    const reason = rest.slice(1).join(' ').trim();
-    if (!reason) {
-      fail(usage);
-    }
-    openWait(key, reason, box.tracker);
-  } else if (command === 'unwait') {
-    setWait(need(rest[0], usage), false, box.tracker);
-  } else if (command === 'accept') {
-    console.log(acceptIssue(need(rest[0], usage), box));
-  } else if (command === 'publish') {
-    const key = need(rest[0], usage);
-    const title = rest.slice(1).join(' ');
-    if (!title) {
-      fail(usage);
-    }
-    console.log(publish({key, title}, box));
-  } else if (command === 'checks') {
-    const text = box.review.checksText(need(rest[0], usage)).replace(/\n$/, '');
-    if (text) {
-      console.log(text);
-    }
-  } else if (command === 'threads') {
-    const args = threadsArgs(rest);
-    if (!args) {
-      fail(usage);
-    }
-    const report = threadsReport(box.review.threadList(args.pull), box.review.comments(args.pull), {
-      layer: args.layer,
-      unmarked: args.unmarked,
-    });
-    console.log(JSON.stringify(report, null, 2));
-  } else if (command === 'thread') {
-    const sub = rest[0];
-    if (sub === 'open') {
-      const pull = need(rest[1], usage);
-      const file = need(rest[2], usage);
-      const line = Number(need(rest[3], usage));
-      const body = rest.slice(4).join(' ');
-      if (!Number.isInteger(line) || !body) {
-        fail(usage);
-      }
-      box.review.openThread(pull, {commit: box.vcs.head(), path: file, line, body});
-    } else if (sub === 'reply') {
-      const pull = need(rest[1], usage);
-      const comment = need(rest[2], usage);
-      const body = rest.slice(3).join(' ');
-      if (!body) {
-        fail(usage);
-      }
-      box.review.reply(pull, comment, body);
-    } else if (sub === 'say') {
-      const pull = need(rest[1], usage);
-      const body = rest.slice(2).join(' ');
-      if (!body) {
-        fail(usage);
-      }
-      box.review.say(pull, body);
-    } else if (sub === 'resolve') {
-      box.review.resolveThread(need(rest[1], usage));
-    } else if (sub === 'fix') {
-      const args = fixArgs(rest.slice(1));
-      if (!args) {
-        fail(usage);
-      }
-      console.log(fixThread(args, box));
-    } else {
-      fail(usage);
-    }
-  } else if (command === 'mirror') {
-    const key = need(rest[0], usage);
-    const layer = need(rest[1], usage);
-    const text = rest.slice(2).join(' ');
-    if (!text) {
-      fail(usage);
-    }
-    const record = box.tracker.issue(key);
-    box.tracker.updateBody(key, updateMirror(record.body, layer, text));
-  } else {
+type Verb = (box: Machine, rest: string[]) => void;
+
+function dispatch(box: Machine, command: string | undefined, rest: string[]): void {
+  const verb = command === undefined ? undefined : verbs[command];
+  if (!verb) {
     fail(usage);
   }
+  verb(box, rest);
+}
+
+const verbs: Record<string, Verb> = {
+  plan,
+  step,
+  worktree,
+  set,
+  wait,
+  unwait,
+  accept,
+  publish: publishCommand,
+  checks,
+  threads,
+  thread,
+  mirror,
+};
+
+function plan(box: Machine): void {
+  const snapshot = loadCycle(
+    box.tracker,
+    box.review,
+    key => box.vcs.filesAt(key),
+    box.config.queueLabel,
+  );
+  const decision = pick(resolveCycle(snapshot, box.tracker, box.config.queueLabel));
+  console.log(JSON.stringify(decision, null, 2));
+}
+
+function step(box: Machine, rest: string[]): void {
+  const args = stepArgs(rest);
+  if (!args) {
+    fail(usage);
+  }
+  const record = box.tracker.issue(args.key);
+  const inCycle =
+    record.labels.includes(box.config.queueLabel) && record.labels.includes('sdd:cycle');
+  if (!inCycle) {
+    console.log(
+      JSON.stringify({kind: 'done', issue: args.key, reason: 'not in the open cycle'}, null, 2),
+    );
+    return;
+  }
+  if (args.labels.length) {
+    box.tracker.editLabels(args.key, args.labels, []);
+  }
+  console.log(JSON.stringify(turn(box, args.key), null, 2));
+}
+
+function worktree(box: Machine, rest: string[]): void {
+  const key = need(rest[0], usage);
+  if (rest.length !== 1) {
+    fail(usage);
+  }
+  const dir = prepareCheckout(box.root, key, {
+    branchPrefix: box.config.branchPrefix,
+    defaultBranch: box.config.defaultBranch,
+    worktreesDir: SESSION_WORKTREES,
+    link: linkCommand(solverRoot(), box.root),
+  });
+  console.log(dir);
+}
+
+function set(box: Machine, rest: string[]): void {
+  const key = need(rest[0], usage);
+  const phase = need(rest[1], usage);
+  if (!PHASES.includes(phase as Phase)) {
+    fail(usage);
+  }
+  setPhase(key, phase as Phase, box.tracker);
+}
+
+function wait(box: Machine, rest: string[]): void {
+  const key = need(rest[0], usage);
+  const reason = rest.slice(1).join(' ').trim();
+  if (!reason) {
+    fail(usage);
+  }
+  openWait(key, reason, box.tracker);
+}
+
+function unwait(box: Machine, rest: string[]): void {
+  setWait(need(rest[0], usage), false, box.tracker);
+}
+
+/** Close proposing, specifying, or designing. The agent does not run this. Merge is not this command. */
+function accept(box: Machine, rest: string[]): void {
+  const key = need(rest[0], usage);
+  const record = box.tracker.issue(key);
+  const decision = acceptGate(record, readChange(key, box.vcs.filesAt(key)));
+  if (decision.kind !== 'advance') {
+    throw new Error(decision.reason);
+  }
+  applyLabels(box.tracker, key, record.labels, labelsAfterAdvance(record.labels, decision.to));
+  const login = box.tracker.login();
+  box.tracker.comment(key, `sdd:accept ${decision.reason} by @${login}`);
+  console.log(`#${key}: ${decision.reason}`);
+}
+
+function publishCommand(box: Machine, rest: string[]): void {
+  const key = need(rest[0], usage);
+  const title = rest.slice(1).join(' ');
+  if (!title) {
+    fail(usage);
+  }
+  console.log(publish({key, title}, box));
+}
+
+function checks(box: Machine, rest: string[]): void {
+  const text = box.review.checksText(need(rest[0], usage)).replace(/\n$/, '');
+  if (text) {
+    console.log(text);
+  }
+}
+
+function threads(box: Machine, rest: string[]): void {
+  const args = threadsArgs(rest);
+  if (!args) {
+    fail(usage);
+  }
+  const report = threadsReport(box.review.threadList(args.pull), box.review.comments(args.pull), {
+    layer: args.layer,
+    unmarked: args.unmarked,
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
+const threadVerbs: Record<string, Verb> = {
+  open: threadOpen,
+  reply: threadReply,
+  say: threadSay,
+  resolve: threadResolve,
+  fix: threadFix,
+};
+
+function thread(box: Machine, rest: string[]): void {
+  const verb = rest[0] === undefined ? undefined : threadVerbs[rest[0]];
+  if (!verb) {
+    fail(usage);
+  }
+  verb(box, rest);
+}
+
+function threadOpen(box: Machine, rest: string[]): void {
+  const pull = need(rest[1], usage);
+  const file = need(rest[2], usage);
+  const line = Number(need(rest[3], usage));
+  const body = rest.slice(4).join(' ');
+  if (!Number.isInteger(line) || !body) {
+    fail(usage);
+  }
+  box.review.openThread(pull, {commit: box.vcs.head(), path: file, line, body});
+}
+
+function threadReply(box: Machine, rest: string[]): void {
+  const pull = need(rest[1], usage);
+  const comment = need(rest[2], usage);
+  const body = rest.slice(3).join(' ');
+  if (!body) {
+    fail(usage);
+  }
+  box.review.reply(pull, comment, body);
+}
+
+function threadSay(box: Machine, rest: string[]): void {
+  const pull = need(rest[1], usage);
+  const body = rest.slice(2).join(' ');
+  if (!body) {
+    fail(usage);
+  }
+  box.review.say(pull, body);
+}
+
+function threadResolve(box: Machine, rest: string[]): void {
+  box.review.resolveThread(need(rest[1], usage));
+}
+
+function threadFix(box: Machine, rest: string[]): void {
+  const args = fixArgs(rest.slice(1));
+  if (!args) {
+    fail(usage);
+  }
+  console.log(fixThread(args, box));
+}
+
+function mirror(box: Machine, rest: string[]): void {
+  const key = need(rest[0], usage);
+  const layer = need(rest[1], usage);
+  const text = rest.slice(2).join(' ');
+  if (!text) {
+    fail(usage);
+  }
+  const record = box.tracker.issue(key);
+  box.tracker.updateBody(key, updateMirror(record.body, layer, text));
 }
 
 if (process.argv[1]?.endsWith('sdd.ts')) {

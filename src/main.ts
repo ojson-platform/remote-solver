@@ -1,5 +1,5 @@
-import {machine, type Machine} from './adapters/compose.ts';
-import {resolveCycle, resolveIssue} from './machine/flow.ts';
+import {machine, turn, type Machine} from './adapters/compose.ts';
+import {performCycle} from './machine/flow.ts';
 import {exited, signature, tick, type State} from './machine/scheduler.ts';
 import {loadCycle} from './machine/snapshot.ts';
 
@@ -7,8 +7,8 @@ import {loadCycle} from './machine/snapshot.ts';
 // issue's agent runs in the worktree sandcastle keeps for branch sdd/<key>.
 //
 // The machine archives the change, then waits for a person to merge the pull
-// request. sdd:auto-merge rebases it without that person. Once the pull request
-// is merged, the machine sets sdd:accepted and closes the issue.
+// request. sdd:auto-merge rebases it in the same turn and closes the issue.
+// Once the pull request is merged, the machine sets sdd:accepted and closes the issue.
 //
 // From the service repository:
 // One issue: remote-solver issue <key>
@@ -23,18 +23,6 @@ function flag(argv: string[], name: string, fallback: number): number {
   return Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
-function issueArg(argv: string[]): string | null {
-  const index = argv.indexOf('--issue');
-  if (index === -1) {
-    return null;
-  }
-  const key = argv[index + 1];
-  if (!key || key.startsWith('--')) {
-    throw new Error('Usage: remote-solver issue <key>');
-  }
-  return key;
-}
-
 export async function runIssue(key: string): Promise<number> {
   return driveIssue(machine(), key);
 }
@@ -42,17 +30,7 @@ export async function runIssue(key: string): Promise<number> {
 /** One issue, up to 40 steps. */
 export async function driveIssue(box: Machine, key: string): Promise<number> {
   for (let step = 1; step <= 40; step += 1) {
-    const decision = resolveIssue(key, {
-      tracker: box.tracker,
-      review: box.review,
-      files: box.vcs.filesAt(key),
-      queueLabel: box.config.queueLabel,
-    });
-    if (decision.kind === 'merge') {
-      box.review.merge(decision.pull);
-      console.log(`#${key} ${decision.reason}`);
-      return 0;
-    }
+    const decision = turn(box, key);
     if (decision.kind !== 'agent') {
       console.log(`#${key} ${decision.kind}: ${decision.reason}`);
       return 0;
@@ -66,7 +44,9 @@ export async function driveIssue(box: Machine, key: string): Promise<number> {
       pull: decision.pr,
     });
     if (outcome.commits === 0) {
-      console.error(`Stopped: ${decision.action} made no commit, so the next poll would repeat it.`);
+      console.error(
+        `Stopped: ${decision.action} made no commit, so the next poll would repeat it.`,
+      );
       return 2;
     }
   }
@@ -103,17 +83,16 @@ export async function runSpy(argv: string[]): Promise<void> {
         key => box.vcs.filesAt(key),
         box.config.queueLabel,
       );
-      const decisions = resolveCycle(
+      const decisions = performCycle(
         snapshot,
-        box.tracker,
-        box.config.queueLabel,
+        {
+          tracker: box.tracker,
+          review: box.review,
+          filesAt: key => box.vcs.filesAt(key),
+          queueLabel: box.config.queueLabel,
+        },
         new Set(state.running),
       );
-      for (const decision of decisions) {
-        if (decision.kind === 'merge') {
-          box.review.merge(decision.pull);
-        }
-      }
       const turned = tick(state, decisions, parallel);
       state = turned.state;
       for (const line of turned.report) {
@@ -149,14 +128,5 @@ export async function runSpy(argv: string[]): Promise<void> {
         resolve();
       };
     });
-  }
-}
-
-if (process.argv[1]?.endsWith('main.ts')) {
-  const issue = issueArg(process.argv);
-  if (issue === null) {
-    await runSpy(process.argv);
-  } else {
-    process.exit(await runIssue(issue));
   }
 }

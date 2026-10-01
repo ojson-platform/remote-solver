@@ -1,22 +1,19 @@
 import {machine} from './adapters/compose.ts';
 import {runIssue, runSpy} from './main.ts';
 import {runReview} from './reviewer/run.ts';
-import {runSdd} from './sdd.ts';
 
 const usage = `Usage:
   remote-solver spy [--parallel N] [--interval S]
   remote-solver review
   remote-solver issue <key>
-  remote-solver plan | set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key> | publish <key> "<title>" | checks <pull> | threads <pull> [--layer <layer>] [--unmarked] | thread open|reply|say|resolve ... | thread fix <key> <pull> <thread>|--conversation | mirror <key> <Layer> <text>
 
-Working directory is the service repository.`;
+Cycle verbs are the sdd bin.`;
 
 export type Route =
   | {kind: 'help'}
   | {kind: 'spy'; argv: string[]}
   | {kind: 'review'}
-  | {kind: 'issue'; key: string}
-  | {kind: 'sdd'; argv: string[]};
+  | {kind: 'issue'; key: string};
 
 export function route(argv: string[]): Route {
   const [command, ...rest] = argv;
@@ -36,7 +33,7 @@ export function route(argv: string[]): Route {
     }
     return {kind: 'issue', key};
   }
-  return {kind: 'sdd', argv};
+  return {kind: 'help'};
 }
 
 export async function runCli(argv: string[]): Promise<number> {
@@ -53,11 +50,7 @@ export async function runCli(argv: string[]): Promise<number> {
   if (chosen.kind === 'review') {
     return runReview(machine());
   }
-  if (chosen.kind === 'issue') {
-    return runIssue(chosen.key);
-  }
-  runSdd(chosen.argv);
-  return 0;
+  return runIssue(chosen.key);
 }
 
 if (process.argv[1]?.endsWith('cli.ts')) {

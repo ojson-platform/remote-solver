@@ -7,7 +7,7 @@ const LABEL = (phase: string) => `sdd:${phase}`;
 export function setPhase(key: string, phase: Phase, tracker: Tracker, options?: {allowGate?: boolean}): void {
   if (!options?.allowGate && (GATE_PHASES as readonly string[]).includes(phase)) {
     throw new Error(
-      `Refusing to set gate label sdd:${phase}. A person changes the phase on the issue, or runs remote-solver accept ${key}.`,
+      `Refusing to set gate label sdd:${phase}. A person changes the phase on the issue, or runs sdd accept ${key}.`,
     );
   }
   const names = tracker.labels(key);
@@ -36,5 +36,5 @@ export function openWait(key: string, ask: string, tracker: Tracker): void {
 /** The review gate ask. The tracker says how a person moves the phase there. */
 export function gateAsk(key: string, gate: Gate, tracker: Tracker): string {
   const hint = tracker.phaseHint(gate.from, gate.to);
-  return `Review the ${gate.artifact}. To accept it, ${hint} on this issue, or run \`remote-solver accept ${key}\`.`;
+  return `Review the ${gate.artifact}. To accept it, ${hint} on this issue, or run \`sdd accept ${key}\`.`;
 }

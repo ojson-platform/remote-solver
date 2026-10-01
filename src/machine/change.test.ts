@@ -5,6 +5,8 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {test} from 'vitest';
 
+import {requirement, scenario, spec} from '@ojson/spec-coverage';
+
 import {changeText, HEADINGS, readChange} from './change.ts';
 import type {FileSource} from './port.ts';
 import {gitFiles} from '../adapters/vcs.ts';
@@ -23,29 +25,6 @@ function repo(): string {
   git(root, ['commit', '-m', 'init']);
   return root;
 }
-
-test('reads a proposal, its open questions, and a missing baseline from the working tree', () => {
-  const root = repo();
-  const change = path.join(root, 'openspec', 'changes', 'issue-4');
-  mkdirSync(change, {recursive: true});
-  writeFileSync(
-    path.join(change, 'proposal.md'),
-    [
-      '## Capabilities',
-      '### Modified',
-      '- cache-first keep the first hit',
-      '',
-      '## Open questions',
-      '- [ ] who owns eviction',
-      '',
-    ].join('\n'),
-  );
-  const view = readChange('4', gitFiles(root, '4', 'sdd'));
-  assert.equal(view.proposal, true);
-  assert.equal(view.openQuestions, 1);
-  assert.deepEqual(view.missingBaseline, ['cache-first']);
-  rmSync(root, {recursive: true, force: true});
-});
 
 test('reads proposal.md from sdd/<issue> when the working tree is another branch', () => {
   const root = repo();
@@ -70,6 +49,53 @@ test('reads proposal.md from sdd/<issue> when the working tree is another branch
   assert.equal(view.openTasks, 1);
   assert.equal(existsOnMaster(root, 'openspec/changes/issue-7/proposal.md'), false);
   rmSync(root, {recursive: true, force: true});
+});
+
+spec('change', () => {
+  requirement('The change directory is issue-<key>', () => {
+    scenario('A file only in the checkout is not the change', () => {
+      const root = repo();
+      const change = path.join(root, 'openspec', 'changes', 'issue-4');
+      mkdirSync(change, {recursive: true});
+      writeFileSync(path.join(change, 'proposal.md'), '## Open questions\n- [ ] only here\n');
+      const view = readChange('4', gitFiles(root, '4', 'sdd'));
+      assert.equal(view.proposal, false);
+      assert.equal(view.openQuestions, 0);
+      rmSync(root, {recursive: true, force: true});
+    });
+
+    scenario('The issue branch wins over the checkout', () => {
+      const root = repo();
+      git(root, ['checkout', '-b', 'sdd/4']);
+      const change = path.join(root, 'openspec', 'changes', 'issue-4');
+      mkdirSync(change, {recursive: true});
+      writeFileSync(
+        path.join(change, 'proposal.md'),
+        [
+          '## Capabilities',
+          '### Modified',
+          '- cache-first keep the first hit',
+          '',
+          '## Open questions',
+          '- [ ] who owns eviction',
+          '',
+        ].join('\n'),
+      );
+      git(root, ['add', 'openspec']);
+      git(root, ['commit', '-m', 'change']);
+      git(root, ['checkout', 'master']);
+      mkdirSync(change, {recursive: true});
+      writeFileSync(
+        path.join(change, 'proposal.md'),
+        '## Open questions\n- [x] closed in the checkout\n',
+      );
+      const view = readChange('4', gitFiles(root, '4', 'sdd'));
+      assert.equal(view.proposal, true);
+      assert.equal(view.openQuestions, 1);
+      assert.deepEqual(view.missingBaseline, ['cache-first']);
+      rmSync(root, {recursive: true, force: true});
+    });
+  });
 });
 
 test('a numeric change directory is not the issue change', () => {

@@ -2,7 +2,6 @@ import {execFileSync, spawnSync} from 'node:child_process';
 
 import {authorIgnored, loadIgnoredAuthors} from '../machine/ignore.ts';
 import {pullTitlePrefix} from '../machine/naming.ts';
-import {publishChoice} from '../machine/policy.ts';
 import {markRobot} from '../machine/marker.ts';
 import {spokeByRobot} from '../machine/review.ts';
 import type {ReviewNote} from '../machine/port.ts';
@@ -50,7 +49,10 @@ export type ReviewComment = {
 };
 
 /** The body GitHub publishes as one review. Inline notes are threads; the rest is the review summary. */
-export function changesPayload(head: string, notes: ReviewNote[]): {
+export function changesPayload(
+  head: string,
+  notes: ReviewNote[],
+): {
   commit_id: string;
   event: 'REQUEST_CHANGES';
   body: string;
@@ -337,12 +339,8 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       const open = linked(key)
         .filter(pr => pr.state === 'OPEN')
         .map(pr => String(pr.number));
-      const choice = publishChoice(open);
-      if (!choice.ok) {
-        throw new Error(choice.reason);
-      }
-      if (choice.id) {
-        return choice.id;
+      if (open[0]) {
+        return open[0];
       }
       const url = gh([
         'pr',
@@ -407,8 +405,20 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
         const text = notes.map(note => note.body).join('\n\n');
         try {
           gh(
-            ['api', '--method', 'POST', '--input', '-', `repos/${repoSlug()}/pulls/${pull}/reviews`],
-            JSON.stringify(changesPayload(head, notes.map(note => ({body: note.body})))),
+            [
+              'api',
+              '--method',
+              'POST',
+              '--input',
+              '-',
+              `repos/${repoSlug()}/pulls/${pull}/reviews`,
+            ],
+            JSON.stringify(
+              changesPayload(
+                head,
+                notes.map(note => ({body: note.body})),
+              ),
+            ),
           );
         } catch {
           this.speak(pull, text);
@@ -420,13 +430,18 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       if (payload.comments.length === 0 && payload.body) {
         this.speak(pull, payload.body);
       }
-      const loose = notes.filter(note => !note.path).map(note => note.body).join('\n\n');
+      const loose = notes
+        .filter(note => !note.path)
+        .map(note => note.body)
+        .join('\n\n');
       if (payload.comments.length > 0 && loose) {
         this.speak(pull, loose);
       }
     },
     range(pull) {
-      const view = JSON.parse(gh(['pr', 'view', pull, '--repo', repoSlug(), '--json', 'headRefOid,baseRefOid'])) as {
+      const view = JSON.parse(
+        gh(['pr', 'view', pull, '--repo', repoSlug(), '--json', 'headRefOid,baseRefOid']),
+      ) as {
         headRefOid?: string;
         baseRefOid?: string;
       };
@@ -450,10 +465,17 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
         const stderr =
           error && typeof error === 'object' && 'stderr' in error ? String(error.stderr) : '';
         const message = error instanceof Error ? error.message : String(error);
-        if (/already merged/i.test(`${message}\n${stderr}`)) {
-          return;
+        if (!/already merged/i.test(`${message}\n${stderr}`)) {
+          throw error;
         }
-        throw error;
+      }
+      const view = JSON.parse(
+        gh(['pr', 'view', pull, '--repo', repoSlug(), '--json', 'state']),
+      ) as {
+        state?: string;
+      };
+      if (view.state !== 'MERGED') {
+        throw new Error(`merge of PR #${pull} left it ${view.state ?? 'OPEN'}`);
       }
     },
   };
@@ -589,11 +611,7 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
     ensurePull(key) {
       calls.push('ensurePull');
       const open = (seed.pulls?.[key] ?? []).filter(pr => pr.state === 'OPEN').map(pr => pr.id);
-      const choice = publishChoice(open);
-      if (!choice.ok) {
-        throw new Error(choice.reason);
-      }
-      return choice.id ?? 'new';
+      return open[0] ?? 'new';
     },
     openThread(_pull, target) {
       calls.push('openThread');
@@ -641,6 +659,13 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
     },
     merge(pull) {
       calls.push(`merge:${pull}`);
+      for (const list of Object.values(seed.pulls ?? {})) {
+        for (const pr of list) {
+          if (pr.id === pull) {
+            pr.state = 'MERGED';
+          }
+        }
+      }
     },
   };
   return {tracker, review, calls};

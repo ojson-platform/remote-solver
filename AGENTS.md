@@ -8,7 +8,7 @@ pnpm test
 pnpm run test:types
 ```
 
-From the service repository: `remote-solver issue <key>`, `remote-solver spy`, and `remote-solver accept <key>` as an alternative to moving the gate phase on the issue. The bin is `bin/remote-solver.mjs`.
+From the service repository: `remote-solver issue <key>` and `remote-solver spy`. A gate is `sdd accept <key>`. The bins are `bin/remote-solver.mjs` and `bin/sdd.mjs`.
 
 Secrets belong in `.env` and are not committed.
 

@@ -78,41 +78,31 @@ export type ThreadsReport = {
   conversation: {last: Conversation | null; layer: string | null; unanswered: boolean};
 };
 
-/**
- * What `remote-solver threads <pull>` prints. Open threads only. `layer`
- * keeps the threads whose latest reply carries that marker; `unmarked` keeps
- * the ones with no marker at all.
- */
-export function threadsReport(
-  threads: ThreadRecord[],
-  comments: Conversation[],
-  filter?: {layer?: string; unmarked?: boolean},
-): ThreadsReport {
-  const lines = threads
-    .filter(thread => !thread.resolved)
-    .map(thread => ({
-      thread: thread.id,
-      comment: thread.comment,
-      file: thread.path,
-      line: thread.line,
-      marker: markerOf(thread.body),
-      body: thread.body,
-    }))
-    .filter(line => (filter?.layer ? line.marker === filter.layer : true))
-    .filter(line => (filter?.unmarked ? line.marker === null : true));
-  return {
-    threads: lines,
-    conversation: {
-      last: comments.at(-1) ?? null,
-      layer: conversationLayer(comments),
-      unanswered: conversationUnanswered(comments),
-    },
-  };
-}
+/** A thread the reading can see. Handles are present when the caller has them. */
+export type ReadThread = Thread & {
+  id?: string;
+  comment?: string;
+  path?: string;
+  line?: number | null;
+};
 
-/** An open thread without a marker is unanswered; only a layer marker opens a phase. */
-export function reviewOf(threads: Thread[], comments: Conversation[]): ReviewView {
+/** One reading of threads and the conversation. The cycle and `threads` both take it. */
+export type ReviewReading = ReviewView & {
+  threads: ThreadLine[];
+  conversation: ThreadsReport['conversation'];
+};
+
+/**
+ * Open threads and the conversation, read once. An open thread without a marker
+ * is unanswered. Only a layer marker opens a phase. `fixed` closes a conversation
+ * layer. Handles are kept for the threads verb.
+ */
+export function readReview(
+  threads: readonly ReadThread[],
+  comments: Conversation[],
+): ReviewReading {
   const layers: string[] = [];
+  const lines: ThreadLine[] = [];
   let unanswered = conversationUnanswered(comments);
   for (const thread of threads) {
     if (thread.resolved) {
@@ -124,6 +114,14 @@ export function reviewOf(threads: Thread[], comments: Conversation[]): ReviewVie
     } else if (marker.kind === 'layer') {
       layers.push(marker.layer);
     }
+    lines.push({
+      thread: thread.id ?? '',
+      comment: thread.comment ?? '',
+      file: thread.path ?? '',
+      line: thread.line ?? null,
+      marker: markerOf(thread.body),
+      body: thread.body,
+    });
   }
   const fromConversation = conversationLayer(comments);
   if (fromConversation) {
@@ -136,5 +134,38 @@ export function reviewOf(threads: Thread[], comments: Conversation[]): ReviewVie
       rollback = phase;
     }
   }
-  return {unanswered, rollback, layers};
+  return {
+    unanswered,
+    rollback,
+    layers,
+    threads: lines,
+    conversation: {
+      last: comments.at(-1) ?? null,
+      layer: fromConversation,
+      unanswered: conversationUnanswered(comments),
+    },
+  };
+}
+
+/**
+ * What `sdd threads <pull>` prints. Open threads only. `layer`
+ * keeps the threads whose latest reply carries that marker; `unmarked` keeps
+ * the ones with no marker at all.
+ */
+export function threadsReport(
+  threads: ThreadRecord[],
+  comments: Conversation[],
+  filter?: {layer?: string; unmarked?: boolean},
+): ThreadsReport {
+  const reading = readReview(threads, comments);
+  const lines = reading.threads
+    .filter(line => (filter?.layer ? line.marker === filter.layer : true))
+    .filter(line => (filter?.unmarked ? line.marker === null : true));
+  return {threads: lines, conversation: reading.conversation};
+}
+
+/** The cycle's view of the same reading: unanswered, rollback, and layers. */
+export function reviewOf(threads: readonly ReadThread[], comments: Conversation[]): ReviewView {
+  const reading = readReview(threads, comments);
+  return {unanswered: reading.unanswered, rollback: reading.rollback, layers: reading.layers};
 }

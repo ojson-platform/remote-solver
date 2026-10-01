@@ -120,14 +120,32 @@ test('wait-human holds even when the auto tag is set', () => {
   );
   assert.equal(held.kind, 'wait');
   if (held.kind === 'wait') {
-    assert.equal(held.gate, undefined);
+    assert.deepEqual(held.gate, {artifact: 'spec', from: 'specifying', to: 'specified'});
   }
 });
 
 const gates = [
-  {phase: 'proposing', gate: 'proposed', artifact: 'proposal', tag: 'sdd:auto-plan', next: 'specifying'},
-  {phase: 'specifying', gate: 'specified', artifact: 'spec', tag: 'sdd:auto-spec', next: 'designing'},
-  {phase: 'designing', gate: 'designed', artifact: 'design', tag: 'sdd:auto-design', next: 'tasking'},
+  {
+    phase: 'proposing',
+    gate: 'proposed',
+    artifact: 'proposal',
+    tag: 'sdd:auto-plan',
+    next: 'specifying',
+  },
+  {
+    phase: 'specifying',
+    gate: 'specified',
+    artifact: 'spec',
+    tag: 'sdd:auto-spec',
+    next: 'designing',
+  },
+  {
+    phase: 'designing',
+    gate: 'designed',
+    artifact: 'design',
+    tag: 'sdd:auto-design',
+    next: 'tasking',
+  },
 ] as const;
 
 for (const gate of gates) {
@@ -141,7 +159,7 @@ for (const gate of gates) {
     const held = decide(issue(1, [`sdd:${gate.phase}`, 'sdd:wait-human']), [], [pull(9)], ready);
     assert.equal(held.kind, 'wait');
     if (held.kind === 'wait') {
-      assert.equal(held.gate, undefined);
+      assert.deepEqual(held.gate, {artifact: gate.artifact, from: gate.phase, to: gate.gate});
     }
 
     const auto = decide(issue(1, [`sdd:${gate.phase}`, gate.tag]), [], [pull(9)], ready);
@@ -309,19 +327,9 @@ test('verifying classifies red checks, and follows a marker once one exists', ()
 });
 
 test('verifying accepts a pull request once its checks are green', () => {
-  const waiting = decide(
-    issue(1, ['sdd:verifying']),
-    [],
-    [pull(9, {checks: 'pending'})],
-    ready,
-  );
+  const waiting = decide(issue(1, ['sdd:verifying']), [], [pull(9, {checks: 'pending'})], ready);
   assert.equal(waiting.kind, 'wait');
-  const accepted = decide(
-    issue(1, ['sdd:verifying']),
-    [],
-    [pull(9, {checks: 'green'})],
-    ready,
-  );
+  const accepted = decide(issue(1, ['sdd:verifying']), [], [pull(9, {checks: 'green'})], ready);
   assert.deepEqual(accepted, {
     kind: 'advance',
     issue: '1',

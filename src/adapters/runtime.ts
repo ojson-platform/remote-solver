@@ -12,8 +12,6 @@ import {ensureIssueBranch} from './vcs.ts';
 const LINKED = [
   ['skills', 'skills'],
   ['prompts', 'prompts'],
-  ['src/sdd.ts', 'sdd.ts'],
-  ['src/accept.ts', 'accept.ts'],
   ['.env', '.env'],
 ] as const;
 
@@ -34,9 +32,8 @@ function shQuote(value: string): string {
 
 /**
  * Host hook sandcastle runs with cwd set to the issue worktree. The worktree
- * is a checkout of the service, so the agent reaches this package through
- * these links. Node resolves a symlinked `sdd.ts` from its real path, and the
- * service `node_modules` stays the worktree's own. The links go into the
+ * is a checkout of the service, so the agent reaches skills and prompts through
+ * these links. The service `node_modules` stays the worktree's own. The links go into the
  * repository's `info/exclude`: they are not dirt, and a `node_modules/` rule
  * in the service `.gitignore` does not match a symlink.
  */

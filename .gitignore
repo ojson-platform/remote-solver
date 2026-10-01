@@ -1,5 +1,6 @@
 .env
 logs/
 worktrees/
+.worktrees/
 node_modules/
 .spec-coverage/

@@ -14,6 +14,9 @@ test('the worktree hook links the package into .sandcastle and keeps the service
   const service = path.join(parent, 'service');
   mkdirSync(path.join(solver, 'prompts'), {recursive: true});
   writeFileSync(path.join(solver, 'prompts', 'context.md'), '#');
+  mkdirSync(path.join(solver, 'src'), {recursive: true});
+  writeFileSync(path.join(solver, 'src', 'sdd.ts'), 'export {}\n');
+  writeFileSync(path.join(solver, 'src', 'accept.ts'), 'export {}\n');
   mkdirSync(path.join(service, 'node_modules'), {recursive: true});
   const command = linkCommand(solver, service);
   const prompts = path.join(solver, 'prompts').replaceAll("'", `'\\''`);
@@ -23,6 +26,7 @@ test('the worktree hook links the package into .sandcastle and keeps the service
   assert.ok(command.includes(`ln -sfn '${modules}' node_modules`));
   assert.equal(command.includes('.env'), false);
   assert.equal(command.includes('sdd.ts'), false);
+  assert.equal(command.includes('accept.ts'), false);
 });
 
 test('the links the hook makes in a sandcastle worktree are not dirt, and the exclude rules are written once', () => {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
-import {markRobot, reviewOf, spokeByRobot, threadsReport} from './review.ts';
+import {markRobot, readReview, reviewOf, spokeByRobot, threadsReport} from './review.ts';
 
 test('threads report lists open threads with their handles and filters by marker', () => {
   const records = [
@@ -62,19 +62,39 @@ test('threads report lists open threads with their handles and filters by marker
     threadsReport(records, comments, {unmarked: true}).threads.map(line => line.thread),
     ['T1'],
   );
-  assert.deepEqual(threadsReport([], []).conversation, {last: null, layer: null, unanswered: false});
-  assert.equal(threadsReport([], [{robot: false, body: 'please rebase'}]).conversation.unanswered, true);
+  assert.deepEqual(threadsReport([], []).conversation, {
+    last: null,
+    layer: null,
+    unanswered: false,
+  });
+  assert.equal(
+    threadsReport([], [{robot: false, body: 'please rebase'}]).conversation.unanswered,
+    true,
+  );
 });
 
 test('a thread fixed but not yet resolved is done: not unanswered, not a layer, not unmarked', () => {
   const records = [
-    {id: 'T1', comment: '11', path: 'src/a.ts', line: 3, resolved: false, body: '🤖 sdd:fixed abc123'},
+    {
+      id: 'T1',
+      comment: '11',
+      path: 'src/a.ts',
+      line: 3,
+      resolved: false,
+      body: '🤖 sdd:fixed abc123',
+    },
   ];
-  const review = reviewOf(records, []);
-  assert.equal(review.unanswered, false);
-  assert.equal(review.rollback, null);
-  assert.deepEqual(review.layers, []);
-  assert.equal(threadsReport(records, []).threads[0].marker, 'fixed');
+  const reading = readReview(records, []);
+  assert.equal(reading.unanswered, false);
+  assert.equal(reading.rollback, null);
+  assert.deepEqual(reading.layers, []);
+  assert.equal(reading.threads[0].marker, 'fixed');
+  assert.equal(reading.conversation.unanswered, false);
+  assert.deepEqual(reviewOf(records, []), {
+    unanswered: reading.unanswered,
+    rollback: reading.rollback,
+    layers: reading.layers,
+  });
   assert.deepEqual(threadsReport(records, [], {unmarked: true}).threads, []);
 });
 

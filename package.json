@@ -4,7 +4,8 @@
   "description": "SDLC machine: one issue, one pull request, one change",
   "type": "module",
   "bin": {
-    "remote-solver": "./bin/remote-solver.mjs"
+    "remote-solver": "./bin/remote-solver.mjs",
+    "sdd": "./bin/sdd.mjs"
   },
   "packageManager": "pnpm@10.30.0",
   "engines": {

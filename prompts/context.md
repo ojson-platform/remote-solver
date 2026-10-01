@@ -1,6 +1,6 @@
 # Context
 
-Skills talk to the tracker, the review, and the repository only through `npx remote-solver`. Every read and every write below is one of its verbs. The source of this package, the GitHub API, and `gh` are not part of a skill.
+Skills talk to the tracker, the review, and the repository only through `npx sdd`. Every read and every write below is one of its verbs. The source of this package, the GitHub API, `gh`, and `remote-solver` are not part of a skill.
 
 ## Outcome
 
@@ -84,13 +84,13 @@ The other files of `openspec/changes/issue-<issue>/`, with these headings exactl
 ## Threads
 
 ```bash
-npx remote-solver threads <pull> [--layer <layer>] [--unmarked]
-npx remote-solver thread open <pull> <file> <line> '<body>'
-npx remote-solver thread reply <pull> <comment> '<body>'
-npx remote-solver thread say <pull> '<body>'
-npx remote-solver thread resolve <thread>
-npx remote-solver thread fix <issue> <pull> <thread>
-npx remote-solver thread fix <issue> <pull> --conversation
+npx sdd threads <pull> [--layer <layer>] [--unmarked]
+npx sdd thread open <pull> <file> <line> '<body>'
+npx sdd thread reply <pull> <comment> '<body>'
+npx sdd thread say <pull> '<body>'
+npx sdd thread resolve <thread>
+npx sdd thread fix <issue> <pull> <thread>
+npx sdd thread fix <issue> <pull> --conversation
 ```
 
 `threads` prints the open review threads as JSON: `thread` (for `resolve` and `fix`), `comment` (for `reply`), `file`, `line`, `marker` (the layer, `note`, or `fixed` the latest reply carries, or `null`), `body`. `--layer X` keeps the threads marked `X`; `--unmarked` keeps the ones with no marker. `conversation.last` is the last pull request comment, `conversation.layer` is the layer the conversation still asks for, and `conversation.unanswered` is true when that last comment is a person's and carries no marker.
@@ -109,27 +109,29 @@ The work the run found belongs to another layer: `thread open <pull> <file> <lin
 
 1. `git status` is empty aside from the files of this commit. Anything else is an artifact the task did not name: a generated directory goes into the service `.gitignore`, a stray file is deleted, a file that belongs to the task joins the commit. Find why it appeared and remove that cause in the same run. `publish` refuses a dirty tree and lists its files.
 2. Commit. The repository's own commit rule wins: read it where the repository states commit messages (`CONTRIBUTING`, the agent style guide, a commitlint config). Without one, the subject is `#<issue>: <what changed>`. The body contains a line `#<issue>`. Any uncommitted `openspec/` of this issue joins the commit.
-3. `npx remote-solver publish <issue> "#<issue>: <what changed>"`. The argument is the pull request title, not the commit subject. It pushes `sdd/<issue>` and opens the pull request when there is none.
+3. `npx sdd publish <issue> "#<issue>: <what changed>"`. The argument is the pull request title, not the commit subject. It pushes `sdd/<issue>` and opens the pull request when there is none.
 4. The layer's mirror line, when the skill names one: § Issue mirror.
 
 Nothing to commit: skip steps 1–2 and still run step 3.
 
 ## Wait
 
-`npx remote-solver wait <issue> '<what the person does>'` sets `sdd:wait-human` and comments on the issue. The comment is the ask: the decision or the broken check, and the next command. A wait without that sentence is refused.
+`npx sdd wait <issue> '<what the person does>'` sets `sdd:wait-human` and comments on the issue. The comment is the ask: the decision or the broken check, and the next command. A wait without that sentence is refused.
 
 Wait only for a blocker. The review of a published proposal, spec, or design is not one: the machine opens that gate itself.
 
 ## Worktree
 
-The agent for an issue runs on branch `sdd/<key>`. The library keeps that checkout in the service under `.sandcastle/worktrees/`, named from the branch with `/` replaced by `-`, and reuses it on the next run. This package is linked into that checkout as `.sandcastle/`. A branch is checked out in only one worktree, so an older checkout of `sdd/<key>` has to be removed before that issue can run. A dirty tree is reused as-is and is not fast-forwarded from origin.
+The agent for an issue runs on branch `sdd/<key>`. A branch is checked out in only one worktree, so an older checkout of `sdd/<key>` has to be removed before that issue can run. A dirty tree is reused as-is and is not fast-forwarded from origin. This package is linked into the checkout as `.sandcastle/`.
+
+The spy's library keeps its checkout under `.sandcastle/worktrees/`, named from the branch with `/` replaced by `-`. A person driving one issue in a chat runs `npx sdd worktree <key>`, which checks the same branch out at `.worktrees/sdd-<key>`. The two checkouts are not used together.
 
 ## Issue mirror
 
 Keep the author's text. Replace only the block between `<!-- sdd:begin -->`
 and `<!-- sdd:end -->`. Create the block at the end if it is missing. One
 line per layer; a layer keeps its line once written. Update one line with
-`npx remote-solver mirror <key> <Layer> "<text>"`, where `<Layer>` is `Change`, `Plan`, `Specify`, `Design`, or `Tasks`:
+`npx sdd mirror <key> <Layer> "<text>"`, where `<Layer>` is `Change`, `Plan`, `Specify`, `Design`, or `Tasks`:
 
 ```md
 <!-- sdd:begin -->

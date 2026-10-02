@@ -21,7 +21,7 @@ The service checkout the change is read from.
 _Avoid_: Git, clone
 
 **Runtime**:
-Where a skill or a judge runs. It owns the sandbox, the model, and the base branch.
+Where a step or a judge runs. The repository port prepares the checkout.
 _Avoid_: Agent, sandcastle
 
 **Service**:
@@ -33,5 +33,5 @@ The branch named for one cycle. Commits for that cycle land on it.
 _Avoid_: Feature branch, PR branch
 
 **Worktree**:
-The checkout the runtime gives one run.
+The checkout one run uses. The session and the spy keep different directories.
 _Avoid_: Clone, sandbox

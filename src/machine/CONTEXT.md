@@ -19,7 +19,7 @@ The phase labels left after a reading has applied every advance, together with t
 _Avoid_: Plan, schedule
 
 **Action**:
-The named piece of work one skill does. Each action belongs to one skill.
+The named piece of work one step does. Each action belongs to one step.
 _Avoid_: Command, workflow step, annotation
 
 **Idle**:

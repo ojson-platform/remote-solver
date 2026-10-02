@@ -24,8 +24,12 @@ _Avoid_: Spec (that is one file inside the change)
 The process that reads open cycles and starts the ones that can move.
 _Avoid_: Watcher, poller, bot
 
+**Step**:
+The file an agent decision names. The chat and the spy run it. `sdd-flow` and `sdd-init` are skills; a step is not.
+_Avoid_: Skill
+
 **Skill mode**:
-Whether a skill follows an instruction already written, or has to judge.
+Whether a step follows an instruction already written, or has to judge.
 _Avoid_: Model, tier
 
 **Layer**:
@@ -37,11 +41,11 @@ The `sdd:` token a reply carries: a layer, `note`, or `fixed`. The machine reads
 _Avoid_: Tag, label (that is the tracker's)
 
 **Thread**:
-One open review conversation on the pull request, with the handles a skill replies and resolves with.
+One open review conversation on the pull request, with the handles a step replies and resolves with.
 _Avoid_: Comment (that is one message inside it)
 
 **Signal**:
-How a skill run ends: Publish, Wait, or Hand-off. A run with none is idle.
+How a step run ends: Publish, Wait, or Hand-off. A run with none is idle.
 _Avoid_: Result, exit
 
 **Hand-off**:

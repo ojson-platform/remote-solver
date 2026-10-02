@@ -8,4 +8,4 @@ A project skill fills a step of a named skill. The solver does not list hooks, d
 
 A `sdd hook <slot>` verb was rejected: it takes the choice away from the harness, and the solver would have to know every slot. A bold step heading is the text of the canon. A project skill recognizes the step from that phrase in its own description. Nothing checks that it fired.
 
-`sdd-init` may name `sdd-flow`. That is the chat entry it tells the person, not a call. A cycle skill may name `sdd-init` for the same reason: the person runs it, the machine does not.
+`sdd-init` may name `sdd-flow`. That is the chat entry it tells the person, not a call. A step does not name another step. The person runs `sdd-init`; the machine does not.

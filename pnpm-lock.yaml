@@ -11,9 +11,6 @@ importers:
       '@ai-hero/sandcastle':
         specifier: 0.12.0
         version: 0.12.0
-      tsx:
-        specifier: 4.23.15
-        version: 4.23.15
     devDependencies:
       '@ojson/infra':
         specifier: ^1.0.1
@@ -24,6 +21,9 @@ importers:
       '@types/node':
         specifier: ^26.6.2
         version: 26.6.2
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
       vitest:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@26.6.2)(tsx@4.23.15)
@@ -3475,6 +3475,7 @@ snapshots:
       esbuild: 0.28.2
     optionalDependencies:
       fsevents: 2.3.3
+    optional: true
 
   type-check@0.4.0:
     dependencies:

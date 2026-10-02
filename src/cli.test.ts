@@ -36,7 +36,7 @@ test('the launcher bin prints its commands and refuses a cycle verb', () => {
 
 test('the sdd bin prints cycle verbs', () => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  const bin = path.join(root, 'bin', 'sdd.mjs');
+  const bin = path.join(root, 'skills', 'sdd-flow', 'scripts', 'sdd.mjs');
   const child = spawnSync(process.execPath, [bin], {encoding: 'utf8', cwd: root});
   assert.equal(child.status, 1);
   assert.match(child.stderr, /^Usage: sdd plan /);

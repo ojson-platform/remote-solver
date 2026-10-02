@@ -5,26 +5,36 @@
   "type": "module",
   "bin": {
     "remote-solver": "./bin/remote-solver.mjs",
-    "sdd": "./bin/sdd.mjs"
+    "sdd": "./skills/sdd-flow/scripts/sdd.mjs"
   },
+  "files": [
+    "bin/remote-solver.mjs",
+    "prompts",
+    "skills/sdd-init",
+    "skills/sdd-flow/SKILL.md",
+    "skills/sdd-flow/CONTEXT.md",
+    "skills/sdd-flow/steps",
+    "skills/sdd-flow/scripts/sdd.mjs"
+  ],
   "packageManager": "pnpm@10.30.0",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
+    "build": "node scripts/build-sdd.mjs",
     "test": "vitest --run",
     "test:types": "tsc --noEmit",
     "lint": "eslint .",
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@ai-hero/sandcastle": "0.12.0",
-    "tsx": "4.23.15"
+    "@ai-hero/sandcastle": "0.12.0"
   },
   "devDependencies": {
     "@ojson/infra": "^1.0.1",
     "@ojson/spec-coverage": "workspace:*",
     "@types/node": "^26.6.2",
+    "esbuild": "^0.28.2",
     "vitest": "^3.2.4"
   }
 }

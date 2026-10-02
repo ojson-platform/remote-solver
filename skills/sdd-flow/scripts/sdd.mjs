@@ -48,18 +48,6 @@ function changeDocuments(dir, files) {
   const specs = files.list(path2.join(dir, "specs")).filter((rel) => rel.endsWith("spec.md"));
   return [...named, ...specs];
 }
-function changeBody(dir, files) {
-  return changeDocuments(dir, files).flatMap((rel) => {
-    const text = files.read(rel).trim();
-    return text ? [`# ${rel}
-${text}`] : [];
-  });
-}
-function changeText(key, files) {
-  const active = changeBody(changeDir(key), files);
-  const text = active.length > 0 ? active : changeBody(archiveDir(key), files);
-  return text.length > 0 ? text.join("\n\n") : null;
-}
 function modifiedCapabilities(proposal) {
   const body = section(proposal, HEADINGS.capabilities);
   const subsection = new RegExp(`### ${HEADINGS.modified}\\s*([\\s\\S]*?)(?:\\n### |\\s*$)`);
@@ -107,6 +95,7 @@ var PHASES = [
   "accepted",
   "cancelled"
 ];
+var GATE_PHASES = ["proposed", "specified", "designed", "accepted"];
 var GATE_CLOSES = {
   proposed: "proposing",
   specified: "specifying",
@@ -124,6 +113,10 @@ function phaseOf(labels) {
 function phaseRank(phase) {
   return PHASES.indexOf(phase);
 }
+function removedPhaseLabels(labels, to) {
+  const add = LABEL(to);
+  return labels.filter((name) => PHASES.some((phase) => name === LABEL(phase)) && name !== add);
+}
 function labelsAfterAdvance(labels, to) {
   const kept = labels.filter(
     (name) => name !== "sdd:wait-human" && !PHASES.some((phase) => name === LABEL(phase))
@@ -132,6 +125,17 @@ function labelsAfterAdvance(labels, to) {
 }
 
 // src/machine/labels.ts
+var LABEL2 = (phase) => `sdd:${phase}`;
+function setPhase(key, phase, tracker, options) {
+  if (!options?.allowGate && GATE_PHASES.includes(phase)) {
+    throw new Error(
+      `Refusing to set gate label sdd:${phase}. A person changes the phase on the issue, or runs sdd accept ${key}.`
+    );
+  }
+  const names = tracker.labels(key);
+  const remove = removedPhaseLabels(names, phase);
+  tracker.editLabels(key, [LABEL2(phase)], remove);
+}
 function setWait(key, waiting, tracker) {
   if (!waiting) {
     const names = tracker.labels(key);
@@ -202,7 +206,6 @@ function loadIgnoredAuthors(root) {
 
 // src/machine/marker.ts
 var ROBOT_MARK = "\u{1F916} ";
-var TOKENS = ["sdd:fixed", "sdd:note", "sdd:layer=", "sdd:begin"];
 function parseMarker(body) {
   if (body.includes("sdd:fixed")) {
     return { kind: "fixed", commit: body.match(/sdd:fixed[ \t]+(\S+)/)?.[1] ?? null };
@@ -224,9 +227,6 @@ function markerName(marker) {
 }
 function markRobot(body) {
   return body.startsWith("\u{1F916}") ? body : `${ROBOT_MARK}${body}`;
-}
-function mentionsGrammar(body) {
-  return body.includes("\u{1F916}") || TOKENS.some((token) => body.includes(token));
 }
 
 // src/machine/review.ts
@@ -266,27 +266,27 @@ function layerOfPhase(phase) {
 function markerOf(body) {
   return markerName(parseMarker(body));
 }
-function readReview(threads, comments) {
+function readReview(threads2, comments) {
   const layers = [];
   const lines = [];
   let unanswered = conversationUnanswered(comments);
-  for (const thread of threads) {
-    if (thread.resolved) {
+  for (const thread2 of threads2) {
+    if (thread2.resolved) {
       continue;
     }
-    const marker = parseMarker(thread.body);
+    const marker = parseMarker(thread2.body);
     if (!marker) {
       unanswered = true;
     } else if (marker.kind === "layer") {
       layers.push(marker.layer);
     }
     lines.push({
-      thread: thread.id ?? "",
-      comment: thread.comment ?? "",
-      file: thread.path ?? "",
-      line: thread.line ?? null,
-      marker: markerOf(thread.body),
-      body: thread.body
+      thread: thread2.id ?? "",
+      comment: thread2.comment ?? "",
+      file: thread2.path ?? "",
+      line: thread2.line ?? null,
+      marker: markerOf(thread2.body),
+      body: thread2.body
     });
   }
   const fromConversation = conversationLayer(comments);
@@ -312,8 +312,13 @@ function readReview(threads, comments) {
     }
   };
 }
-function reviewOf(threads, comments) {
-  const reading = readReview(threads, comments);
+function threadsReport(threads2, comments, filter) {
+  const reading = readReview(threads2, comments);
+  const lines = reading.threads.filter((line) => filter?.layer ? line.marker === filter.layer : true).filter((line) => filter?.unmarked ? line.marker === null : true);
+  return { threads: lines, conversation: reading.conversation };
+}
+function reviewOf(threads2, comments) {
+  const reading = readReview(threads2, comments);
   return { unanswered: reading.unanswered, rollback: reading.rollback, layers: reading.layers };
 }
 
@@ -346,6 +351,12 @@ var LAYER_ACTION = {
 // src/machine/policy.ts
 function severalOpenReason(ids) {
   return `cycle stopped until one open PR remains: ${ids.join(", ")}`;
+}
+function publishChoice(openIds) {
+  if (openIds.length > 1) {
+    return { ok: false, reason: severalOpenReason(openIds) };
+  }
+  return { ok: true, id: openIds[0] ?? null };
 }
 function writingGate(phase, change) {
   if (phase === "proposing") {
@@ -702,10 +713,29 @@ function decide(issue, issues, pulls, change) {
   }
   return mergeOrWait(issue.key, pr, merged, names.includes("sdd:auto-merge"));
 }
+function accept(issue, change) {
+  if (!issue.labels.includes("sdd:cycle")) {
+    return { kind: "wait", issue: issue.key, reason: `#${issue.key} has no sdd:cycle label` };
+  }
+  const phase = phaseOf(issue.labels);
+  const next = phase ? HUMAN_NEXT[phase] : void 0;
+  if (!phase || !next) {
+    return {
+      kind: "wait",
+      issue: issue.key,
+      reason: `#${issue.key} is ${phase ?? "without a phase"}. Accept closes only proposing, specifying, or designing.`
+    };
+  }
+  const blocker = gateBlocker(issue.key, phase, change);
+  if (blocker) {
+    return { kind: "wait", issue: issue.key, reason: blocker };
+  }
+  return { kind: "advance", issue: issue.key, to: next, reason: `${phase} \u2192 ${next}` };
+}
 function settle(issue, issues, pulls, change) {
   let labels = [...issue.labels];
   const transitions = [];
-  for (let step = 0; step < 12; step += 1) {
+  for (let step2 = 0; step2 < 12; step2 += 1) {
     const decision = decide({ ...issue, labels }, issues, pulls, change);
     if (decision.kind !== "advance") {
       return { decision, transitions, labels };
@@ -829,18 +859,12 @@ function performIssue(key, options) {
   }
   return settled;
 }
-function performCycle(snapshot, options, busy = /* @__PURE__ */ new Set()) {
-  return resolveCycle(snapshot, options.tracker, options.queueLabel, busy).map((decision) => {
-    if (decision.kind !== "merge") {
-      return decision;
-    }
-    return performIssue(decision.issue, {
-      tracker: options.tracker,
-      review: options.review,
-      files: options.filesAt(decision.issue),
-      queueLabel: options.queueLabel
-    });
-  });
+function pick(decisions) {
+  return decisions.find((item) => item.kind === "advance") ?? decisions.find((item) => item.kind === "agent") ?? decisions.find((item) => item.kind === "merge") ?? {
+    kind: "wait",
+    issue: null,
+    reason: decisions.map((item) => `#${item.issue}: ${item.reason}`).join("\n")
+  };
 }
 
 // src/adapters/github.ts
@@ -1036,7 +1060,7 @@ function githubAdapters(options = {}) {
       });
     },
     threads(pull) {
-      return this.threadList(pull).map((thread) => ({ resolved: thread.resolved, body: thread.body }));
+      return this.threadList(pull).map((thread2) => ({ resolved: thread2.resolved, body: thread2.body }));
     },
     threadList(pull) {
       const { owner, name } = repo();
@@ -1192,9 +1216,9 @@ function githubAdapters(options = {}) {
       );
       return { head: view.headRefOid ?? "", base: view.baseRefOid ?? null };
     },
-    resolveThread(thread) {
+    resolveThread(thread2) {
       const query = "mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}) { thread { isResolved } } }";
-      gh(["api", "graphql", "-f", `query=${query}`, "-f", `id=${thread}`]);
+      gh(["api", "graphql", "-f", `query=${query}`, "-f", `id=${thread2}`]);
     },
     checksText(pull) {
       const result = spawnSync("gh", ["pr", "checks", pull, "--repo", repoSlug()], {
@@ -1501,906 +1525,335 @@ async function openMachine(root, options = {}) {
   return { ...built, runtime: options.runtime?.(built) };
 }
 
-// src/adapters/runtime.ts
-import { existsSync as existsSync6, mkdirSync as mkdirSync3, symlinkSync } from "node:fs";
-import path10 from "node:path";
-
-// src/machine/skill.ts
-import { readFileSync as readFileSync4 } from "node:fs";
-import path8 from "node:path";
-import { cursor } from "@ai-hero/sandcastle";
-function skillMode(text) {
-  const front = /^---\n([\s\S]*?)\n---/.exec(text);
-  const mode = front?.[1].match(/^mode:\s*(\S+)/m)?.[1] ?? text.match(/^mode:\s*(\S+)/m)?.[1];
-  return mode === "mechanical" ? "mechanical" : "judgment";
-}
-function modeOfSkill(stepsDir, skill) {
-  return skillMode(readFileSync4(path8.join(stepsDir, `${skill}.md`), "utf8"));
-}
-function modelFor(mode) {
-  return mode === "mechanical" ? "composer-2.5-fast" : "grok-4.7-high-fast";
-}
-function agentFor(mode) {
-  return cursor(modelFor(mode));
-}
-
-// src/adapters/agent.ts
-import { spawn as spawn2 } from "node:child_process";
-import { appendFileSync, existsSync as existsSync5, mkdirSync as mkdirSync2, readFileSync as readFileSync5 } from "node:fs";
-import path9 from "node:path";
-
-// src/adapters/host-sandbox.ts
-import { spawn } from "node:child_process";
-import { copyFile } from "node:fs/promises";
-import { createInterface } from "node:readline";
-function openHostHandle(worktreePath, env = {}) {
-  const processEnv = { ...process.env, ...env };
-  const handle = {
-    worktreePath,
-    exec(command, opts) {
-      return spawnShell(command, opts?.cwd ?? worktreePath, processEnv, opts);
-    },
-    copyFileIn: (hostPath, sandboxPath) => copyFile(hostPath, sandboxPath),
-    copyFileOut: (sandboxPath, hostPath) => copyFile(sandboxPath, hostPath),
-    close: async () => {
-    }
-  };
-  return Promise.resolve(handle);
-}
-function spawnShell(command, cwd, env, opts) {
-  const isWindows = process.platform === "win32";
-  const shell = isWindows ? "cmd.exe" : "sh";
-  const args = isWindows ? ["/d", "/s", "/c", command] : ["-c", command];
-  return new Promise((resolve, reject) => {
-    const child = spawn(shell, args, {
-      cwd,
-      env,
-      stdio: [opts?.stdin !== void 0 ? "pipe" : "ignore", "pipe", "pipe"],
-      windowsVerbatimArguments: isWindows
-    });
-    let settled = false;
-    const finish = (result) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      resolve(result);
-    };
-    const fail = (error) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      reject(error);
-    };
-    child.on("error", (error) => fail(new Error(`exec failed: ${error.message}`)));
-    if (!child.stdout || !child.stderr) {
-      fail(new Error("exec failed: missing pipes"));
-      return;
-    }
-    if (opts?.stdin !== void 0 && child.stdin) {
-      child.stdin.write(opts.stdin);
-      child.stdin.end();
-    }
-    if (opts?.onLine) {
-      const onLine = opts.onLine;
-      const stdout2 = [];
-      const stderr2 = [];
-      const lines = createInterface({ input: child.stdout });
-      lines.on("line", (line) => {
-        stdout2.push(line);
-        onLine(line);
-      });
-      child.stderr.on("data", (chunk) => {
-        stderr2.push(chunk.toString());
-      });
-      child.on("close", (code) => finish({ stdout: stdout2.join("\n"), stderr: stderr2.join(""), exitCode: code ?? 0 }));
-      return;
-    }
-    const stdout = [];
-    const stderr = [];
-    child.stdout.on("data", (chunk) => stdout.push(chunk.toString()));
-    child.stderr.on("data", (chunk) => stderr.push(chunk.toString()));
-    child.on("close", (code) => finish({ stdout: stdout.join(""), stderr: stderr.join(""), exitCode: code ?? 0 }));
-  });
+// src/machine/mirror.ts
+var BEGIN = "<!-- sdd:begin -->";
+var END = "<!-- sdd:end -->";
+function updateMirror(body, layer, text) {
+  const row = `${layer}: ${text}`;
+  const start = body.indexOf(BEGIN);
+  const end = body.indexOf(END);
+  if (start === -1 || end === -1 || end < start) {
+    const block = `${BEGIN}
+${row}
+${END}`;
+    const trimmed = body.replace(/\s*$/, "");
+    return `${trimmed}${trimmed ? "\n\n" : ""}${block}
+`;
+  }
+  const inner = body.slice(start + BEGIN.length, end).replace(/^\n/, "").replace(/\n$/, "");
+  const lines = inner.split("\n").filter((line) => line.trim() !== "");
+  const next = lines.some((line) => line.startsWith(`${layer}:`)) ? lines.map((line) => line.startsWith(`${layer}:`) ? row : line) : [...lines, row];
+  return `${body.slice(0, start)}${BEGIN}
+${next.join("\n")}
+${END}${body.slice(end + END.length)}`;
 }
 
-// src/adapters/agent.ts
-function substitute(template, args) {
-  return template.replace(/\{\{([A-Z0-9_]+)\}\}/g, (_match, key) => args[key] ?? "");
+// src/sdd.ts
+function fail(message) {
+  console.error(message);
+  process.exit(1);
 }
-function envFile(hostCwd) {
-  const file = path9.join(hostCwd, ".sandcastle", ".env");
-  if (!existsSync5(file)) {
-    return {};
+function need(value, usage2) {
+  if (!value) {
+    fail(usage2);
   }
-  const values = {};
-  for (const line of readFileSync5(file, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) {
-      continue;
-    }
-    const eq = trimmed.indexOf("=");
-    if (eq > 0) {
-      values[trimmed.slice(0, eq)] = trimmed.slice(eq + 1);
-    }
-  }
-  return values;
+  return value;
 }
-function tagged(text, tag) {
-  if (!tag) {
-    return text;
+var usage = 'Usage: sdd plan | step <key> [--auto-plan] [--auto-spec] [--auto-design] | worktree <key> | set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key> | publish <key> "<title>" | checks <pull> | threads <pull> [--layer <layer>] [--unmarked] | thread open|reply|say|resolve ... | thread fix <key> <pull> <thread>|--conversation | mirror <key> <Layer> <text>';
+var AUTO_LABEL = {
+  "--auto-plan": "sdd:auto-plan",
+  "--auto-spec": "sdd:auto-spec",
+  "--auto-design": "sdd:auto-design"
+};
+var SESSION_WORKTREES = ".worktrees";
+function stepArgs(rest) {
+  const [key, ...flags] = rest;
+  if (!key || key.startsWith("-")) {
+    return null;
   }
-  const found = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(text);
-  return found?.[1] ?? text;
-}
-function runProcess(command, stdin, cwd, env, provider, logPath, idleMs, graceMs) {
-  mkdirSync2(path9.dirname(logPath), { recursive: true });
-  return new Promise((resolve, reject) => {
-    const child = spawn2("sh", ["-c", command], { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
-    if (stdin !== void 0 && child.stdin) {
-      child.stdin.write(stdin);
+  const labels = [];
+  for (const flag of flags) {
+    const label = AUTO_LABEL[flag];
+    if (!label || labels.includes(label)) {
+      return null;
     }
-    child.stdin?.end();
-    let stderr = "";
-    let text = "";
-    let sessionId;
-    let buffer = "";
-    let settled = false;
-    let sawResult = false;
-    let grace;
-    const idle = setTimeout(() => stop(false), idleMs);
-    const resetIdle = () => {
-      idle.refresh();
-    };
-    const stop = (ok, code = 1) => {
-      if (settled) {
-        return;
+    labels.push(label);
+  }
+  return { key, labels };
+}
+function threadsArgs(rest) {
+  const [pull, ...flags] = rest;
+  if (!pull || pull.startsWith("-")) {
+    return null;
+  }
+  let layer;
+  let unmarked = false;
+  for (let index = 0; index < flags.length; index += 1) {
+    const flag = flags[index];
+    if (flag === "--layer") {
+      layer = flags[index + 1];
+      index += 1;
+      if (!layer) {
+        return null;
       }
-      settled = true;
-      clearTimeout(idle);
-      if (grace) {
-        clearTimeout(grace);
-      }
-      if (ok) {
-        resolve({ text, sessionId });
-        return;
-      }
-      reject(new Error(`agent exited ${code}: ${stderr.slice(-500)}`));
-    };
-    child.stdout?.on("data", (chunk) => {
-      resetIdle();
-      buffer += chunk.toString();
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-      for (const line of lines) {
-        appendFileSync(logPath, `${line}
-`);
-        for (const event of provider.parseStreamLine(line)) {
-          if (event.type === "text") {
-            text += event.text;
-          }
-          if (event.type === "session_id") {
-            sessionId = event.sessionId;
-          }
-          if (event.type === "result" && !sawResult) {
-            sawResult = true;
-            grace = setTimeout(() => {
-              child.kill();
-              stop(true);
-            }, graceMs);
-          }
-        }
-      }
-    });
-    child.stderr?.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-    child.on("error", () => stop(false, 1));
-    child.on("close", (code) => {
-      if (buffer) {
-        appendFileSync(logPath, `${buffer}
-`);
-      }
-      stop(code === 0 || sawResult, code ?? 1);
-    });
-  });
-}
-async function runAgent(run) {
-  const prompt = substitute(readFileSync5(run.promptFile, "utf8"), run.promptArgs);
-  const handle = await openHostHandle(run.cwd);
-  if (run.resumeSession && run.provider.sessionStorage) {
-    await run.provider.sessionStorage.resumeIntoSandbox({
-      hostCwd: run.hostCwd,
-      sandboxCwd: run.cwd,
-      sessionId: run.resumeSession,
-      handle
-    });
-  }
-  const printed = run.provider.buildPrintCommand({
-    prompt,
-    dangerouslySkipPermissions: true,
-    resumeSession: run.resumeSession,
-    forkSession: run.forkSession
-  });
-  const captured = await runProcess(
-    printed.command,
-    printed.stdin,
-    run.cwd,
-    { ...process.env, ...envFile(run.hostCwd), ...run.provider.env },
-    run.provider,
-    run.logPath,
-    (run.idleTimeoutSeconds ?? 600) * 1e3,
-    run.resultGraceMs ?? 6e4
-  );
-  const storage = run.provider.sessionStorage;
-  let sessionFilePath;
-  let usage2 = void 0;
-  if (run.provider.captureSessions && storage && captured.sessionId) {
-    await storage.captureToHost({
-      hostCwd: run.hostCwd,
-      sandboxCwd: run.cwd,
-      sessionId: captured.sessionId,
-      handle
-    });
-    sessionFilePath = storage.hostSessionFilePath(run.hostCwd, captured.sessionId);
-    if (run.provider.parseSessionUsage) {
-      const content = await storage.readHostSession(run.hostCwd, captured.sessionId);
-      if (content) {
-        usage2 = run.provider.parseSessionUsage(content);
-      }
-    }
-  }
-  return {
-    text: tagged(captured.text, run.outputTag),
-    sessionId: captured.sessionId,
-    sessionFilePath,
-    usage: usage2
-  };
-}
-
-// src/adapters/runtime.ts
-function agentLogPath(root, branch, name) {
-  const safeBranch = branch.replace(/[/\\:*?"<>|]/g, "-");
-  const suffix = name.toLowerCase().replace(/[^a-z0-9_.-]/g, "-");
-  return path10.join(root, ".sandcastle", "logs", `${safeBranch}-${suffix}.log`);
-}
-function ensureServiceEnv(serviceRoot, solverRoot2) {
-  const from = path10.join(solverRoot2, ".env");
-  if (!existsSync6(from)) {
-    return;
-  }
-  const dir = path10.join(serviceRoot, ".sandcastle");
-  mkdirSync3(dir, { recursive: true });
-  const to = path10.join(dir, ".env");
-  if (existsSync6(to)) {
-    return;
-  }
-  symlinkSync(from, to);
-}
-var WORKTREES = ".sandcastle/worktrees";
-function keyFromBranch(branch, prefix) {
-  const head = `${prefix}/`;
-  return branch.startsWith(head) ? branch.slice(head.length) : branch.slice(branch.indexOf("/") + 1);
-}
-function commitCount(vcs, before, after) {
-  if (before === after) {
-    return 0;
-  }
-  const range = vcs.compare(before, after);
-  if (!range?.commits.trim()) {
-    return 0;
-  }
-  return range.commits.split("\n").filter((line) => line.trim()).length;
-}
-function agentRuntime(config) {
-  const checkout = (key) => config.vcs.prepare(key, { worktreesDir: WORKTREES, links: packageLinks(config.solverRoot) });
-  return {
-    async run(skill) {
-      const dir = checkout(skill.key);
-      const before = config.vcs.tip(skill.key);
-      ensureServiceEnv(config.root, config.solverRoot);
-      const answer = await runAgent({
-        cwd: dir,
-        hostCwd: config.root,
-        provider: agentFor(skill.mode),
-        name: skill.action,
-        promptFile: path10.join(config.solverRoot, "prompts", "sdd.md"),
-        promptArgs: {
-          ISSUE: skill.key,
-          ACTION: skill.action,
-          PHASE: skill.phase,
-          PR: skill.pull,
-          SKILL: skill.skill,
-          QUEUE: config.queueLabel,
-          BASE: config.prBase
-        },
-        logPath: agentLogPath(config.root, branchName(skill.key, config.branchPrefix), skill.action),
-        resumeSession: skill.resumeSession
-      });
-      return {
-        commits: commitCount(config.vcs, before, config.vcs.tip(skill.key)),
-        sessionId: answer.sessionId,
-        usage: answer.usage
-      };
-    },
-    async ask(request) {
-      const key = keyFromBranch(request.branch, config.branchPrefix);
-      const dir = checkout(key);
-      ensureServiceEnv(config.root, config.solverRoot);
-      return runAgent({
-        cwd: dir,
-        hostCwd: config.root,
-        provider: agentFor(request.mode),
-        name: request.name,
-        promptFile: request.promptFile,
-        promptArgs: request.promptArgs,
-        logPath: agentLogPath(config.root, request.branch, request.name),
-        outputTag: request.outputTag
-      });
-    }
-  };
-}
-
-// src/main.ts
-import path11 from "node:path";
-
-// src/machine/scheduler.ts
-function signature(decision) {
-  return `${decision.phase}\0${decision.action}\0${decision.reason}`;
-}
-function tick(state, decisions, parallel) {
-  const idle = { ...state.idle };
-  const reported = { ...state.reported };
-  const report = [];
-  const ready = [];
-  const say = (issue, reason) => {
-    const slot = issue ?? "";
-    if (reported[slot] === reason) {
-      return;
-    }
-    reported[slot] = reason;
-    report.push({ issue, reason });
-  };
-  for (const decision of decisions) {
-    if (decision.issue !== null && state.running.includes(decision.issue)) {
-      continue;
-    }
-    if (decision.kind !== "agent") {
-      if (decision.issue !== null) {
-        delete idle[decision.issue];
-      }
-      say(decision.issue, decision.reason);
-      continue;
-    }
-    ready.push(decision);
-  }
-  const start = [];
-  for (const decision of ready) {
-    if (state.running.length + start.length >= parallel) {
-      break;
-    }
-    const sig = signature(decision);
-    if (idle[decision.issue] === sig) {
-      say(decision.issue, `idle ${decision.action}: ${decision.reason}`);
-      continue;
-    }
-    start.push(decision);
-  }
-  return { state: { running: state.running, idle, reported }, start, report };
-}
-function exited(state, issue, code, sig) {
-  const idle = { ...state.idle };
-  if (code === 2) {
-    idle[issue] = sig;
-  } else {
-    delete idle[issue];
-  }
-  return { running: state.running.filter((item) => item !== issue), idle, reported: state.reported };
-}
-
-// src/main.ts
-function flag(argv, name, fallback) {
-  const index = argv.indexOf(name);
-  if (index === -1) {
-    return fallback;
-  }
-  const value = Number(argv[index + 1]);
-  return Number.isInteger(value) && value > 0 ? value : fallback;
-}
-async function runIssue(box, key) {
-  return driveIssue(box, key);
-}
-async function driveIssue(box, key) {
-  const runtime = box.runtime;
-  if (!runtime) {
-    throw new Error("runtime is not configured");
-  }
-  for (let step = 1; step <= 40; step += 1) {
-    const decision = turn(box, key);
-    if (decision.kind !== "agent") {
-      console.log(`#${key} ${decision.kind}: ${decision.reason}`);
-      return 0;
-    }
-    console.log(`
-#${key} ${decision.phase} \u2192 ${decision.action} (${decision.skill})`);
-    const outcome = await runtime.run({
-      skill: decision.skill,
-      action: decision.action,
-      key,
-      phase: decision.phase,
-      pull: decision.pr,
-      mode: modeOfSkill(path11.join(solverRoot(), "skills/sdd-flow/steps"), decision.skill)
-    });
-    if (outcome.sessionId) {
-      console.log(`#${key} session ${outcome.sessionId}`);
-    }
-    if (outcome.usage) {
-      console.log(`#${key} tokens in ${outcome.usage.inputTokens} out ${outcome.usage.outputTokens}`);
-    }
-    if (outcome.commits === 0) {
-      console.error(
-        `Stopped: ${decision.action} made no commit, so the next poll would repeat it.`
-      );
-      return 2;
-    }
-  }
-  console.error(`Stopped #${key} after 40 steps.`);
-  return 3;
-}
-async function runSpy(box, argv) {
-  const parallel = flag(argv, "--parallel", 2);
-  const intervalMs = flag(argv, "--interval", 20) * 1e3;
-  let state = { running: [], idle: {}, reported: {} };
-  const sigs = /* @__PURE__ */ new Map();
-  let wake = null;
-  let woke = false;
-  const finish = (issue, code, sig) => {
-    state = exited(state, issue, code, sigs.get(issue) ?? sig);
-    console.log(`#${issue} worker exited ${code}`);
-    if (wake) {
-      wake();
+    } else if (flag === "--unmarked") {
+      unmarked = true;
     } else {
-      woke = true;
-    }
-  };
-  console.log(`Spy polling every ${intervalMs / 1e3}s, parallel ${parallel}.`);
-  for (; ; ) {
-    try {
-      const snapshot = loadCycle(
-        box.tracker,
-        box.review,
-        (key) => box.vcs.filesAt(key),
-        box.config.queueLabel
-      );
-      const decisions = performCycle(
-        snapshot,
-        {
-          tracker: box.tracker,
-          review: box.review,
-          filesAt: (key) => box.vcs.filesAt(key),
-          queueLabel: box.config.queueLabel
-        },
-        new Set(state.running)
-      );
-      const turned = tick(state, decisions, parallel);
-      state = turned.state;
-      for (const line of turned.report) {
-        console.log(line.issue === null ? line.reason : `#${line.issue}: ${line.reason}`);
-      }
-      for (const decision of turned.start) {
-        console.log(`#${decision.issue} start ${decision.phase} \u2192 ${decision.action}`);
-        const sig = signature(decision);
-        state = { ...state, running: [...state.running, decision.issue] };
-        sigs.set(decision.issue, sig);
-        void driveIssue(box, decision.issue).then(
-          (code) => finish(decision.issue, code, sig),
-          (error) => {
-            console.error(error instanceof Error ? error.message : String(error));
-            finish(decision.issue, 1, sig);
-          }
-        );
-      }
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-    }
-    await new Promise((resolve) => {
-      if (woke) {
-        woke = false;
-        resolve();
-        return;
-      }
-      const timer = setTimeout(resolve, intervalMs);
-      wake = () => {
-        clearTimeout(timer);
-        wake = null;
-        resolve();
-      };
-    });
-  }
-}
-
-// src/adapters/actions.ts
-function escapeData(value) {
-  return value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
-}
-function escapeProperty(value) {
-  return escapeData(value).replaceAll(":", "%3A").replaceAll(",", "%2C");
-}
-function annotate(kind, title, message) {
-  console.log(`::${kind} title=${escapeProperty(title)}::${escapeData(message)}`);
-}
-
-// src/reviewer/place.ts
-function commentableLines(diff) {
-  const files = /* @__PURE__ */ new Map();
-  let path13 = null;
-  let next = 0;
-  for (const line of diff.split("\n")) {
-    const plus = line.match(/^\+\+\+ b\/(.+)$/);
-    if (plus) {
-      path13 = plus[1] === "/dev/null" ? null : plus[1];
-      if (path13 && !files.has(path13)) {
-        files.set(path13, /* @__PURE__ */ new Set());
-      }
-      next = 0;
-      continue;
-    }
-    const hunk = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-    if (hunk && path13) {
-      next = Number(hunk[1]);
-      continue;
-    }
-    if (!path13 || next === 0) {
-      continue;
-    }
-    if (line.startsWith("-") || line.startsWith("\\")) {
-      continue;
-    }
-    files.get(path13)?.add(next);
-    next += 1;
-  }
-  return files;
-}
-function placeOnDiff(diff, remark) {
-  if (!remark.path) {
-    return remark;
-  }
-  const lines = commentableLines(diff).get(remark.path);
-  if (!lines) {
-    return { body: remark.body };
-  }
-  if (remark.line && lines.has(remark.line)) {
-    return remark;
-  }
-  return { body: remark.body, path: remark.path };
-}
-
-// src/reviewer/dossier.ts
-var STANDARD_FILES = ["CODING_STANDARDS.md", "CONTRIBUTING.md", "AGENTS.md"];
-function standardsText(files) {
-  return STANDARD_FILES.flatMap((name) => {
-    if (!files.exists(name)) {
-      return [];
-    }
-    const text = files.read(name).trim();
-    return text ? [`# ${name}
-${text}`] : [];
-  }).join("\n\n");
-}
-function assembleDossier(input) {
-  if (!input.base) {
-    return { kind: "wait", reason: "base does not resolve" };
-  }
-  if (!input.diff.trim()) {
-    return { kind: "wait", reason: "diff is empty" };
-  }
-  const change = changeText(input.issue, input.files);
-  if (!change) {
-    return { kind: "wait", reason: "change has no files" };
-  }
-  return {
-    kind: "ready",
-    dossier: {
-      issue: input.issue,
-      pull: input.pull,
-      head: input.head,
-      base: input.base,
-      commits: input.commits,
-      diff: input.diff,
-      change,
-      standards: standardsText(input.files)
-    }
-  };
-}
-
-// src/reviewer/act.ts
-function reviewedNote(head) {
-  return `sdd:note reviewed ${head}`;
-}
-function reviewStep(input) {
-  if (input.checks !== "green") {
-    return { kind: "wait", reason: `checks are ${input.checks}` };
-  }
-  const view = reviewOf(input.threads, input.comments);
-  if (view.unanswered) {
-    return { kind: "wait", reason: "unanswered comment" };
-  }
-  if (view.layers.length > 0) {
-    return { kind: "wait", reason: "open layer" };
-  }
-  if (!input.head) {
-    return { kind: "wait", reason: "head does not resolve" };
-  }
-  const note = reviewedNote(input.head);
-  if (input.comments.some((comment) => comment.body.includes(note))) {
-    return { kind: "merge" };
-  }
-  return { kind: "judge" };
-}
-function spokenRemarks(items) {
-  return items.map((item) => ({ ...item, body: item.body.trim() })).filter((item) => item.body.length > 0);
-}
-function applyReview(verdict, pull, head, review) {
-  if (verdict.kind === "unjudged") {
-    return;
-  }
-  if (verdict.kind === "clean") {
-    review.say(pull, reviewedNote(head));
-    review.merge(pull);
-    return;
-  }
-  const notes = spokenRemarks(verdict.items);
-  if (notes.length > 0) {
-    review.flag(pull, head, notes);
-  }
-}
-async function passReview(deps, item) {
-  const pulls = deps.review.pulls(item.issue);
-  const range = deps.review.range(item.pull);
-  const step = reviewStep({
-    checks: pulls.find((pull) => pull.id === item.pull)?.checks ?? "none",
-    threads: deps.review.threads(item.pull),
-    comments: deps.review.comments(item.pull),
-    head: range.head
-  });
-  if (step.kind === "wait") {
-    return { action: "wait", reason: step.reason };
-  }
-  if (step.kind === "merge") {
-    deps.review.merge(item.pull);
-    return { action: "clean" };
-  }
-  const span = range.base ? deps.vcs.compare(range.base, range.head) : null;
-  if (range.base && !span) {
-    return { action: "wait", reason: "range does not resolve" };
-  }
-  const built = assembleDossier({
-    issue: item.issue,
-    pull: item.pull,
-    head: range.head,
-    base: span ? range.base : null,
-    commits: span?.commits ?? "",
-    diff: span?.diff ?? "",
-    files: deps.vcs.filesAt(item.issue)
-  });
-  if (built.kind === "wait") {
-    return { action: "wait", reason: built.reason };
-  }
-  const verdict = await deps.judge(built.dossier);
-  const placed = verdict.kind === "remarks" ? { kind: "remarks", items: verdict.items.map((item2) => placeOnDiff(span?.diff ?? "", item2)) } : verdict;
-  applyReview(placed, item.pull, range.head, deps.review);
-  if (placed.kind === "remarks") {
-    return { action: "remarks", items: spokenRemarks(placed.items) };
-  }
-  if (placed.kind === "clean") {
-    return { action: "clean" };
-  }
-  return { action: "unjudged", reason: placed.reason };
-}
-
-// src/reviewer/judge.ts
-import path12 from "node:path";
-
-// src/reviewer/verdict.ts
-function excerpt(text) {
-  const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length > 160 ? `${flat.slice(0, 160)}...` : flat;
-}
-function parseVerdict(text) {
-  const lines = text.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
-  if (lines.length === 1 && lines[0] === "clean") {
-    return { kind: "clean" };
-  }
-  const items = lines.filter((line) => line.startsWith("remark:")).map((line) => parseRemark(line.slice("remark:".length).trim())).filter((item) => item.body.length > 0 && !mentionsGrammar(item.body)).slice(0, 5);
-  if (items.length === 0) {
-    const sample = excerpt(text);
-    return {
-      kind: "unjudged",
-      reason: sample ? `answer is not a verdict: ${sample}` : "empty answer"
-    };
-  }
-  return { kind: "remarks", items };
-}
-function parseRemark(text) {
-  const placed = text.match(/^@(\S+?)(?::(\d+))?\s+(\S[\s\S]*)$/);
-  if (!placed) {
-    return { body: text };
-  }
-  const line = placed[2] ? Number(placed[2]) : void 0;
-  return { body: placed[3], path: placed[1], ...line ? { line } : {} };
-}
-
-// src/reviewer/judge.ts
-function failureReason(error) {
-  return error instanceof Error ? error.message : String(error);
-}
-async function sandcastleJudge(runtime, dossier) {
-  try {
-    const answer = await runtime.ask({
-      name: "review",
-      mode: "judgment",
-      promptFile: path12.join(solverRoot(), "prompts", "review.md"),
-      promptArgs: {
-        COMMITS: dossier.commits,
-        DIFF: dossier.diff,
-        CHANGE: dossier.change,
-        STANDARDS: dossier.standards
-      },
-      branch: `reviewer/${dossier.head.slice(0, 12)}`,
-      outputTag: "verdict"
-    });
-    return parseVerdict(answer.text);
-  } catch (error) {
-    return { kind: "unjudged", reason: failureReason(error) };
-  }
-}
-
-// src/reviewer/plan.ts
-function reviewQueue(issues, pullsOf) {
-  const items = [];
-  for (const issue of issues) {
-    if (!issue.labels.includes("sdd:auto-review")) {
-      continue;
-    }
-    if (!issue.labels.includes("sdd:accepting")) {
-      items.push({ kind: "skip", issue: issue.key, reason: "sdd:auto-review waits for accepting" });
-      continue;
-    }
-    if (issue.labels.includes("sdd:auto-merge")) {
-      items.push({
-        kind: "skip",
-        issue: issue.key,
-        reason: "sdd:auto-merge merges without this review"
-      });
-      continue;
-    }
-    const open = pullsOf(issue.key).filter((pull) => pull.state === "OPEN");
-    if (open.length !== 1) {
-      items.push({
-        kind: "wait",
-        issue: issue.key,
-        reason: open.length === 0 ? "accepting needs the pull request" : "several open pull requests"
-      });
-      continue;
-    }
-    items.push({ kind: "ready", issue: issue.key, pull: open[0].id });
-  }
-  return items;
-}
-function describe(item, pass) {
-  if (pass) {
-    if (pass.action === "wait" || pass.action === "unjudged") {
-      return `#${item.issue} ${pass.action}: ${pass.reason}`;
-    }
-    return `#${item.issue} ${pass.action}`;
-  }
-  if (item.kind === "ready") {
-    return `#${item.issue} review pull ${item.pull}`;
-  }
-  return `#${item.issue} ${item.kind}: ${item.reason}`;
-}
-function describeQueue(items) {
-  if (items.length === 0) {
-    return ["no sdd:auto-review issues"];
-  }
-  return items.map((item) => describe(item));
-}
-
-// src/reviewer/run.ts
-async function runReview(box, judge) {
-  const chosen = judge ?? ((dossier) => {
-    if (!box.runtime) {
-      throw new Error("runtime is not configured");
-    }
-    return sandcastleJudge(box.runtime, dossier);
-  });
-  const items = reviewQueue(box.tracker.listOpen(), (key) => box.review.pulls(key));
-  if (items.length === 0) {
-    console.log(describeQueue(items)[0]);
-    return 0;
-  }
-  let code = 0;
-  for (const item of items) {
-    if (item.kind !== "ready") {
-      console.log(describe(item));
-      continue;
-    }
-    const result = await passReview({ review: box.review, vcs: box.vcs, judge: chosen }, item);
-    console.log(describe(item, result));
-    if (result.action === "unjudged") {
-      annotate("error", `#${item.issue} unjudged`, result.reason);
-      code = 1;
-    }
-    if (result.action === "remarks") {
-      for (const remark of result.items) {
-        annotate("error", `#${item.issue} remark`, remark.body);
-      }
-    }
-    if (result.action === "wait") {
-      annotate("warning", `#${item.issue} wait`, result.reason);
+      return null;
     }
   }
-  return code;
+  return { pull, layer, unmarked };
 }
-
-// src/cli.ts
-var usage = `Usage:
-  remote-solver spy [--parallel N] [--interval S]
-  remote-solver review
-  remote-solver issue <key>
-
-Cycle verbs are the sdd bin.`;
-function route(argv) {
+function fixArgs(rest) {
+  const [key, pull, target, ...extra] = rest;
+  if (!key || !pull || !target || extra.length > 0 || key.startsWith("-") || pull.startsWith("-")) {
+    return null;
+  }
+  if (target === "--conversation") {
+    return { key, pull, thread: null };
+  }
+  return target.startsWith("-") ? null : { key, pull, thread: target };
+}
+function fixThread(args, deps) {
+  const head = deps.vcs.head();
+  if (!deps.vcs.published(args.key, head)) {
+    throw new Error(
+      `HEAD ${head} is not on the remote branch of #${args.key}: Publish, then thread fix.`
+    );
+  }
+  const body = `sdd:fixed ${head}`;
+  if (args.thread === null) {
+    deps.review.say(args.pull, body);
+    return body;
+  }
+  const record = deps.review.threadList(args.pull).find((item) => item.id === args.thread);
+  if (!record) {
+    throw new Error(`No thread ${args.thread} on pull ${args.pull}.`);
+  }
+  if (record.resolved) {
+    return body;
+  }
+  if (parseMarker(record.body)?.kind !== "fixed") {
+    deps.review.reply(args.pull, record.comment, body);
+  }
+  deps.review.resolveThread(record.id);
+  return body;
+}
+function publish(args, deps) {
+  const dirt = deps.vcs.dirty();
+  if (dirt.length > 0) {
+    throw new Error(
+      [
+        `The worktree is not clean, #${args.key} is not published. Remove the cause of each path (ignore a generated directory in the service .gitignore, delete a stray file, or commit a file of this task), then publish again:`,
+        ...dirt.map((file) => `  ${file}`)
+      ].join("\n")
+    );
+  }
+  const open = deps.review.pulls(args.key).filter((pr) => pr.state === "OPEN").map((pr) => pr.id);
+  const choice = publishChoice(open);
+  if (!choice.ok) {
+    throw new Error(choice.reason);
+  }
+  deps.vcs.push(args.key);
+  const id = deps.review.ensurePull(args.key, args.title, `${changeDir(args.key)}/`);
+  return `#${args.key}: pull ${id}`;
+}
+function runSdd(argv, box = machine()) {
   const [command, ...rest] = argv;
-  if (!command || command === "help" || command === "--help" || command === "-h") {
-    return { kind: "help" };
-  }
-  if (command === "spy") {
-    return { kind: "spy", argv: rest };
-  }
-  if (command === "review") {
-    return { kind: "review" };
-  }
-  if (command === "issue") {
-    const key = rest[0];
-    if (!key || key.startsWith("-")) {
-      return { kind: "help" };
-    }
-    return { kind: "issue", key };
-  }
-  return { kind: "help" };
-}
-async function runCli(argv) {
-  const chosen = route(argv);
-  if (chosen.kind === "help") {
+  if (command === "help" || command === "--help" || command === "-h") {
     console.error(usage);
-    const asked = argv[0] === "help" || argv[0] === "--help" || argv[0] === "-h";
-    return asked ? 0 : 1;
+    return;
   }
-  const box = await openMachine(process.cwd(), {
-    runtime: (built) => agentRuntime({
-      root: built.root,
-      vcs: built.vcs,
-      branchPrefix: built.config.branchPrefix,
-      queueLabel: built.config.queueLabel,
-      prBase: built.config.prBase,
-      solverRoot: solverRoot()
-    })
-  });
-  if (chosen.kind === "spy") {
-    await runSpy(box, chosen.argv);
-    return 0;
+  try {
+    dispatch(box, command, rest);
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
   }
-  if (chosen.kind === "review") {
-    return runReview(box);
-  }
-  return runIssue(box, chosen.key);
 }
-if (process.argv[1]?.endsWith("cli.ts") || process.argv[1]?.endsWith("remote-solver.mjs")) {
-  process.exit(await runCli(process.argv.slice(2)));
+function dispatch(box, command, rest) {
+  const verb = command === void 0 ? void 0 : verbs[command];
+  if (!verb) {
+    fail(usage);
+  }
+  verb(box, rest);
+}
+var verbs = {
+  plan,
+  step,
+  worktree,
+  set,
+  wait,
+  unwait,
+  accept: accept2,
+  publish: publishCommand,
+  checks,
+  threads,
+  thread,
+  mirror
+};
+function plan(box) {
+  const snapshot = loadCycle(
+    box.tracker,
+    box.review,
+    (key) => box.vcs.filesAt(key),
+    box.config.queueLabel
+  );
+  const decision = pick(resolveCycle(snapshot, box.tracker, box.config.queueLabel));
+  console.log(JSON.stringify(decision, null, 2));
+}
+function step(box, rest) {
+  const args = stepArgs(rest);
+  if (!args) {
+    fail(usage);
+  }
+  const record = box.tracker.issue(args.key);
+  const inCycle = record.labels.includes(box.config.queueLabel) && record.labels.includes("sdd:cycle");
+  if (!inCycle) {
+    printStep({ kind: "done", issue: args.key, reason: "not in the open cycle" }, box);
+    return;
+  }
+  if (args.labels.length) {
+    box.tracker.editLabels(args.key, args.labels, []);
+  }
+  printStep(turn(box, args.key), box);
+}
+function printStep(decision, box) {
+  console.log(
+    JSON.stringify({ ...decision, queue: box.config.queueLabel, base: box.config.prBase }, null, 2)
+  );
+}
+function worktree(box, rest) {
+  const key = need(rest[0], usage);
+  if (rest.length !== 1) {
+    fail(usage);
+  }
+  const dir = box.vcs.prepare(key, { worktreesDir: SESSION_WORKTREES, links: packageLinks(solverRoot()) });
+  console.log(dir);
+}
+function set(box, rest) {
+  const key = need(rest[0], usage);
+  const phase = need(rest[1], usage);
+  if (!PHASES.includes(phase)) {
+    fail(usage);
+  }
+  setPhase(key, phase, box.tracker);
+}
+function wait(box, rest) {
+  const key = need(rest[0], usage);
+  const reason = rest.slice(1).join(" ").trim();
+  if (!reason) {
+    fail(usage);
+  }
+  openWait(key, reason, box.tracker);
+}
+function unwait(box, rest) {
+  setWait(need(rest[0], usage), false, box.tracker);
+}
+function accept2(box, rest) {
+  const key = need(rest[0], usage);
+  const record = box.tracker.issue(key);
+  const decision = accept(record, readChange(key, box.vcs.filesAt(key)));
+  if (decision.kind !== "advance") {
+    throw new Error(decision.reason);
+  }
+  applyLabels(box.tracker, key, record.labels, labelsAfterAdvance(record.labels, decision.to));
+  const login = box.tracker.login();
+  box.tracker.comment(key, `sdd:accept ${decision.reason} by @${login}`);
+  console.log(`#${key}: ${decision.reason}`);
+}
+function publishCommand(box, rest) {
+  const key = need(rest[0], usage);
+  const title = rest.slice(1).join(" ");
+  if (!title) {
+    fail(usage);
+  }
+  console.log(publish({ key, title }, box));
+}
+function checks(box, rest) {
+  const text = box.review.checksText(need(rest[0], usage)).replace(/\n$/, "");
+  if (text) {
+    console.log(text);
+  }
+}
+function threads(box, rest) {
+  const args = threadsArgs(rest);
+  if (!args) {
+    fail(usage);
+  }
+  const report = threadsReport(box.review.threadList(args.pull), box.review.comments(args.pull), {
+    layer: args.layer,
+    unmarked: args.unmarked
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+var threadVerbs = {
+  open: threadOpen,
+  reply: threadReply,
+  say: threadSay,
+  resolve: threadResolve,
+  fix: threadFix
+};
+function thread(box, rest) {
+  const verb = rest[0] === void 0 ? void 0 : threadVerbs[rest[0]];
+  if (!verb) {
+    fail(usage);
+  }
+  verb(box, rest);
+}
+function threadOpen(box, rest) {
+  const pull = need(rest[1], usage);
+  const file = need(rest[2], usage);
+  const line = Number(need(rest[3], usage));
+  const body = rest.slice(4).join(" ");
+  if (!Number.isInteger(line) || !body) {
+    fail(usage);
+  }
+  box.review.openThread(pull, { commit: box.vcs.head(), path: file, line, body });
+}
+function threadReply(box, rest) {
+  const pull = need(rest[1], usage);
+  const comment = need(rest[2], usage);
+  const body = rest.slice(3).join(" ");
+  if (!body) {
+    fail(usage);
+  }
+  box.review.reply(pull, comment, body);
+}
+function threadSay(box, rest) {
+  const pull = need(rest[1], usage);
+  const body = rest.slice(2).join(" ");
+  if (!body) {
+    fail(usage);
+  }
+  box.review.say(pull, body);
+}
+function threadResolve(box, rest) {
+  box.review.resolveThread(need(rest[1], usage));
+}
+function threadFix(box, rest) {
+  const args = fixArgs(rest.slice(1));
+  if (!args) {
+    fail(usage);
+  }
+  console.log(fixThread(args, box));
+}
+function mirror(box, rest) {
+  const key = need(rest[0], usage);
+  const layer = need(rest[1], usage);
+  const text = rest.slice(2).join(" ");
+  if (!text) {
+    fail(usage);
+  }
+  const record = box.tracker.issue(key);
+  box.tracker.updateBody(key, updateMirror(record.body, layer, text));
+}
+if (process.argv[1]?.endsWith("sdd.ts") || process.argv[1]?.endsWith("sdd.mjs")) {
+  runSdd(process.argv.slice(2), await openMachine(process.cwd()));
 }
 export {
-  route,
-  runCli
+  fixArgs,
+  fixThread,
+  publish,
+  runSdd,
+  threadsArgs
 };

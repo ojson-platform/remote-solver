@@ -11,7 +11,7 @@ function agent(over: Partial<Extract<Decision, {kind: 'agent'}>> = {}): Extract<
     kind: 'agent',
     issue: '1',
     action: 'create-proposal',
-    skill: 'sdd-plan',
+    skill: 'plan',
     phase: 'proposing',
     pr: '',
     reason: 'write proposal.md',

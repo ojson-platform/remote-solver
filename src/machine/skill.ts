@@ -8,12 +8,12 @@ export type SkillMode = 'mechanical' | 'judgment';
 /** The skill declares its mode. The runtime maps that onto a model. */
 export function skillMode(text: string): SkillMode {
   const front = /^---\n([\s\S]*?)\n---/.exec(text);
-  const mode = front?.[1].match(/^mode:\s*(\S+)/m)?.[1];
+  const mode = front?.[1].match(/^mode:\s*(\S+)/m)?.[1] ?? text.match(/^mode:\s*(\S+)/m)?.[1];
   return mode === 'mechanical' ? 'mechanical' : 'judgment';
 }
 
-export function modeOfSkill(skillsDir: string, skill: string): SkillMode {
-  return skillMode(readFileSync(path.join(skillsDir, skill, 'SKILL.md'), 'utf8'));
+export function modeOfSkill(stepsDir: string, skill: string): SkillMode {
+  return skillMode(readFileSync(path.join(stepsDir, `${skill}.md`), 'utf8'));
 }
 
 export function modelFor(mode: SkillMode): string {

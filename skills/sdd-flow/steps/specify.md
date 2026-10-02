@@ -1,14 +1,8 @@
----
-name: sdd-specify
-description: >
-  Writes the OpenSpec delta: requirements and scenarios.
-  Trigger: create-initial-specs, improve-specs. Phase sdd:specifying.
 mode: judgment
----
 
 # sdd-specify
 
-Writes observable behavior. Zoom is the black box. The delta grammar is `context.md` § Delta.
+Writes observable behavior. Zoom is the black box. The delta grammar is `CONTEXT.md` § Delta.
 
 ## Out of this action
 
@@ -23,9 +17,9 @@ Writes observable behavior. Zoom is the black box. The delta grammar is `context
 1. The delta exists, still matches the proposal, and `threads <pull> --layer spec` is empty: go to step 5.
 2. Run `openspec instructions specs --change issue-<issue> --json`. Write `openspec/changes/issue-<issue>/specs/<capability>/spec.md` from its `template`, sections by § Delta. A scenario is checked from outside, without reading code.
 3. A local proposal change: edit the requirements and scenarios it changes, including ones it drops.
-4. `improve-specs`: Fix thread (`context.md`), layer `spec`. A thread that drops a requirement or scenario writes that drop in the delta. `proposal.md` stays.
+4. `improve-specs`: Fix thread (`CONTEXT.md`), layer `spec`. A thread that drops a requirement or scenario writes that drop in the delta. `proposal.md` stays.
 5. Run `openspec validate --all --strict --no-interactive`. Exit non-zero: fix every spec file the output names, then run it again. Do not publish while it fails.
-6. Publish (`context.md`). Mirror: `Specify`.
+6. Publish (`CONTEXT.md`). Mirror: `Specify`.
 
 ## Check
 

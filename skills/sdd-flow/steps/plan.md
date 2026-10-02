@@ -1,10 +1,4 @@
----
-name: sdd-plan
-description: >
-  Writes openspec/changes/issue-<issue>/proposal.md, commits it, and opens the
-  pull request. Trigger: create-proposal, improve-proposal. Phase sdd:proposing.
 mode: judgment
----
 
 # sdd-plan
 
@@ -19,12 +13,12 @@ Records why and the scope. Zoom is context, not implementation. The commit and t
 
 ## Steps
 
-1. No `proposal.md` yet: move the issue text into `openspec/changes/issue-<issue>/proposal.md`. Headings: `context.md` § Artifacts. An empty description stays a scaffold with its open questions as `- [ ]` items. Ids cut by `context.md` § Capability. Several services: what this change needs from each, no contracts. No child issues.
+1. No `proposal.md` yet: move the issue text into `openspec/changes/issue-<issue>/proposal.md`. Headings: `CONTEXT.md` § Artifacts. An empty description stays a scaffold with its open questions as `- [ ]` items. Ids cut by `CONTEXT.md` § Capability. Several services: what this change needs from each, no contracts. No child issues.
 2. `proposal.md` already exists: leave it.
 3. A question below the context zoom stays out of the proposal.
-4. `improve-proposal`: Fix thread (`context.md`), layer `proposal`.
-5. Publish (`context.md`). Mirror: `Change` and `Plan`. Open questions do not delay the pull request.
-6. Open questions remain: Wait (`context.md`) with the questions.
+4. `improve-proposal`: Fix thread (`CONTEXT.md`), layer `proposal`.
+5. Publish (`CONTEXT.md`). Mirror: `Change` and `Plan`. Open questions do not delay the pull request.
+6. Open questions remain: Wait (`CONTEXT.md`) with the questions.
 
 ## Check
 

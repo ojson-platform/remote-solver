@@ -1,16 +1,8 @@
----
-name: sdd-pr-comments
-description: >
-  Labels unanswered pull request threads and the pull request conversation
-  with sdd:layer. Does not edit files and does not set the phase. The machine
-  moves to the earliest marker.
-  Trigger: classify-comments.
 mode: mechanical
----
 
 # sdd-pr-comments
 
-Labels unanswered PR threads and one conversation comment. Leaves change files untouched and does not resolve threads. The result is a reply, not a commit. Layers and their phases are `context.md` § Layers.
+Labels unanswered PR threads and one conversation comment. Leaves change files untouched and does not resolve threads. The result is a reply, not a commit. Layers and their phases are `CONTEXT.md` § Layers.
 
 ## Out of this action
 

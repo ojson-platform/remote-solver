@@ -15,7 +15,7 @@ export type ChangeView = {
   missingBaseline: string[];
 };
 
-/** Change-file headings the machine reads; `prompts/context.md` § Artifacts states them. */
+/** Change-file headings the machine reads; `skills/sdd-flow/CONTEXT.md` § Artifacts states them. */
 export const HEADINGS = {
   capabilities: 'Capabilities',
   modified: 'Modified',

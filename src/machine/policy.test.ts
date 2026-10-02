@@ -78,7 +78,7 @@ test('proposing without a proposal asks the plan skill to write one', () => {
   assert.equal(decision.kind, 'agent');
   if (decision.kind === 'agent') {
     assert.equal(decision.action, 'create-proposal');
-    assert.equal(decision.skill, 'sdd-plan');
+    assert.equal(decision.skill, 'plan');
     assert.equal(decision.pr, '9');
   }
 });
@@ -250,7 +250,7 @@ test('out does not move the phase, and a code marker fixes implementation', () =
   assert.equal(decision.kind, 'agent');
   if (decision.kind === 'agent') {
     assert.equal(decision.action, 'fix-implementation');
-    assert.equal(decision.skill, 'sdd-fix');
+    assert.equal(decision.skill, 'fix');
   }
 });
 
@@ -278,7 +278,7 @@ test('specifying restores a missing baseline before it improves the specs', () =
   assert.equal(decision.kind, 'agent');
   if (decision.kind === 'agent') {
     assert.equal(decision.action, 'restore-baseline');
-    assert.equal(decision.skill, 'sdd-baseline');
+    assert.equal(decision.skill, 'baseline');
   }
 });
 

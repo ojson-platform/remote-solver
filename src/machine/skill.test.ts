@@ -4,69 +4,56 @@ import path from 'node:path';
 import {test} from 'vitest';
 
 import {ACTION_SKILL} from './route.ts';
-import {modelFor, skillMode} from './skill.ts';
+import {modeOfSkill, modelFor, skillMode} from './skill.ts';
 
 const root = path.join(import.meta.dirname, '..', '..', 'skills');
-const mechanical = new Set(['sdd-tasks', 'sdd-implement', 'sdd-fix', 'sdd-pr-comments']);
-/** The routing table. The only skill allowed to name the others. */
-const router = 'sdd-flow';
-/** Outside the route: no Trigger, and its run does not end in a cycle signal. */
-const outside = new Set(['sdd-flow', 'sdd-init']);
+const flow = path.join(root, 'sdd-flow');
+const stepsDir = path.join(flow, 'steps');
+const mechanical = new Set(['tasks', 'implement', 'fix', 'pr-comments']);
 
-const skills = readdirSync(root);
-const text = (skill: string) => readFileSync(path.join(root, skill, 'SKILL.md'), 'utf8');
-
-test('every skill declares a mode and the runtime maps it to a model', () => {
-  assert.ok(skills.length >= mechanical.size);
-  for (const skill of skills) {
-    const body = text(skill);
-    assert.match(body, /^mode: (mechanical|judgment)$/m);
-    const mode = skillMode(body);
-    assert.equal(mode, mechanical.has(skill) ? 'mechanical' : 'judgment');
-    assert.equal(modelFor(mode), mode === 'mechanical' ? 'composer-2.5-fast' : 'grok-4.7-high-fast');
-  }
+test('skills holds the router and the init skill', () => {
+  assert.deepEqual(readdirSync(root).sort(), ['sdd-flow', 'sdd-init']);
 });
 
-test('every action skill ends in a signal from context.md', () => {
-  for (const skill of skills.filter(name => !outside.has(name))) {
-    const body = text(skill);
+test('each step declares a mode and does not name another step', () => {
+  const steps = readdirSync(stepsDir).filter(name => name.endsWith('.md'));
+  assert.deepEqual(steps.map(name => name.replace(/\.md$/, '')).sort(), [...new Set(Object.values(ACTION_SKILL))].sort());
+  const found = new Set<string>();
+  for (const file of steps) {
+    const body = readFileSync(path.join(stepsDir, file), 'utf8');
+    const name = file.replace(/\.md$/, '');
+    assert.match(body.split('\n')[0], /^mode: (mechanical|judgment)$/, file);
+    const mode = skillMode(body);
+    assert.equal(mode, mechanical.has(name) ? 'mechanical' : 'judgment', file);
+    assert.equal(modelFor(mode), mode === 'mechanical' ? 'composer-2.5-fast' : 'grok-4.7-high-fast');
+    found.add(name);
     const stop = body
       .split(/^## /m)
       .find(section => section.startsWith('Stop\n'))
       ?.slice('Stop\n'.length);
-    assert.ok(stop, `${skill} has a Stop section`);
-    assert.match(stop, /Publish|Wait|Hand-off/, `${skill} Stop names Publish, Wait, or Hand-off`);
-    assert.match(body, /context\.md/, `${skill} points at context.md`);
+    assert.ok(stop, `${file} has a Stop section`);
+    assert.match(stop, /Publish|Wait|Hand-off/);
+    assert.match(body, /CONTEXT\.md/);
+    for (const other of steps) {
+      if (other === file) {
+        continue;
+      }
+      const step = other.replace(/\.md$/, '');
+      assert.doesNotMatch(body, new RegExp(`steps/${step}\\.md`), `${file} names ${step}`);
+    }
+    assert.doesNotMatch(body, /npx sdd|\bpnpm\b|\bSandcastle\b|\bmaster\b/);
   }
-});
-
-const routed = (skill: string) =>
-  Object.entries(ACTION_SKILL)
-    .filter(([, target]) => target === skill)
-    .map(([action]) => action)
-    .sort();
-
-const triggers = (skill: string) => {
-  const front = text(skill).split(/^---$/m)[1].replace(/\s+/g, ' ');
-  const phrase = front.match(/Trigger: ([^.]+)\./)?.[1];
-  assert.ok(phrase, `${skill} description has a Trigger phrase`);
-  return phrase.split(/,\s*/).sort();
-};
-
-test('each skill Trigger lists the actions the route sends to it', () => {
-  const seen: string[] = [];
-  for (const skill of skills.filter(name => !outside.has(name))) {
-    assert.deepEqual(triggers(skill), routed(skill), `${skill} Trigger`);
-    seen.push(...triggers(skill));
+  for (const name of mechanical) {
+    assert.ok(found.has(name), name);
   }
-  assert.deepEqual(seen.sort(), Object.keys(ACTION_SKILL).sort());
+  assert.equal(modeOfSkill(stepsDir, 'tasks'), 'mechanical');
 });
 
 test('the router Actions table matches the route', () => {
-  const table = text(router)
+  const table = readFileSync(path.join(flow, 'SKILL.md'), 'utf8')
     .split(/^## /m)
     .find(section => section.startsWith('Actions\n'));
-  assert.ok(table, `${router} has an Actions section`);
+  assert.ok(table);
   const route: Record<string, string> = {};
   for (const row of table.split('\n').filter(line => line.startsWith('| `'))) {
     const [code, who, target] = row.split('|').slice(1, 4).map(cell => cell.trim());
@@ -80,24 +67,13 @@ test('the router Actions table matches the route', () => {
   assert.deepEqual(route, {...ACTION_SKILL});
 });
 
-test('only the router names other skills', () => {
-  for (const skill of skills.filter(name => name !== router)) {
-    const body = text(skill);
-    for (const other of skills.filter(name => name !== skill)) {
-      // sdd-init is not on the route. A skill may name it as the chat a person runs.
-      // sdd-init may name the router: that is the chat entry it tells the person, not a call.
-      if (other === 'sdd-init') continue;
-      if (skill === 'sdd-init' && other === router) continue;
-      assert.doesNotMatch(body, new RegExp(`\\b${other}\\b`), `${skill} names ${other}`);
-    }
+test('the chat files point at the sdd script', () => {
+  const skill = readFileSync(path.join(flow, 'SKILL.md'), 'utf8');
+  const context = readFileSync(path.join(flow, 'CONTEXT.md'), 'utf8');
+  const init = readFileSync(path.join(root, 'sdd-init', 'SKILL.md'), 'utf8');
+  for (const body of [skill, context]) {
+    assert.match(body, /node scripts\/sdd\.mjs/);
+    assert.doesNotMatch(body, /npx sdd|\bpnpm\b|\bSandcastle\b|\bmaster\b/);
   }
-});
-
-test('no skill hardcodes a package command, the queue label, or the base branch', () => {
-  for (const skill of skills) {
-    const body = text(skill);
-    assert.doesNotMatch(body, /\bpnpm\b/, skill);
-    assert.doesNotMatch(body, /\bSandcastle\b/, skill);
-    assert.doesNotMatch(body, /\bmaster\b/, skill);
-  }
+  assert.match(init, /node \.\.\/sdd-flow\/scripts\/sdd\.mjs/);
 });

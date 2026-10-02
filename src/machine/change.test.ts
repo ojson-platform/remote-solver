@@ -144,7 +144,7 @@ test('reads a change from a file source that is not git', () => {
 
 test('context.md § Artifacts states every heading the machine and the implementer read', () => {
   const context = readFileSync(
-    path.join(import.meta.dirname, '..', '..', 'prompts', 'context.md'),
+    path.join(import.meta.dirname, '..', '..', 'skills', 'sdd-flow', 'CONTEXT.md'),
     'utf8',
   );
   const artifacts = context.split(/^## /m).find(section => section.startsWith('Artifacts\n'));

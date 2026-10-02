@@ -1,11 +1,4 @@
----
-name: sdd-implement
-description: >
-  Implements one task: a test that was red, then code, then the checkbox,
-  one commit. Follows tasks/<id>.md and does not explore the repo.
-  Trigger: implement-next-task. Phase sdd:implementing.
 mode: mechanical
----
 
 # sdd-implement
 
@@ -13,7 +6,7 @@ One task per run. One commit: test, code, checkbox. The task file is the instruc
 
 ## Read only
 
-The headings below are `context.md` § Artifacts.
+The headings below are `CONTEXT.md` § Artifacts.
 
 1. The first `- [ ]` line in `openspec/changes/issue-<issue>/tasks.md`. The backtick id is the task.
 2. `openspec/changes/issue-<issue>/tasks/<id>.md`.
@@ -37,7 +30,7 @@ A file the task does not name stays unread and unedited: other changes, ADRs, a 
 4. **Implement the task.** For each scenario the task names, do 4.1 and then 4.2 before the next scenario. The substeps still hold. One commit covers the whole task.
    4.1 **Write the test red.** The test file is the path in `## Proof`. The test name contains this scenario's title. The test observes only what `## Proof` says. Run the narrow command from `## Proof`. Red is the test whose name contains this scenario's title failing on its assertion or on behavior that is not there yet. Exit 0, a test file that does not load, or a run that collects no test is not red: rewrite the test. Do not edit a file from `## Source` before the command is red.
    4.2 **Edit source code** only as `## Source` says, and only enough for this scenario. Run that same narrow command and the fast suite from the card. Both exit 0. Run the type check when the card names one. A failure outside this task: revert the code and Hand-off to `code` on the failing file, cause the failing test. Do not choose a command the card did not write.
-5. Check this task's `- [x]` only. One commit naming `<id>`. Publish (`context.md`). Mirror: `Tasks`.
+5. Check this task's `- [x]` only. One commit naming `<id>`. Publish (`CONTEXT.md`). Mirror: `Tasks`.
 
 ## Check
 

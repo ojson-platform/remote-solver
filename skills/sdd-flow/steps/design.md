@@ -1,11 +1,4 @@
----
-name: sdd-design
-description: >
-  Writes design.md: verification boundary, external contracts, technical
-  prerequisites, open decisions.
-  Trigger: create-design, improve-design. Phase sdd:designing.
 mode: judgment
----
 
 # sdd-design
 
@@ -20,15 +13,15 @@ Writes the technical decision for this change.
 ## Steps
 
 1. `design.md` is already right and `threads <pull> --layer design` is empty: go to step 6.
-2. Otherwise write `design.md` by `context.md` § Artifacts. The verification boundary names every capability, where its scenarios are observed, and the commands: a narrow command that runs one test file and contains `<test-file>`, and the fast suite. The last line of the section is the type check, once for the change, or `none`.
+2. Otherwise write `design.md` by `CONTEXT.md` § Artifacts. The verification boundary names every capability, where its scenarios are observed, and the commands: a narrow command that runs one test file and contains `<test-file>`, and the fast suite. The last line of the section is the type check, once for the change, or `none`.
    The block between `<!-- sdd:init:begin -->` and `<!-- sdd:init:end -->` in `AGENTS.md` is present: copy its commands, its trace line, and its test path rule into the boundary. Do not search again. Do not edit `AGENTS.md`.
    The block is absent: find the commands in CI, a hook, `package.json`, or a Makefile, and write them in `design.md`.
    Neither a narrow command nor a fast suite is found: Wait. The service is not connected to SDD. The person runs `/sdd-init`.
 3. **Write the approach.** `## Approach` says how this change is built: module boundaries, risks, rejected alternatives. `none` when there is nothing to say. Leave the three required sections as step 2 wrote them.
 4. No decision yet: an open decision item. Leave it open.
-5. `improve-design`: Fix thread (`context.md`), layer `design`.
-6. Publish (`context.md`). Mirror: `Design`. Open decisions do not delay the push.
-7. An open decision remains: Wait (`context.md`) with the open decision.
+5. `improve-design`: Fix thread (`CONTEXT.md`), layer `design`.
+6. Publish (`CONTEXT.md`). Mirror: `Design`. Open decisions do not delay the push.
+7. An open decision remains: Wait (`CONTEXT.md`) with the open decision.
 
 ## Check
 

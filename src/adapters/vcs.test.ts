@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {mkdirSync, mkdtempSync, writeFileSync} from 'node:fs';
+import {lstatSync, mkdirSync, mkdtempSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {test} from 'vitest';
 
-import {ensureIssueBranch, gitVcs} from './vcs.ts';
+import {ensureIssueBranch, gitVcs, packageLinks} from './vcs.ts';
 
 function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, {cwd, encoding: 'utf8'}).trim();
@@ -108,4 +108,27 @@ test('dirty lists changed, staged, and untracked paths, and nothing on a clean t
   git(root, ['mv', 'b.txt', 'c.txt']);
   writeFileSync(path.join(root, 'stray file.log'), '');
   assert.deepEqual(vcs.dirty().sort(), ['a.txt', 'c.txt', 'stray file.log']);
+});
+
+test('prepare checks out sdd/<key> once and links the package files', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'sdd-vcs-'));
+  execFileSync('git', ['init'], {cwd: root, stdio: 'ignore'});
+  execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/master'], {cwd: root});
+  git(root, ['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '--allow-empty', '-m', 'init']);
+  const skills = mkdtempSync(path.join(tmpdir(), 'sdd-skills-'));
+  const vcs = gitVcs(root, {defaultBranch: 'master'});
+  const dir = vcs.prepare('7', {worktreesDir: '.worktrees', links: [{from: skills, to: 'skills'}]});
+  assert.equal(git(dir, ['rev-parse', '--abbrev-ref', 'HEAD']), 'sdd/7');
+  assert.equal(lstatSync(path.join(dir, '.sandcastle', 'skills')).isSymbolicLink(), true);
+  const exclude = execFileSync('git', ['rev-parse', '--git-path', 'info/exclude'], {cwd: root, encoding: 'utf8'}).trim();
+  assert.match(execFileSync('cat', [path.resolve(root, exclude)], {encoding: 'utf8'}), /\/\.sandcastle\//);
+  assert.equal(vcs.prepare('7', {worktreesDir: '.worktrees', links: []}), dir);
+  assert.equal(vcs.tip('7'), git(root, ['rev-parse', 'sdd/7']));
+  assert.throws(() => vcs.tip('nope'), /no branch sdd\/nope/);
+});
+
+test('packageLinks keeps the directories that exist', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'sdd-links-'));
+  mkdirSync(path.join(root, 'skills'));
+  assert.deepEqual(packageLinks(root), [{from: path.join(root, 'skills'), to: 'skills'}]);
 });

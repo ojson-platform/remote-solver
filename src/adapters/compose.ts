@@ -68,7 +68,7 @@ export function machine(root = process.cwd(), options: MachineOptions = {}): Mac
     config,
     tracker: options.tracker ?? github!.tracker,
     review: options.review ?? github!.review,
-    vcs: options.vcs ?? gitVcs(root, {branchPrefix: config.branchPrefix}),
+    vcs: options.vcs ?? gitVcs(root, {branchPrefix: config.branchPrefix, defaultBranch: config.defaultBranch}),
     runtime: options.runtime,
   };
 }

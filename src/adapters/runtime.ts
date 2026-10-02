@@ -7,13 +7,12 @@ import {branchName} from '../machine/naming.ts';
 import type {Runtime, RuntimeAsk, SkillRun} from '../machine/port.ts';
 import {modelFor} from '../machine/skill.ts';
 import {hostSandbox} from './host-sandbox.ts';
-import {ensureIssueBranch} from './vcs.ts';
+import {ensureIssueBranch, linkCommand as checkoutLinks, packageLinks} from './vcs.ts';
 
-const LINKED = [
-  ['skills', 'skills'],
-  ['prompts', 'prompts'],
-  ['.env', '.env'],
-] as const;
+/** The hook sandcastle runs. Links whatever of this package is on disk. */
+export function linkCommand(solverRoot: string, serviceRoot: string): string {
+  return checkoutLinks(packageLinks(solverRoot), serviceRoot);
+}
 
 export type SandcastleRuntimeConfig = {
   /** Repository the worktrees are created in. */
@@ -27,38 +26,6 @@ export type SandcastleRuntimeConfig = {
   /** This package. Its files are linked into the issue worktree. */
   solverRoot: string;
 };
-
-function shQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`;
-}
-
-/**
- * Host hook sandcastle runs with cwd set to the issue worktree. The worktree
- * is a checkout of the service, so the agent reaches skills and prompts through
- * these links. The service `node_modules` stays the worktree's own. The links go into the
- * repository's `info/exclude`: they are not dirt, and a `node_modules/` rule
- * in the service `.gitignore` does not match a symlink.
- */
-export function linkCommand(solverRoot: string, serviceRoot: string): string {
-  const steps = ['mkdir -p .sandcastle'];
-  const excluded = ['/.sandcastle/'];
-  for (const [fromName, toName] of LINKED) {
-    const from = path.join(solverRoot, fromName);
-    if (existsSync(from)) {
-      steps.push(`ln -sfn ${shQuote(from)} .sandcastle/${toName}`);
-    }
-  }
-  const modules = path.join(serviceRoot, 'node_modules');
-  if (existsSync(modules)) {
-    steps.push(`ln -sfn ${shQuote(modules)} node_modules`);
-    excluded.push('/node_modules');
-  }
-  steps.push('exclude="$(git rev-parse --git-path info/exclude)"', 'mkdir -p "$(dirname "$exclude")"');
-  for (const rule of excluded) {
-    steps.push(`{ grep -qxF ${shQuote(rule)} "$exclude" 2>/dev/null || echo ${shQuote(rule)} >> "$exclude"; }`);
-  }
-  return steps.join(' && ');
-}
 
 /** Same path sandcastle uses for a file log: `/` in the branch becomes `-`. */
 export function agentLogPath(root: string, branch: string, name: string): string {

@@ -1,8 +1,7 @@
 import type {Review, Vcs} from './machine/port.ts';
 
 import {machine, solverRoot, turn, type Machine} from './adapters/compose.ts';
-import {linkCommand} from './adapters/runtime.ts';
-import {prepareCheckout} from './adapters/vcs.ts';
+import {packageLinks} from './adapters/vcs.ts';
 import {readChange} from './machine/change.ts';
 import {applyLabels, pick, resolveCycle} from './machine/flow.ts';
 import {openWait, setPhase, setWait} from './machine/labels.ts';
@@ -249,12 +248,7 @@ function worktree(box: Machine, rest: string[]): void {
   if (rest.length !== 1) {
     fail(usage);
   }
-  const dir = prepareCheckout(box.root, key, {
-    branchPrefix: box.config.branchPrefix,
-    defaultBranch: box.config.defaultBranch,
-    worktreesDir: SESSION_WORKTREES,
-    link: linkCommand(solverRoot(), box.root),
-  });
+  const dir = box.vcs.prepare(key, {worktreesDir: SESSION_WORKTREES, links: packageLinks(solverRoot())});
   console.log(dir);
 }
 

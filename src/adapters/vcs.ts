@@ -1,4 +1,4 @@
-import type {FileSource, Vcs} from '../machine/port.ts';
+import type {FileSource, Link, Vcs} from '../machine/port.ts';
 
 import {execFileSync} from 'node:child_process';
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
@@ -8,7 +8,38 @@ import {branchName} from '../machine/naming.ts';
 
 export type GitVcsConfig = {
   branchPrefix?: string;
+  defaultBranch?: string;
 };
+
+function shQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
+/** Shell that links package files into `.sandcastle/` and the service `node_modules` into the checkout. */
+export function linkCommand(links: Link[], serviceRoot: string): string {
+  const steps = ['mkdir -p .sandcastle'];
+  const excluded = ['/.sandcastle/'];
+  for (const link of links) {
+    steps.push(`ln -sfn ${shQuote(link.from)} .sandcastle/${link.to}`);
+  }
+  const modules = path.join(serviceRoot, 'node_modules');
+  if (existsSync(modules)) {
+    steps.push(`ln -sfn ${shQuote(modules)} node_modules`);
+    excluded.push('/node_modules');
+  }
+  steps.push('exclude="$(git rev-parse --git-path info/exclude)"', 'mkdir -p "$(dirname "$exclude")"');
+  for (const rule of excluded) {
+    steps.push(`{ grep -qxF ${shQuote(rule)} "$exclude" 2>/dev/null || echo ${shQuote(rule)} >> "$exclude"; }`);
+  }
+  return steps.join(' && ');
+}
+
+/** `skills`, `prompts`, and `.env` from this package, when they exist. */
+export function packageLinks(solverRoot: string): Link[] {
+  return (['skills', 'prompts', '.env'] as const)
+    .filter(name => existsSync(path.join(solverRoot, name)))
+    .map(name => ({from: path.join(solverRoot, name), to: name}));
+}
 
 function git(root: string, args: string[], allowFail = false): string {
   try {
@@ -133,7 +164,23 @@ export function ensureIssueBranch(
 
 export function gitVcs(root: string, config: GitVcsConfig = {}): Vcs {
   const prefix = config.branchPrefix ?? 'sdd';
+  const base = config.defaultBranch ?? 'origin/master';
   return {
+    prepare(key, options) {
+      return prepareCheckout(root, key, {
+        branchPrefix: prefix,
+        defaultBranch: base,
+        worktreesDir: options.worktreesDir,
+        link: linkCommand(options.links, root),
+      });
+    },
+    tip(key) {
+      const found = git(root, ['rev-parse', '--verify', '--quiet', branchName(key, prefix)], true).trim();
+      if (!found) {
+        throw new Error(`no branch ${branchName(key, prefix)}`);
+      }
+      return found;
+    },
     filesAt: key => gitFiles(root, key, prefix),
     compare(base, head) {
       try {

@@ -101,7 +101,14 @@ export type FileSource = {
   list(rel: string): string[];
 };
 
+/** A path in this package, linked as `.sandcastle/<to>` inside a checkout. */
+export type Link = {from: string; to: string};
+
 export type Vcs = {
+  /** Checkout of `sdd/<key>`. Creates it when missing and returns the same path again. */
+  prepare(key: IssueKey, options: {worktreesDir: string; links: Link[]}): string;
+  /** Tip of the local issue branch. Throws when the branch does not exist. */
+  tip(key: IssueKey): string;
   filesAt(key: IssueKey): FileSource;
   /**
    * Commits on `base..head` and the three-dot diff.

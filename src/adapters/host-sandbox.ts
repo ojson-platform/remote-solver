@@ -4,6 +4,14 @@ import {createInterface} from 'node:readline';
 
 import {createBindMountSandboxProvider, type BindMountSandboxHandle} from '@ai-hero/sandcastle';
 
+/** Bind-mount sandbox for the sandcastle `run` still used by the old runtime. */
+export function hostSandbox(): ReturnType<typeof createBindMountSandboxProvider> {
+  return createBindMountSandboxProvider({
+    name: 'host',
+    create: options => openHostHandle(options.worktreePath, options.env),
+  });
+}
+
 type ExecOptions = {
   onLine?: (line: string) => void;
   cwd?: string;
@@ -13,32 +21,12 @@ type ExecOptions = {
 
 type ExecResult = {stdout: string; stderr: string; exitCode: number};
 
-/**
- * Sandcastle copies the host git identity with `git config --global` during
- * setup. This host has `user.name` more than once, so that write fails and
- * would rewrite `~/.gitconfig`. The commands are answered here, before a
- * process starts. Commits keep the identity already configured for the repo.
- */
-export function skipsGlobalGitConfig(command: string): boolean {
-  return command.startsWith('git config --global ');
-}
-
-export function hostSandbox(): ReturnType<typeof createBindMountSandboxProvider> {
-  return createBindMountSandboxProvider({
-    name: 'host',
-    create: options => openHostHandle(options.worktreePath, options.env),
-  });
-}
-
 /** A bind-mount handle whose commands run on this machine, in the worktree. */
 export function openHostHandle(worktreePath: string, env: Record<string, string> = {}): Promise<BindMountSandboxHandle> {
   const processEnv = {...process.env, ...env};
   const handle: BindMountSandboxHandle = {
     worktreePath,
     exec(command, opts) {
-      if (skipsGlobalGitConfig(command)) {
-        return Promise.resolve({stdout: '', stderr: '', exitCode: 0});
-      }
       return spawnShell(command, opts?.cwd ?? worktreePath, processEnv, opts);
     },
     copyFileIn: (hostPath, sandboxPath) => copyFile(hostPath, sandboxPath),

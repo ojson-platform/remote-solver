@@ -1,6 +1,8 @@
 import {readFileSync} from 'node:fs';
 import path from 'node:path';
 
+import {cursor, type AgentProvider} from '@ai-hero/sandcastle';
+
 export type SkillMode = 'mechanical' | 'judgment';
 
 /** The skill declares its mode. The runtime maps that onto a model. */
@@ -16,4 +18,9 @@ export function modeOfSkill(skillsDir: string, skill: string): SkillMode {
 
 export function modelFor(mode: SkillMode): string {
   return mode === 'mechanical' ? 'composer-2.5-fast' : 'grok-4.7-high-fast';
+}
+
+/** The agent for a mode. Today every mode is Cursor; the choice lives here. */
+export function agentFor(mode: SkillMode): AgentProvider {
+  return cursor(modelFor(mode));
 }

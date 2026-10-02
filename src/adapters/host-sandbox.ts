@@ -2,15 +2,7 @@ import {spawn} from 'node:child_process';
 import {copyFile} from 'node:fs/promises';
 import {createInterface} from 'node:readline';
 
-import {createBindMountSandboxProvider, type BindMountSandboxHandle} from '@ai-hero/sandcastle';
-
-/** Bind-mount sandbox for the sandcastle `run` still used by the old runtime. */
-export function hostSandbox(): ReturnType<typeof createBindMountSandboxProvider> {
-  return createBindMountSandboxProvider({
-    name: 'host',
-    create: options => openHostHandle(options.worktreePath, options.env),
-  });
-}
+import type {BindMountSandboxHandle} from '@ai-hero/sandcastle';
 
 type ExecOptions = {
   onLine?: (line: string) => void;

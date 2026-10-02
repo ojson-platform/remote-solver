@@ -1,25 +1,24 @@
 import {existsSync, mkdirSync, symlinkSync} from 'node:fs';
 import path from 'node:path';
 
-import {Output, cursor, run, type AgentStreamEvent} from '@ai-hero/sandcastle';
+import type {AgentStreamEvent} from '@ai-hero/sandcastle';
 
 import {branchName} from '../machine/naming.ts';
-import type {Runtime, RuntimeAsk, SkillRun} from '../machine/port.ts';
-import {modelFor} from '../machine/skill.ts';
-import {hostSandbox} from './host-sandbox.ts';
-import {ensureIssueBranch, linkCommand as checkoutLinks, packageLinks} from './vcs.ts';
+import type {Runtime, RuntimeAsk, SkillRun, Vcs} from '../machine/port.ts';
+import {agentFor} from '../machine/skill.ts';
+import {runAgent} from './agent.ts';
+import {linkCommand as checkoutLinks, packageLinks} from './vcs.ts';
 
 /** The hook sandcastle runs. Links whatever of this package is on disk. */
 export function linkCommand(solverRoot: string, serviceRoot: string): string {
   return checkoutLinks(packageLinks(solverRoot), serviceRoot);
 }
 
-export type SandcastleRuntimeConfig = {
+export type AgentRuntimeConfig = {
   /** Repository the worktrees are created in. */
   root: string;
+  vcs: Vcs;
   branchPrefix: string;
-  /** Ref a missing issue branch is cut from. */
-  baseBranch: string;
   /** Queue label and pull request base. The prompt names them for the skill. */
   queueLabel: string;
   prBase: string;
@@ -76,59 +75,38 @@ export function ensureServiceEnv(serviceRoot: string, solverRoot: string): void 
   symlinkSync(from, to);
 }
 
-export function sandcastleRuntime(config: SandcastleRuntimeConfig): Runtime {
+const WORKTREES = '.sandcastle/worktrees';
+
+function keyFromBranch(branch: string, prefix: string): string {
+  const head = `${prefix}/`;
+  return branch.startsWith(head) ? branch.slice(head.length) : branch.slice(branch.indexOf('/') + 1);
+}
+
+function commitCount(vcs: Vcs, before: string, after: string): number {
+  if (before === after) {
+    return 0;
+  }
+  const range = vcs.compare(before, after);
+  if (!range?.commits.trim()) {
+    return 0;
+  }
+  return range.commits.split('\n').filter(line => line.trim()).length;
+}
+
+/** One runtime for every host. The checkout is whatever `vcs` prepares. */
+export function agentRuntime(config: AgentRuntimeConfig): Runtime {
+  const checkout = (key: string) =>
+    config.vcs.prepare(key, {worktreesDir: WORKTREES, links: packageLinks(config.solverRoot)});
   return {
-    async ask(request: RuntimeAsk) {
-      ensureServiceEnv(config.root, config.solverRoot);
-      const logPath = agentLogPath(config.root, request.branch, request.name);
-      console.log(`::group::${request.name} agent`);
-      let atLineStart = true;
-      try {
-        const result = await run({
-          name: request.name,
-          sandbox: hostSandbox(),
-          agent: cursor(modelFor(request.mode)),
-          promptFile: request.promptFile,
-          promptArgs: request.promptArgs,
-          output: Output.string({tag: request.outputTag}),
-          maxIterations: 1,
-          logging: {
-            type: 'file',
-            path: logPath,
-            onAgentStreamEvent(event) {
-              const piece = renderAgentEvent(event, atLineStart);
-              atLineStart = piece.atLineStart;
-              if (piece.text) {
-                process.stdout.write(piece.text);
-              }
-            },
-          },
-          branchStrategy: {
-            type: 'branch',
-            branch: request.branch,
-            baseBranch: config.baseBranch,
-          },
-          cwd: config.root,
-        });
-        return {text: result.output};
-      } finally {
-        if (!atLineStart) {
-          process.stdout.write('\n');
-        }
-        console.log('::endgroup::');
-      }
-    },
     async run(skill: SkillRun) {
-      ensureIssueBranch(config.root, skill.key, {
-        branchPrefix: config.branchPrefix,
-        defaultBranch: config.baseBranch,
-      });
+      const dir = checkout(skill.key);
+      const before = config.vcs.tip(skill.key);
       ensureServiceEnv(config.root, config.solverRoot);
-      const branch = branchName(skill.key, config.branchPrefix);
-      const result = await run({
+      const answer = await runAgent({
+        cwd: dir,
+        hostCwd: config.root,
+        provider: agentFor(skill.mode),
         name: skill.action,
-        sandbox: hostSandbox(),
-        agent: cursor(modelFor(skill.mode)),
         promptFile: path.join(config.solverRoot, 'prompts', 'sdd.md'),
         promptArgs: {
           ISSUE: skill.key,
@@ -139,20 +117,29 @@ export function sandcastleRuntime(config: SandcastleRuntimeConfig): Runtime {
           QUEUE: config.queueLabel,
           BASE: config.prBase,
         },
-        maxIterations: 1,
-        branchStrategy: {
-          type: 'branch',
-          branch,
-          baseBranch: config.baseBranch,
-        },
-        cwd: config.root,
-        hooks: {
-          host: {
-            onWorktreeReady: [{command: linkCommand(config.solverRoot, config.root)}],
-          },
-        },
+        logPath: agentLogPath(config.root, branchName(skill.key, config.branchPrefix), skill.action),
+        resumeSession: skill.resumeSession,
       });
-      return {commits: result.commits.length};
+      return {
+        commits: commitCount(config.vcs, before, config.vcs.tip(skill.key)),
+        sessionId: answer.sessionId,
+        usage: answer.usage,
+      };
+    },
+    async ask(request: RuntimeAsk) {
+      const key = keyFromBranch(request.branch, config.branchPrefix);
+      const dir = checkout(key);
+      ensureServiceEnv(config.root, config.solverRoot);
+      return runAgent({
+        cwd: dir,
+        hostCwd: config.root,
+        provider: agentFor(request.mode),
+        name: request.name,
+        promptFile: request.promptFile,
+        promptArgs: request.promptArgs,
+        logPath: agentLogPath(config.root, request.branch, request.name),
+        outputTag: request.outputTag,
+      });
     },
   };
 }

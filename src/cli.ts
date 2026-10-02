@@ -1,4 +1,6 @@
-import {machine} from './adapters/compose.ts';
+import {solverRoot} from './adapters/compose.ts';
+import {openMachine} from './adapters/load.ts';
+import {agentRuntime} from './adapters/runtime.ts';
 import {runIssue, runSpy} from './main.ts';
 import {runReview} from './reviewer/run.ts';
 
@@ -43,16 +45,27 @@ export async function runCli(argv: string[]): Promise<number> {
     const asked = argv[0] === 'help' || argv[0] === '--help' || argv[0] === '-h';
     return asked ? 0 : 1;
   }
+  const box = await openMachine(process.cwd(), {
+    runtime: built =>
+      agentRuntime({
+        root: built.root,
+        vcs: built.vcs,
+        branchPrefix: built.config.branchPrefix,
+        queueLabel: built.config.queueLabel,
+        prBase: built.config.prBase,
+        solverRoot: solverRoot(),
+      }),
+  });
   if (chosen.kind === 'spy') {
-    await runSpy(chosen.argv);
+    await runSpy(box, chosen.argv);
     return 0;
   }
   if (chosen.kind === 'review') {
-    return runReview(machine());
+    return runReview(box);
   }
-  return runIssue(chosen.key);
+  return runIssue(box, chosen.key);
 }
 
-if (process.argv[1]?.endsWith('cli.ts')) {
+if (process.argv[1]?.endsWith('cli.ts') || process.argv[1]?.endsWith('remote-solver.mjs')) {
   process.exit(await runCli(process.argv.slice(2)));
 }

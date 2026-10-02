@@ -1,6 +1,7 @@
 import type {Review, Vcs} from './machine/port.ts';
 
 import {machine, solverRoot, turn, type Machine} from './adapters/compose.ts';
+import {openMachine} from './adapters/load.ts';
 import {packageLinks} from './adapters/vcs.ts';
 import {readChange} from './machine/change.ts';
 import {applyLabels, pick, resolveCycle} from './machine/flow.ts';
@@ -385,6 +386,6 @@ function mirror(box: Machine, rest: string[]): void {
   box.tracker.updateBody(key, updateMirror(record.body, layer, text));
 }
 
-if (process.argv[1]?.endsWith('sdd.ts')) {
-  runSdd(process.argv.slice(2));
+if (process.argv[1]?.endsWith('sdd.ts') || process.argv[1]?.endsWith('sdd.mjs')) {
+  runSdd(process.argv.slice(2), await openMachine(process.cwd()));
 }

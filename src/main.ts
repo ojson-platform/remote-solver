@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import {machine, solverRoot, turn, type Machine} from './adapters/compose.ts';
+import {solverRoot, turn, type Machine} from './adapters/compose.ts';
 import {performCycle} from './machine/flow.ts';
 import {exited, signature, tick, type State} from './machine/scheduler.ts';
 import {modeOfSkill} from './machine/skill.ts';
@@ -26,8 +26,8 @@ function flag(argv: string[], name: string, fallback: number): number {
   return Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
-export async function runIssue(key: string): Promise<number> {
-  return driveIssue(machine(), key);
+export async function runIssue(box: Machine, key: string): Promise<number> {
+  return driveIssue(box, key);
 }
 
 /** One issue, up to 40 steps. */
@@ -68,8 +68,7 @@ export async function driveIssue(box: Machine, key: string): Promise<number> {
   return 3;
 }
 
-export async function runSpy(argv: string[]): Promise<void> {
-  const box = machine();
+export async function runSpy(box: Machine, argv: string[]): Promise<void> {
   const parallel = flag(argv, '--parallel', 2);
   const intervalMs = flag(argv, '--interval', 20) * 1000;
   let state: State = {running: [], idle: {}, reported: {}};

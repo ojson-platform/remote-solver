@@ -1,5 +1,6 @@
 import {annotate} from '../adapters/actions.ts';
 import type {Machine} from '../adapters/compose.ts';
+import type {Review} from '../machine/port.ts';
 import {passReview, type Judge} from './act.ts';
 import {sandcastleJudge} from './judge.ts';
 import {describe, describeQueue, reviewQueue} from './plan.ts';
@@ -20,7 +21,12 @@ export async function runReview(box: Machine, judge?: Judge): Promise<number> {
       }
       return sandcastleJudge(box.runtime, dossier);
     });
-  const items = reviewQueue(box.tracker.listOpen(), key => box.review.pulls(key));
+  const issues = await box.tracker.listOpen();
+  const pulls = new Map<string, Awaited<ReturnType<Review['pulls']>>>();
+  for (const issue of issues) {
+    pulls.set(issue.key, await box.review.pulls(issue.key));
+  }
+  const items = reviewQueue(issues, key => pulls.get(key) ?? []);
   if (items.length === 0) {
     console.log(describeQueue(items)[0]);
     return 0;

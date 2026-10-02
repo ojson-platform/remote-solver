@@ -60,7 +60,7 @@ skills/sdd-init/
 
 ## Машина без runtime
 
-`machine(root, options)` синхронный. Порты `tracker`, `review`, `vcs` по умолчанию — GitHub и git. Порт `runtime` машина сама не строит: он берётся только из `options.runtime`, и в типе `Machine` он необязателен.
+`machine(root, options)` собирает порты сразу. Методы `tracker`, `review` и `vcs`, которые ходят в сеть или в VCS, возвращают Promise. `decide` и `settle` остаются синхронными: им передают уже загруженные записи. `phaseHint` и чтение файлов через `filesAt` тоже синхронные. Порты по умолчанию — GitHub и git. Порт `runtime` машина сама не строит: он берётся только из `options.runtime`, и в типе `Machine` он необязателен.
 
 ```ts
 export type Machine = {

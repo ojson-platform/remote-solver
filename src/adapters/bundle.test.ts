@@ -42,7 +42,9 @@ test('the package ships the built files and not the source', () => {
   const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')) as {
     bin: Record<string, string>;
     dependencies: Record<string, string>;
+    scripts: Record<string, string>;
   };
+  assert.equal(pkg.scripts.prepublishOnly, 'pnpm build');
   assert.equal(pkg.bin.sdd, './skills/sdd-flow/scripts/sdd.mjs');
   assert.equal(pkg.bin['remote-solver'], './bin/remote-solver.mjs');
   assert.equal(pkg.dependencies.tsx, undefined);

@@ -49,49 +49,49 @@ export type Conversation = {body: string; robot: boolean};
 export type ReviewNote = {body: string; path?: string; line?: number};
 
 export type Tracker = {
-  login(): string;
-  listOpen(): IssueRecord[];
-  issue(key: IssueKey): IssueRecord;
-  labels(key: IssueKey): string[];
-  editLabels(key: IssueKey, add: string[], remove: string[]): void;
-  updateBody(key: IssueKey, body: string): void;
-  comment(key: IssueKey, body: string): void;
-  close(key: IssueKey, comment: string): void;
-  /** How a person moves the phase in this tracker, e.g. "replace the label `sdd:proposing` with `sdd:proposed`". */
+  login(): Promise<string>;
+  listOpen(): Promise<IssueRecord[]>;
+  issue(key: IssueKey): Promise<IssueRecord>;
+  labels(key: IssueKey): Promise<string[]>;
+  editLabels(key: IssueKey, add: string[], remove: string[]): Promise<void>;
+  updateBody(key: IssueKey, body: string): Promise<void>;
+  comment(key: IssueKey, body: string): Promise<void>;
+  close(key: IssueKey, comment: string): Promise<void>;
+  /** How a person moves the phase in this tracker. Pure: no tracker call. */
   phaseHint(from: Phase, to: Phase): string;
 };
 
 export type ThreadTarget = {commit: string; path: string; line: number; body: string};
 
 export type Review = {
-  pulls(key: IssueKey): Pull[];
-  threads(pull: string): Thread[];
+  pulls(key: IssueKey): Promise<Pull[]>;
+  threads(pull: string): Promise<Thread[]>;
   /** The threads with their handles. What `sdd threads` prints for a skill. */
-  threadList(pull: string): ThreadRecord[];
-  comments(pull: string): Conversation[];
+  threadList(pull: string): Promise<ThreadRecord[]>;
+  comments(pull: string): Promise<Conversation[]>;
   /**
    * The open pull request, or a new one. Several open pull requests are the
    * machine's stop, applied before this is called.
    */
-  ensurePull(key: IssueKey, title: string, body: string): string;
-  openThread(pull: string, target: ThreadTarget): void;
-  reply(pull: string, comment: string, body: string): void;
+  ensurePull(key: IssueKey, title: string, body: string): Promise<string>;
+  openThread(pull: string, target: ThreadTarget): Promise<void>;
+  reply(pull: string, comment: string, body: string): Promise<void>;
   /** Issue comment on the pull request. The adapter adds the spy mark. */
-  say(pull: string, body: string): void;
+  say(pull: string, body: string): Promise<void>;
   /** Issue comment on the pull request. The body is posted unchanged. */
-  speak(pull: string, body: string): void;
+  speak(pull: string, body: string): Promise<void>;
   /**
    * One published review that requests changes. A note with a file becomes a
    * thread on that file or line. Notes without a file stay in the review body.
    */
-  flag(pull: string, head: string, notes: ReviewNote[]): void;
+  flag(pull: string, head: string, notes: ReviewNote[]): Promise<void>;
   /** Head and base commits of an open pull request. */
-  range(pull: string): {head: string; base: string | null};
-  resolveThread(thread: string): void;
+  range(pull: string): Promise<{head: string; base: string | null}>;
+  resolveThread(thread: string): Promise<void>;
   /** Text the agent reads: check names, conclusions, logs. */
-  checksText(pull: string): string;
+  checksText(pull: string): Promise<string>;
   /** Rebase the pull request into the base branch. Already merged is success. */
-  merge(pull: string): void;
+  merge(pull: string): Promise<void>;
 };
 
 export type FileSource = {
@@ -106,23 +106,24 @@ export type Link = {from: string; to: string};
 
 export type Vcs = {
   /** Checkout of `sdd/<key>`. Creates it when missing and returns the same path again. */
-  prepare(key: IssueKey, options: {worktreesDir: string; links: Link[]}): string;
+  prepare(key: IssueKey, options: {worktreesDir: string; links: Link[]}): Promise<string>;
   /** Tip of the local issue branch. Throws when the branch does not exist. */
-  tip(key: IssueKey): string;
+  tip(key: IssueKey): Promise<string>;
+  /** Files of the issue branch. Reading them is local and stays synchronous. */
   filesAt(key: IssueKey): FileSource;
   /**
    * Commits on `base..head` and the three-dot diff.
    * A missing object is a failed range, not an empty diff.
    */
-  compare(base: string, head: string): {commits: string; diff: string} | null;
+  compare(base: string, head: string): Promise<{commits: string; diff: string} | null>;
   /** Push the issue branch `sdd/<key>` and set its upstream. */
-  push(key: IssueKey): void;
+  push(key: IssueKey): Promise<void>;
   /** HEAD of the checkout this adapter was opened on. */
-  head(): string;
+  head(): Promise<string>;
   /** `commit` is the tip of the remote issue branch `sdd/<key>`, or behind it. */
-  published(key: IssueKey, commit: string): boolean;
+  published(key: IssueKey, commit: string): Promise<boolean>;
   /** Paths `git status` reports in this checkout: changed, staged, or untracked. Empty on a clean tree. */
-  dirty(): string[];
+  dirty(): Promise<string[]>;
 };
 
 export type AgentUsage = {

@@ -14,7 +14,7 @@ const files: FileSource = {
   list: () => [],
 };
 
-test('resolveIssue loads the cycle once and flushes mechanical advances in one write', () => {
+test('resolveIssue loads the cycle once and flushes mechanical advances in one write', async () => {
   const {tracker, review, calls} = memoryPorts({
     issues: [
       {
@@ -26,7 +26,7 @@ test('resolveIssue loads the cycle once and flushes mechanical advances in one w
       },
     ],
   });
-  const decision = resolveIssue('424242', {tracker, review, files, queueLabel: 'Sandcastle'});
+  const decision = await resolveIssue('424242', {tracker, review, files, queueLabel: 'Sandcastle'});
   assert.equal(calls.filter(call => call === 'listOpen').length, 1);
   assert.equal(calls.filter(call => call === 'editLabels').length, 1);
   assert.equal(
@@ -37,10 +37,10 @@ test('resolveIssue loads the cycle once and flushes mechanical advances in one w
   if (decision.kind === 'agent') {
     assert.equal(decision.action, 'create-proposal');
   }
-  assert.deepEqual(tracker.labels('424242'), ['Sandcastle', 'sdd:cycle', 'sdd:proposing']);
+  assert.deepEqual(await tracker.labels('424242'), ['Sandcastle', 'sdd:cycle', 'sdd:proposing']);
 });
 
-test('the machine opens the review gate with one ask and does not repeat it', () => {
+test('the machine opens the review gate with one ask and does not repeat it', async () => {
   const {tracker, review, calls} = memoryPorts({
     issues: [
       {
@@ -60,9 +60,9 @@ test('the machine opens the review gate with one ask and does not repeat it', ()
     queueLabel: 'Sandcastle',
     change: {...readChange('5', files), proposal: true},
   };
-  const opened = resolveIssue('5', options);
+  const opened = await resolveIssue('5', options);
   assert.equal(opened.kind, 'wait');
-  assert.ok(tracker.labels('5').includes('sdd:wait-human'));
+  assert.ok((await tracker.labels('5')).includes('sdd:wait-human'));
   const asks = () =>
     calls.filter(call => call.startsWith('body:') && call.includes('Review the proposal'));
   assert.equal(asks().length, 1);
@@ -71,7 +71,7 @@ test('the machine opens the review gate with one ask and does not repeat it', ()
     /Review the proposal\. To accept it, replace the label `sdd:proposing` with `sdd:proposed` on this issue, or run `sdd accept 5`\./,
   );
 
-  const held = resolveIssue('5', options);
+  const held = await resolveIssue('5', options);
   assert.equal(held.kind, 'wait');
   if (held.kind === 'wait') {
     assert.deepEqual(held.gate, {artifact: 'proposal', from: 'proposing', to: 'proposed'});
@@ -79,7 +79,7 @@ test('the machine opens the review gate with one ask and does not repeat it', ()
   assert.equal(asks().length, 1);
 });
 
-test('a person who moves the gate label on the issue gets a record, or the change goes back', () => {
+test('a person who moves the gate label on the issue gets a record, or the change goes back', async () => {
   const seed = (labels: string[]) =>
     memoryPorts({
       issues: [{key: '5', title: '#5: title', body: '', state: 'OPEN', labels}],
@@ -94,14 +94,14 @@ test('a person who moves the gate label on the issue gets a record, or the chang
     'sdd:proposed',
     'sdd:wait-human',
   ]);
-  resolveIssue('5', {
+  await resolveIssue('5', {
     ...accepted,
     files,
     queueLabel: 'Sandcastle',
     change: {...base, proposal: true},
   });
-  assert.ok(accepted.tracker.labels('5').includes('sdd:specifying'));
-  assert.ok(!accepted.tracker.labels('5').includes('sdd:wait-human'));
+  assert.ok((await accepted.tracker.labels('5')).includes('sdd:specifying'));
+  assert.ok(!(await accepted.tracker.labels('5')).includes('sdd:wait-human'));
   assert.ok(accepted.calls.includes('body:' + markRobot('sdd:accept proposing → specifying')));
 
   const open = seed(['Sandcastle', 'sdd:cycle', 'sdd:proposed']);
@@ -111,22 +111,22 @@ test('a person who moves the gate label on the issue gets a record, or the chang
     queueLabel: 'Sandcastle',
     change: {...base, proposal: true, openQuestions: 1},
   };
-  const held = resolveIssue('5', options);
+  const held = await resolveIssue('5', options);
   assert.equal(held.kind, 'wait');
-  assert.deepEqual(open.tracker.labels('5'), ['Sandcastle', 'sdd:cycle', 'sdd:proposing']);
+  assert.deepEqual(await open.tracker.labels('5'), ['Sandcastle', 'sdd:cycle', 'sdd:proposing']);
   const notes = () => open.calls.filter(call => call.startsWith('body:'));
   assert.equal(notes().length, 1);
   assert.match(notes()[0], /back to proposing/);
   assert.match(notes()[0], /## Open questions in openspec\/changes\/issue-5\/proposal\.md/);
 
-  resolveIssue('5', options);
+  await resolveIssue('5', options);
   assert.equal(notes().length, 1);
-  resolveIssue('5', {...options, change: {...base, proposal: true}});
+  await resolveIssue('5', {...options, change: {...base, proposal: true}});
   assert.equal(notes().length, 2);
   assert.match(notes()[1], /Review the proposal/);
 });
 
-test('resolveCycle leaves an issue a worker already runs', () => {
+test('resolveCycle leaves an issue a worker already runs', async () => {
   const {tracker, review, calls} = memoryPorts({
     issues: [
       {
@@ -138,14 +138,14 @@ test('resolveCycle leaves an issue a worker already runs', () => {
       },
     ],
   });
-  const snapshot = loadCycle(tracker, review, () => files, 'Sandcastle');
-  const decisions = resolveCycle(snapshot, tracker, 'Sandcastle', new Set(['7']));
+  const snapshot = await loadCycle(tracker, review, () => files, 'Sandcastle');
+  const decisions = await resolveCycle(snapshot, tracker, 'Sandcastle', new Set(['7']));
   assert.deepEqual(decisions, []);
   assert.equal(calls.filter(call => call === 'editLabels').length, 0);
-  assert.deepEqual(tracker.labels('7'), ['Sandcastle', 'sdd:cycle', 'sdd:proposed']);
+  assert.deepEqual(await tracker.labels('7'), ['Sandcastle', 'sdd:cycle', 'sdd:proposed']);
 });
 
-test('resolveIssue closes an accepted issue once the pull request is merged', () => {
+test('resolveIssue closes an accepted issue once the pull request is merged', async () => {
   const open = memoryPorts({
     issues: [
       {
@@ -158,7 +158,7 @@ test('resolveIssue closes an accepted issue once the pull request is merged', ()
     ],
     pulls: {'424242': [{id: '9', title: '#424242: title', state: 'OPEN'}]},
   });
-  const waiting = resolveIssue('424242', {
+  const waiting = await resolveIssue('424242', {
     tracker: open.tracker,
     review: open.review,
     files,
@@ -169,7 +169,7 @@ test('resolveIssue closes an accepted issue once the pull request is merged', ()
     open.calls.some(call => call.startsWith('close:')),
     false,
   );
-  assert.equal(open.tracker.issue('424242').state, 'OPEN');
+  assert.equal((await open.tracker.issue('424242')).state, 'OPEN');
 
   const green = memoryPorts({
     issues: [
@@ -184,7 +184,7 @@ test('resolveIssue closes an accepted issue once the pull request is merged', ()
     pulls: {'424242': [{id: '9', title: '#424242: title', state: 'OPEN'}]},
     checks: {'9': {checks: 'green'}},
   });
-  const held = resolveIssue('424242', {
+  const held = await resolveIssue('424242', {
     tracker: green.tracker,
     review: green.review,
     files,
@@ -208,7 +208,7 @@ test('resolveIssue closes an accepted issue once the pull request is merged', ()
     ],
     pulls: {'424242': [{id: '9', title: '#424242: title', state: 'MERGED'}]},
   });
-  const decision = resolveIssue('424242', {
+  const decision = await resolveIssue('424242', {
     tracker: merged.tracker,
     review: merged.review,
     files,
@@ -218,7 +218,7 @@ test('resolveIssue closes an accepted issue once the pull request is merged', ()
   assert.equal(merged.calls.filter(call => call.startsWith('close:')).length, 1);
 });
 
-test('performIssue merges a green archived pull request and settles the close', () => {
+test('performIssue merges a green archived pull request and settles the close', async () => {
   const {tracker, review, calls} = memoryPorts({
     issues: [
       {
@@ -237,7 +237,7 @@ test('performIssue merges a green archived pull request and settles the close', 
     read: () => '',
     list: () => [],
   };
-  const decision = performIssue('3', {
+  const decision = await performIssue('3', {
     tracker,
     review,
     files: archived,
@@ -248,6 +248,6 @@ test('performIssue merges a green archived pull request and settles the close', 
     assert.equal(decision.reason, 'pull request merged');
   }
   assert.equal(calls.filter(call => call === 'merge:9').length, 1);
-  assert.ok(tracker.labels('3').includes('sdd:accepted'));
-  assert.equal(tracker.issue('3').state, 'CLOSED');
+  assert.ok((await tracker.labels('3')).includes('sdd:accepted'));
+  assert.equal((await tracker.issue('3')).state, 'CLOSED');
 });

@@ -132,20 +132,20 @@ function labelsAfterAdvance(labels, to) {
 }
 
 // src/machine/labels.ts
-function setWait(key, waiting, tracker) {
+async function setWait(key, waiting, tracker) {
   if (!waiting) {
-    const names = tracker.labels(key);
+    const names = await tracker.labels(key);
     if (!names.includes("sdd:wait-human")) {
       return;
     }
-    tracker.editLabels(key, [], ["sdd:wait-human"]);
+    await tracker.editLabels(key, [], ["sdd:wait-human"]);
     return;
   }
-  tracker.editLabels(key, ["sdd:wait-human"], []);
+  await tracker.editLabels(key, ["sdd:wait-human"], []);
 }
-function openWait(key, ask, tracker) {
-  setWait(key, true, tracker);
-  tracker.comment(key, ask);
+async function openWait(key, ask, tracker) {
+  await setWait(key, true, tracker);
+  await tracker.comment(key, ask);
 }
 function gateAsk(key, gate, tracker) {
   const hint = tracker.phaseHint(gate.from, gate.to);
@@ -728,19 +728,24 @@ function settle(issue, issues, pulls, change) {
 }
 
 // src/machine/snapshot.ts
-function pullSnapshots(review, key) {
-  return review.pulls(key).map((pull) => ({
-    ...pull,
-    review: pull.state === "OPEN" ? reviewOf(review.threads(pull.id), review.comments(pull.id)) : emptyReview
-  }));
+async function pullSnapshots(review, key) {
+  const pulls = await review.pulls(key);
+  const snapshots = [];
+  for (const pull of pulls) {
+    snapshots.push({
+      ...pull,
+      review: pull.state === "OPEN" ? reviewOf(await review.threads(pull.id), await review.comments(pull.id)) : emptyReview
+    });
+  }
+  return snapshots;
 }
-function loadCycle(tracker, review, filesAt, queueLabel) {
-  const issues = tracker.listOpen();
+async function loadCycle(tracker, review, filesAt, queueLabel) {
+  const issues = await tracker.listOpen();
   const cycles = issues.filter((issue) => issue.labels.includes(queueLabel) && issue.labels.includes("sdd:cycle")).sort((a, b) => a.key.localeCompare(b.key, void 0, { numeric: true }));
   const pulls = /* @__PURE__ */ new Map();
   const changes = /* @__PURE__ */ new Map();
   for (const issue of cycles) {
-    pulls.set(issue.key, pullSnapshots(review, issue.key));
+    pulls.set(issue.key, await pullSnapshots(review, issue.key));
     changes.set(issue.key, readChange(issue.key, filesAt(issue.key)));
   }
   return { issues, cycles, pulls, changes };
@@ -760,48 +765,51 @@ function queueLabelOf(snapshot, queueLabel) {
     }
   ];
 }
-function applyLabels(tracker, key, before, after) {
+async function applyLabels(tracker, key, before, after) {
   const add = after.filter((label) => !before.includes(label));
   const remove = before.filter((label) => !after.includes(label));
   if (add.length || remove.length) {
-    tracker.editLabels(key, add, remove);
+    await tracker.editLabels(key, add, remove);
   }
 }
-function closeAccepted(tracker, key) {
-  tracker.close(key, "SDLC accepted: the pull request is merged and the baseline is in trunk.");
+async function closeAccepted(tracker, key) {
+  await tracker.close(key, "SDLC accepted: the pull request is merged and the baseline is in trunk.");
 }
-function applySettlement(tracker, before, settled, key) {
-  applyLabels(tracker, key, before, settled.labels);
+async function applySettlement(tracker, before, settled, key) {
+  await applyLabels(tracker, key, before, settled.labels);
   const closing = settled.transitions.find((transition) => transition.to === "accepted");
   for (const transition of settled.transitions) {
     if (transition.comment) {
-      tracker.comment(key, transition.comment);
+      await tracker.comment(key, transition.comment);
     }
   }
   if (closing) {
-    closeAccepted(tracker, key);
+    await closeAccepted(tracker, key);
   }
   if (settled.decision.kind === "wait" && settled.decision.gate && !before.includes("sdd:wait-human")) {
-    openWait(key, gateAsk(key, settled.decision.gate, tracker), tracker);
+    await openWait(key, gateAsk(key, settled.decision.gate, tracker), tracker);
   }
 }
-function resolveCycle(snapshot, tracker, queueLabel, busy = /* @__PURE__ */ new Set()) {
+async function resolveCycle(snapshot, tracker, queueLabel, busy = /* @__PURE__ */ new Set()) {
   const empty = queueLabelOf(snapshot, queueLabel);
   if (empty.length) {
     return empty;
   }
-  return snapshot.cycles.filter((record) => !busy.has(record.key)).map((record) => {
+  const decisions = [];
+  for (const record of snapshot.cycles.filter((item) => !busy.has(item.key))) {
     const change = snapshot.changes.get(record.key);
     if (!change) {
-      return { kind: "wait", issue: record.key, reason: "change was not loaded" };
+      decisions.push({ kind: "wait", issue: record.key, reason: "change was not loaded" });
+      continue;
     }
     const settled = settle(record, snapshot.issues, snapshot.pulls.get(record.key) ?? [], change);
-    applySettlement(tracker, record.labels, settled, record.key);
-    return settled.decision;
-  });
+    await applySettlement(tracker, record.labels, settled, record.key);
+    decisions.push(settled.decision);
+  }
+  return decisions;
 }
-function resolveIssue(key, options) {
-  const issues = options.tracker.listOpen();
+async function resolveIssue(key, options) {
+  const issues = await options.tracker.listOpen();
   const record = issues.find(
     (issue) => issue.key === key && issue.labels.includes(options.queueLabel) && issue.labels.includes("sdd:cycle")
   );
@@ -811,40 +819,46 @@ function resolveIssue(key, options) {
   const settled = settle(
     record,
     issues,
-    pullSnapshots(options.review, key),
+    await pullSnapshots(options.review, key),
     options.change ?? readChange(key, options.files)
   );
-  applySettlement(options.tracker, record.labels, settled, key);
+  await applySettlement(options.tracker, record.labels, settled, key);
   return settled.decision;
 }
-function performIssue(key, options) {
-  const decision = resolveIssue(key, options);
+async function performIssue(key, options) {
+  const decision = await resolveIssue(key, options);
   if (decision.kind !== "merge") {
     return decision;
   }
-  options.review.merge(decision.pull);
-  const settled = resolveIssue(key, options);
+  await options.review.merge(decision.pull);
+  const settled = await resolveIssue(key, options);
   if (settled.kind === "merge") {
     throw new Error(`merge of PR #${decision.pull} did not settle`);
   }
   return settled;
 }
-function performCycle(snapshot, options, busy = /* @__PURE__ */ new Set()) {
-  return resolveCycle(snapshot, options.tracker, options.queueLabel, busy).map((decision) => {
-    if (decision.kind !== "merge") {
-      return decision;
+async function performCycle(snapshot, options, busy = /* @__PURE__ */ new Set()) {
+  const decisions = await resolveCycle(snapshot, options.tracker, options.queueLabel, busy);
+  const performed = [];
+  for (const decision of decisions) {
+    if (decision.kind !== "merge" || decision.issue === null) {
+      performed.push(decision);
+      continue;
     }
-    return performIssue(decision.issue, {
-      tracker: options.tracker,
-      review: options.review,
-      files: options.filesAt(decision.issue),
-      queueLabel: options.queueLabel
-    });
-  });
+    performed.push(
+      await performIssue(decision.issue, {
+        tracker: options.tracker,
+        review: options.review,
+        files: options.filesAt(decision.issue),
+        queueLabel: options.queueLabel
+      })
+    );
+  }
+  return performed;
 }
 
 // src/adapters/github.ts
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 var FAILED = ["FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED"];
 var PENDING = ["QUEUED", "IN_PROGRESS", "PENDING", "WAITING", "REQUESTED"];
 function labelHint(from, to) {
@@ -886,8 +900,36 @@ function threadRecord(node) {
     body: comment?.body ?? ""
   };
 }
-function gh(args, input) {
-  return execFileSync("gh", args, { encoding: "utf8", input });
+function command(file, args, input) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(file, args, { stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code) {
+        reject(Object.assign(new Error(`${file} exited ${code}`), { stdout, stderr }));
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+    if (input) {
+      child.stdin.write(input);
+    }
+    child.stdin.end();
+  });
+}
+async function gh(args, input) {
+  const { stdout } = await command("gh", args, input);
+  return stdout;
 }
 function classifyChecks(view, name) {
   if (view.state === "MERGED") {
@@ -939,20 +981,20 @@ function githubAdapters(options = {}) {
     }
     return slug;
   };
-  const login = () => {
+  const login = async () => {
     if (!user) {
-      user = gh(["api", "user", "--jq", ".login"]).trim();
+      user = (await gh(["api", "user", "--jq", ".login"])).trim();
     }
     return user;
   };
-  const readIssue = (key) => JSON.parse(
-    gh(["issue", "view", key, "--repo", repoSlug(), "--json", "number,title,body,state,labels"])
+  const readIssue = async (key) => JSON.parse(
+    await gh(["issue", "view", key, "--repo", repoSlug(), "--json", "number,title,body,state,labels"])
   );
   const tracker = {
     login,
-    listOpen() {
+    async listOpen() {
       const found = JSON.parse(
-        gh([
+        await gh([
           "issue",
           "list",
           "--repo",
@@ -967,9 +1009,9 @@ function githubAdapters(options = {}) {
       );
       return found.map(asRecord);
     },
-    issue: (key) => asRecord(readIssue(key)),
-    labels: (key) => asRecord(readIssue(key)).labels,
-    editLabels(key, add, remove) {
+    issue: async (key) => asRecord(await readIssue(key)),
+    labels: async (key) => asRecord(await readIssue(key)).labels,
+    async editLabels(key, add, remove) {
       if (add.length === 0 && remove.length === 0) {
         return;
       }
@@ -980,22 +1022,22 @@ function githubAdapters(options = {}) {
       if (remove.length) {
         args.push("--remove-label", remove.join(","));
       }
-      gh(args);
+      await gh(args);
     },
-    updateBody(key, body) {
-      gh(["issue", "edit", key, "--repo", repoSlug(), "--body", body]);
+    async updateBody(key, body) {
+      await gh(["issue", "edit", key, "--repo", repoSlug(), "--body", body]);
     },
-    comment(key, body) {
-      gh(["issue", "comment", key, "--repo", repoSlug(), "--body", markRobot(body)]);
+    async comment(key, body) {
+      await gh(["issue", "comment", key, "--repo", repoSlug(), "--body", markRobot(body)]);
     },
-    close(key, comment) {
-      gh(["issue", "close", key, "--repo", repoSlug(), "--comment", markRobot(comment)]);
+    async close(key, comment) {
+      await gh(["issue", "close", key, "--repo", repoSlug(), "--comment", markRobot(comment)]);
     },
     phaseHint: labelHint
   };
-  const linked = (key) => {
+  const linked = async (key) => {
     const found = JSON.parse(
-      gh([
+      await gh([
         "pr",
         "list",
         "--repo",
@@ -1013,32 +1055,25 @@ function githubAdapters(options = {}) {
     return found.filter((pr) => linkedTitle(key, pr.title));
   };
   const review = {
-    pulls(key) {
-      return linked(key).map((pr) => {
+    async pulls(key) {
+      const found = [];
+      for (const pr of await linked(key)) {
         const id = String(pr.number);
         if (pr.state !== "OPEN") {
-          return {
-            id,
-            title: pr.title,
-            state: pr.state,
-            checks: "none"
-          };
+          found.push({ id, title: pr.title, state: pr.state, checks: "none" });
+          continue;
         }
         const view = JSON.parse(
-          gh(["pr", "view", id, "--repo", repoSlug(), "--json", "statusCheckRollup,state"])
+          await gh(["pr", "view", id, "--repo", repoSlug(), "--json", "statusCheckRollup,state"])
         );
-        return {
-          id,
-          title: pr.title,
-          state: pr.state,
-          checks: classifyChecks(view)
-        };
-      });
+        found.push({ id, title: pr.title, state: pr.state, checks: classifyChecks(view) });
+      }
+      return found;
     },
-    threads(pull) {
-      return this.threadList(pull).map((thread) => ({ resolved: thread.resolved, body: thread.body }));
+    async threads(pull) {
+      return (await this.threadList(pull)).map((thread) => ({ resolved: thread.resolved, body: thread.body }));
     },
-    threadList(pull) {
+    async threadList(pull) {
       const { owner, name } = repo();
       const query = `query($owner:String!,$name:String!,$number:Int!){
         repository(owner:$owner, name:$name) {
@@ -1056,7 +1091,7 @@ function githubAdapters(options = {}) {
         }
       }`;
       const data = JSON.parse(
-        gh([
+        await gh([
           "api",
           "graphql",
           "-f",
@@ -1075,9 +1110,9 @@ function githubAdapters(options = {}) {
         return authorIgnored(node.comments.nodes[0]?.author?.login ?? "", ignored) ? [] : [record];
       });
     },
-    comments(pull) {
+    async comments(pull) {
       const comments = JSON.parse(
-        gh([
+        await gh([
           "api",
           `repos/${repoSlug()}/issues/${pull}/comments`,
           "--jq",
@@ -1089,12 +1124,12 @@ function githubAdapters(options = {}) {
         robot: spokeByRobot(comment.body, comment.login, ignored)
       }));
     },
-    ensurePull(key, title, body) {
-      const open = linked(key).filter((pr) => pr.state === "OPEN").map((pr) => String(pr.number));
+    async ensurePull(key, title, body) {
+      const open = (await linked(key)).filter((pr) => pr.state === "OPEN").map((pr) => String(pr.number));
       if (open[0]) {
         return open[0];
       }
-      const url = gh([
+      const url = (await gh([
         "pr",
         "create",
         "--repo",
@@ -1105,15 +1140,15 @@ function githubAdapters(options = {}) {
         title,
         "--body",
         body
-      ]).trim();
+      ])).trim();
       const id = url.match(/\/(\d+)\s*$/)?.[1];
       if (!id) {
         throw new Error(`gh pr create returned no pull number: ${url}`);
       }
       return id;
     },
-    openThread(pull, target) {
-      gh([
+    async openThread(pull, target) {
+      await gh([
         "api",
         "--method",
         "POST",
@@ -1128,8 +1163,8 @@ function githubAdapters(options = {}) {
         `body=${markRobot(target.body)}`
       ]);
     },
-    reply(pull, comment, body) {
-      gh([
+    async reply(pull, comment, body) {
+      await gh([
         "api",
         "--method",
         "POST",
@@ -1138,24 +1173,24 @@ function githubAdapters(options = {}) {
         `body=${markRobot(body)}`
       ]);
     },
-    say(pull, body) {
-      gh(["issue", "comment", pull, "--repo", repoSlug(), "--body", markRobot(body)]);
+    async say(pull, body) {
+      await gh(["issue", "comment", pull, "--repo", repoSlug(), "--body", markRobot(body)]);
     },
-    speak(pull, body) {
-      gh(["issue", "comment", pull, "--repo", repoSlug(), "--body", body]);
+    async speak(pull, body) {
+      await gh(["issue", "comment", pull, "--repo", repoSlug(), "--body", body]);
     },
-    flag(pull, head, notes) {
+    async flag(pull, head, notes) {
       const payload = changesPayload(head, notes);
       const post = () => gh(
         ["api", "--method", "POST", "--input", "-", `repos/${repoSlug()}/pulls/${pull}/reviews`],
         JSON.stringify(payload)
       );
       try {
-        post();
+        await post();
       } catch {
         const text = notes.map((note) => note.body).join("\n\n");
         try {
-          gh(
+          await gh(
             [
               "api",
               "--method",
@@ -1172,39 +1207,43 @@ function githubAdapters(options = {}) {
             )
           );
         } catch {
-          this.speak(pull, text);
+          await this.speak(pull, text);
           return;
         }
-        this.speak(pull, text);
+        await this.speak(pull, text);
         return;
       }
       if (payload.comments.length === 0 && payload.body) {
-        this.speak(pull, payload.body);
+        await this.speak(pull, payload.body);
       }
       const loose = notes.filter((note) => !note.path).map((note) => note.body).join("\n\n");
       if (payload.comments.length > 0 && loose) {
-        this.speak(pull, loose);
+        await this.speak(pull, loose);
       }
     },
-    range(pull) {
+    async range(pull) {
       const view = JSON.parse(
-        gh(["pr", "view", pull, "--repo", repoSlug(), "--json", "headRefOid,baseRefOid"])
+        await gh(["pr", "view", pull, "--repo", repoSlug(), "--json", "headRefOid,baseRefOid"])
       );
       return { head: view.headRefOid ?? "", base: view.baseRefOid ?? null };
     },
-    resolveThread(thread) {
+    async resolveThread(thread) {
       const query = "mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}) { thread { isResolved } } }";
-      gh(["api", "graphql", "-f", `query=${query}`, "-f", `id=${thread}`]);
+      await gh(["api", "graphql", "-f", `query=${query}`, "-f", `id=${thread}`]);
     },
-    checksText(pull) {
-      const result = spawnSync("gh", ["pr", "checks", pull, "--repo", repoSlug()], {
-        encoding: "utf8"
-      });
-      return `${result.stdout ?? ""}${result.stderr ?? ""}`;
-    },
-    merge(pull) {
+    async checksText(pull) {
       try {
-        gh(["pr", "merge", pull, "--repo", repoSlug(), "--rebase"]);
+        const { stdout, stderr } = await command("gh", ["pr", "checks", pull, "--repo", repoSlug()]);
+        return `${stdout}${stderr}`;
+      } catch (error) {
+        const stdout = error && typeof error === "object" && "stdout" in error ? String(error.stdout) : "";
+        const stderr = error && typeof error === "object" && "stderr" in error ? String(error.stderr) : "";
+        return `${stdout}${stderr}`;
+      }
+    },
+    async merge(pull) {
+      try {
+        await gh(["pr", "merge", pull, "--repo", repoSlug(), "--rebase"]);
       } catch (error) {
         const stderr = error && typeof error === "object" && "stderr" in error ? String(error.stderr) : "";
         const message = error instanceof Error ? error.message : String(error);
@@ -1214,7 +1253,7 @@ ${stderr}`)) {
         }
       }
       const view = JSON.parse(
-        gh(["pr", "view", pull, "--repo", repoSlug(), "--json", "state"])
+        await gh(["pr", "view", pull, "--repo", repoSlug(), "--json", "state"])
       );
       if (view.state !== "MERGED") {
         throw new Error(`merge of PR #${pull} left it ${view.state ?? "OPEN"}`);
@@ -1225,7 +1264,8 @@ ${stderr}`)) {
 }
 
 // src/adapters/vcs.ts
-import { execFileSync as execFileSync2 } from "node:child_process";
+import { execFile, execFileSync as execFileSync2 } from "node:child_process";
+import { promisify } from "node:util";
 import { existsSync as existsSync2, mkdirSync, readFileSync as readFileSync2, writeFileSync } from "node:fs";
 import path5 from "node:path";
 function shQuote(value) {
@@ -1250,6 +1290,18 @@ function linkCommand(links, serviceRoot) {
 }
 function packageLinks(solverRoot2) {
   return ["skills", "prompts", ".env"].filter((name) => existsSync2(path5.join(solverRoot2, name))).map((name) => ({ from: path5.join(solverRoot2, name), to: name }));
+}
+var run = promisify(execFile);
+async function gitAsync(root, args, allowFail = false) {
+  try {
+    const { stdout } = await run("git", args, { cwd: root, encoding: "utf8" });
+    return stdout;
+  } catch (error) {
+    if (allowFail) {
+      return "";
+    }
+    throw error;
+  }
 }
 function git(root, args, allowFail = false) {
   try {
@@ -1302,9 +1354,9 @@ function existsOnRef(root, ref, rel) {
     return false;
   }
 }
-function isAncestor(root, commit, tip) {
+async function isAncestor(root, commit, tip) {
   try {
-    execFileSync2("git", ["merge-base", "--is-ancestor", commit, tip], { cwd: root, stdio: "ignore" });
+    await run("git", ["merge-base", "--is-ancestor", commit, tip], { cwd: root, encoding: "utf8" });
     return true;
   } catch {
     return false;
@@ -1323,37 +1375,37 @@ function ignorePath(root, rule) {
   writeFileSync(file, `${body}${rule}
 `);
 }
-function prepareCheckout(root, key, config) {
-  ensureIssueBranch(root, key, config);
+async function prepareCheckout(root, key, config) {
+  await ensureIssueBranch(root, key, config);
   const leaf = branchName(key, config.branchPrefix).replaceAll("/", "-");
   const dir = path5.join(root, config.worktreesDir, leaf);
   if (!existsSync2(dir)) {
     mkdirSync(path5.dirname(dir), { recursive: true });
-    execFileSync2("git", ["worktree", "add", "-q", dir, branchName(key, config.branchPrefix)], {
+    await run("git", ["worktree", "add", "-q", dir, branchName(key, config.branchPrefix)], {
       cwd: root,
-      stdio: "ignore"
+      encoding: "utf8"
     });
   }
   ignorePath(root, `/${config.worktreesDir}/`);
-  execFileSync2("sh", ["-c", config.link], { cwd: dir, stdio: "ignore" });
+  await run("sh", ["-c", config.link], { cwd: dir, encoding: "utf8" });
   return dir;
 }
-function ensureIssueBranch(root, key, config) {
+async function ensureIssueBranch(root, key, config) {
   const branch = branchName(key, config.branchPrefix);
-  if (git(root, ["rev-parse", "--verify", "--quiet", branch], true).trim()) {
+  if ((await gitAsync(root, ["rev-parse", "--verify", "--quiet", branch], true)).trim()) {
     return;
   }
   try {
-    execFileSync2("git", ["fetch", "origin", `${branch}:${branch}`], { cwd: root, stdio: "ignore" });
+    await run("git", ["fetch", "origin", `${branch}:${branch}`], { cwd: root, encoding: "utf8" });
   } catch {
-    execFileSync2("git", ["branch", branch, config.defaultBranch], { cwd: root, stdio: "inherit" });
+    await run("git", ["branch", branch, config.defaultBranch], { cwd: root, encoding: "utf8" });
   }
 }
 function gitVcs(root, config = {}) {
   const prefix = config.branchPrefix ?? "sdd";
   const base = config.defaultBranch ?? "origin/master";
   return {
-    prepare(key, options) {
+    async prepare(key, options) {
       return prepareCheckout(root, key, {
         branchPrefix: prefix,
         defaultBranch: base,
@@ -1361,41 +1413,41 @@ function gitVcs(root, config = {}) {
         link: linkCommand(options.links, root)
       });
     },
-    tip(key) {
-      const found = git(root, ["rev-parse", "--verify", "--quiet", branchName(key, prefix)], true).trim();
+    async tip(key) {
+      const found = (await gitAsync(root, ["rev-parse", "--verify", "--quiet", branchName(key, prefix)], true)).trim();
       if (!found) {
         throw new Error(`no branch ${branchName(key, prefix)}`);
       }
       return found;
     },
     filesAt: (key) => gitFiles(root, key, prefix),
-    compare(base2, head) {
+    async compare(base2, head) {
       try {
-        const commits = git(root, ["log", "--oneline", `${base2}..${head}`]);
-        const diff = git(root, ["diff", `${base2}...${head}`]);
+        const commits = await gitAsync(root, ["log", "--oneline", `${base2}..${head}`]);
+        const diff = await gitAsync(root, ["diff", `${base2}...${head}`]);
         return { commits, diff };
       } catch {
         return null;
       }
     },
-    head() {
-      return execFileSync2("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+    async head() {
+      return (await gitAsync(root, ["rev-parse", "HEAD"])).trim();
     },
-    push(key) {
-      execFileSync2("git", ["push", "-u", "origin", branchName(key, prefix)], {
+    async push(key) {
+      await run("git", ["push", "-u", "origin", branchName(key, prefix)], {
         cwd: root,
-        stdio: "inherit"
+        encoding: "utf8"
       });
     },
-    published(key, commit) {
-      const tip = git(root, ["ls-remote", "origin", `refs/heads/${branchName(key, prefix)}`]).trim().split(/\s+/)[0];
+    async published(key, commit) {
+      const tip = (await gitAsync(root, ["ls-remote", "origin", `refs/heads/${branchName(key, prefix)}`])).trim().split(/\s+/)[0];
       if (!tip) {
         return false;
       }
-      return tip === commit || isAncestor(root, commit, tip);
+      return tip === commit || await isAncestor(root, commit, tip);
     },
-    dirty() {
-      const entries = git(root, ["status", "--porcelain", "-z"]).split("\0");
+    async dirty() {
+      const entries = (await gitAsync(root, ["status", "--porcelain", "-z"])).split("\0");
       const paths = [];
       for (let index = 0; index < entries.length; index += 1) {
         const entry = entries[index];
@@ -1525,20 +1577,20 @@ function agentFor(mode) {
 }
 
 // src/adapters/agent.ts
-import { spawn as spawn2 } from "node:child_process";
+import { spawn as spawn3 } from "node:child_process";
 import { appendFileSync, existsSync as existsSync5, mkdirSync as mkdirSync2, readFileSync as readFileSync5 } from "node:fs";
 import path9 from "node:path";
 
 // src/adapters/host-sandbox.ts
-import { spawn } from "node:child_process";
+import { spawn as spawn2 } from "node:child_process";
 import { copyFile } from "node:fs/promises";
 import { createInterface } from "node:readline";
 function openHostHandle(worktreePath, env = {}) {
   const processEnv = { ...process.env, ...env };
   const handle = {
     worktreePath,
-    exec(command, opts) {
-      return spawnShell(command, opts?.cwd ?? worktreePath, processEnv, opts);
+    exec(command2, opts) {
+      return spawnShell(command2, opts?.cwd ?? worktreePath, processEnv, opts);
     },
     copyFileIn: (hostPath, sandboxPath) => copyFile(hostPath, sandboxPath),
     copyFileOut: (sandboxPath, hostPath) => copyFile(sandboxPath, hostPath),
@@ -1547,12 +1599,12 @@ function openHostHandle(worktreePath, env = {}) {
   };
   return Promise.resolve(handle);
 }
-function spawnShell(command, cwd, env, opts) {
+function spawnShell(command2, cwd, env, opts) {
   const isWindows = process.platform === "win32";
   const shell = isWindows ? "cmd.exe" : "sh";
-  const args = isWindows ? ["/d", "/s", "/c", command] : ["-c", command];
+  const args = isWindows ? ["/d", "/s", "/c", command2] : ["-c", command2];
   return new Promise((resolve, reject) => {
-    const child = spawn(shell, args, {
+    const child = spawn2(shell, args, {
       cwd,
       env,
       stdio: [opts?.stdin !== void 0 ? "pipe" : "ignore", "pipe", "pipe"],
@@ -1634,10 +1686,10 @@ function tagged(text, tag) {
   const found = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(text);
   return found?.[1] ?? text;
 }
-function runProcess(command, stdin, cwd, env, provider, logPath, idleMs, graceMs) {
+function runProcess(command2, stdin, cwd, env, provider, logPath, idleMs, graceMs) {
   mkdirSync2(path9.dirname(logPath), { recursive: true });
   return new Promise((resolve, reject) => {
-    const child = spawn2("sh", ["-c", command], { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn3("sh", ["-c", command2], { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
     if (stdin !== void 0 && child.stdin) {
       child.stdin.write(stdin);
     }
@@ -1706,53 +1758,53 @@ function runProcess(command, stdin, cwd, env, provider, logPath, idleMs, graceMs
     });
   });
 }
-async function runAgent(run) {
-  const prompt = substitute(readFileSync5(run.promptFile, "utf8"), run.promptArgs);
-  const handle = await openHostHandle(run.cwd);
-  if (run.resumeSession && run.provider.sessionStorage) {
-    await run.provider.sessionStorage.resumeIntoSandbox({
-      hostCwd: run.hostCwd,
-      sandboxCwd: run.cwd,
-      sessionId: run.resumeSession,
+async function runAgent(run2) {
+  const prompt = substitute(readFileSync5(run2.promptFile, "utf8"), run2.promptArgs);
+  const handle = await openHostHandle(run2.cwd);
+  if (run2.resumeSession && run2.provider.sessionStorage) {
+    await run2.provider.sessionStorage.resumeIntoSandbox({
+      hostCwd: run2.hostCwd,
+      sandboxCwd: run2.cwd,
+      sessionId: run2.resumeSession,
       handle
     });
   }
-  const printed = run.provider.buildPrintCommand({
+  const printed = run2.provider.buildPrintCommand({
     prompt,
     dangerouslySkipPermissions: true,
-    resumeSession: run.resumeSession,
-    forkSession: run.forkSession
+    resumeSession: run2.resumeSession,
+    forkSession: run2.forkSession
   });
   const captured = await runProcess(
     printed.command,
     printed.stdin,
-    run.cwd,
-    { ...process.env, ...envFile(run.hostCwd), ...run.provider.env },
-    run.provider,
-    run.logPath,
-    (run.idleTimeoutSeconds ?? 600) * 1e3,
-    run.resultGraceMs ?? 6e4
+    run2.cwd,
+    { ...process.env, ...envFile(run2.hostCwd), ...run2.provider.env },
+    run2.provider,
+    run2.logPath,
+    (run2.idleTimeoutSeconds ?? 600) * 1e3,
+    run2.resultGraceMs ?? 6e4
   );
-  const storage = run.provider.sessionStorage;
+  const storage = run2.provider.sessionStorage;
   let sessionFilePath;
   let usage2 = void 0;
-  if (run.provider.captureSessions && storage && captured.sessionId) {
+  if (run2.provider.captureSessions && storage && captured.sessionId) {
     await storage.captureToHost({
-      hostCwd: run.hostCwd,
-      sandboxCwd: run.cwd,
+      hostCwd: run2.hostCwd,
+      sandboxCwd: run2.cwd,
       sessionId: captured.sessionId,
       handle
     });
-    sessionFilePath = storage.hostSessionFilePath(run.hostCwd, captured.sessionId);
-    if (run.provider.parseSessionUsage) {
-      const content = await storage.readHostSession(run.hostCwd, captured.sessionId);
+    sessionFilePath = storage.hostSessionFilePath(run2.hostCwd, captured.sessionId);
+    if (run2.provider.parseSessionUsage) {
+      const content = await storage.readHostSession(run2.hostCwd, captured.sessionId);
       if (content) {
-        usage2 = run.provider.parseSessionUsage(content);
+        usage2 = run2.provider.parseSessionUsage(content);
       }
     }
   }
   return {
-    text: tagged(captured.text, run.outputTag),
+    text: tagged(captured.text, run2.outputTag),
     sessionId: captured.sessionId,
     sessionFilePath,
     usage: usage2
@@ -1783,11 +1835,11 @@ function keyFromBranch(branch, prefix) {
   const head = `${prefix}/`;
   return branch.startsWith(head) ? branch.slice(head.length) : branch.slice(branch.indexOf("/") + 1);
 }
-function commitCount(vcs, before, after) {
+async function commitCount(vcs, before, after) {
   if (before === after) {
     return 0;
   }
-  const range = vcs.compare(before, after);
+  const range = await vcs.compare(before, after);
   if (!range?.commits.trim()) {
     return 0;
   }
@@ -1797,8 +1849,8 @@ function agentRuntime(config) {
   const checkout = (key) => config.vcs.prepare(key, { worktreesDir: WORKTREES, links: packageLinks(config.solverRoot) });
   return {
     async run(skill) {
-      const dir = checkout(skill.key);
-      const before = config.vcs.tip(skill.key);
+      const dir = await checkout(skill.key);
+      const before = await config.vcs.tip(skill.key);
       ensureServiceEnv(config.root, config.solverRoot);
       const answer = await runAgent({
         cwd: dir,
@@ -1819,14 +1871,14 @@ function agentRuntime(config) {
         resumeSession: skill.resumeSession
       });
       return {
-        commits: commitCount(config.vcs, before, config.vcs.tip(skill.key)),
+        commits: await commitCount(config.vcs, before, await config.vcs.tip(skill.key)),
         sessionId: answer.sessionId,
         usage: answer.usage
       };
     },
     async ask(request) {
       const key = keyFromBranch(request.branch, config.branchPrefix);
-      const dir = checkout(key);
+      const dir = await checkout(key);
       ensureServiceEnv(config.root, config.solverRoot);
       return runAgent({
         cwd: dir,
@@ -1917,7 +1969,7 @@ async function driveIssue(box, key) {
     throw new Error("runtime is not configured");
   }
   for (let step = 1; step <= 40; step += 1) {
-    const decision = turn(box, key);
+    const decision = await turn(box, key);
     if (decision.kind !== "agent") {
       console.log(`#${key} ${decision.kind}: ${decision.reason}`);
       return 0;
@@ -1967,13 +2019,13 @@ async function runSpy(box, argv) {
   console.log(`Spy polling every ${intervalMs / 1e3}s, parallel ${parallel}.`);
   for (; ; ) {
     try {
-      const snapshot = loadCycle(
+      const snapshot = await loadCycle(
         box.tracker,
         box.review,
         (key) => box.vcs.filesAt(key),
         box.config.queueLabel
       );
-      const decisions = performCycle(
+      const decisions = await performCycle(
         snapshot,
         {
           tracker: box.tracker,
@@ -2141,37 +2193,37 @@ function reviewStep(input) {
 function spokenRemarks(items) {
   return items.map((item) => ({ ...item, body: item.body.trim() })).filter((item) => item.body.length > 0);
 }
-function applyReview(verdict, pull, head, review) {
+async function applyReview(verdict, pull, head, review) {
   if (verdict.kind === "unjudged") {
     return;
   }
   if (verdict.kind === "clean") {
-    review.say(pull, reviewedNote(head));
-    review.merge(pull);
+    await review.say(pull, reviewedNote(head));
+    await review.merge(pull);
     return;
   }
   const notes = spokenRemarks(verdict.items);
   if (notes.length > 0) {
-    review.flag(pull, head, notes);
+    await review.flag(pull, head, notes);
   }
 }
 async function passReview(deps, item) {
-  const pulls = deps.review.pulls(item.issue);
-  const range = deps.review.range(item.pull);
+  const pulls = await deps.review.pulls(item.issue);
+  const range = await deps.review.range(item.pull);
   const step = reviewStep({
     checks: pulls.find((pull) => pull.id === item.pull)?.checks ?? "none",
-    threads: deps.review.threads(item.pull),
-    comments: deps.review.comments(item.pull),
+    threads: await deps.review.threads(item.pull),
+    comments: await deps.review.comments(item.pull),
     head: range.head
   });
   if (step.kind === "wait") {
     return { action: "wait", reason: step.reason };
   }
   if (step.kind === "merge") {
-    deps.review.merge(item.pull);
+    await deps.review.merge(item.pull);
     return { action: "clean" };
   }
-  const span = range.base ? deps.vcs.compare(range.base, range.head) : null;
+  const span = range.base ? await deps.vcs.compare(range.base, range.head) : null;
   if (range.base && !span) {
     return { action: "wait", reason: "range does not resolve" };
   }
@@ -2189,7 +2241,7 @@ async function passReview(deps, item) {
   }
   const verdict = await deps.judge(built.dossier);
   const placed = verdict.kind === "remarks" ? { kind: "remarks", items: verdict.items.map((item2) => placeOnDiff(span?.diff ?? "", item2)) } : verdict;
-  applyReview(placed, item.pull, range.head, deps.review);
+  await applyReview(placed, item.pull, range.head, deps.review);
   if (placed.kind === "remarks") {
     return { action: "remarks", items: spokenRemarks(placed.items) };
   }
@@ -2315,7 +2367,12 @@ async function runReview(box, judge) {
     }
     return sandcastleJudge(box.runtime, dossier);
   });
-  const items = reviewQueue(box.tracker.listOpen(), (key) => box.review.pulls(key));
+  const issues = await box.tracker.listOpen();
+  const pulls = /* @__PURE__ */ new Map();
+  for (const issue of issues) {
+    pulls.set(issue.key, await box.review.pulls(issue.key));
+  }
+  const items = reviewQueue(issues, (key) => pulls.get(key) ?? []);
   if (items.length === 0) {
     console.log(describeQueue(items)[0]);
     return 0;
@@ -2352,17 +2409,17 @@ var usage = `Usage:
 
 Cycle verbs are the sdd bin.`;
 function route(argv) {
-  const [command, ...rest] = argv;
-  if (!command || command === "help" || command === "--help" || command === "-h") {
+  const [command2, ...rest] = argv;
+  if (!command2 || command2 === "help" || command2 === "--help" || command2 === "-h") {
     return { kind: "help" };
   }
-  if (command === "spy") {
+  if (command2 === "spy") {
     return { kind: "spy", argv: rest };
   }
-  if (command === "review") {
+  if (command2 === "review") {
     return { kind: "review" };
   }
-  if (command === "issue") {
+  if (command2 === "issue") {
     const key = rest[0];
     if (!key || key.startsWith("-")) {
       return { kind: "help" };

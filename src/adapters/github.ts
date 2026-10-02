@@ -1,4 +1,4 @@
-import {execFileSync, spawnSync} from 'node:child_process';
+import {execFileSync, spawn} from 'node:child_process';
 
 import {authorIgnored, loadIgnoredAuthors} from '../machine/ignore.ts';
 import {pullTitlePrefix} from '../machine/naming.ts';
@@ -9,6 +9,7 @@ import type {
   CheckState,
   Conversation,
   IssueRecord,
+  Pull,
   Review,
   Thread,
   ThreadRecord,
@@ -97,8 +98,37 @@ export function threadRecord(node: ThreadNode): ThreadRecord {
   };
 }
 
-export function gh(args: string[], input?: string): string {
-  return execFileSync('gh', args, {encoding: 'utf8', input});
+function command(file: string, args: string[], input?: string): Promise<{stdout: string; stderr: string}> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(file, args, {stdio: ['pipe', 'pipe', 'pipe']});
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.on('data', (chunk: string) => {
+      stderr += chunk;
+    });
+    child.on('error', reject);
+    child.on('close', code => {
+      if (code) {
+        reject(Object.assign(new Error(`${file} exited ${code}`), {stdout, stderr}));
+        return;
+      }
+      resolve({stdout, stderr});
+    });
+    if (input) {
+      child.stdin.write(input);
+    }
+    child.stdin.end();
+  });
+}
+
+export async function gh(args: string[], input?: string): Promise<string> {
+  const {stdout} = await command('gh', args, input);
+  return stdout;
 }
 
 /** GitHub check vocabulary stays in this adapter. The machine sees CheckState. */
@@ -173,22 +203,22 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
     }
     return slug;
   };
-  const login = () => {
+  const login = async () => {
     if (!user) {
-      user = gh(['api', 'user', '--jq', '.login']).trim();
+      user = (await gh(['api', 'user', '--jq', '.login'])).trim();
     }
     return user;
   };
-  const readIssue = (key: string): RawIssue =>
+  const readIssue = async (key: string): Promise<RawIssue> =>
     JSON.parse(
-      gh(['issue', 'view', key, '--repo', repoSlug(), '--json', 'number,title,body,state,labels']),
+      await gh(['issue', 'view', key, '--repo', repoSlug(), '--json', 'number,title,body,state,labels']),
     ) as RawIssue;
 
   const tracker: Tracker = {
     login,
-    listOpen() {
+    async listOpen() {
       const found = JSON.parse(
-        gh([
+        await gh([
           'issue',
           'list',
           '--repo',
@@ -203,9 +233,9 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       ) as RawIssue[];
       return found.map(asRecord);
     },
-    issue: key => asRecord(readIssue(key)),
-    labels: key => asRecord(readIssue(key)).labels,
-    editLabels(key, add, remove) {
+    issue: async key => asRecord(await readIssue(key)),
+    labels: async key => asRecord(await readIssue(key)).labels,
+    async editLabels(key, add, remove) {
       if (add.length === 0 && remove.length === 0) {
         return;
       }
@@ -216,23 +246,23 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       if (remove.length) {
         args.push('--remove-label', remove.join(','));
       }
-      gh(args);
+      await gh(args);
     },
-    updateBody(key, body) {
-      gh(['issue', 'edit', key, '--repo', repoSlug(), '--body', body]);
+    async updateBody(key, body) {
+      await gh(['issue', 'edit', key, '--repo', repoSlug(), '--body', body]);
     },
-    comment(key, body) {
-      gh(['issue', 'comment', key, '--repo', repoSlug(), '--body', markRobot(body)]);
+    async comment(key, body) {
+      await gh(['issue', 'comment', key, '--repo', repoSlug(), '--body', markRobot(body)]);
     },
-    close(key, comment) {
-      gh(['issue', 'close', key, '--repo', repoSlug(), '--comment', markRobot(comment)]);
+    async close(key, comment) {
+      await gh(['issue', 'close', key, '--repo', repoSlug(), '--comment', markRobot(comment)]);
     },
     phaseHint: labelHint,
   };
 
-  const linked = (key: string) => {
+  const linked = async (key: string) => {
     const found = JSON.parse(
-      gh([
+      await gh([
         'pr',
         'list',
         '--repo',
@@ -251,32 +281,25 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
   };
 
   const review: Review = {
-    pulls(key) {
-      return linked(key).map(pr => {
+    async pulls(key) {
+      const found: Pull[] = [];
+      for (const pr of await linked(key)) {
         const id = String(pr.number);
         if (pr.state !== 'OPEN') {
-          return {
-            id,
-            title: pr.title,
-            state: pr.state,
-            checks: 'none' as const,
-          };
+          found.push({id, title: pr.title, state: pr.state, checks: 'none'});
+          continue;
         }
         const view = JSON.parse(
-          gh(['pr', 'view', id, '--repo', repoSlug(), '--json', 'statusCheckRollup,state']),
+          await gh(['pr', 'view', id, '--repo', repoSlug(), '--json', 'statusCheckRollup,state']),
         ) as CheckRollup;
-        return {
-          id,
-          title: pr.title,
-          state: pr.state,
-          checks: classifyChecks(view),
-        };
-      });
+        found.push({id, title: pr.title, state: pr.state, checks: classifyChecks(view)});
+      }
+      return found;
     },
-    threads(pull) {
-      return this.threadList(pull).map(thread => ({resolved: thread.resolved, body: thread.body}));
+    async threads(pull) {
+      return (await this.threadList(pull)).map(thread => ({resolved: thread.resolved, body: thread.body}));
     },
-    threadList(pull) {
+    async threadList(pull) {
       const {owner, name} = repo();
       const query = `query($owner:String!,$name:String!,$number:Int!){
         repository(owner:$owner, name:$name) {
@@ -294,7 +317,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
         }
       }`;
       const data = JSON.parse(
-        gh([
+        await gh([
           'api',
           'graphql',
           '-f',
@@ -321,9 +344,9 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
         return authorIgnored(node.comments.nodes[0]?.author?.login ?? '', ignored) ? [] : [record];
       });
     },
-    comments(pull) {
+    async comments(pull) {
       const comments = JSON.parse(
-        gh([
+        await gh([
           'api',
           `repos/${repoSlug()}/issues/${pull}/comments`,
           '--jq',
@@ -335,33 +358,35 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
         robot: spokeByRobot(comment.body, comment.login, ignored),
       }));
     },
-    ensurePull(key, title, body) {
-      const open = linked(key)
+    async ensurePull(key, title, body) {
+      const open = (await linked(key))
         .filter(pr => pr.state === 'OPEN')
         .map(pr => String(pr.number));
       if (open[0]) {
         return open[0];
       }
-      const url = gh([
-        'pr',
-        'create',
-        '--repo',
-        repoSlug(),
-        '--base',
-        prBase,
-        '--title',
-        title,
-        '--body',
-        body,
-      ]).trim();
+      const url = (
+        await gh([
+          'pr',
+          'create',
+          '--repo',
+          repoSlug(),
+          '--base',
+          prBase,
+          '--title',
+          title,
+          '--body',
+          body,
+        ])
+      ).trim();
       const id = url.match(/\/(\d+)\s*$/)?.[1];
       if (!id) {
         throw new Error(`gh pr create returned no pull number: ${url}`);
       }
       return id;
     },
-    openThread(pull, target: ThreadTarget) {
-      gh([
+    async openThread(pull, target: ThreadTarget) {
+      await gh([
         'api',
         '--method',
         'POST',
@@ -376,8 +401,8 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
         `body=${markRobot(target.body)}`,
       ]);
     },
-    reply(pull, comment, body) {
-      gh([
+    async reply(pull, comment, body) {
+      await gh([
         'api',
         '--method',
         'POST',
@@ -386,13 +411,13 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
         `body=${markRobot(body)}`,
       ]);
     },
-    say(pull, body) {
-      gh(['issue', 'comment', pull, '--repo', repoSlug(), '--body', markRobot(body)]);
+    async say(pull, body) {
+      await gh(['issue', 'comment', pull, '--repo', repoSlug(), '--body', markRobot(body)]);
     },
-    speak(pull, body) {
-      gh(['issue', 'comment', pull, '--repo', repoSlug(), '--body', body]);
+    async speak(pull, body) {
+      await gh(['issue', 'comment', pull, '--repo', repoSlug(), '--body', body]);
     },
-    flag(pull, head, notes) {
+    async flag(pull, head, notes) {
       const payload = changesPayload(head, notes);
       const post = () =>
         gh(
@@ -400,11 +425,11 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
           JSON.stringify(payload),
         );
       try {
-        post();
+        await post();
       } catch {
         const text = notes.map(note => note.body).join('\n\n');
         try {
-          gh(
+          await gh(
             [
               'api',
               '--method',
@@ -421,46 +446,50 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
             ),
           );
         } catch {
-          this.speak(pull, text);
+          await this.speak(pull, text);
           return;
         }
-        this.speak(pull, text);
+        await this.speak(pull, text);
         return;
       }
       if (payload.comments.length === 0 && payload.body) {
-        this.speak(pull, payload.body);
+        await this.speak(pull, payload.body);
       }
       const loose = notes
         .filter(note => !note.path)
         .map(note => note.body)
         .join('\n\n');
       if (payload.comments.length > 0 && loose) {
-        this.speak(pull, loose);
+        await this.speak(pull, loose);
       }
     },
-    range(pull) {
+    async range(pull) {
       const view = JSON.parse(
-        gh(['pr', 'view', pull, '--repo', repoSlug(), '--json', 'headRefOid,baseRefOid']),
+        await gh(['pr', 'view', pull, '--repo', repoSlug(), '--json', 'headRefOid,baseRefOid']),
       ) as {
         headRefOid?: string;
         baseRefOid?: string;
       };
       return {head: view.headRefOid ?? '', base: view.baseRefOid ?? null};
     },
-    resolveThread(thread) {
+    async resolveThread(thread) {
       const query =
         'mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}) { thread { isResolved } } }';
-      gh(['api', 'graphql', '-f', `query=${query}`, '-f', `id=${thread}`]);
+      await gh(['api', 'graphql', '-f', `query=${query}`, '-f', `id=${thread}`]);
     },
-    checksText(pull) {
-      const result = spawnSync('gh', ['pr', 'checks', pull, '--repo', repoSlug()], {
-        encoding: 'utf8',
-      });
-      return `${result.stdout ?? ''}${result.stderr ?? ''}`;
-    },
-    merge(pull) {
+    async checksText(pull) {
       try {
-        gh(['pr', 'merge', pull, '--repo', repoSlug(), '--rebase']);
+        const {stdout, stderr} = await command('gh', ['pr', 'checks', pull, '--repo', repoSlug()]);
+        return `${stdout}${stderr}`;
+      } catch (error) {
+        const stdout = error && typeof error === 'object' && 'stdout' in error ? String(error.stdout) : '';
+        const stderr = error && typeof error === 'object' && 'stderr' in error ? String(error.stderr) : '';
+        return `${stdout}${stderr}`;
+      }
+    },
+    async merge(pull) {
+      try {
+        await gh(['pr', 'merge', pull, '--repo', repoSlug(), '--rebase']);
       } catch (error) {
         const stderr =
           error && typeof error === 'object' && 'stderr' in error ? String(error.stderr) : '';
@@ -470,7 +499,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
         }
       }
       const view = JSON.parse(
-        gh(['pr', 'view', pull, '--repo', repoSlug(), '--json', 'state']),
+        await gh(['pr', 'view', pull, '--repo', repoSlug(), '--json', 'state']),
       ) as {
         state?: string;
       };
@@ -535,23 +564,23 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
     };
   };
   const tracker: Tracker = {
-    login: () => {
+    login: async () => {
       calls.push('login');
       return seed.user ?? 'robot';
     },
-    listOpen: () => {
+    listOpen: async () => {
       calls.push('listOpen');
       return issues.filter(issue => issue.state === 'OPEN').map(record);
     },
-    issue: key => {
+    issue: async key => {
       calls.push('issue');
       return record(find(key));
     },
-    labels: key => {
+    labels: async key => {
       calls.push('labels');
       return [...find(key).labels];
     },
-    editLabels(key, add, remove) {
+    async editLabels(key, add, remove) {
       calls.push('editLabels');
       const issue = find(key);
       issue.labels = issue.labels.filter(name => !remove.includes(name));
@@ -561,15 +590,15 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
         }
       }
     },
-    updateBody(key, body) {
+    async updateBody(key, body) {
       calls.push('updateBody');
       find(key).body = body;
     },
-    comment(_key, body) {
+    async comment(_key, body) {
       calls.push('comment');
       calls.push(`body:${markRobot(body)}`);
     },
-    close(key, comment) {
+    async close(key, comment) {
       calls.push(`close:${comment}`);
       calls.push(`body:${markRobot(comment)}`);
       find(key).state = 'CLOSED';
@@ -577,7 +606,7 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
     phaseHint: labelHint,
   };
   const review: Review = {
-    pulls(key) {
+    async pulls(key) {
       calls.push('pulls');
       return (seed.pulls?.[key] ?? []).map(pr => {
         const checks = seed.checks?.[pr.id] ?? {
@@ -586,11 +615,11 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
         return {...pr, ...checks};
       });
     },
-    threads(pull) {
+    async threads(pull) {
       calls.push('threads');
       return seed.threads?.[pull] ?? seed.threadList?.[pull] ?? [];
     },
-    threadList(pull) {
+    async threadList(pull) {
       calls.push('threadList');
       const full = seed.threadList?.[pull];
       if (full) {
@@ -604,32 +633,32 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
         line: null,
       }));
     },
-    comments(pull) {
+    async comments(pull) {
       calls.push('comments');
       return seed.comments?.[pull] ?? [];
     },
-    ensurePull(key) {
+    async ensurePull(key) {
       calls.push('ensurePull');
       const open = (seed.pulls?.[key] ?? []).filter(pr => pr.state === 'OPEN').map(pr => pr.id);
       return open[0] ?? 'new';
     },
-    openThread(_pull, target) {
+    async openThread(_pull, target) {
       calls.push('openThread');
       calls.push(`body:${markRobot(target.body)}`);
     },
-    reply(_pull, _comment, body) {
+    async reply(_pull, _comment, body) {
       calls.push('reply');
       calls.push(`body:${markRobot(body)}`);
     },
-    say(_pull, body) {
+    async say(_pull, body) {
       calls.push('say');
       calls.push(`body:${markRobot(body)}`);
     },
-    speak(_pull, body) {
+    async speak(_pull, body) {
       calls.push('speak');
       calls.push(`body:${body}`);
     },
-    flag(_pull, head, notes) {
+    async flag(_pull, head, notes) {
       calls.push('flag');
       calls.push(`head:${head}`);
       const loose: string[] = [];
@@ -646,18 +675,18 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
         calls.push(`body:${loose.join('\n\n')}`);
       }
     },
-    range(pull) {
+    async range(pull) {
       calls.push('range');
       return seed.ranges?.[pull] ?? {head: '', base: null};
     },
-    resolveThread() {
+    async resolveThread() {
       calls.push('resolveThread');
     },
-    checksText(pull) {
+    async checksText(pull) {
       calls.push('checksText');
       return seed.checksText?.[pull] ?? '';
     },
-    merge(pull) {
+    async merge(pull) {
       calls.push(`merge:${pull}`);
       for (const list of Object.values(seed.pulls ?? {})) {
         for (const pr of list) {

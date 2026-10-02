@@ -209,17 +209,17 @@ test('a change with no files waits', () => {
   assert.deepEqual(built, {kind: 'wait', reason: 'change has no files'});
 });
 
-test('unjudged posts nothing, clean notes then merges, remarks speak once', () => {
+test('unjudged posts nothing, clean notes then merges, remarks speak once', async () => {
   const quiet = memoryPorts();
-  applyReview({kind: 'unjudged', reason: 'empty answer'}, '15', head, quiet.review);
+  await applyReview({kind: 'unjudged', reason: 'empty answer'}, '15', head, quiet.review);
   assert.deepEqual(quiet.calls, []);
 
   const clean = memoryPorts();
-  applyReview({kind: 'clean'}, '15', head, clean.review);
+  await applyReview({kind: 'clean'}, '15', head, clean.review);
   assert.deepEqual(clean.calls, ['say', `body:🤖 sdd:note reviewed ${head}`, 'merge:15']);
 
   const remarks = memoryPorts();
-  applyReview(
+  await applyReview(
     {kind: 'remarks', items: [{body: '  '}, {body: 'Scenario TTL is missing'}, {body: 'The diff skips the requirement'}]},
     '15',
     head,

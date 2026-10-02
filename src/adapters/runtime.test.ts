@@ -29,7 +29,7 @@ test('the worktree hook links the package into .sandcastle and keeps the service
   assert.equal(command.includes('accept.ts'), false);
 });
 
-test('the links the hook makes in a sandcastle worktree are not dirt, and the exclude rules are written once', () => {
+test('the links the hook makes in a sandcastle worktree are not dirt, and the exclude rules are written once', async () => {
   const parent = mkdtempSync(path.join(tmpdir(), 'sdd-link-'));
   const solver = path.join(parent, 'solver');
   const service = path.join(parent, 'service');
@@ -48,8 +48,8 @@ test('the links the hook makes in a sandcastle worktree are not dirt, and the ex
   execFileSync('sh', ['-c', command], {cwd: worktree});
   execFileSync('sh', ['-c', command], {cwd: worktree});
   assert.equal(lstatSync(path.join(worktree, 'node_modules')).isSymbolicLink(), true);
-  assert.deepEqual(gitVcs(worktree).dirty(), []);
-  assert.deepEqual(gitVcs(service).dirty(), []);
+  assert.deepEqual(await gitVcs(worktree).dirty(), []);
+  assert.deepEqual(await gitVcs(service).dirty(), []);
   const exclude = readFileSync(path.join(service, '.git', 'info', 'exclude'), 'utf8').split('\n');
   assert.equal(exclude.filter(line => line === '/.sandcastle/').length, 1);
   assert.equal(exclude.filter(line => line === '/node_modules').length, 1);

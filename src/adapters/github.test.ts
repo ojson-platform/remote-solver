@@ -93,15 +93,15 @@ test('a thread record carries the handles a skill replies and resolves with', ()
   assert.deepEqual(empty, {id: 'PRRT_2', comment: '', path: 'f', line: null, resolved: true, body: ''});
 });
 
-test('memory ports serve thread records from a plain thread seed', () => {
+test('memory ports serve thread records from a plain thread seed', async () => {
   const {review} = memoryPorts({threads: {5: [{resolved: false, body: 'sdd:layer=spec'}]}});
-  assert.deepEqual(review.threadList('5'), [
+  assert.deepEqual(await review.threadList('5'), [
     {resolved: false, body: 'sdd:layer=spec', id: 'T1', comment: 'C1', path: '', line: null},
   ]);
-  assert.deepEqual(review.threads('5'), [{resolved: false, body: 'sdd:layer=spec'}]);
+  assert.deepEqual(await review.threads('5'), [{resolved: false, body: 'sdd:layer=spec'}]);
 });
 
-test('loadCycle keeps marker grammar above the port', () => {
+test('loadCycle keeps marker grammar above the port', async () => {
   const {tracker, review, calls} = memoryPorts({
     user: 'robot',
     issues: [
@@ -123,7 +123,7 @@ test('loadCycle keeps marker grammar above the port', () => {
       71: [{robot: false, body: 'hello'}],
     },
   });
-  const snapshot = loadCycle(tracker, review, () => files, 'Sandcastle');
+  const snapshot = await loadCycle(tracker, review, () => files, 'Sandcastle');
   const pulls = snapshot.pulls.get('7') ?? [];
   assert.deepEqual(
     pulls.map(pr => pr.id),
@@ -135,7 +135,7 @@ test('loadCycle keeps marker grammar above the port', () => {
   assert.equal(calls.filter(call => call === 'listOpen').length, 1);
 });
 
-test('setPhase keeps a single phase label and refuses a gate label', () => {
+test('setPhase keeps a single phase label and refuses a gate label', async () => {
   const {tracker} = memoryPorts({
     issues: [
       {
@@ -147,22 +147,22 @@ test('setPhase keeps a single phase label and refuses a gate label', () => {
       },
     ],
   });
-  setPhase('7', 'specifying', tracker);
-  assert.deepEqual(tracker.labels('7'), ['Sandcastle', 'sdd:specifying']);
-  assert.throws(() => setPhase('7', 'proposed', tracker), /gate label sdd:proposed/);
+  await setPhase('7', 'specifying', tracker);
+  assert.deepEqual(await tracker.labels('7'), ['Sandcastle', 'sdd:specifying']);
+  await assert.rejects(setPhase('7', 'proposed', tracker), /gate label sdd:proposed/);
 });
 
-test('posted bodies carry the spy mark, and the shared login is not the robot', () => {
+test('posted bodies carry the spy mark, and the shared login is not the robot', async () => {
   const {tracker, review, calls} = memoryPorts({
     user: '3y3',
     issues: [{key: '7', title: '#7: title', body: '', state: 'OPEN', labels: []}],
   });
-  tracker.comment('7', 'sdd:accept proposal accepted by @3y3');
-  review.openThread('15', {commit: 'abc', path: 'src/a.ts', line: 1, body: 'sdd:note baseline'});
-  review.reply('15', '9', 'sdd:fixed abc');
-  review.say('15', 'sdd:layer=code → implementing');
-  review.speak('15', 'rebase onto master');
-  tracker.close('7', 'SDLC accepted');
+  await tracker.comment('7', 'sdd:accept proposal accepted by @3y3');
+  await review.openThread('15', {commit: 'abc', path: 'src/a.ts', line: 1, body: 'sdd:note baseline'});
+  await review.reply('15', '9', 'sdd:fixed abc');
+  await review.say('15', 'sdd:layer=code → implementing');
+  await review.speak('15', 'rebase onto master');
+  await tracker.close('7', 'SDLC accepted');
   assert.deepEqual(
     calls.filter(call => call.startsWith('body:')),
     [

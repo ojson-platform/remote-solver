@@ -29,7 +29,7 @@ const module = `export function createAdapters(root, config) {
 test('adapters replace the ports and the config; the runtime is built over their vcs', async () => {
   const root = plant(mkdtempSync(path.join(tmpdir(), 'sdd-adapters-')), module);
   const chat = await openMachine(root);
-  assert.equal(chat.tracker.login(), 'from-adapter');
+  assert.equal(await chat.tracker.login(), 'from-adapter');
   assert.equal(chat.config.queueLabel, 'LAVKA');
   assert.equal(chat.config.prBase, 'trunk');
   assert.equal(chat.runtime, undefined);

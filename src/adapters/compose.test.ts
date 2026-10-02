@@ -8,7 +8,7 @@ import {machine, solverRoot} from './compose.ts';
 import {memoryPorts} from './github.ts';
 import type {Runtime} from '../machine/port.ts';
 
-test('a caller can replace the tracker and the review without touching the composition', () => {
+test('a caller can replace the tracker and the review without touching the composition', async () => {
   const {tracker, review} = memoryPorts({
     issues: [
       {
@@ -23,7 +23,7 @@ test('a caller can replace the tracker and the review without touching the compo
   const box = machine(process.cwd(), {tracker, review});
   assert.equal(box.tracker, tracker);
   assert.equal(box.review, review);
-  assert.equal(box.tracker.issue('LAVKA-1').key, 'LAVKA-1');
+  assert.equal((await box.tracker.issue('LAVKA-1')).key, 'LAVKA-1');
   assert.equal(box.runtime, undefined);
 });
 

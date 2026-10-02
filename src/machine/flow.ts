@@ -22,73 +22,74 @@ function queueLabelOf(snapshot: CycleSnapshot, queueLabel: string): Decision[] {
   ];
 }
 
-export function applyLabels(
+export async function applyLabels(
   tracker: Tracker,
   key: string,
   before: string[],
   after: string[],
-): void {
+): Promise<void> {
   const add = after.filter(label => !before.includes(label));
   const remove = before.filter(label => !after.includes(label));
   if (add.length || remove.length) {
-    tracker.editLabels(key, add, remove);
+    await tracker.editLabels(key, add, remove);
   }
 }
 
-function closeAccepted(tracker: Tracker, key: string): void {
-  tracker.close(key, 'SDLC accepted: the pull request is merged and the baseline is in trunk.');
+async function closeAccepted(tracker: Tracker, key: string): Promise<void> {
+  await tracker.close(key, 'SDLC accepted: the pull request is merged and the baseline is in trunk.');
 }
 
-function applySettlement(
+async function applySettlement(
   tracker: Tracker,
   before: string[],
   settled: ReturnType<typeof settle>,
   key: string,
-): void {
-  applyLabels(tracker, key, before, settled.labels);
+): Promise<void> {
+  await applyLabels(tracker, key, before, settled.labels);
   const closing = settled.transitions.find(transition => transition.to === 'accepted');
   for (const transition of settled.transitions) {
     if (transition.comment) {
-      tracker.comment(key, transition.comment);
+      await tracker.comment(key, transition.comment);
     }
   }
   if (closing) {
-    closeAccepted(tracker, key);
+    await closeAccepted(tracker, key);
   }
   if (
     settled.decision.kind === 'wait' &&
     settled.decision.gate &&
     !before.includes('sdd:wait-human')
   ) {
-    openWait(key, gateAsk(key, settled.decision.gate, tracker), tracker);
+    await openWait(key, gateAsk(key, settled.decision.gate, tracker), tracker);
   }
 }
 
-export function resolveCycle(
+export async function resolveCycle(
   snapshot: CycleSnapshot,
   tracker: Tracker,
   queueLabel: string,
   busy: ReadonlySet<string> = new Set(),
-): Decision[] {
+): Promise<Decision[]> {
   const empty = queueLabelOf(snapshot, queueLabel);
   if (empty.length) {
     return empty;
   }
   // A running worker already owns the issue. Settling it again would move labels under the agent.
-  return snapshot.cycles
-    .filter(record => !busy.has(record.key))
-    .map(record => {
-      const change = snapshot.changes.get(record.key);
-      if (!change) {
-        return {kind: 'wait' as const, issue: record.key, reason: 'change was not loaded'};
-      }
-      const settled = settle(record, snapshot.issues, snapshot.pulls.get(record.key) ?? [], change);
-      applySettlement(tracker, record.labels, settled, record.key);
-      return settled.decision;
-    });
+  const decisions: Decision[] = [];
+  for (const record of snapshot.cycles.filter(item => !busy.has(item.key))) {
+    const change = snapshot.changes.get(record.key);
+    if (!change) {
+      decisions.push({kind: 'wait', issue: record.key, reason: 'change was not loaded'});
+      continue;
+    }
+    const settled = settle(record, snapshot.issues, snapshot.pulls.get(record.key) ?? [], change);
+    await applySettlement(tracker, record.labels, settled, record.key);
+    decisions.push(settled.decision);
+  }
+  return decisions;
 }
 
-export function resolveIssue(
+export async function resolveIssue(
   key: string,
   options: {
     tracker: Tracker;
@@ -97,8 +98,8 @@ export function resolveIssue(
     queueLabel: string;
     change?: ChangeView;
   },
-): Decision {
-  const issues = options.tracker.listOpen();
+): Promise<Decision> {
+  const issues = await options.tracker.listOpen();
   const record = issues.find(
     issue =>
       issue.key === key &&
@@ -111,10 +112,10 @@ export function resolveIssue(
   const settled = settle(
     record,
     issues,
-    pullSnapshots(options.review, key),
+    await pullSnapshots(options.review, key),
     options.change ?? readChange(key, options.files),
   );
-  applySettlement(options.tracker, record.labels, settled, key);
+  await applySettlement(options.tracker, record.labels, settled, key);
   return settled.decision;
 }
 
@@ -122,7 +123,7 @@ export function resolveIssue(
  * The reading the spy and the session share. A merge is performed here, then
  * the issue is read again. `plan` stays on `resolveCycle` and does not merge.
  */
-export function performIssue(
+export async function performIssue(
   key: string,
   options: {
     tracker: Tracker;
@@ -131,13 +132,13 @@ export function performIssue(
     queueLabel: string;
     change?: ChangeView;
   },
-): Decision {
-  const decision = resolveIssue(key, options);
+): Promise<Decision> {
+  const decision = await resolveIssue(key, options);
   if (decision.kind !== 'merge') {
     return decision;
   }
-  options.review.merge(decision.pull);
-  const settled = resolveIssue(key, options);
+  await options.review.merge(decision.pull);
+  const settled = await resolveIssue(key, options);
   if (settled.kind === 'merge') {
     throw new Error(`merge of PR #${decision.pull} did not settle`);
   }
@@ -145,7 +146,7 @@ export function performIssue(
 }
 
 /** One poll. Mechanical moves come from `resolveCycle`; a merge is performed. */
-export function performCycle(
+export async function performCycle(
   snapshot: CycleSnapshot,
   options: {
     tracker: Tracker;
@@ -154,18 +155,24 @@ export function performCycle(
     queueLabel: string;
   },
   busy: ReadonlySet<string> = new Set(),
-): Decision[] {
-  return resolveCycle(snapshot, options.tracker, options.queueLabel, busy).map(decision => {
-    if (decision.kind !== 'merge') {
-      return decision;
+): Promise<Decision[]> {
+  const decisions = await resolveCycle(snapshot, options.tracker, options.queueLabel, busy);
+  const performed: Decision[] = [];
+  for (const decision of decisions) {
+    if (decision.kind !== 'merge' || decision.issue === null) {
+      performed.push(decision);
+      continue;
     }
-    return performIssue(decision.issue, {
-      tracker: options.tracker,
-      review: options.review,
-      files: options.filesAt(decision.issue),
-      queueLabel: options.queueLabel,
-    });
-  });
+    performed.push(
+      await performIssue(decision.issue, {
+        tracker: options.tracker,
+        review: options.review,
+        files: options.filesAt(decision.issue),
+        queueLabel: options.queueLabel,
+      }),
+    );
+  }
+  return performed;
 }
 
 export function pick(decisions: Decision[]): Decision {

@@ -50,23 +50,23 @@ export function spokenRemarks(items: Remark[]): Remark[] {
 }
 
 /** `unjudged` posts nothing. A clean verdict notes the head, then merges. Remarks are one review. */
-export function applyReview(
+export async function applyReview(
   verdict: Verdict,
   pull: string,
   head: string,
   review: Pick<Review, 'say' | 'flag' | 'merge'>,
-): void {
+): Promise<void> {
   if (verdict.kind === 'unjudged') {
     return;
   }
   if (verdict.kind === 'clean') {
-    review.say(pull, reviewedNote(head));
-    review.merge(pull);
+    await review.say(pull, reviewedNote(head));
+    await review.merge(pull);
     return;
   }
   const notes = spokenRemarks(verdict.items);
   if (notes.length > 0) {
-    review.flag(pull, head, notes);
+    await review.flag(pull, head, notes);
   }
 }
 
@@ -78,22 +78,22 @@ export async function passReview(
   deps: {review: Review; vcs: Vcs; judge: Judge},
   item: {issue: string; pull: string},
 ): Promise<ReviewPass> {
-  const pulls = deps.review.pulls(item.issue);
-  const range = deps.review.range(item.pull);
+  const pulls = await deps.review.pulls(item.issue);
+  const range = await deps.review.range(item.pull);
   const step = reviewStep({
     checks: pulls.find(pull => pull.id === item.pull)?.checks ?? 'none',
-    threads: deps.review.threads(item.pull),
-    comments: deps.review.comments(item.pull),
+    threads: await deps.review.threads(item.pull),
+    comments: await deps.review.comments(item.pull),
     head: range.head,
   });
   if (step.kind === 'wait') {
     return {action: 'wait', reason: step.reason};
   }
   if (step.kind === 'merge') {
-    deps.review.merge(item.pull);
+    await deps.review.merge(item.pull);
     return {action: 'clean'};
   }
-  const span = range.base ? deps.vcs.compare(range.base, range.head) : null;
+  const span = range.base ? await deps.vcs.compare(range.base, range.head) : null;
   if (range.base && !span) {
     return {action: 'wait', reason: 'range does not resolve'};
   }
@@ -114,7 +114,7 @@ export async function passReview(
     verdict.kind === 'remarks'
       ? {kind: 'remarks' as const, items: verdict.items.map(item => placeOnDiff(span?.diff ?? '', item))}
       : verdict;
-  applyReview(placed, item.pull, range.head, deps.review);
+  await applyReview(placed, item.pull, range.head, deps.review);
   if (placed.kind === 'remarks') {
     return {action: 'remarks', items: spokenRemarks(placed.items)};
   }

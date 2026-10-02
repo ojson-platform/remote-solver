@@ -1,6 +1,7 @@
 import type {FileSource, Link, Vcs} from '../machine/port.ts';
 
-import {execFileSync} from 'node:child_process';
+import {execFile, execFileSync} from 'node:child_process';
+import {promisify} from 'node:util';
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 
@@ -39,6 +40,20 @@ export function packageLinks(solverRoot: string): Link[] {
   return (['skills', 'prompts', '.env'] as const)
     .filter(name => existsSync(path.join(solverRoot, name)))
     .map(name => ({from: path.join(solverRoot, name), to: name}));
+}
+
+const run = promisify(execFile);
+
+async function gitAsync(root: string, args: string[], allowFail = false): Promise<string> {
+  try {
+    const {stdout} = await run('git', args, {cwd: root, encoding: 'utf8'});
+    return stdout;
+  } catch (error) {
+    if (allowFail) {
+      return '';
+    }
+    throw error;
+  }
 }
 
 function git(root: string, args: string[], allowFail = false): string {
@@ -99,9 +114,9 @@ function existsOnRef(root: string, ref: string, rel: string): boolean {
   }
 }
 
-function isAncestor(root: string, commit: string, tip: string): boolean {
+async function isAncestor(root: string, commit: string, tip: string): Promise<boolean> {
   try {
-    execFileSync('git', ['merge-base', '--is-ancestor', commit, tip], {cwd: root, stdio: 'ignore'});
+    await run('git', ['merge-base', '--is-ancestor', commit, tip], {cwd: root, encoding: 'utf8'});
     return true;
   } catch {
     return false;
@@ -125,40 +140,40 @@ function ignorePath(root: string, rule: string): void {
  * missing and reusing it when it exists. Runs `link` inside the checkout.
  * Does not fast-forward a dirty tree.
  */
-export function prepareCheckout(
+export async function prepareCheckout(
   root: string,
   key: string,
   config: {branchPrefix: string; defaultBranch: string; worktreesDir: string; link: string},
-): string {
-  ensureIssueBranch(root, key, config);
+): Promise<string> {
+  await ensureIssueBranch(root, key, config);
   const leaf = branchName(key, config.branchPrefix).replaceAll('/', '-');
   const dir = path.join(root, config.worktreesDir, leaf);
   if (!existsSync(dir)) {
     mkdirSync(path.dirname(dir), {recursive: true});
-    execFileSync('git', ['worktree', 'add', '-q', dir, branchName(key, config.branchPrefix)], {
+    await run('git', ['worktree', 'add', '-q', dir, branchName(key, config.branchPrefix)], {
       cwd: root,
-      stdio: 'ignore',
+      encoding: 'utf8',
     });
   }
   ignorePath(root, `/${config.worktreesDir}/`);
-  execFileSync('sh', ['-c', config.link], {cwd: dir, stdio: 'ignore'});
+  await run('sh', ['-c', config.link], {cwd: dir, encoding: 'utf8'});
   return dir;
 }
 
 /** Make `sdd/<key>` exist locally: fetch it, or cut it from `defaultBranch`. Does not check it out. */
-export function ensureIssueBranch(
+export async function ensureIssueBranch(
   root: string,
   key: string,
   config: {branchPrefix: string; defaultBranch: string},
-): void {
+): Promise<void> {
   const branch = branchName(key, config.branchPrefix);
-  if (git(root, ['rev-parse', '--verify', '--quiet', branch], true).trim()) {
+  if ((await gitAsync(root, ['rev-parse', '--verify', '--quiet', branch], true)).trim()) {
     return;
   }
   try {
-    execFileSync('git', ['fetch', 'origin', `${branch}:${branch}`], {cwd: root, stdio: 'ignore'});
+    await run('git', ['fetch', 'origin', `${branch}:${branch}`], {cwd: root, encoding: 'utf8'});
   } catch {
-    execFileSync('git', ['branch', branch, config.defaultBranch], {cwd: root, stdio: 'inherit'});
+    await run('git', ['branch', branch, config.defaultBranch], {cwd: root, encoding: 'utf8'});
   }
 }
 
@@ -166,7 +181,7 @@ export function gitVcs(root: string, config: GitVcsConfig = {}): Vcs {
   const prefix = config.branchPrefix ?? 'sdd';
   const base = config.defaultBranch ?? 'origin/master';
   return {
-    prepare(key, options) {
+    async prepare(key, options) {
       return prepareCheckout(root, key, {
         branchPrefix: prefix,
         defaultBranch: base,
@@ -174,43 +189,43 @@ export function gitVcs(root: string, config: GitVcsConfig = {}): Vcs {
         link: linkCommand(options.links, root),
       });
     },
-    tip(key) {
-      const found = git(root, ['rev-parse', '--verify', '--quiet', branchName(key, prefix)], true).trim();
+    async tip(key) {
+      const found = (await gitAsync(root, ['rev-parse', '--verify', '--quiet', branchName(key, prefix)], true)).trim();
       if (!found) {
         throw new Error(`no branch ${branchName(key, prefix)}`);
       }
       return found;
     },
     filesAt: key => gitFiles(root, key, prefix),
-    compare(base, head) {
+    async compare(base, head) {
       try {
-        const commits = git(root, ['log', '--oneline', `${base}..${head}`]);
-        const diff = git(root, ['diff', `${base}...${head}`]);
+        const commits = await gitAsync(root, ['log', '--oneline', `${base}..${head}`]);
+        const diff = await gitAsync(root, ['diff', `${base}...${head}`]);
         return {commits, diff};
       } catch {
         return null;
       }
     },
-    head() {
-      return execFileSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'}).trim();
+    async head() {
+      return (await gitAsync(root, ['rev-parse', 'HEAD'])).trim();
     },
-    push(key) {
-      execFileSync('git', ['push', '-u', 'origin', branchName(key, prefix)], {
+    async push(key) {
+      await run('git', ['push', '-u', 'origin', branchName(key, prefix)], {
         cwd: root,
-        stdio: 'inherit',
+        encoding: 'utf8',
       });
     },
-    published(key, commit) {
-      const tip = git(root, ['ls-remote', 'origin', `refs/heads/${branchName(key, prefix)}`])
+    async published(key, commit) {
+      const tip = (await gitAsync(root, ['ls-remote', 'origin', `refs/heads/${branchName(key, prefix)}`]))
         .trim()
         .split(/\s+/)[0];
       if (!tip) {
         return false;
       }
-      return tip === commit || isAncestor(root, commit, tip);
+      return tip === commit || (await isAncestor(root, commit, tip));
     },
-    dirty() {
-      const entries = git(root, ['status', '--porcelain', '-z']).split('\0');
+    async dirty() {
+      const entries = (await gitAsync(root, ['status', '--porcelain', '-z'])).split('\0');
       const paths: string[] = [];
       for (let index = 0; index < entries.length; index += 1) {
         const entry = entries[index];

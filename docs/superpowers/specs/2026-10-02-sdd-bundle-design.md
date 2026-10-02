@@ -17,7 +17,7 @@
 
 `node skills/sdd-flow/scripts/sdd.mjs` без аргументов завершается ненулевым кодом и печатает строку `Usage: sdd`. `node bin/remote-solver.mjs` без аргументов завершается ненулевым кодом и печатает `remote-solver spy`.
 
-Оба файла коммитятся. Перед публикацией `pnpm build` обновляет их. В tar есть `scripts/sdd.mjs` и `bin/remote-solver.mjs`, `src/` в tar нет. Скрипт синхронизации берёт скилы из этого tar и сам пакет не собирает.
+Оба файла коммитятся. `prepublishOnly` запускает `pnpm build` перед упаковкой, так что в tar попадают только что собранные файлы. В tar есть `scripts/sdd.mjs` и `bin/remote-solver.mjs`, `src/` в tar нет. Скрипт синхронизации берёт скилы из этого tar и сам пакет не собирает.
 
 ## Скрипт сборки
 

@@ -114,21 +114,21 @@ spec('phase', () => {
   });
 
   requirement('The machine does not set a gate label', () => {
-    scenario('Set refuses a gate label', () => {
+    scenario('Set refuses a gate label', async () => {
       const {tracker} = memoryPorts({
         issues: [
           {key: '7', title: '#7: title', body: '', state: 'OPEN', labels: ['sdd:proposing']},
         ],
       });
-      assert.throws(() => setPhase('7', 'proposed', tracker), /gate label sdd:proposed/);
-      assert.deepEqual(tracker.labels('7'), ['sdd:proposing']);
+      await assert.rejects(setPhase('7', 'proposed', tracker), /gate label sdd:proposed/);
+      assert.deepEqual(await tracker.labels('7'), ['sdd:proposing']);
     });
   });
 });
 
 spec('review-gate', () => {
   requirement('The machine opens the review once', () => {
-    scenario('A published proposal is asked once', () => {
+    scenario('A published proposal is asked once', async () => {
       const {tracker, review, calls} = memoryPorts({
         issues: [
           {
@@ -148,13 +148,13 @@ spec('review-gate', () => {
         queueLabel: 'Sandcastle',
         change: {...readChange('5', files), proposal: true},
       };
-      assert.equal(resolveIssue('5', options).kind, 'wait');
-      assert.ok(tracker.labels('5').includes('sdd:wait-human'));
+      assert.equal((await resolveIssue('5', options)).kind, 'wait');
+      assert.ok((await tracker.labels('5')).includes('sdd:wait-human'));
       const asks = () => calls.filter(call => call.includes('Review the proposal'));
       assert.equal(asks().length, 1);
       assert.match(asks()[0], /replace the label `sdd:proposing` with `sdd:proposed`/);
       assert.match(asks()[0], /sdd accept 5/);
-      const held = resolveIssue('5', options);
+      const held = await resolveIssue('5', options);
       assert.equal(asks().length, 1);
       assert.equal(held.kind, 'wait');
       if (held.kind === 'wait') {
@@ -236,7 +236,7 @@ spec('review-gate', () => {
   });
 
   requirement('A person closes the gate on the issue', () => {
-    scenario('Proposed on a ready proposal moves to specifying', () => {
+    scenario('Proposed on a ready proposal moves to specifying', async () => {
       const {tracker, review, calls} = memoryPorts({
         issues: [
           {
@@ -249,18 +249,18 @@ spec('review-gate', () => {
         ],
         pulls: {'5': [{id: '9', title: '#5: title', state: 'OPEN'}]},
       });
-      resolveIssue('5', {
+      await resolveIssue('5', {
         tracker,
         review,
         files,
         queueLabel: 'Sandcastle',
         change: {...readChange('5', files), proposal: true},
       });
-      assert.ok(tracker.labels('5').includes('sdd:specifying'));
-      assert.equal(tracker.labels('5').includes('sdd:wait-human'), false);
+      assert.ok((await tracker.labels('5')).includes('sdd:specifying'));
+      assert.equal((await tracker.labels('5')).includes('sdd:wait-human'), false);
       assert.ok(calls.some(call => call.includes('sdd:accept proposing → specifying')));
     });
-    scenario('Specified over a missing delta goes back once', () => {
+    scenario('Specified over a missing delta goes back once', async () => {
       const {tracker, review, calls} = memoryPorts({
         issues: [
           {
@@ -280,12 +280,12 @@ spec('review-gate', () => {
         queueLabel: 'Sandcastle',
         change: {...readChange('5', files), proposal: true},
       };
-      resolveIssue('5', options);
-      assert.ok(tracker.labels('5').includes('sdd:specifying'));
+      await resolveIssue('5', options);
+      assert.ok((await tracker.labels('5')).includes('sdd:specifying'));
       const notes = calls.filter(call => call.startsWith('body:'));
       assert.equal(notes.length, 1);
       assert.match(notes[0], /specs/);
-      resolveIssue('5', options);
+      await resolveIssue('5', options);
       assert.equal(calls.filter(call => call.startsWith('body:')).length, 1);
     });
     scenario('Designed over an open decision goes back, then asks', () => {
@@ -546,7 +546,7 @@ spec('marker', () => {
   });
 
   requirement('Thread fix closes a thread in one call', () => {
-    scenario('Fix refuses before the commit is on the remote branch', () => {
+    scenario('Fix refuses before the commit is on the remote branch', async () => {
       const memory = memoryPorts({
         threadList: {
           '12': [
@@ -561,17 +561,16 @@ spec('marker', () => {
           ],
         },
       });
-      assert.throws(
-        () =>
-          fixThread(
-            {key: '7', pull: '12', thread: 'PRRT_1'},
-            {review: memory.review, vcs: {head: () => 'abc123', published: () => false}},
-          ),
+      await assert.rejects(
+        fixThread(
+          {key: '7', pull: '12', thread: 'PRRT_1'},
+          {review: memory.review, vcs: {head: async () => 'abc123', published: async () => false}},
+        ),
         /Publish/,
       );
       assert.deepEqual(memory.calls, []);
     });
-    scenario('Fix replies and resolves together', () => {
+    scenario('Fix replies and resolves together', async () => {
       const memory = memoryPorts({
         threadList: {
           '12': [
@@ -587,9 +586,9 @@ spec('marker', () => {
         },
       });
       assert.equal(
-        fixThread(
+        await fixThread(
           {key: '7', pull: '12', thread: 'PRRT_1'},
-          {review: memory.review, vcs: {head: () => 'abc123', published: () => true}},
+          {review: memory.review, vcs: {head: async () => 'abc123', published: async () => true}},
         ),
         'sdd:fixed abc123',
       );
@@ -637,11 +636,11 @@ spec('pull-request', () => {
   });
 
   requirement('None creates a pull request, one is reused', () => {
-    scenario('No open pull request is created with the given title', () => {
+    scenario('No open pull request is created with the given title', async () => {
       const titles: string[] = [];
       const pushed: string[] = [];
       const memory = memoryPorts();
-      const id = publish(
+      const id = await publish(
         {key: '7', title: '#7: land the change'},
         {
           review: {
@@ -651,19 +650,19 @@ spec('pull-request', () => {
               return memory.review.ensurePull(key, title, body);
             },
           } as never,
-          vcs: {dirty: () => [], push: key => void pushed.push(key)},
+          vcs: {dirty: async () => [], push: async key => void pushed.push(key)},
         },
       );
       assert.equal(id, '#7: pull new');
       assert.deepEqual(titles, ['#7: land the change']);
       assert.deepEqual(pushed, ['7']);
     });
-    scenario('One open pull request is reused', () => {
+    scenario('One open pull request is reused', async () => {
       const memory = memoryPorts({pulls: {'7': [{id: '9', title: '#7: existing', state: 'OPEN'}]}});
       const pushed: string[] = [];
-      const id = publish(
+      const id = await publish(
         {key: '7', title: '#7: again'},
-        {review: memory.review, vcs: {dirty: () => [], push: key => void pushed.push(key)}},
+        {review: memory.review, vcs: {dirty: async () => [], push: async key => void pushed.push(key)}},
       );
       assert.equal(id, '#7: pull 9');
       assert.deepEqual(pushed, ['7']);
@@ -745,7 +744,7 @@ spec('dependencies', () => {
   });
 
   requirement('Parent and Depends are body lines', () => {
-    scenario('A Parent line holds tasking', () => {
+    scenario('A Parent line holds tasking', async () => {
       const {tracker} = memoryPorts({
         issues: [
           {
@@ -764,7 +763,7 @@ spec('dependencies', () => {
           },
         ],
       });
-      const issues = tracker.listOpen();
+      const issues = await tracker.listOpen();
       const parent = issues.find(item => item.key === '1');
       const decision = decide(parent!, issues, [pull(9)], ready);
       assert.equal(decision.kind, 'wait');
@@ -772,7 +771,7 @@ spec('dependencies', () => {
         assert.match(decision.reason, /#2/);
       }
     });
-    scenario('A Depends line holds implementing', () => {
+    scenario('A Depends line holds implementing', async () => {
       const {tracker} = memoryPorts({
         issues: [
           {
@@ -785,7 +784,7 @@ spec('dependencies', () => {
           {key: '8', title: '#8: title', body: '', state: 'OPEN', labels: []},
         ],
       });
-      const issues = tracker.listOpen();
+      const issues = await tracker.listOpen();
       const parent = issues.find(item => item.key === '1');
       const decision = decide(parent!, issues, [pull(9)], ready);
       assert.equal(decision.kind, 'wait');
@@ -796,7 +795,7 @@ spec('dependencies', () => {
   });
 
   requirement('A parent rollback does not move a child', () => {
-    scenario('A spec marker on the parent leaves the child in place', () => {
+    scenario('A spec marker on the parent leaves the child in place', async () => {
       const parent = issue(1, ['Sandcastle', 'sdd:cycle', 'sdd:implementing']);
       const child = issue(2, ['Sandcastle', 'sdd:cycle', 'sdd:implementing'], {parent: '1'});
       const {tracker} = memoryPorts({
@@ -813,7 +812,7 @@ spec('dependencies', () => {
         ],
       });
       const review = reviewOf([{resolved: false, body: 'sdd:layer=spec → specifying'}], []);
-      resolveCycle(
+      await resolveCycle(
         {
           issues: [parent, child],
           cycles: [parent, child],
@@ -829,9 +828,9 @@ spec('dependencies', () => {
         tracker,
         'Sandcastle',
       );
-      assert.ok(tracker.labels('1').includes('sdd:specifying'));
-      assert.equal(tracker.labels('1').includes('sdd:implementing'), false);
-      assert.deepEqual(tracker.labels('2'), ['Sandcastle', 'sdd:cycle', 'sdd:implementing']);
+      assert.ok((await tracker.labels('1')).includes('sdd:specifying'));
+      assert.equal((await tracker.labels('1')).includes('sdd:implementing'), false);
+      assert.deepEqual(await tracker.labels('2'), ['Sandcastle', 'sdd:cycle', 'sdd:implementing']);
     });
   });
 });
@@ -987,7 +986,7 @@ spec('merge', () => {
       );
       assert.equal(action(decision), 'archive');
     });
-    scenario('A merged archived pull request closes the issue', () => {
+    scenario('A merged archived pull request closes the issue', async () => {
       const {tracker, review} = memoryPorts({
         issues: [
           {
@@ -1000,9 +999,9 @@ spec('merge', () => {
         ],
         pulls: {'5': [{id: '9', title: '#5: title', state: 'MERGED'}]},
       });
-      const decision = resolveIssue('5', {tracker, review, files, queueLabel: 'Sandcastle'});
+      const decision = await resolveIssue('5', {tracker, review, files, queueLabel: 'Sandcastle'});
       assert.equal(decision.kind, 'done');
-      assert.equal(tracker.issue('5').state, 'CLOSED');
+      assert.equal((await tracker.issue('5')).state, 'CLOSED');
     });
     scenario('Accepted waits while the pull request is open', () => {
       const decision = decide(
@@ -1053,7 +1052,7 @@ spec('change', () => {
 
 spec('wait', () => {
   requirement('Wait comments the ask', () => {
-    scenario('Wait without a sentence is refused', () => {
+    scenario('Wait without a sentence is refused', async () => {
       const {tracker, review} = memoryPorts({
         issues: [{key: '7', title: '#7: title', body: '', state: 'OPEN', labels: ['sdd:cycle']}],
       });
@@ -1061,27 +1060,27 @@ spec('wait', () => {
         throw new Error('exit');
       });
       try {
-        assert.throws(
-          () => runSdd(['wait', '7'], machine(process.cwd(), {tracker, review})),
+        await assert.rejects(
+          runSdd(['wait', '7'], machine(process.cwd(), {tracker, review})),
           /exit/,
         );
-        assert.equal(tracker.labels('7').includes('sdd:wait-human'), false);
+        assert.equal((await tracker.labels('7')).includes('sdd:wait-human'), false);
       } finally {
         exit.mockRestore();
       }
     });
-    scenario('Wait posts the sentence', () => {
+    scenario('Wait posts the sentence', async () => {
       const {tracker, review, calls} = memoryPorts({
         issues: [{key: '7', title: '#7: title', body: '', state: 'OPEN', labels: ['sdd:cycle']}],
       });
-      runSdd(['wait', '7', 'merge the pull request'], machine(process.cwd(), {tracker, review}));
-      assert.ok(tracker.labels('7').includes('sdd:wait-human'));
+      await runSdd(['wait', '7', 'merge the pull request'], machine(process.cwd(), {tracker, review}));
+      assert.ok((await tracker.labels('7')).includes('sdd:wait-human'));
       assert.ok(calls.some(call => call.includes('merge the pull request')));
     });
   });
 
   requirement('Unwait clears the label', () => {
-    scenario('Unwait removes the label', () => {
+    scenario('Unwait removes the label', async () => {
       const {tracker, review} = memoryPorts({
         issues: [
           {
@@ -1093,34 +1092,33 @@ spec('wait', () => {
           },
         ],
       });
-      runSdd(['unwait', '7'], machine(process.cwd(), {tracker, review}));
-      assert.equal(tracker.labels('7').includes('sdd:wait-human'), false);
+      await runSdd(['unwait', '7'], machine(process.cwd(), {tracker, review}));
+      assert.equal((await tracker.labels('7')).includes('sdd:wait-human'), false);
     });
-    scenario('Unwait on an issue that is not waiting', () => {
+    scenario('Unwait on an issue that is not waiting', async () => {
       const {tracker, review, calls} = memoryPorts({
         issues: [{key: '7', title: '#7: title', body: '', state: 'OPEN', labels: ['sdd:cycle']}],
       });
-      runSdd(['unwait', '7'], machine(process.cwd(), {tracker, review}));
+      await runSdd(['unwait', '7'], machine(process.cwd(), {tracker, review}));
       assert.equal(calls.includes('editLabels'), false);
-      assert.deepEqual(tracker.labels('7'), ['sdd:cycle']);
+      assert.deepEqual(await tracker.labels('7'), ['sdd:cycle']);
     });
   });
 });
 
 spec('publish', () => {
   requirement('A dirty worktree is not published', () => {
-    scenario('Dirty paths are named and nothing is pushed', () => {
+    scenario('Dirty paths are named and nothing is pushed', async () => {
       const pushed: string[] = [];
       const memory = memoryPorts();
-      assert.throws(
-        () =>
-          publish(
-            {key: '7', title: '#7: fix'},
-            {
-              review: memory.review,
-              vcs: {dirty: () => ['src/a.ts'], push: key => void pushed.push(key)},
-            },
-          ),
+      await assert.rejects(
+        publish(
+          {key: '7', title: '#7: fix'},
+          {
+            review: memory.review,
+            vcs: {dirty: async () => ['src/a.ts'], push: async key => void pushed.push(key)},
+          },
+        ),
         /src\/a\.ts/,
       );
       assert.deepEqual(pushed, []);
@@ -1128,7 +1126,7 @@ spec('publish', () => {
   });
 
   requirement('Several open pull requests are refused before the push', () => {
-    scenario('Two open pull requests reject publish before the push', () => {
+    scenario('Two open pull requests reject publish before the push', async () => {
       const memory = memoryPorts({
         pulls: {
           '7': [
@@ -1138,12 +1136,11 @@ spec('publish', () => {
         },
       });
       const pushed: string[] = [];
-      assert.throws(
-        () =>
-          publish(
-            {key: '7', title: '#7: fix'},
-            {review: memory.review, vcs: {dirty: () => [], push: key => void pushed.push(key)}},
-          ),
+      await assert.rejects(
+        publish(
+          {key: '7', title: '#7: fix'},
+          {review: memory.review, vcs: {dirty: async () => [], push: async key => void pushed.push(key)}},
+        ),
         /3, 4/,
       );
       assert.deepEqual(pushed, []);
@@ -1151,10 +1148,10 @@ spec('publish', () => {
   });
 
   requirement('The argument is the pull request title', () => {
-    scenario('The new pull request uses the given title', () => {
+    scenario('The new pull request uses the given title', async () => {
       const titles: string[] = [];
       const memory = memoryPorts();
-      publish(
+      await publish(
         {key: '7', title: '#7: land the change'},
         {
           review: {
@@ -1164,7 +1161,7 @@ spec('publish', () => {
               return memory.review.ensurePull(key, title, body);
             },
           } as never,
-          vcs: {dirty: () => [], push: () => undefined},
+          vcs: {dirty: async () => [], push: async () => undefined},
         },
       );
       assert.deepEqual(titles, ['#7: land the change']);
@@ -1215,7 +1212,7 @@ spec('idle', () => {
   });
 
   requirement('A running issue and the parallel cap are left alone', () => {
-    scenario('A running issue is not moved', () => {
+    scenario('A running issue is not moved', async () => {
       const {tracker, review, calls} = memoryPorts({
         issues: [
           {
@@ -1227,11 +1224,11 @@ spec('idle', () => {
           },
         ],
       });
-      const snapshot = loadCycle(tracker, review, () => files, 'Sandcastle');
-      const decisions = resolveCycle(snapshot, tracker, 'Sandcastle', new Set(['7']));
+      const snapshot = await loadCycle(tracker, review, () => files, 'Sandcastle');
+      const decisions = await resolveCycle(snapshot, tracker, 'Sandcastle', new Set(['7']));
       assert.deepEqual(decisions, []);
       assert.equal(calls.includes('editLabels'), false);
-      assert.deepEqual(tracker.labels('7'), ['Sandcastle', 'sdd:cycle', 'sdd:proposed']);
+      assert.deepEqual(await tracker.labels('7'), ['Sandcastle', 'sdd:cycle', 'sdd:proposed']);
     });
     scenario('Parallel 1 starts one of two ready issues', () => {
       const empty: State = {running: [], idle: {}, reported: {}};
@@ -1457,7 +1454,7 @@ spec('reviewer', () => {
   requirement('The verdict posts a note, remarks, or nothing', () => {
     scenario('An empty answer posts nothing and the command fails', async () => {
       const quiet = memoryPorts();
-      applyReview({kind: 'unjudged', reason: 'empty answer'}, '15', reviewedHead, quiet.review);
+      await applyReview({kind: 'unjudged', reason: 'empty answer'}, '15', reviewedHead, quiet.review);
       assert.deepEqual(quiet.calls, []);
       const {tracker, review, calls} = memoryPorts({
         issues: [
@@ -1497,15 +1494,15 @@ spec('reviewer', () => {
       assert.equal(calls.includes('say'), false);
       assert.equal(calls.includes('merge:15'), false);
     });
-    scenario('A clean verdict notes the head and merges', () => {
+    scenario('A clean verdict notes the head and merges', async () => {
       const clean = memoryPorts();
-      applyReview({kind: 'clean'}, '15', reviewedHead, clean.review);
+      await applyReview({kind: 'clean'}, '15', reviewedHead, clean.review);
       assert.ok(clean.calls.includes(`body:🤖 sdd:note reviewed ${reviewedHead}`));
       assert.ok(clean.calls.includes('merge:15'));
     });
-    scenario('Remarks are one comment and carry no robot mark', () => {
+    scenario('Remarks are one comment and carry no robot mark', async () => {
       const remarks = memoryPorts();
-      applyReview(
+      await applyReview(
         {
           kind: 'remarks',
           items: [
@@ -1734,10 +1731,10 @@ function planFiles(key: string): FileSource {
   return files;
 }
 
-function runPlan(
+async function runPlan(
   issues: {key: string; title: string; body: string; state: string; labels: string[]}[],
   pulls: Record<string, {id: string; title: string; state: string}[]> = {},
-): {printed: Decision; labels: (key: string) => string[]; calls: string[]} {
+): Promise<{printed: Decision; labels: (key: string) => Promise<string[]>; calls: string[]}> {
   const {tracker, review, calls} = memoryPorts({
     issues,
     pulls,
@@ -1761,7 +1758,7 @@ function runPlan(
     lines.push(String(line));
   };
   try {
-    runSdd(['plan'], box);
+    await runSdd(['plan'], box);
   } finally {
     console.log = logged;
   }
@@ -1774,8 +1771,8 @@ function runPlan(
 
 spec('plan', () => {
   requirement('Plan applies mechanical moves and prints one decision', () => {
-    scenario('A phase move is applied and the first skill is printed', () => {
-      const {printed, labels, calls} = runPlan(
+    scenario('A phase move is applied and the first skill is printed', async () => {
+      const {printed, labels, calls} = await runPlan(
         [
           planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposed']),
           planIssue('2', ['Sandcastle', 'sdd:cycle', 'sdd:implementing']),
@@ -1783,17 +1780,17 @@ spec('plan', () => {
         ],
         {'3': [{id: '9', title: '#3: title', state: 'OPEN'}]},
       );
-      assert.ok(labels('1').includes('sdd:proposing'));
+      assert.ok((await labels('1')).includes('sdd:proposing'));
       assert.equal(printed.kind, 'agent');
       if (printed.kind === 'agent') {
         assert.equal(printed.issue, '1');
       }
-      assert.ok(labels('2').includes('sdd:implementing'));
-      assert.ok(labels('3').includes('sdd:accepting'));
+      assert.ok((await labels('2')).includes('sdd:implementing'));
+      assert.ok((await labels('3')).includes('sdd:accepting'));
       assert.equal(calls.includes('merge:9'), false);
     });
-    scenario('A merge is printed and not performed', () => {
-      const {printed, labels, calls} = runPlan(
+    scenario('A merge is printed and not performed', async () => {
+      const {printed, labels, calls} = await runPlan(
         [planIssue('3', ['Sandcastle', 'sdd:cycle', 'sdd:accepting', 'sdd:auto-merge'])],
         {'3': [{id: '9', title: '#3: title', state: 'OPEN'}]},
       );
@@ -1801,11 +1798,11 @@ spec('plan', () => {
       if (printed.kind === 'merge') {
         assert.equal(printed.issue, '3');
       }
-      assert.ok(labels('3').includes('sdd:accepting'));
+      assert.ok((await labels('3')).includes('sdd:accepting'));
       assert.equal(calls.includes('merge:9'), false);
     });
-    scenario('Several waits are printed as one', () => {
-      const {printed} = runPlan([
+    scenario('Several waits are printed as one', async () => {
+      const {printed} = await runPlan([
         planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:verifying']),
         planIssue('4', ['Sandcastle', 'sdd:cycle', 'sdd:verifying']),
       ]);
@@ -1827,12 +1824,12 @@ function proposalFiles(key: string): FileSource {
   };
 }
 
-function runStep(
+async function runStep(
   argv: string[],
   issues: {key: string; title: string; body: string; state: string; labels: string[]}[],
   filesAt: (key: string) => FileSource,
   pulls: Record<string, {id: string; title: string; state: string}[]> = {},
-): {printed: Decision; labels: (key: string) => string[]; calls: string[]} {
+): Promise<{printed: Decision; labels: (key: string) => Promise<string[]>; calls: string[]}> {
   const {tracker, review, calls} = memoryPorts({
     issues,
     pulls,
@@ -1865,7 +1862,7 @@ function runStep(
     lines.push(String(line));
   };
   try {
-    runSdd(argv, box);
+    await runSdd(argv, box);
   } finally {
     console.log = logged;
   }
@@ -1887,7 +1884,7 @@ function serviceRepo(): string {
   return service;
 }
 
-function runWorktree(service: string, key: string): string {
+async function runWorktree(service: string, key: string): Promise<string> {
   const {tracker, review} = memoryPorts({issues: [planIssue(key, ['sdd:cycle'])]});
   const box = machine(service, {
     config: {defaultBranch: 'master'},
@@ -1900,7 +1897,7 @@ function runWorktree(service: string, key: string): string {
     lines.push(String(line));
   };
   try {
-    runSdd(['worktree', key], box);
+    await runSdd(['worktree', key], box);
   } finally {
     console.log = logged;
   }
@@ -1909,8 +1906,8 @@ function runWorktree(service: string, key: string): string {
 
 spec('step', () => {
   requirement('Step settles one issue and prints its decision', () => {
-    scenario('One issue moves and another stays', () => {
-      const {printed, labels, calls} = runStep(
+    scenario('One issue moves and another stays', async () => {
+      const {printed, labels, calls} = await runStep(
         ['step', '1'],
         [
           planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposed']),
@@ -1918,16 +1915,16 @@ spec('step', () => {
         ],
         planFiles,
       );
-      assert.ok(labels('1').includes('sdd:proposing'));
+      assert.ok((await labels('1')).includes('sdd:proposing'));
       assert.equal(printed.kind, 'agent');
       if (printed.kind === 'agent') {
         assert.equal(printed.issue, '1');
       }
-      assert.ok(labels('2').includes('sdd:implementing'));
+      assert.ok((await labels('2')).includes('sdd:implementing'));
       assert.equal(calls.includes('runtime'), false);
     });
-    scenario('The printed decision names the queue and the base', () => {
-      const {printed} = runStep(
+    scenario('The printed decision names the queue and the base', async () => {
+      const {printed} = await runStep(
         ['step', '1'],
         [planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposed'])],
         planFiles,
@@ -1936,15 +1933,15 @@ spec('step', () => {
       assert.equal(named.queue, 'Sandcastle');
       assert.equal(named.base, 'master');
     });
-    scenario('A decision outside the cycle still names them', () => {
-      const {printed} = runStep(['step', '7'], [planIssue('7', ['sdd:proposing'])], planFiles);
+    scenario('A decision outside the cycle still names them', async () => {
+      const {printed} = await runStep(['step', '7'], [planIssue('7', ['sdd:proposing'])], planFiles);
       assert.equal(printed.kind, 'done');
       const named = printed as typeof printed & {queue?: string; base?: string};
       assert.equal(named.queue, 'Sandcastle');
       assert.equal(named.base, 'master');
     });
-    scenario('A merge is performed', () => {
-      const {printed, labels, calls} = runStep(
+    scenario('A merge is performed', async () => {
+      const {printed, labels, calls} = await runStep(
         ['step', '3'],
         [planIssue('3', ['Sandcastle', 'sdd:cycle', 'sdd:accepting', 'sdd:auto-merge'])],
         planFiles,
@@ -1954,41 +1951,41 @@ spec('step', () => {
       if (printed.kind === 'done') {
         assert.equal(printed.reason, 'pull request merged');
       }
-      assert.ok(labels('3').includes('sdd:accepted'));
-      assert.equal(labels('3').includes('sdd:accepting'), false);
+      assert.ok((await labels('3')).includes('sdd:accepted'));
+      assert.equal((await labels('3')).includes('sdd:accepting'), false);
       assert.equal(calls.filter(call => call === 'merge:9').length, 1);
       assert.ok(calls.some(call => call.startsWith('close:')));
     });
   });
 
   requirement('Auto tags are written only inside the cycle', () => {
-    scenario('Auto-plan advances a ready proposal', () => {
-      const {labels} = runStep(
+    scenario('Auto-plan advances a ready proposal', async () => {
+      const {labels} = await runStep(
         ['step', '1', '--auto-plan', '--auto-spec', '--auto-design'],
         [planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposing'])],
         proposalFiles,
         {'1': [{id: '8', title: '#1: title', state: 'OPEN'}]},
       );
-      assert.ok(labels('1').includes('sdd:auto-plan'));
-      assert.ok(labels('1').includes('sdd:auto-spec'));
-      assert.ok(labels('1').includes('sdd:auto-design'));
-      assert.ok(labels('1').includes('sdd:specifying'));
+      assert.ok((await labels('1')).includes('sdd:auto-plan'));
+      assert.ok((await labels('1')).includes('sdd:auto-spec'));
+      assert.ok((await labels('1')).includes('sdd:auto-design'));
+      assert.ok((await labels('1')).includes('sdd:specifying'));
     });
-    scenario('A flag outside the cycle writes nothing', () => {
-      const {printed, labels} = runStep(
+    scenario('A flag outside the cycle writes nothing', async () => {
+      const {printed, labels} = await runStep(
         ['step', '7', '--auto-plan'],
         [planIssue('7', ['sdd:proposing'])],
         proposalFiles,
       );
       assert.equal(printed.kind, 'done');
-      assert.equal(labels('7').includes('sdd:auto-plan'), false);
+      assert.equal((await labels('7')).includes('sdd:auto-plan'), false);
     });
   });
 
   requirement('Worktree prepares the session checkout', () => {
-    scenario('A missing checkout is created', () => {
+    scenario('A missing checkout is created', async () => {
       const service = serviceRepo();
-      const printed = runWorktree(service, '1');
+      const printed = await runWorktree(service, '1');
       const checkout = path.join(service, '.worktrees', 'sdd-1');
       assert.equal(printed, checkout);
       assert.equal(existsSync(checkout), true);
@@ -2004,11 +2001,11 @@ spec('step', () => {
       });
       assert.equal(status.includes('.worktrees'), false);
     });
-    scenario('A dirty checkout is reused', () => {
+    scenario('A dirty checkout is reused', async () => {
       const service = serviceRepo();
-      const checkout = runWorktree(service, '1');
+      const checkout = await runWorktree(service, '1');
       writeFileSync(path.join(checkout, 'note.txt'), 'keep\n');
-      const again = runWorktree(service, '1');
+      const again = await runWorktree(service, '1');
       assert.equal(again, checkout);
       assert.equal(readFileSync(path.join(checkout, 'note.txt'), 'utf8'), 'keep\n');
     });

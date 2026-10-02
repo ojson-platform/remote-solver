@@ -110,22 +110,22 @@ export function fixArgs(rest: string[]): {key: string; pull: string; thread: str
  * conversation. Refuses while HEAD is not on the remote issue branch. A thread
  * whose latest reply is already `sdd:fixed` is only resolved.
  */
-export function fixThread(
+export async function fixThread(
   args: {key: string; pull: string; thread: string | null},
   deps: {review: Review; vcs: Pick<Vcs, 'head' | 'published'>},
-): string {
-  const head = deps.vcs.head();
-  if (!deps.vcs.published(args.key, head)) {
+): Promise<string> {
+  const head = await deps.vcs.head();
+  if (!(await deps.vcs.published(args.key, head))) {
     throw new Error(
       `HEAD ${head} is not on the remote branch of #${args.key}: Publish, then thread fix.`,
     );
   }
   const body = `sdd:fixed ${head}`;
   if (args.thread === null) {
-    deps.review.say(args.pull, body);
+    await deps.review.say(args.pull, body);
     return body;
   }
-  const record = deps.review.threadList(args.pull).find(item => item.id === args.thread);
+  const record = (await deps.review.threadList(args.pull)).find(item => item.id === args.thread);
   if (!record) {
     throw new Error(`No thread ${args.thread} on pull ${args.pull}.`);
   }
@@ -133,9 +133,9 @@ export function fixThread(
     return body;
   }
   if (parseMarker(record.body)?.kind !== 'fixed') {
-    deps.review.reply(args.pull, record.comment, body);
+    await deps.review.reply(args.pull, record.comment, body);
   }
-  deps.review.resolveThread(record.id);
+  await deps.review.resolveThread(record.id);
   return body;
 }
 
@@ -144,11 +144,11 @@ export function fixThread(
  * dirty worktree, and refuses several open pull requests, before anything
  * reaches the remote.
  */
-export function publish(
+export async function publish(
   args: {key: string; title: string},
   deps: {review: Review; vcs: Pick<Vcs, 'dirty' | 'push'>},
-): string {
-  const dirt = deps.vcs.dirty();
+): Promise<string> {
+  const dirt = await deps.vcs.dirty();
   if (dirt.length > 0) {
     throw new Error(
       [
@@ -157,40 +157,39 @@ export function publish(
       ].join('\n'),
     );
   }
-  const open = deps.review
-    .pulls(args.key)
+  const open = (await deps.review.pulls(args.key))
     .filter(pr => pr.state === 'OPEN')
     .map(pr => pr.id);
   const choice = publishChoice(open);
   if (!choice.ok) {
     throw new Error(choice.reason);
   }
-  deps.vcs.push(args.key);
-  const id = deps.review.ensurePull(args.key, args.title, `${changeDir(args.key)}/`);
+  await deps.vcs.push(args.key);
+  const id = await deps.review.ensurePull(args.key, args.title, `${changeDir(args.key)}/`);
   return `#${args.key}: pull ${id}`;
 }
 
-export function runSdd(argv: string[], box = machine()): void {
+export async function runSdd(argv: string[], box = machine()): Promise<void> {
   const [command, ...rest] = argv;
   if (command === 'help' || command === '--help' || command === '-h') {
     console.error(usage);
     return;
   }
   try {
-    dispatch(box, command, rest);
+    await dispatch(box, command, rest);
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error));
   }
 }
 
-type Verb = (box: Machine, rest: string[]) => void;
+type Verb = (box: Machine, rest: string[]) => Promise<void>;
 
-function dispatch(box: Machine, command: string | undefined, rest: string[]): void {
+async function dispatch(box: Machine, command: string | undefined, rest: string[]): Promise<void> {
   const verb = command === undefined ? undefined : verbs[command];
   if (!verb) {
     fail(usage);
   }
-  verb(box, rest);
+  await verb(box, rest);
 }
 
 const verbs: Record<string, Verb> = {
@@ -208,23 +207,23 @@ const verbs: Record<string, Verb> = {
   mirror,
 };
 
-function plan(box: Machine): void {
-  const snapshot = loadCycle(
+async function plan(box: Machine): Promise<void> {
+  const snapshot = await loadCycle(
     box.tracker,
     box.review,
     key => box.vcs.filesAt(key),
     box.config.queueLabel,
   );
-  const decision = pick(resolveCycle(snapshot, box.tracker, box.config.queueLabel));
+  const decision = pick(await resolveCycle(snapshot, box.tracker, box.config.queueLabel));
   console.log(JSON.stringify(decision, null, 2));
 }
 
-function step(box: Machine, rest: string[]): void {
+async function step(box: Machine, rest: string[]): Promise<void> {
   const args = stepArgs(rest);
   if (!args) {
     fail(usage);
   }
-  const record = box.tracker.issue(args.key);
+  const record = await box.tracker.issue(args.key);
   const inCycle =
     record.labels.includes(box.config.queueLabel) && record.labels.includes('sdd:cycle');
   if (!inCycle) {
@@ -232,9 +231,9 @@ function step(box: Machine, rest: string[]): void {
     return;
   }
   if (args.labels.length) {
-    box.tracker.editLabels(args.key, args.labels, []);
+    await box.tracker.editLabels(args.key, args.labels, []);
   }
-  printStep(turn(box, args.key), box);
+  printStep(await turn(box, args.key), box);
 }
 
 /** The chat reads these two fields. The spy run receives the same values as prompt placeholders. */
@@ -244,73 +243,73 @@ function printStep(decision: Decision, box: Machine): void {
   );
 }
 
-function worktree(box: Machine, rest: string[]): void {
+async function worktree(box: Machine, rest: string[]): Promise<void> {
   const key = need(rest[0], usage);
   if (rest.length !== 1) {
     fail(usage);
   }
-  const dir = box.vcs.prepare(key, {worktreesDir: SESSION_WORKTREES, links: packageLinks(solverRoot())});
+  const dir = await box.vcs.prepare(key, {worktreesDir: SESSION_WORKTREES, links: packageLinks(solverRoot())});
   console.log(dir);
 }
 
-function set(box: Machine, rest: string[]): void {
+async function set(box: Machine, rest: string[]): Promise<void> {
   const key = need(rest[0], usage);
   const phase = need(rest[1], usage);
   if (!PHASES.includes(phase as Phase)) {
     fail(usage);
   }
-  setPhase(key, phase as Phase, box.tracker);
+  await setPhase(key, phase as Phase, box.tracker);
 }
 
-function wait(box: Machine, rest: string[]): void {
+async function wait(box: Machine, rest: string[]): Promise<void> {
   const key = need(rest[0], usage);
   const reason = rest.slice(1).join(' ').trim();
   if (!reason) {
     fail(usage);
   }
-  openWait(key, reason, box.tracker);
+  await openWait(key, reason, box.tracker);
 }
 
-function unwait(box: Machine, rest: string[]): void {
-  setWait(need(rest[0], usage), false, box.tracker);
+async function unwait(box: Machine, rest: string[]): Promise<void> {
+  await setWait(need(rest[0], usage), false, box.tracker);
 }
 
 /** Close proposing, specifying, or designing. The agent does not run this. Merge is not this command. */
-function accept(box: Machine, rest: string[]): void {
+async function accept(box: Machine, rest: string[]): Promise<void> {
   const key = need(rest[0], usage);
-  const record = box.tracker.issue(key);
+  const record = await box.tracker.issue(key);
   const decision = acceptGate(record, readChange(key, box.vcs.filesAt(key)));
   if (decision.kind !== 'advance') {
     throw new Error(decision.reason);
   }
-  applyLabels(box.tracker, key, record.labels, labelsAfterAdvance(record.labels, decision.to));
-  const login = box.tracker.login();
-  box.tracker.comment(key, `sdd:accept ${decision.reason} by @${login}`);
+  await applyLabels(box.tracker, key, record.labels, labelsAfterAdvance(record.labels, decision.to));
+  const login = await box.tracker.login();
+  await box.tracker.comment(key, `sdd:accept ${decision.reason} by @${login}`);
   console.log(`#${key}: ${decision.reason}`);
 }
 
-function publishCommand(box: Machine, rest: string[]): void {
+async function publishCommand(box: Machine, rest: string[]): Promise<void> {
   const key = need(rest[0], usage);
   const title = rest.slice(1).join(' ');
   if (!title) {
     fail(usage);
   }
-  console.log(publish({key, title}, box));
+  console.log(await publish({key, title}, box));
 }
 
-function checks(box: Machine, rest: string[]): void {
-  const text = box.review.checksText(need(rest[0], usage)).replace(/\n$/, '');
+async function checks(box: Machine, rest: string[]): Promise<void> {
+  const text = (await box.review.checksText(need(rest[0], usage))).replace(/\n$/, '');
   if (text) {
     console.log(text);
   }
 }
 
-function threads(box: Machine, rest: string[]): void {
+async function threads(box: Machine, rest: string[]): Promise<void> {
   const args = threadsArgs(rest);
   if (!args) {
     fail(usage);
   }
-  const report = threadsReport(box.review.threadList(args.pull), box.review.comments(args.pull), {
+  const report = threadsReport(await box.review.threadList(args.pull), await box.review.comments(args.pull), {
     layer: args.layer,
     unmarked: args.unmarked,
   });
@@ -325,15 +324,15 @@ const threadVerbs: Record<string, Verb> = {
   fix: threadFix,
 };
 
-function thread(box: Machine, rest: string[]): void {
+async function thread(box: Machine, rest: string[]): Promise<void> {
   const verb = rest[0] === undefined ? undefined : threadVerbs[rest[0]];
   if (!verb) {
     fail(usage);
   }
-  verb(box, rest);
+  await verb(box, rest);
 }
 
-function threadOpen(box: Machine, rest: string[]): void {
+async function threadOpen(box: Machine, rest: string[]): Promise<void> {
   const pull = need(rest[1], usage);
   const file = need(rest[2], usage);
   const line = Number(need(rest[3], usage));
@@ -341,51 +340,51 @@ function threadOpen(box: Machine, rest: string[]): void {
   if (!Number.isInteger(line) || !body) {
     fail(usage);
   }
-  box.review.openThread(pull, {commit: box.vcs.head(), path: file, line, body});
+  await box.review.openThread(pull, {commit: await box.vcs.head(), path: file, line, body});
 }
 
-function threadReply(box: Machine, rest: string[]): void {
+async function threadReply(box: Machine, rest: string[]): Promise<void> {
   const pull = need(rest[1], usage);
   const comment = need(rest[2], usage);
   const body = rest.slice(3).join(' ');
   if (!body) {
     fail(usage);
   }
-  box.review.reply(pull, comment, body);
+  await box.review.reply(pull, comment, body);
 }
 
-function threadSay(box: Machine, rest: string[]): void {
+async function threadSay(box: Machine, rest: string[]): Promise<void> {
   const pull = need(rest[1], usage);
   const body = rest.slice(2).join(' ');
   if (!body) {
     fail(usage);
   }
-  box.review.say(pull, body);
+  await box.review.say(pull, body);
 }
 
-function threadResolve(box: Machine, rest: string[]): void {
-  box.review.resolveThread(need(rest[1], usage));
+async function threadResolve(box: Machine, rest: string[]): Promise<void> {
+  await box.review.resolveThread(need(rest[1], usage));
 }
 
-function threadFix(box: Machine, rest: string[]): void {
+async function threadFix(box: Machine, rest: string[]): Promise<void> {
   const args = fixArgs(rest.slice(1));
   if (!args) {
     fail(usage);
   }
-  console.log(fixThread(args, box));
+  console.log(await fixThread(args, box));
 }
 
-function mirror(box: Machine, rest: string[]): void {
+async function mirror(box: Machine, rest: string[]): Promise<void> {
   const key = need(rest[0], usage);
   const layer = need(rest[1], usage);
   const text = rest.slice(2).join(' ');
   if (!text) {
     fail(usage);
   }
-  const record = box.tracker.issue(key);
-  box.tracker.updateBody(key, updateMirror(record.body, layer, text));
+  const record = await box.tracker.issue(key);
+  await box.tracker.updateBody(key, updateMirror(record.body, layer, text));
 }
 
 if (process.argv[1]?.endsWith('sdd.ts') || process.argv[1]?.endsWith('sdd.mjs')) {
-  runSdd(process.argv.slice(2), await openMachine(process.cwd()));
+  await runSdd(process.argv.slice(2), await openMachine(process.cwd()));
 }

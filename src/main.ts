@@ -37,7 +37,7 @@ export async function driveIssue(box: Machine, key: string): Promise<number> {
     throw new Error('runtime is not configured');
   }
   for (let step = 1; step <= 40; step += 1) {
-    const decision = turn(box, key);
+    const decision = await turn(box, key);
     if (decision.kind !== 'agent') {
       console.log(`#${key} ${decision.kind}: ${decision.reason}`);
       return 0;
@@ -90,13 +90,13 @@ export async function runSpy(box: Machine, argv: string[]): Promise<void> {
 
   for (;;) {
     try {
-      const snapshot = loadCycle(
+      const snapshot = await loadCycle(
         box.tracker,
         box.review,
         key => box.vcs.filesAt(key),
         box.config.queueLabel,
       );
-      const decisions = performCycle(
+      const decisions = await performCycle(
         snapshot,
         {
           tracker: box.tracker,

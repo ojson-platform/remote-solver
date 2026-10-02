@@ -11,30 +11,35 @@ export type CycleSnapshot = {
 };
 
 /** Pulls of one issue, each open pull carrying the one review reading. */
-export function pullSnapshots(review: Review, key: string): PullSnapshot[] {
-  return review.pulls(key).map(pull => ({
-    ...pull,
-    review:
-      pull.state === 'OPEN'
-        ? reviewOf(review.threads(pull.id), review.comments(pull.id))
-        : emptyReview,
-  }));
+export async function pullSnapshots(review: Review, key: string): Promise<PullSnapshot[]> {
+  const pulls = await review.pulls(key);
+  const snapshots: PullSnapshot[] = [];
+  for (const pull of pulls) {
+    snapshots.push({
+      ...pull,
+      review:
+        pull.state === 'OPEN'
+          ? reviewOf(await review.threads(pull.id), await review.comments(pull.id))
+          : emptyReview,
+    });
+  }
+  return snapshots;
 }
 
-export function loadCycle(
+export async function loadCycle(
   tracker: Tracker,
   review: Review,
   filesAt: (key: string) => FileSource,
   queueLabel: string,
-): CycleSnapshot {
-  const issues = tracker.listOpen();
+): Promise<CycleSnapshot> {
+  const issues = await tracker.listOpen();
   const cycles = issues
     .filter(issue => issue.labels.includes(queueLabel) && issue.labels.includes('sdd:cycle'))
     .sort((a, b) => a.key.localeCompare(b.key, undefined, {numeric: true}));
   const pulls = new Map<string, PullSnapshot[]>();
   const changes = new Map<string, ChangeView>();
   for (const issue of cycles) {
-    pulls.set(issue.key, pullSnapshots(review, issue.key));
+    pulls.set(issue.key, await pullSnapshots(review, issue.key));
     changes.set(issue.key, readChange(issue.key, filesAt(issue.key)));
   }
   return {issues, cycles, pulls, changes};

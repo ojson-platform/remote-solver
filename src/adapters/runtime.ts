@@ -82,11 +82,11 @@ function keyFromBranch(branch: string, prefix: string): string {
   return branch.startsWith(head) ? branch.slice(head.length) : branch.slice(branch.indexOf('/') + 1);
 }
 
-function commitCount(vcs: Vcs, before: string, after: string): number {
+async function commitCount(vcs: Vcs, before: string, after: string): Promise<number> {
   if (before === after) {
     return 0;
   }
-  const range = vcs.compare(before, after);
+  const range = await vcs.compare(before, after);
   if (!range?.commits.trim()) {
     return 0;
   }
@@ -99,8 +99,8 @@ export function agentRuntime(config: AgentRuntimeConfig): Runtime {
     config.vcs.prepare(key, {worktreesDir: WORKTREES, links: packageLinks(config.solverRoot)});
   return {
     async run(skill: SkillRun) {
-      const dir = checkout(skill.key);
-      const before = config.vcs.tip(skill.key);
+      const dir = await checkout(skill.key);
+      const before = await config.vcs.tip(skill.key);
       ensureServiceEnv(config.root, config.solverRoot);
       const answer = await runAgent({
         cwd: dir,
@@ -121,14 +121,14 @@ export function agentRuntime(config: AgentRuntimeConfig): Runtime {
         resumeSession: skill.resumeSession,
       });
       return {
-        commits: commitCount(config.vcs, before, config.vcs.tip(skill.key)),
+        commits: await commitCount(config.vcs, before, await config.vcs.tip(skill.key)),
         sessionId: answer.sessionId,
         usage: answer.usage,
       };
     },
     async ask(request: RuntimeAsk) {
       const key = keyFromBranch(request.branch, config.branchPrefix);
-      const dir = checkout(key);
+      const dir = await checkout(key);
       ensureServiceEnv(config.root, config.solverRoot);
       return runAgent({
         cwd: dir,

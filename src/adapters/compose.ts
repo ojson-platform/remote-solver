@@ -1,10 +1,10 @@
+import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {performIssue} from '../machine/flow.ts';
 import type {Review, Runtime, Tracker, Vcs} from '../machine/port.ts';
 import {githubAdapters} from './github.ts';
-import {sandcastleRuntime} from './runtime.ts';
 import {gitVcs} from './vcs.ts';
 
 export type MachineConfig = {
@@ -21,7 +21,7 @@ export type Machine = {
   tracker: Tracker;
   review: Review;
   vcs: Vcs;
-  runtime: Runtime;
+  runtime?: Runtime;
 };
 
 /** Anything omitted is the adapter this repository ships: GitHub, git, sandcastle. */
@@ -35,7 +35,22 @@ export type MachineOptions = {
 
 /** This package, not the service the machine is pointed at. */
 export function solverRoot(): string {
-  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  let dir = here;
+  for (;;) {
+    const pkg = path.join(dir, 'package.json');
+    if (existsSync(pkg)) {
+      const name = (JSON.parse(readFileSync(pkg, 'utf8')) as {name?: string}).name;
+      if (name === '@ojson/remote-solver') {
+        return dir;
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      return path.resolve(here, '../..');
+    }
+    dir = parent;
+  }
 }
 
 export function machine(root = process.cwd(), options: MachineOptions = {}): Machine {
@@ -54,17 +69,7 @@ export function machine(root = process.cwd(), options: MachineOptions = {}): Mac
     tracker: options.tracker ?? github!.tracker,
     review: options.review ?? github!.review,
     vcs: options.vcs ?? gitVcs(root, {branchPrefix: config.branchPrefix}),
-    runtime:
-      options.runtime ??
-      sandcastleRuntime({
-        root,
-        skillsDir: path.join(solverRoot(), 'skills'),
-        branchPrefix: config.branchPrefix,
-        baseBranch: config.defaultBranch,
-        queueLabel: config.queueLabel,
-        prBase: config.prBase,
-        solverRoot: solverRoot(),
-      }),
+    runtime: options.runtime,
   };
 }
 

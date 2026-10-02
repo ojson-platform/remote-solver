@@ -1855,7 +1855,7 @@ function runStep(
         return {commits: 0};
       },
       async ask() {
-        return '';
+        return {text: ''};
       },
     },
   });

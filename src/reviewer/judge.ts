@@ -15,7 +15,7 @@ export async function sandcastleJudge(
   dossier: Dossier,
 ): Promise<Verdict> {
   try {
-    const text = await runtime.ask({
+    const answer = await runtime.ask({
       name: 'review',
       mode: 'judgment',
       promptFile: path.join(solverRoot(), 'prompts', 'review.md'),
@@ -28,7 +28,7 @@ export async function sandcastleJudge(
       branch: `reviewer/${dossier.head.slice(0, 12)}`,
       outputTag: 'verdict',
     });
-    return parseVerdict(text);
+    return parseVerdict(answer.text);
   } catch (error) {
     return {kind: 'unjudged', reason: failureReason(error)};
   }

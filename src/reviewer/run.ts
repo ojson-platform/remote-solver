@@ -12,7 +12,14 @@ export type {Judge};
  */
 /** `1` when a ready issue stayed unjudged. Wait, skip, clean, and remarks stay `0`. */
 export async function runReview(box: Machine, judge?: Judge): Promise<number> {
-  const chosen = judge ?? (dossier => sandcastleJudge(box.runtime, dossier));
+  const chosen =
+    judge ??
+    (dossier => {
+      if (!box.runtime) {
+        throw new Error('runtime is not configured');
+      }
+      return sandcastleJudge(box.runtime, dossier);
+    });
   const items = reviewQueue(box.tracker.listOpen(), key => box.review.pulls(key));
   if (items.length === 0) {
     console.log(describeQueue(items)[0]);

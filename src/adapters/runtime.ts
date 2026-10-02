@@ -5,7 +5,7 @@ import {Output, cursor, run, type AgentStreamEvent} from '@ai-hero/sandcastle';
 
 import {branchName} from '../machine/naming.ts';
 import type {Runtime, RuntimeAsk, SkillRun} from '../machine/port.ts';
-import {modelFor, modeOfSkill} from '../machine/skill.ts';
+import {modelFor} from '../machine/skill.ts';
 import {hostSandbox} from './host-sandbox.ts';
 import {ensureIssueBranch} from './vcs.ts';
 
@@ -18,7 +18,6 @@ const LINKED = [
 export type SandcastleRuntimeConfig = {
   /** Repository the worktrees are created in. */
   root: string;
-  skillsDir: string;
   branchPrefix: string;
   /** Ref a missing issue branch is cut from. */
   baseBranch: string;
@@ -144,7 +143,7 @@ export function sandcastleRuntime(config: SandcastleRuntimeConfig): Runtime {
           },
           cwd: config.root,
         });
-        return result.output;
+        return {text: result.output};
       } finally {
         if (!atLineStart) {
           process.stdout.write('\n');
@@ -158,12 +157,11 @@ export function sandcastleRuntime(config: SandcastleRuntimeConfig): Runtime {
         defaultBranch: config.baseBranch,
       });
       ensureServiceEnv(config.root, config.solverRoot);
-      const mode = modeOfSkill(config.skillsDir, skill.skill);
       const branch = branchName(skill.key, config.branchPrefix);
       const result = await run({
         name: skill.action,
         sandbox: hostSandbox(),
-        agent: cursor(modelFor(mode)),
+        agent: cursor(modelFor(skill.mode)),
         promptFile: path.join(config.solverRoot, 'prompts', 'sdd.md'),
         promptArgs: {
           ISSUE: skill.key,

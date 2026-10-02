@@ -1,6 +1,9 @@
-import {machine, turn, type Machine} from './adapters/compose.ts';
+import path from 'node:path';
+
+import {machine, solverRoot, turn, type Machine} from './adapters/compose.ts';
 import {performCycle} from './machine/flow.ts';
 import {exited, signature, tick, type State} from './machine/scheduler.ts';
+import {modeOfSkill} from './machine/skill.ts';
 import {loadCycle} from './machine/snapshot.ts';
 
 // Spy: poll the tracker and run up to --parallel issues in this process. Each
@@ -29,6 +32,10 @@ export async function runIssue(key: string): Promise<number> {
 
 /** One issue, up to 40 steps. */
 export async function driveIssue(box: Machine, key: string): Promise<number> {
+  const runtime = box.runtime;
+  if (!runtime) {
+    throw new Error('runtime is not configured');
+  }
   for (let step = 1; step <= 40; step += 1) {
     const decision = turn(box, key);
     if (decision.kind !== 'agent') {
@@ -36,13 +43,20 @@ export async function driveIssue(box: Machine, key: string): Promise<number> {
       return 0;
     }
     console.log(`\n#${key} ${decision.phase} → ${decision.action} (${decision.skill})`);
-    const outcome = await box.runtime.run({
+    const outcome = await runtime.run({
       skill: decision.skill,
       action: decision.action,
       key,
       phase: decision.phase,
       pull: decision.pr,
+      mode: modeOfSkill(path.join(solverRoot(), 'skills/sdd-flow/steps'), decision.skill),
     });
+    if (outcome.sessionId) {
+      console.log(`#${key} session ${outcome.sessionId}`);
+    }
+    if (outcome.usage) {
+      console.log(`#${key} tokens in ${outcome.usage.inputTokens} out ${outcome.usage.outputTokens}`);
+    }
     if (outcome.commits === 0) {
       console.error(
         `Stopped: ${decision.action} made no commit, so the next poll would repeat it.`,

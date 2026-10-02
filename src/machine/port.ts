@@ -118,17 +118,36 @@ export type Vcs = {
   dirty(): string[];
 };
 
+export type AgentUsage = {
+  inputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+  outputTokens: number;
+};
+
+/** Text the agent wrote, plus the session it left when the provider records one. */
+export type AgentResult = {
+  text: string;
+  sessionId?: string;
+  sessionFilePath?: string;
+  usage?: AgentUsage;
+};
+
 export type SkillRun = {
   skill: string;
   action: string;
   key: IssueKey;
   phase: string;
   pull: string;
+  mode: SkillMode;
+  resumeSession?: string;
 };
 
 /** What one skill run changed. Zero commits leaves the issue idle. */
 export type SkillOutcome = {
   commits: number;
+  sessionId?: string;
+  usage?: AgentUsage;
 };
 
 /** One prompt, one answer. The runtime owns the sandbox, the model, and the base branch. */
@@ -145,5 +164,5 @@ export type RuntimeAsk = {
 
 export type Runtime = {
   run(skill: SkillRun): Promise<SkillOutcome>;
-  ask(request: RuntimeAsk): Promise<string>;
+  ask(request: RuntimeAsk): Promise<AgentResult>;
 };

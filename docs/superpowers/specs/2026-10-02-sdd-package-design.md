@@ -56,7 +56,7 @@ skills/sdd-init/
 
 `scripts/sdd.mjs` — один файл. В сервис он попадает либо симлинком aisuite на каталог скила, либо как `bin.sdd` установленного пакета. `bin.remote-solver` — это `bin/remote-solver.mjs`. Оба запускаются через `node`. `tsx` в зависимостях пакета нет.
 
-`sdd-init` описывает оба входа. На GitHub этап машины добавляет зависимость `@ojson/remote-solver` и пишет `sandcastle.yaml` с `comments.ignore`. На Arcadia тот же этап не пропускается: скилы уже приезжают пресетом `lavka/sdd`, зависимость ставится ради шпиона. `sandcastle.yaml` сервиса адаптеры не называет.
+`sdd-init` описывает оба входа. Этап машины добавляет зависимость `@ojson/remote-solver` и пишет ключ `sdd`, а не `sandcastle.yaml`. На Arcadia тот же этап не пропускается: скилы уже приезжают пресетом `lavka/sdd`, зависимость ставится ради шпиона.
 
 ## Машина без runtime
 
@@ -215,7 +215,7 @@ export async function openMachine(
 
 `printStep` печатает `queue` и `base` из итогового `config`, поэтому промпт шпиона на Аркадии получает значения адаптеров.
 
-`sandcastle.yaml` остаётся файлом сервиса (`comments.ignore` и то, что сервис уже туда пишет). Ключа для адаптеров в нём нет.
+Настройки сервиса — ключ `sdd` в `openspec/config.yaml`.
 
 ## Что давало отдельное SKILL.md
 

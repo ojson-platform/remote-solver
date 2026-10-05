@@ -13,7 +13,15 @@ const common = {
   bundle: true,
   platform: 'node',
   format: 'esm',
-  banner: {js: '#!/usr/bin/env node'},
+  // yaml's CJS build calls require("process") and require("buffer"). esbuild
+  // leaves those as dynamic requires in an ESM bundle, which Node rejects.
+  banner: {
+    js: [
+      '#!/usr/bin/env node',
+      "import {createRequire} from 'node:module';",
+      'const require = createRequire(import.meta.url);',
+    ].join('\n'),
+  },
 };
 
 await esbuild.build({

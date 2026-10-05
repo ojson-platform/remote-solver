@@ -1,6 +1,6 @@
 import type {Review, Vcs} from './machine/port.ts';
 
-import {machine, solverRoot, turn, type Machine} from './adapters/compose.ts';
+import {solverRoot, turn, type Machine} from './adapters/compose.ts';
 import {openMachine} from './adapters/load.ts';
 import {packageLinks} from './adapters/vcs.ts';
 import {readChange} from './machine/change.ts';
@@ -170,14 +170,17 @@ export async function publish(
   return `#${args.key}: pull ${id}`;
 }
 
-export async function runSdd(argv: string[], box = machine()): Promise<void> {
+export async function runSdd(argv: string[], box?: Machine): Promise<void> {
   const [command, ...rest] = argv;
   if (command === 'help' || command === '--help' || command === '-h') {
     console.error(usage);
     return;
   }
+  if (command === undefined || !verbs[command]) {
+    fail(usage);
+  }
   try {
-    await dispatch(box, command, rest);
+    await dispatch(box ?? (await openMachine(process.cwd())), command, rest);
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error));
   }
@@ -397,5 +400,5 @@ async function mirror(box: Machine, rest: string[]): Promise<void> {
 }
 
 if (process.argv[1]?.endsWith('sdd.ts') || process.argv[1]?.endsWith('sdd.mjs')) {
-  await runSdd(process.argv.slice(2), await openMachine(process.cwd()));
+  await runSdd(process.argv.slice(2));
 }

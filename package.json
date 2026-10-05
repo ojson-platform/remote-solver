@@ -29,7 +29,8 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@ai-hero/sandcastle": "0.12.0"
+    "@ai-hero/sandcastle": "0.12.0",
+    "yaml": "^2.8.0"
   },
   "devDependencies": {
     "@ojson/infra": "^1.0.1",

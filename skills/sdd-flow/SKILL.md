@@ -24,7 +24,7 @@ The issue is already in the cycle: the queue label and `sdd:cycle` are set befor
 
 ## Act
 
-- `agent`: run `node scripts/sdd.mjs worktree <key>`. The printed path is the cwd for every edit and commit in this issue. Open `steps/<name>.md` for the printed action. The printed decision's `queue` and `base` are the queue label and the base branch for that step. A commit was made: run `node scripts/sdd.mjs step <key>` again and follow Act. No commit: stop and say that the action made no commit.
+- `agent`: run `node scripts/sdd.mjs worktree <key>`. The printed path is the cwd for every edit and commit in this issue. Open `steps/<name>.md` for the printed action. The printed decision's `queue` and `base` are the queue label and the base branch for the issue being driven in that step. A new child issue uses the first queue under `sdd.queues` in `openspec/config.yaml`, not the printed `queue`. A commit was made: run `node scripts/sdd.mjs step <key>` again and follow Act. No commit: stop and say that the action made no commit.
 - `wait` or `done`: stop and say the reason.
 
 ## The next message

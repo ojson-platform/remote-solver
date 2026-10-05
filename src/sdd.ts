@@ -242,7 +242,7 @@ async function step(box: Machine, rest: string[]): Promise<void> {
   await printStep(await turn(box, args.key), box, labels);
 }
 
-/** The chat reads these two fields. The spy run receives the same values as prompt placeholders. */
+/** `queue` is the queue of the issue being driven. The prompt placeholder `QUEUE` is the first configured queue, the one a new child issue is filed in. */
 function printStep(decision: Decision, box: Machine, labels: readonly string[]): void {
   console.log(
     JSON.stringify(

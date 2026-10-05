@@ -1975,13 +1975,13 @@ spec('step', () => {
     scenario('The printed queue is the issue queue', async () => {
       const {printed} = await runStep(
         ['step', '1'],
-        [planIssue('1', ['SECOND', 'FIRST', 'sdd:cycle', 'sdd:proposed'])],
+        [planIssue('1', ['SECOND', 'sdd:cycle', 'sdd:proposed'])],
         planFiles,
         {},
         [{name: 'FIRST'}, {name: 'SECOND'}],
       );
       const named = printed as typeof printed & {queue?: string; base?: string};
-      assert.equal(named.queue, 'FIRST');
+      assert.equal(named.queue, 'SECOND');
       assert.equal(named.base, 'trunk');
     });
     scenario('A decision outside the cycle still names them', async () => {

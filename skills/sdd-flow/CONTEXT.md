@@ -108,9 +108,9 @@ The work the run found belongs to another layer: `thread open <pull> <file> <lin
 
 ## Publish
 
-1. `git status` is empty aside from the files of this commit. Anything else is an artifact the task did not name: a generated directory goes into the service `.gitignore`, a stray file is deleted, a file that belongs to the task joins the commit. Find why it appeared and remove that cause in the same run. `publish` refuses a dirty tree and lists its files.
+1. The checkout lists only the files of this commit. Anything else is an artifact the task did not name: a generated directory is ignored by the repository, a stray file is deleted, a file that belongs to the task joins the commit. Find why it appeared and remove that cause in the same run. `publish` refuses a dirty checkout and lists its files.
 2. Commit. The repository's own commit rule wins: read it where the repository states commit messages (`CONTRIBUTING`, the agent style guide, a commitlint config). Without one, the subject is `#<issue>: <what changed>`. The body contains a line `#<issue>`. Any uncommitted `openspec/` of this issue joins the commit.
-3. `node scripts/sdd.mjs publish <issue> "#<issue>: <what changed>"`. The argument is the pull request title, not the commit subject. It pushes `sdd/<issue>` and opens the pull request when there is none.
+3. `node scripts/sdd.mjs publish <issue> "#<issue>: <what changed>"`. The argument is the pull request title, not the commit subject. It pushes the issue branch and opens the pull request when there is none.
 4. The layer's mirror line, when the skill names one: § Issue mirror.
 
 Nothing to commit: skip steps 1–2 and still run step 3.
@@ -123,9 +123,7 @@ Wait only for a blocker. The review of a published proposal, spec, or design is 
 
 ## Worktree
 
-The agent for an issue runs on branch `sdd/<key>`. A branch is checked out in only one worktree, so an older checkout of `sdd/<key>` has to be removed before that issue can run. A dirty tree is reused as-is and is not fast-forwarded from origin. This package is linked into the checkout as `.sandcastle/`.
-
-The spy's library keeps its checkout under `.sandcastle/worktrees/`, named from the branch with `/` replaced by `-`. A person driving one issue in a chat runs `node scripts/sdd.mjs worktree <key>`, which checks the same branch out at `.worktrees/sdd-<key>`. The two checkouts are not used together.
+Run `node scripts/sdd.mjs worktree <key>` and work in the directory it prints. A branch is checked out in one place, so an older checkout of the same branch has to be removed before this issue can run. A dirty checkout is reused as it is. The spy and a chat driving one issue do not share a checkout.
 
 ## Issue mirror
 

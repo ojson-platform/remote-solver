@@ -184,7 +184,6 @@ export type Runtime = {
 
 ```ts
 export function createAdapters(root: string, config: MachineConfig): {
-  config?: Partial<MachineConfig>;
   tracker: Tracker;
   review: Review;
   vcs: Vcs;
@@ -193,19 +192,20 @@ export function createAdapters(root: string, config: MachineConfig): {
 
 Модуль не импортирует ничего, кроме `node:*`. Runtime он не возвращает: его строит пакет поверх `vcs`.
 
-`config` в аргументе — дефолты пакета (`Sandcastle`, `origin/master`, `master`). Модуль возвращает свой `config` для своего хоста: очередь Трекера, `trunk`.
+`config` в аргументе — конфиг сервиса после `loadServiceConfig`. Модуль возвращает `tracker`, `review` и `vcs`. `config` не возвращает. Очереди, база и префикс остаются из загруженного конфига.
 
 ```ts
 export async function openMachine(
   root: string,
   options: {runtime?: (box: Omit<Machine, 'runtime'>) => Runtime} = {},
 ): Promise<Machine> {
+  const config = loadServiceConfig(root);
   const file = adapterFile(process.argv[1] ?? '', root);
-  let built = machine(root);
+  let built = machine(root, {config});
   if (file) {
     const loaded = await import(pathToFileURL(file).href);
     const made = loaded.createAdapters(root, built.config);
-    built = machine(root, {config: made.config, tracker: made.tracker, review: made.review, vcs: made.vcs});
+    built = machine(root, {config, tracker: made.tracker, review: made.review, vcs: made.vcs});
   }
   return {...built, runtime: options.runtime?.(built)};
 }
@@ -213,7 +213,7 @@ export async function openMachine(
 
 Чат вызывает `openMachine(cwd)`. Шпион и ревьюер — `openMachine(cwd, {runtime: box => agentRuntime({root, vcs: box.vcs, config: box.config, solverRoot: solverRoot()})})`.
 
-`printStep` печатает `queue` и `base` из итогового `config`, поэтому промпт шпиона на Аркадии получает значения адаптеров.
+`printStep` печатает `queue` и `base` из итогового `config`, поэтому промпт шпиона на Аркадии получает очереди и базу сервиса из `openspec/config.yaml`.
 
 Настройки сервиса — ключ `sdd` в `openspec/config.yaml`.
 

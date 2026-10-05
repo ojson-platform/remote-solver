@@ -8,7 +8,7 @@
 
 ### Requirement: Step settles one issue and prints its decision
 
-`step <key>` SHALL apply that issue's mechanical phase moves and print the decision that stops the settlement. When that decision is a merge, `step` SHALL merge the pull request and print the following decision: the issue is `accepted` and closed, and the printed decision is `done`. It SHALL NOT start a skill. It SHALL NOT settle any other issue. Every printed decision SHALL carry `queue`, the machine's queue label, and `base`, the pull request base branch, including a decision printed because the issue is outside the cycle.
+`step <key>` SHALL apply that issue's mechanical phase moves and print the decision that stops the settlement. When that decision is a merge, `step` SHALL merge the pull request and print the following decision: the issue is `accepted` and closed, and the printed decision is `done`. It SHALL NOT start a skill. It SHALL NOT settle any other issue. Every printed decision SHALL carry `queue` and `base`, including a decision printed because the issue is outside the cycle. `queue` SHALL be the earliest configured queue whose name is in the issue labels. When no configured queue name is in the labels, `queue` SHALL be the first configured queue name. `base` SHALL be the pull request base branch.
 
 #### Scenario: One issue moves and another stays
 
@@ -25,7 +25,12 @@
 #### Scenario: The printed decision names the queue and the base
 
 - **WHEN** `step` is run for an issue in the cycle
-- **THEN** the printed decision carries `queue` as the machine's queue label and `base` as the pull request base branch
+- **THEN** the printed decision carries `queue` as that issue's queue and `base` as the pull request base branch
+
+#### Scenario: The printed queue is the issue queue
+
+- **WHEN** the issue labels include `SECOND` and `FIRST` and the configured queues are `FIRST` then `SECOND`
+- **THEN** the printed `queue` is `FIRST` and `base` is the pull request base branch
 
 #### Scenario: A decision outside the cycle still names them
 

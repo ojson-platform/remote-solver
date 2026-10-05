@@ -1757,6 +1757,7 @@ function planFiles(key: string): FileSource {
 async function runPlan(
   issues: {key: string; title: string; body: string; state: string; labels: string[]}[],
   pulls: Record<string, {id: string; title: string; state: string}[]> = {},
+  queues: {name: string}[] = [{name: 'Sandcastle'}],
 ): Promise<{printed: Decision; labels: (key: string) => Promise<string[]>; calls: string[]}> {
   const {tracker, review, calls} = memoryPorts({
     issues,
@@ -1764,7 +1765,7 @@ async function runPlan(
     checks: {'9': {checks: 'green'}},
   });
   const box = machine(process.cwd(), {
-    config: {queues: [{name: 'Sandcastle'}]},
+    config: {queues},
     tracker,
     review,
     vcs: {
@@ -1836,6 +1837,13 @@ spec('plan', () => {
         assert.match(printed.reason, /#4/);
       }
     });
+    scenario('A decision with no issue names the first queue', async () => {
+      const {printed} = await runPlan([], {}, [{name: 'FIRST'}, {name: 'SECOND'}]);
+      assert.equal(printed.issue, null);
+      const named = printed as typeof printed & {queue?: string; base?: string};
+      assert.equal(named.queue, 'FIRST');
+      assert.equal(named.base, 'trunk');
+    });
   });
 });
 
@@ -1853,6 +1861,7 @@ async function runStep(
   issues: {key: string; title: string; body: string; state: string; labels: string[]}[],
   filesAt: (key: string) => FileSource,
   pulls: Record<string, {id: string; title: string; state: string}[]> = {},
+  queues: {name: string}[] = [{name: 'Sandcastle'}],
 ): Promise<{printed: Decision; labels: (key: string) => Promise<string[]>; calls: string[]}> {
   const {tracker, review, calls} = memoryPorts({
     issues,
@@ -1860,7 +1869,7 @@ async function runStep(
     checks: {'9': {checks: 'green'}},
   });
   const box = machine(process.cwd(), {
-    config: {queues: [{name: 'Sandcastle'}]},
+    config: {queues},
     tracker,
     review,
     vcs: {
@@ -1957,6 +1966,18 @@ spec('step', () => {
       );
       const named = printed as typeof printed & {queue?: string; base?: string};
       assert.equal(named.queue, 'Sandcastle');
+      assert.equal(named.base, 'trunk');
+    });
+    scenario('The printed queue is the issue queue', async () => {
+      const {printed} = await runStep(
+        ['step', '1'],
+        [planIssue('1', ['SECOND', 'FIRST', 'sdd:cycle', 'sdd:proposed'])],
+        planFiles,
+        {},
+        [{name: 'FIRST'}, {name: 'SECOND'}],
+      );
+      const named = printed as typeof printed & {queue?: string; base?: string};
+      assert.equal(named.queue, 'FIRST');
       assert.equal(named.base, 'trunk');
     });
     scenario('A decision outside the cycle still names them', async () => {

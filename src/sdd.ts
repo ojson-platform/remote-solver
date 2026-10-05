@@ -216,7 +216,7 @@ async function plan(box: Machine): Promise<void> {
     box.config.queues,
   );
   const decision = pick(await resolveCycle(snapshot, box.tracker, box.config.queues));
-  console.log(JSON.stringify(decision, null, 2));
+  await printStep(decision, box);
 }
 
 async function step(box: Machine, rest: string[]): Promise<void> {
@@ -228,28 +228,41 @@ async function step(box: Machine, rest: string[]): Promise<void> {
   const inCycle =
     queueOf(record.labels, box.config.queues) !== undefined && record.labels.includes('sdd:cycle');
   if (!inCycle) {
-    printStep({kind: 'done', issue: args.key, reason: 'not in the open cycle'}, box);
+    await printStep({kind: 'done', issue: args.key, reason: 'not in the open cycle'}, box);
     return;
   }
   if (args.labels.length) {
     await box.tracker.editLabels(args.key, args.labels, []);
   }
-  printStep(await turn(box, args.key), box);
+  await printStep(await turn(box, args.key), box);
 }
 
 /** The chat reads these two fields. The spy run receives the same values as prompt placeholders. */
-function printStep(decision: Decision, box: Machine): void {
+async function printStep(decision: Decision, box: Machine): Promise<void> {
   console.log(
     JSON.stringify(
       {
         ...decision,
-        queue: box.config.queues.map(queue => queue.name).join(', '),
+        queue: await printedQueue(decision, box),
         base: box.config.base,
       },
       null,
       2,
     ),
   );
+}
+
+/** The issue's queue, or the first configured name when the decision has no issue. */
+async function printedQueue(decision: Decision, box: Machine): Promise<string> {
+  const first = box.config.queues[0]?.name;
+  if (!first) {
+    throw new Error('openspec/config.yaml: queues is missing');
+  }
+  if (decision.issue === null) {
+    return first;
+  }
+  const record = await box.tracker.issue(decision.issue);
+  return queueOf(record.labels, box.config.queues)?.name ?? first;
 }
 
 async function worktree(box: Machine, rest: string[]): Promise<void> {

@@ -216,7 +216,8 @@ async function plan(box: Machine): Promise<void> {
     box.config.queues,
   );
   const decision = pick(await resolveCycle(snapshot, box.tracker, box.config.queues));
-  await printStep(decision, box);
+  const labels = decision.issue === null ? [] : (await box.tracker.issue(decision.issue)).labels;
+  await printStep(decision, box, labels);
 }
 
 async function step(box: Machine, rest: string[]): Promise<void> {
@@ -228,41 +229,29 @@ async function step(box: Machine, rest: string[]): Promise<void> {
   const inCycle =
     queueOf(record.labels, box.config.queues) !== undefined && record.labels.includes('sdd:cycle');
   if (!inCycle) {
-    await printStep({kind: 'done', issue: args.key, reason: 'not in the open cycle'}, box);
+    await printStep({kind: 'done', issue: args.key, reason: 'not in the open cycle'}, box, record.labels);
     return;
   }
   if (args.labels.length) {
     await box.tracker.editLabels(args.key, args.labels, []);
   }
-  await printStep(await turn(box, args.key), box);
+  const labels = (await box.tracker.issue(args.key)).labels;
+  await printStep(await turn(box, args.key), box, labels);
 }
 
 /** The chat reads these two fields. The spy run receives the same values as prompt placeholders. */
-async function printStep(decision: Decision, box: Machine): Promise<void> {
+function printStep(decision: Decision, box: Machine, labels: readonly string[]): void {
   console.log(
     JSON.stringify(
       {
         ...decision,
-        queue: await printedQueue(decision, box),
+        queue: queueOf(labels, box.config.queues)?.name ?? box.config.queues[0].name,
         base: box.config.base,
       },
       null,
       2,
     ),
   );
-}
-
-/** The issue's queue, or the first configured name when the decision has no issue. */
-async function printedQueue(decision: Decision, box: Machine): Promise<string> {
-  const first = box.config.queues[0]?.name;
-  if (!first) {
-    throw new Error('openspec/config.yaml: queues is missing');
-  }
-  if (decision.issue === null) {
-    return first;
-  }
-  const record = await box.tracker.issue(decision.issue);
-  return queueOf(record.labels, box.config.queues)?.name ?? first;
 }
 
 async function worktree(box: Machine, rest: string[]): Promise<void> {

@@ -1862,6 +1862,7 @@ async function runStep(
   filesAt: (key: string) => FileSource,
   pulls: Record<string, {id: string; title: string; state: string}[]> = {},
   queues: {name: string}[] = [{name: 'Sandcastle'}],
+  base?: string,
 ): Promise<{printed: Decision; labels: (key: string) => Promise<string[]>; calls: string[]}> {
   const {tracker, review, calls} = memoryPorts({
     issues,
@@ -1869,7 +1870,7 @@ async function runStep(
     checks: {'9': {checks: 'green'}},
   });
   const box = machine(process.cwd(), {
-    config: {queues},
+    config: base === undefined ? {queues} : {queues, base},
     tracker,
     review,
     vcs: {
@@ -1963,10 +1964,13 @@ spec('step', () => {
         ['step', '1'],
         [planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposed'])],
         planFiles,
+        {},
+        [{name: 'Sandcastle'}],
+        'master',
       );
       const named = printed as typeof printed & {queue?: string; base?: string};
       assert.equal(named.queue, 'Sandcastle');
-      assert.equal(named.base, 'trunk');
+      assert.equal(named.base, 'master');
     });
     scenario('The printed queue is the issue queue', async () => {
       const {printed} = await runStep(
@@ -1981,11 +1985,18 @@ spec('step', () => {
       assert.equal(named.base, 'trunk');
     });
     scenario('A decision outside the cycle still names them', async () => {
-      const {printed} = await runStep(['step', '7'], [planIssue('7', ['sdd:proposing'])], planFiles);
+      const {printed} = await runStep(
+        ['step', '7'],
+        [planIssue('7', ['sdd:proposing'])],
+        planFiles,
+        {},
+        [{name: 'Sandcastle'}],
+        'master',
+      );
       assert.equal(printed.kind, 'done');
       const named = printed as typeof printed & {queue?: string; base?: string};
       assert.equal(named.queue, 'Sandcastle');
-      assert.equal(named.base, 'trunk');
+      assert.equal(named.base, 'master');
     });
     scenario('A merge is performed', async () => {
       const {printed, labels, calls} = await runStep(

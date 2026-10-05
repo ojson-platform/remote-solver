@@ -65,7 +65,9 @@ export function machine(root = process.cwd(), options: MachineOptions = {}): Mac
     throw new Error('openspec/config.yaml: queues is missing');
   }
   const github =
-    options.tracker && options.review ? undefined : githubAdapters({prBase: config.base, root});
+    options.tracker && options.review
+      ? undefined
+      : githubAdapters({prBase: config.base, ignoreComments: config.ignoreComments});
   return {
     root,
     config,

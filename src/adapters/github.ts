@@ -1,6 +1,6 @@
 import {execFileSync, spawn} from 'node:child_process';
 
-import {authorIgnored, loadIgnoredAuthors} from '../machine/ignore.ts';
+import {authorIgnored} from '../machine/ignore.ts';
 import {pullTitlePrefix} from '../machine/naming.ts';
 import {markRobot} from '../machine/marker.ts';
 import {spokeByRobot} from '../machine/review.ts';
@@ -188,13 +188,12 @@ function asRecord(issue: RawIssue): IssueRecord {
 export type GitHubAdapters = {
   /** Base branch passed to `gh pr create`. */
   prBase?: string;
-  /** Service root that holds `sandcastle.yaml`. */
-  root?: string;
+  ignoreComments?: RegExp[];
 };
 
 export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker; review: Review} {
   const prBase = options.prBase ?? 'master';
-  const ignored = loadIgnoredAuthors(options.root ?? process.cwd());
+  const ignored = options.ignoreComments ?? [];
   let slug: string | null = null;
   let user: string | null = null;
   const repoSlug = () => {

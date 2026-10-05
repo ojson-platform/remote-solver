@@ -8,12 +8,24 @@ import {openMachine} from './load.ts';
 
 const file = 'ai/artifacts/skills/teams/lavka/sdd/sdd-flow/scripts/adapters/index.mjs';
 
+const configYaml = `sdd:
+  queues:
+    - name: FROM-FILE
+`;
+
+function writeServiceConfig(root: string): void {
+  const dir = path.join(root, 'openspec');
+  mkdirSync(dir, {recursive: true});
+  writeFileSync(path.join(dir, 'config.yaml'), configYaml);
+}
+
 function plant(mount: string, body: string): string {
   const placed = path.join(mount, file);
   mkdirSync(path.dirname(placed), {recursive: true});
   writeFileSync(placed, body);
   const root = path.join(mount, 'taxi/lavka/service');
   mkdirSync(root, {recursive: true});
+  writeServiceConfig(root);
   return root;
 }
 
@@ -30,8 +42,8 @@ test('adapters replace the ports and the config; the runtime is built over their
   const root = plant(mkdtempSync(path.join(tmpdir(), 'sdd-adapters-')), module);
   const chat = await openMachine(root);
   assert.equal(await chat.tracker.login(), 'from-adapter');
-  assert.equal(chat.config.queueLabel, 'LAVKA');
-  assert.equal(chat.config.prBase, 'trunk');
+  assert.equal(chat.config.queues[0].name, 'FROM-FILE');
+  assert.equal(chat.config.base, 'trunk');
   assert.equal(chat.runtime, undefined);
 
   const seen: unknown[] = [];
@@ -43,7 +55,13 @@ test('adapters replace the ports and the config; the runtime is built over their
 
 test('without the adapter file the ports stay GitHub and git', async () => {
   const root = mkdtempSync(path.join(tmpdir(), 'sdd-plain-'));
+  writeServiceConfig(root);
   const box = await openMachine(root);
-  assert.equal(box.config.queueLabel, 'Sandcastle');
+  assert.equal(box.config.queues[0].name, 'FROM-FILE');
   assert.equal(box.runtime, undefined);
+});
+
+test('a root with no yaml is rejected', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'sdd-missing-'));
+  await assert.rejects(() => openMachine(root), /openspec\/config.yaml is missing/);
 });

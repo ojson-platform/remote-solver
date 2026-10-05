@@ -145,7 +145,7 @@ spec('review-gate', () => {
         tracker,
         review,
         files,
-        queueLabel: 'Sandcastle',
+        queues: [{name: 'Sandcastle'}],
         change: {...readChange('5', files), proposal: true},
       };
       assert.equal((await resolveIssue('5', options)).kind, 'wait');
@@ -253,7 +253,7 @@ spec('review-gate', () => {
         tracker,
         review,
         files,
-        queueLabel: 'Sandcastle',
+        queues: [{name: 'Sandcastle'}],
         change: {...readChange('5', files), proposal: true},
       });
       assert.ok((await tracker.labels('5')).includes('sdd:specifying'));
@@ -277,7 +277,7 @@ spec('review-gate', () => {
         tracker,
         review,
         files,
-        queueLabel: 'Sandcastle',
+        queues: [{name: 'Sandcastle'}],
         change: {...readChange('5', files), proposal: true},
       };
       await resolveIssue('5', options);
@@ -826,7 +826,7 @@ spec('dependencies', () => {
           ]),
         },
         tracker,
-        'Sandcastle',
+        [{name: 'Sandcastle'}],
       );
       assert.ok((await tracker.labels('1')).includes('sdd:specifying'));
       assert.equal((await tracker.labels('1')).includes('sdd:implementing'), false);
@@ -999,7 +999,12 @@ spec('merge', () => {
         ],
         pulls: {'5': [{id: '9', title: '#5: title', state: 'MERGED'}]},
       });
-      const decision = await resolveIssue('5', {tracker, review, files, queueLabel: 'Sandcastle'});
+      const decision = await resolveIssue('5', {
+        tracker,
+        review,
+        files,
+        queues: [{name: 'Sandcastle'}],
+      });
       assert.equal(decision.kind, 'done');
       assert.equal((await tracker.issue('5')).state, 'CLOSED');
     });
@@ -1061,7 +1066,10 @@ spec('wait', () => {
       });
       try {
         await assert.rejects(
-          runSdd(['wait', '7'], machine(process.cwd(), {tracker, review})),
+          runSdd(
+            ['wait', '7'],
+            machine(process.cwd(), {tracker, review, config: {queues: [{name: 'Sandcastle'}]}}),
+          ),
           /exit/,
         );
         assert.equal((await tracker.labels('7')).includes('sdd:wait-human'), false);
@@ -1073,7 +1081,10 @@ spec('wait', () => {
       const {tracker, review, calls} = memoryPorts({
         issues: [{key: '7', title: '#7: title', body: '', state: 'OPEN', labels: ['sdd:cycle']}],
       });
-      await runSdd(['wait', '7', 'merge the pull request'], machine(process.cwd(), {tracker, review}));
+      await runSdd(
+        ['wait', '7', 'merge the pull request'],
+        machine(process.cwd(), {tracker, review, config: {queues: [{name: 'Sandcastle'}]}}),
+      );
       assert.ok((await tracker.labels('7')).includes('sdd:wait-human'));
       assert.ok(calls.some(call => call.includes('merge the pull request')));
     });
@@ -1092,14 +1103,20 @@ spec('wait', () => {
           },
         ],
       });
-      await runSdd(['unwait', '7'], machine(process.cwd(), {tracker, review}));
+      await runSdd(
+        ['unwait', '7'],
+        machine(process.cwd(), {tracker, review, config: {queues: [{name: 'Sandcastle'}]}}),
+      );
       assert.equal((await tracker.labels('7')).includes('sdd:wait-human'), false);
     });
     scenario('Unwait on an issue that is not waiting', async () => {
       const {tracker, review, calls} = memoryPorts({
         issues: [{key: '7', title: '#7: title', body: '', state: 'OPEN', labels: ['sdd:cycle']}],
       });
-      await runSdd(['unwait', '7'], machine(process.cwd(), {tracker, review}));
+      await runSdd(
+        ['unwait', '7'],
+        machine(process.cwd(), {tracker, review, config: {queues: [{name: 'Sandcastle'}]}}),
+      );
       assert.equal(calls.includes('editLabels'), false);
       assert.deepEqual(await tracker.labels('7'), ['sdd:cycle']);
     });
@@ -1224,8 +1241,13 @@ spec('idle', () => {
           },
         ],
       });
-      const snapshot = await loadCycle(tracker, review, () => files, 'Sandcastle');
-      const decisions = await resolveCycle(snapshot, tracker, 'Sandcastle', new Set(['7']));
+      const snapshot = await loadCycle(tracker, review, () => files, [{name: 'Sandcastle'}]);
+      const decisions = await resolveCycle(
+        snapshot,
+        tracker,
+        [{name: 'Sandcastle'}],
+        new Set(['7']),
+      );
       assert.deepEqual(decisions, []);
       assert.equal(calls.includes('editLabels'), false);
       assert.deepEqual(await tracker.labels('7'), ['Sandcastle', 'sdd:cycle', 'sdd:proposed']);
@@ -1471,6 +1493,7 @@ spec('reviewer', () => {
         ranges: {'15': {head: reviewedHead, base: 'def'}},
       });
       const box = machine(process.cwd(), {
+        config: {queues: [{name: 'Sandcastle'}]},
         tracker,
         review,
         vcs: {
@@ -1741,6 +1764,7 @@ async function runPlan(
     checks: {'9': {checks: 'green'}},
   });
   const box = machine(process.cwd(), {
+    config: {queues: [{name: 'Sandcastle'}]},
     tracker,
     review,
     vcs: {
@@ -1836,6 +1860,7 @@ async function runStep(
     checks: {'9': {checks: 'green'}},
   });
   const box = machine(process.cwd(), {
+    config: {queues: [{name: 'Sandcastle'}]},
     tracker,
     review,
     vcs: {
@@ -1881,13 +1906,14 @@ function serviceRepo(): string {
   writeFileSync(path.join(service, 'README'), 'x\n');
   git(['add', '.']);
   git(['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'base']);
+  git(['update-ref', 'refs/remotes/origin/trunk', 'HEAD']);
   return service;
 }
 
 async function runWorktree(service: string, key: string): Promise<string> {
   const {tracker, review} = memoryPorts({issues: [planIssue(key, ['sdd:cycle'])]});
   const box = machine(service, {
-    config: {defaultBranch: 'master'},
+    config: {queues: [{name: 'Sandcastle'}]},
     tracker,
     review,
   });
@@ -1931,14 +1957,14 @@ spec('step', () => {
       );
       const named = printed as typeof printed & {queue?: string; base?: string};
       assert.equal(named.queue, 'Sandcastle');
-      assert.equal(named.base, 'master');
+      assert.equal(named.base, 'trunk');
     });
     scenario('A decision outside the cycle still names them', async () => {
       const {printed} = await runStep(['step', '7'], [planIssue('7', ['sdd:proposing'])], planFiles);
       assert.equal(printed.kind, 'done');
       const named = printed as typeof printed & {queue?: string; base?: string};
       assert.equal(named.queue, 'Sandcastle');
-      assert.equal(named.base, 'master');
+      assert.equal(named.base, 'trunk');
     });
     scenario('A merge is performed', async () => {
       const {printed, labels, calls} = await runStep(

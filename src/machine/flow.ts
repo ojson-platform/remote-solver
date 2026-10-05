@@ -2,22 +2,24 @@ import {readChange, type ChangeView} from './change.ts';
 import {gateAsk, openWait} from './labels.ts';
 import {settle, type Decision} from './policy.ts';
 import type {FileSource, Review, Tracker} from './port.ts';
+import {queueOf} from './queues.ts';
+import type {QueueConfig} from './service-config.ts';
 import {pullSnapshots, type CycleSnapshot} from './snapshot.ts';
 
-function queueLabelOf(snapshot: CycleSnapshot, queueLabel: string): Decision[] {
+function queueLabelOf(snapshot: CycleSnapshot, queues: readonly QueueConfig[]): Decision[] {
   if (snapshot.cycles.length > 0) {
     return [];
   }
   const nums =
     snapshot.issues
-      .filter(issue => issue.labels.includes(queueLabel))
+      .filter(issue => queueOf(issue.labels, queues) !== undefined)
       .map(issue => `#${issue.key}`)
       .join(', ') || 'empty';
   return [
     {
       kind: 'wait',
       issue: null,
-      reason: `No open sdd:cycle issues. ${queueLabel} queue: ${nums}. Add the sdd:cycle label to enter the cycle.`,
+      reason: `No open sdd:cycle issues. ${queues.map(queue => queue.name).join(', ')} queue: ${nums}. Add the sdd:cycle label to enter the cycle.`,
     },
   ];
 }
@@ -67,10 +69,10 @@ async function applySettlement(
 export async function resolveCycle(
   snapshot: CycleSnapshot,
   tracker: Tracker,
-  queueLabel: string,
+  queues: QueueConfig[],
   busy: ReadonlySet<string> = new Set(),
 ): Promise<Decision[]> {
-  const empty = queueLabelOf(snapshot, queueLabel);
+  const empty = queueLabelOf(snapshot, queues);
   if (empty.length) {
     return empty;
   }
@@ -95,7 +97,7 @@ export async function resolveIssue(
     tracker: Tracker;
     review: Review;
     files: FileSource;
-    queueLabel: string;
+    queues: QueueConfig[];
     change?: ChangeView;
   },
 ): Promise<Decision> {
@@ -103,7 +105,7 @@ export async function resolveIssue(
   const record = issues.find(
     issue =>
       issue.key === key &&
-      issue.labels.includes(options.queueLabel) &&
+      queueOf(issue.labels, options.queues) !== undefined &&
       issue.labels.includes('sdd:cycle'),
   );
   if (!record) {
@@ -129,7 +131,7 @@ export async function performIssue(
     tracker: Tracker;
     review: Review;
     files: FileSource;
-    queueLabel: string;
+    queues: QueueConfig[];
     change?: ChangeView;
   },
 ): Promise<Decision> {
@@ -152,11 +154,11 @@ export async function performCycle(
     tracker: Tracker;
     review: Review;
     filesAt: (key: string) => FileSource;
-    queueLabel: string;
+    queues: QueueConfig[];
   },
   busy: ReadonlySet<string> = new Set(),
 ): Promise<Decision[]> {
-  const decisions = await resolveCycle(snapshot, options.tracker, options.queueLabel, busy);
+  const decisions = await resolveCycle(snapshot, options.tracker, options.queues, busy);
   const performed: Decision[] = [];
   for (const decision of decisions) {
     if (decision.kind !== 'merge' || decision.issue === null) {
@@ -168,7 +170,7 @@ export async function performCycle(
         tracker: options.tracker,
         review: options.review,
         files: options.filesAt(decision.issue),
-        queueLabel: options.queueLabel,
+        queues: options.queues,
       }),
     );
   }

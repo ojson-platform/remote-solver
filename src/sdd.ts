@@ -11,6 +11,7 @@ import {updateMirror} from './machine/mirror.ts';
 import {changeDir} from './machine/naming.ts';
 import {labelsAfterAdvance, PHASES, type Phase} from './machine/phase.ts';
 import {accept as acceptGate, publishChoice, type Decision} from './machine/policy.ts';
+import {queueOf} from './machine/queues.ts';
 import {threadsReport} from './machine/review.ts';
 import {loadCycle} from './machine/snapshot.ts';
 
@@ -212,9 +213,9 @@ async function plan(box: Machine): Promise<void> {
     box.tracker,
     box.review,
     key => box.vcs.filesAt(key),
-    box.config.queueLabel,
+    box.config.queues,
   );
-  const decision = pick(await resolveCycle(snapshot, box.tracker, box.config.queueLabel));
+  const decision = pick(await resolveCycle(snapshot, box.tracker, box.config.queues));
   console.log(JSON.stringify(decision, null, 2));
 }
 
@@ -225,7 +226,7 @@ async function step(box: Machine, rest: string[]): Promise<void> {
   }
   const record = await box.tracker.issue(args.key);
   const inCycle =
-    record.labels.includes(box.config.queueLabel) && record.labels.includes('sdd:cycle');
+    queueOf(record.labels, box.config.queues) !== undefined && record.labels.includes('sdd:cycle');
   if (!inCycle) {
     printStep({kind: 'done', issue: args.key, reason: 'not in the open cycle'}, box);
     return;
@@ -239,7 +240,15 @@ async function step(box: Machine, rest: string[]): Promise<void> {
 /** The chat reads these two fields. The spy run receives the same values as prompt placeholders. */
 function printStep(decision: Decision, box: Machine): void {
   console.log(
-    JSON.stringify({...decision, queue: box.config.queueLabel, base: box.config.prBase}, null, 2),
+    JSON.stringify(
+      {
+        ...decision,
+        queue: box.config.queues.map(queue => queue.name).join(', '),
+        base: box.config.base,
+      },
+      null,
+      2,
+    ),
   );
 }
 

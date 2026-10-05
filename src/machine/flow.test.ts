@@ -4,6 +4,7 @@ import {test} from 'vitest';
 import {readChange} from './change.ts';
 import {performIssue, resolveCycle, resolveIssue} from './flow.ts';
 import {markRobot} from './marker.ts';
+import {queueOf} from './queues.ts';
 import {loadCycle} from './snapshot.ts';
 import {memoryPorts} from '../adapters/github.ts';
 import type {FileSource} from './port.ts';
@@ -26,7 +27,12 @@ test('resolveIssue loads the cycle once and flushes mechanical advances in one w
       },
     ],
   });
-  const decision = await resolveIssue('424242', {tracker, review, files, queueLabel: 'Sandcastle'});
+  const decision = await resolveIssue('424242', {
+    tracker,
+    review,
+    files,
+    queues: [{name: 'Sandcastle'}],
+  });
   assert.equal(calls.filter(call => call === 'listOpen').length, 1);
   assert.equal(calls.filter(call => call === 'editLabels').length, 1);
   assert.equal(
@@ -57,7 +63,7 @@ test('the machine opens the review gate with one ask and does not repeat it', as
     tracker,
     review,
     files,
-    queueLabel: 'Sandcastle',
+    queues: [{name: 'Sandcastle'}],
     change: {...readChange('5', files), proposal: true},
   };
   const opened = await resolveIssue('5', options);
@@ -97,7 +103,7 @@ test('a person who moves the gate label on the issue gets a record, or the chang
   await resolveIssue('5', {
     ...accepted,
     files,
-    queueLabel: 'Sandcastle',
+    queues: [{name: 'Sandcastle'}],
     change: {...base, proposal: true},
   });
   assert.ok((await accepted.tracker.labels('5')).includes('sdd:specifying'));
@@ -108,7 +114,7 @@ test('a person who moves the gate label on the issue gets a record, or the chang
   const options = {
     ...open,
     files,
-    queueLabel: 'Sandcastle',
+    queues: [{name: 'Sandcastle'}],
     change: {...base, proposal: true, openQuestions: 1},
   };
   const held = await resolveIssue('5', options);
@@ -138,8 +144,8 @@ test('resolveCycle leaves an issue a worker already runs', async () => {
       },
     ],
   });
-  const snapshot = await loadCycle(tracker, review, () => files, 'Sandcastle');
-  const decisions = await resolveCycle(snapshot, tracker, 'Sandcastle', new Set(['7']));
+  const snapshot = await loadCycle(tracker, review, () => files, [{name: 'Sandcastle'}]);
+  const decisions = await resolveCycle(snapshot, tracker, [{name: 'Sandcastle'}], new Set(['7']));
   assert.deepEqual(decisions, []);
   assert.equal(calls.filter(call => call === 'editLabels').length, 0);
   assert.deepEqual(await tracker.labels('7'), ['Sandcastle', 'sdd:cycle', 'sdd:proposed']);
@@ -162,7 +168,7 @@ test('resolveIssue closes an accepted issue once the pull request is merged', as
     tracker: open.tracker,
     review: open.review,
     files,
-    queueLabel: 'Sandcastle',
+    queues: [{name: 'Sandcastle'}],
   });
   assert.equal(waiting.kind, 'wait');
   assert.equal(
@@ -188,7 +194,7 @@ test('resolveIssue closes an accepted issue once the pull request is merged', as
     tracker: green.tracker,
     review: green.review,
     files,
-    queueLabel: 'Sandcastle',
+    queues: [{name: 'Sandcastle'}],
   });
   assert.deepEqual(held, {kind: 'wait', issue: '424242', reason: 'wait for merge of PR #9'});
   assert.equal(
@@ -212,7 +218,7 @@ test('resolveIssue closes an accepted issue once the pull request is merged', as
     tracker: merged.tracker,
     review: merged.review,
     files,
-    queueLabel: 'Sandcastle',
+    queues: [{name: 'Sandcastle'}],
   });
   assert.equal(decision.kind, 'done');
   assert.equal(merged.calls.filter(call => call.startsWith('close:')).length, 1);
@@ -241,7 +247,7 @@ test('performIssue merges a green archived pull request and settles the close', 
     tracker,
     review,
     files: archived,
-    queueLabel: 'Sandcastle',
+    queues: [{name: 'Sandcastle'}],
   });
   assert.equal(decision.kind, 'done');
   if (decision.kind === 'done') {
@@ -250,4 +256,40 @@ test('performIssue merges a green archived pull request and settles the close', 
   assert.equal(calls.filter(call => call === 'merge:9').length, 1);
   assert.ok((await tracker.labels('3')).includes('sdd:accepted'));
   assert.equal((await tracker.issue('3')).state, 'CLOSED');
+});
+
+test('a cycle includes every configured queue and the earlier name wins', async () => {
+  const queues = [{name: 'FIRST'}, {name: 'SECOND'}];
+  const {tracker, review} = memoryPorts({
+    issues: [
+      {
+        key: '1',
+        title: '#1: title',
+        body: '',
+        state: 'OPEN',
+        labels: ['FIRST', 'sdd:cycle', 'sdd:proposed'],
+      },
+      {
+        key: '2',
+        title: '#2: title',
+        body: '',
+        state: 'OPEN',
+        labels: ['SECOND', 'sdd:cycle', 'sdd:proposed'],
+      },
+      {
+        key: '3',
+        title: '#3: title',
+        body: '',
+        state: 'OPEN',
+        labels: ['SECOND', 'FIRST', 'sdd:cycle', 'sdd:proposed'],
+      },
+    ],
+  });
+  const snapshot = await loadCycle(tracker, review, () => files, queues);
+  assert.deepEqual(
+    snapshot.cycles.map(issue => issue.key),
+    ['1', '2', '3'],
+  );
+  assert.equal(snapshot.cycles.filter(issue => issue.key === '3').length, 1);
+  assert.equal(queueOf(['SECOND', 'FIRST', 'sdd:cycle', 'sdd:proposed'], queues)?.name, 'FIRST');
 });

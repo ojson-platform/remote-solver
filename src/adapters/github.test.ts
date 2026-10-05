@@ -123,7 +123,7 @@ test('loadCycle keeps marker grammar above the port', async () => {
       71: [{robot: false, body: 'hello'}],
     },
   });
-  const snapshot = await loadCycle(tracker, review, () => files, 'Sandcastle');
+  const snapshot = await loadCycle(tracker, review, () => files, [{name: 'Sandcastle'}]);
   const pulls = snapshot.pulls.get('7') ?? [];
   assert.deepEqual(
     pulls.map(pr => pr.id),

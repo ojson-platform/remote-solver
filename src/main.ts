@@ -94,7 +94,7 @@ export async function runSpy(box: Machine, argv: string[]): Promise<void> {
         box.tracker,
         box.review,
         key => box.vcs.filesAt(key),
-        box.config.queueLabel,
+        box.config.queues,
       );
       const decisions = await performCycle(
         snapshot,
@@ -102,7 +102,7 @@ export async function runSpy(box: Machine, argv: string[]): Promise<void> {
           tracker: box.tracker,
           review: box.review,
           filesAt: key => box.vcs.filesAt(key),
-          queueLabel: box.config.queueLabel,
+          queues: box.config.queues,
         },
         new Set(state.running),
       );

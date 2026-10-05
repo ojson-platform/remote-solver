@@ -50,9 +50,9 @@ export async function runCli(argv: string[]): Promise<number> {
       agentRuntime({
         root: built.root,
         vcs: built.vcs,
-        branchPrefix: built.config.branchPrefix,
-        queueLabel: built.config.queueLabel,
-        prBase: built.config.prBase,
+        branchPrefix: built.config.branchScope,
+        queueLabel: built.config.queues.map(queue => queue.name).join(', '),
+        prBase: built.config.base,
         solverRoot: solverRoot(),
       }),
   });

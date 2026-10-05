@@ -1,7 +1,9 @@
 import {readChange, type ChangeView} from './change.ts';
 import type {FileSource, IssueRecord, Review, Tracker} from './port.ts';
 import type {PullSnapshot} from './policy.ts';
+import {queueOf} from './queues.ts';
 import {emptyReview, reviewOf} from './review.ts';
+import type {QueueConfig} from './service-config.ts';
 
 export type CycleSnapshot = {
   issues: IssueRecord[];
@@ -30,11 +32,13 @@ export async function loadCycle(
   tracker: Tracker,
   review: Review,
   filesAt: (key: string) => FileSource,
-  queueLabel: string,
+  queues: QueueConfig[],
 ): Promise<CycleSnapshot> {
   const issues = await tracker.listOpen();
   const cycles = issues
-    .filter(issue => issue.labels.includes(queueLabel) && issue.labels.includes('sdd:cycle'))
+    .filter(
+      issue => queueOf(issue.labels, queues) !== undefined && issue.labels.includes('sdd:cycle'),
+    )
     .sort((a, b) => a.key.localeCompare(b.key, undefined, {numeric: true}));
   const pulls = new Map<string, PullSnapshot[]>();
   const changes = new Map<string, ChangeView>();

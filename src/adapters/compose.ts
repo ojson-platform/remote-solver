@@ -4,15 +4,15 @@ import {fileURLToPath} from 'node:url';
 
 import {performIssue} from '../machine/flow.ts';
 import type {Review, Runtime, Tracker, Vcs} from '../machine/port.ts';
+import type {QueueConfig} from '../machine/service-config.ts';
 import {githubAdapters} from './github.ts';
 import {gitVcs} from './vcs.ts';
 
 export type MachineConfig = {
-  queueLabel: string;
-  branchPrefix: string;
-  /** Ref a missing issue branch is cut from. */
-  defaultBranch: string;
-  prBase: string;
+  queues: QueueConfig[];
+  base: string;
+  branchScope: string;
+  ignoreComments: RegExp[];
 };
 
 export type Machine = {
@@ -54,21 +54,26 @@ export function solverRoot(): string {
 }
 
 export function machine(root = process.cwd(), options: MachineOptions = {}): Machine {
+  const given = options.config ?? {};
   const config: MachineConfig = {
-    queueLabel: 'Sandcastle',
-    branchPrefix: 'sdd',
-    defaultBranch: 'origin/master',
-    prBase: 'master',
-    ...options.config,
+    queues: given.queues ?? [],
+    base: given.base ?? 'trunk',
+    branchScope: given.branchScope ?? 'sdd',
+    ignoreComments: given.ignoreComments ?? [],
   };
+  if (config.queues.length === 0) {
+    throw new Error('openspec/config.yaml: queues is missing');
+  }
   const github =
-    options.tracker && options.review ? undefined : githubAdapters({prBase: config.prBase, root});
+    options.tracker && options.review ? undefined : githubAdapters({prBase: config.base, root});
   return {
     root,
     config,
     tracker: options.tracker ?? github!.tracker,
     review: options.review ?? github!.review,
-    vcs: options.vcs ?? gitVcs(root, {branchPrefix: config.branchPrefix, defaultBranch: config.defaultBranch}),
+    vcs:
+      options.vcs ??
+      gitVcs(root, {branchPrefix: config.branchScope, defaultBranch: `origin/${config.base}`}),
     runtime: options.runtime,
   };
 }
@@ -79,6 +84,6 @@ export function turn(box: Machine, key: string): ReturnType<typeof performIssue>
     tracker: box.tracker,
     review: box.review,
     files: box.vcs.filesAt(key),
-    queueLabel: box.config.queueLabel,
+    queues: box.config.queues,
   });
 }

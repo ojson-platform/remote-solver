@@ -1,10 +1,18 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
+import {mkdtempSync} from 'node:fs';
+import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {test} from 'vitest';
+import {test, vi} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
-import {route} from './cli.ts';
+import type {AgentRun} from './adapters/agent.ts';
+import {launcherRuntime, route} from './cli.ts';
+import type {Vcs} from './machine/port.ts';
+
+const runAgent = vi.hoisted(() => vi.fn(async (_run: AgentRun) => ({text: ''})));
+
+vi.mock('./adapters/agent.ts', () => ({runAgent}));
 
 test('route sends spy, review, and issue to the launcher', () => {
   assert.deepEqual(route([]), {kind: 'help'});
@@ -32,6 +40,39 @@ test('the launcher bin prints its commands and refuses a cycle verb', () => {
   const verb = spawnSync(process.execPath, [bin, 'accept', '12'], {encoding: 'utf8', cwd: root});
   assert.equal(verb.status, 1);
   assert.match(verb.stderr, /Cycle verbs are the sdd bin/);
+});
+
+test('the agent prompt QUEUE is the first configured queue', async () => {
+  runAgent.mockClear();
+  const root = mkdtempSync(path.join(tmpdir(), 'sdd-queue-'));
+  const vcs: Vcs = {
+    prepare: async () => root,
+    tip: async () => 'abc',
+    filesAt: () => ({exists: () => false, read: () => '', list: () => []}),
+    compare: async () => null,
+    push: async () => {},
+    head: async () => 'abc',
+    published: async () => true,
+    dirty: async () => [],
+  };
+  const runtime = launcherRuntime({
+    root,
+    vcs,
+    config: {
+      queues: [{name: 'FIRST'}, {name: 'SECOND'}],
+      branchScope: 'sdd',
+      base: 'trunk',
+    },
+  });
+  await runtime.run({
+    skill: 'tasks',
+    action: 'sdd-tasks',
+    key: '7',
+    phase: 'implementing',
+    pull: '',
+    mode: 'mechanical',
+  });
+  assert.equal(runAgent.mock.calls[0]?.[0].promptArgs.QUEUE, 'FIRST');
 });
 
 test('the sdd bin prints cycle verbs', () => {

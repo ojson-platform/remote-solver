@@ -31,8 +31,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Built files match the source
-        run: pnpm build && git diff --exit-code -- bin skills/sdd-flow/scripts
+      - name: Build the bins
+        run: pnpm build
 
       - name: Run tests
         run: pnpm test

@@ -8,7 +8,7 @@ pnpm test
 pnpm run test:types
 ```
 
-From the service repository: `remote-solver issue <key>` and `remote-solver spy`. A gate is `sdd accept <key>`. The bins are `bin/remote-solver.mjs` and `bin/sdd.mjs`.
+From the service repository: `remote-solver issue <key>` and `remote-solver spy`. A gate is `sdd accept <key>`. The bins are `bin/remote-solver.mjs` and `skills/sdd-flow/scripts/sdd.mjs`; `pnpm build` writes them from `src/`, and they are not committed.
 
 Secrets belong in `.env` and are not committed.
 

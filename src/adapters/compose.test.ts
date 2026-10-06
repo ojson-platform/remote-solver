@@ -29,7 +29,10 @@ test('a caller can replace the tracker and the review without touching the compo
 
 test('the machine takes a runtime only from the caller', () => {
   const runtime: Runtime = {run: async () => ({commits: 0}), ask: async () => ({text: ''})};
-  const box = machine(mkdtempSync(tmpdir()), {runtime, config: {queues: [{name: 'Sandcastle'}]}});
+  const box = machine(mkdtempSync(path.join(tmpdir(), 'sdd-compose-')), {
+    runtime,
+    config: {queues: [{name: 'Sandcastle'}]},
+  });
   assert.equal(box.runtime, runtime);
   const source = readFileSync(new URL('./compose.ts', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /runtime\.ts/);
@@ -40,5 +43,8 @@ test('the machine takes a runtime only from the caller', () => {
 });
 
 test('a bare machine throws when queues are missing', () => {
-  assert.throws(() => machine(mkdtempSync(tmpdir())), /queues is missing/);
+  assert.throws(
+    () => machine(mkdtempSync(path.join(tmpdir(), 'sdd-compose-'))),
+    /queues is missing/,
+  );
 });

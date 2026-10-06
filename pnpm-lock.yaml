@@ -19,8 +19,8 @@ importers:
         specifier: ^1.0.1
         version: 1.0.1(@types/node@26.6.2)(tsx@4.23.15)(yaml@2.8.0)
       '@ojson/spec-coverage':
-        specifier: workspace:*
-        version: link:../spec-coverage
+        specifier: ^0.0.2
+        version: 0.0.2(vitest@3.2.7(@types/node@26.6.2)(tsx@4.23.15)(yaml@2.8.0))
       '@types/node':
         specifier: ^26.6.2
         version: 26.6.2
@@ -324,6 +324,13 @@ packages:
     resolution: {integrity: sha512-EAwoQ3LeHmNXt1YeWXP2tUEb1VE29dlC8Q7eovbeGQbCqq4Y8pT5qm7AtfqR8o4ajY7yLO+wNcqlWCZ3bPoxxA==}
     engines: {node: '>=20'}
     hasBin: true
+
+  '@ojson/spec-coverage@0.0.2':
+    resolution: {integrity: sha512-dQWHGvglPVH2iEOeBLLQX1I0Q+A5/WPrBh9t3Ufi3pS/8LmYaXHd/rGVHmGXcmYSgDPw0Xys+BHRz8ZanDLqPQ==}
+    engines: {node: '>=20'}
+    hasBin: true
+    peerDependencies:
+      vitest: ^3.0.0
 
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
@@ -2007,6 +2014,11 @@ snapshots:
       - tsx
       - yaml
 
+  '@ojson/spec-coverage@0.0.2(vitest@3.2.7(@types/node@26.6.2)(tsx@4.23.15)(yaml@2.8.0))':
+    dependencies:
+      tsx: 4.23.15
+      vitest: 3.2.7(@types/node@26.6.2)(tsx@4.23.15)(yaml@2.8.0)
+
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
@@ -3483,7 +3495,6 @@ snapshots:
       esbuild: 0.28.2
     optionalDependencies:
       fsevents: 2.3.3
-    optional: true
 
   type-check@0.4.0:
     dependencies:

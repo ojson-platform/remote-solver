@@ -1,9 +1,3 @@
-import {execFileSync, spawn} from 'node:child_process';
-
-import {authorIgnored} from '../machine/ignore.ts';
-import {pullTitlePrefix} from '../machine/naming.ts';
-import {markRobot} from '../machine/marker.ts';
-import {spokeByRobot} from '../machine/review.ts';
 import type {ReviewNote} from '../machine/port.ts';
 import type {
   CheckState,
@@ -16,6 +10,13 @@ import type {
   ThreadTarget,
   Tracker,
 } from '../machine/port.ts';
+
+import {execFileSync, spawn} from 'node:child_process';
+
+import {authorIgnored} from '../machine/ignore.ts';
+import {markRobot} from '../machine/marker.ts';
+import {pullTitlePrefix} from '../machine/naming.ts';
+import {spokeByRobot} from '../machine/review.ts';
 
 export type CheckRollup = {
   state: string;
@@ -98,7 +99,11 @@ export function threadRecord(node: ThreadNode): ThreadRecord {
   };
 }
 
-function command(file: string, args: string[], input?: string): Promise<{stdout: string; stderr: string}> {
+function command(
+  file: string,
+  args: string[],
+  input?: string,
+): Promise<{stdout: string; stderr: string}> {
   return new Promise((resolve, reject) => {
     const child = spawn(file, args, {stdio: ['pipe', 'pipe', 'pipe']});
     let stdout = '';
@@ -157,6 +162,7 @@ type RawIssue = {
   body: string | null;
   state: string;
   labels: {name: string}[];
+  assignees?: {login: string}[];
 };
 
 /** A pull belongs to an issue when its title starts with `#<key>:` or `#<key> `. */
@@ -180,6 +186,8 @@ function asRecord(issue: RawIssue): IssueRecord {
     body,
     state: issue.state,
     labels: issue.labels.map(label => label.name),
+    assignee: issue.assignees?.[0]?.login ?? '',
+    service: '',
     parent: links.parent,
     dependsOn: links.dependsOn,
   };
@@ -210,7 +218,15 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
   };
   const readIssue = async (key: string): Promise<RawIssue> =>
     JSON.parse(
-      await gh(['issue', 'view', key, '--repo', repoSlug(), '--json', 'number,title,body,state,labels']),
+      await gh([
+        'issue',
+        'view',
+        key,
+        '--repo',
+        repoSlug(),
+        '--json',
+        'number,title,body,state,labels,assignees',
+      ]),
     ) as RawIssue;
 
   const tracker: Tracker = {
@@ -227,12 +243,15 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
           '--limit',
           '100',
           '--json',
-          'number,title,body,state,labels',
+          'number,title,body,state,labels,assignees',
         ]),
       ) as RawIssue[];
       return found.map(asRecord);
     },
     issue: async key => asRecord(await readIssue(key)),
+    async assign(key, login) {
+      await gh(['issue', 'edit', key, '--repo', repoSlug(), '--add-assignee', login]);
+    },
     labels: async key => asRecord(await readIssue(key)).labels,
     async editLabels(key, add, remove) {
       if (add.length === 0 && remove.length === 0) {
@@ -296,7 +315,10 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       return found;
     },
     async threads(pull) {
-      return (await this.threadList(pull)).map(thread => ({resolved: thread.resolved, body: thread.body}));
+      return (await this.threadList(pull)).map(thread => ({
+        resolved: thread.resolved,
+        body: thread.body,
+      }));
     },
     async threadList(pull) {
       const {owner, name} = repo();
@@ -481,8 +503,10 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
         const {stdout, stderr} = await command('gh', ['pr', 'checks', pull, '--repo', repoSlug()]);
         return `${stdout}${stderr}`;
       } catch (error) {
-        const stdout = error && typeof error === 'object' && 'stdout' in error ? String(error.stdout) : '';
-        const stderr = error && typeof error === 'object' && 'stderr' in error ? String(error.stderr) : '';
+        const stdout =
+          error && typeof error === 'object' && 'stdout' in error ? String(error.stdout) : '';
+        const stderr =
+          error && typeof error === 'object' && 'stderr' in error ? String(error.stderr) : '';
         return `${stdout}${stderr}`;
       }
     },
@@ -519,6 +543,10 @@ export type MemoryIssue = {
   labels: string[];
   parent?: string;
   dependsOn?: string[];
+  /** Absent means the runner. Empty string means nobody. */
+  assignee?: string;
+  /** Directory of the service. Empty or absent means the chat's directory. */
+  service?: string;
 };
 
 export type MemorySeed = {
@@ -558,6 +586,8 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
       body: issue.body,
       state: issue.state,
       labels: [...issue.labels],
+      assignee: issue.assignee ?? seed.user ?? 'robot',
+      service: issue.service ?? '',
       parent: issue.parent ?? links.parent,
       dependsOn: issue.dependsOn ?? links.dependsOn,
     };
@@ -574,6 +604,10 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
     issue: async key => {
       calls.push('issue');
       return record(find(key));
+    },
+    async assign(key, login) {
+      calls.push('assign');
+      find(key).assignee = login;
     },
     labels: async key => {
       calls.push('labels');

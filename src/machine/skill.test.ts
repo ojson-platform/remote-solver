@@ -17,7 +17,10 @@ test('skills holds the router and the init skill', () => {
 
 test('each step declares a mode and does not name another step', () => {
   const steps = readdirSync(stepsDir).filter(name => name.endsWith('.md'));
-  assert.deepEqual(steps.map(name => name.replace(/\.md$/, '')).sort(), [...new Set(Object.values(ACTION_SKILL))].sort());
+  assert.deepEqual(
+    steps.map(name => name.replace(/\.md$/, '')).sort(),
+    [...new Set(Object.values(ACTION_SKILL))].sort(),
+  );
   const found = new Set<string>();
   for (const file of steps) {
     const body = readFileSync(path.join(stepsDir, file), 'utf8');
@@ -25,7 +28,10 @@ test('each step declares a mode and does not name another step', () => {
     assert.match(body.split('\n')[0], /^mode: (mechanical|judgment)$/, file);
     const mode = skillMode(body);
     assert.equal(mode, mechanical.has(name) ? 'mechanical' : 'judgment', file);
-    assert.equal(modelFor(mode), mode === 'mechanical' ? 'composer-2.5-fast' : 'grok-4.7-high-fast');
+    assert.equal(
+      modelFor(mode),
+      mode === 'mechanical' ? 'composer-2.5-fast' : 'grok-4.7-high-fast',
+    );
     found.add(name);
     const stop = body
       .split(/^## /m)
@@ -56,7 +62,10 @@ test('the router Actions table matches the route', () => {
   assert.ok(table);
   const route: Record<string, string> = {};
   for (const row of table.split('\n').filter(line => line.startsWith('| `'))) {
-    const [code, who, target] = row.split('|').slice(1, 4).map(cell => cell.trim());
+    const [code, who, target] = row
+      .split('|')
+      .slice(1, 4)
+      .map(cell => cell.trim());
     if (who !== 'agent') {
       continue;
     }
@@ -71,9 +80,12 @@ test('the chat files point at the sdd script', () => {
   const skill = readFileSync(path.join(flow, 'SKILL.md'), 'utf8');
   const context = readFileSync(path.join(flow, 'CONTEXT.md'), 'utf8');
   const init = readFileSync(path.join(root, 'sdd-init', 'SKILL.md'), 'utf8');
-  for (const body of [skill, context]) {
+  for (const body of [skill, context, init]) {
     assert.match(body, /node scripts\/sdd\.mjs/);
     assert.doesNotMatch(body, /npx sdd|\bpnpm\b|\bSandcastle\b|\bmaster\b/);
+    assert.doesNotMatch(
+      body,
+      /\bArcadia\b|\bArcanum\b|\bTracker\b|\ba\.yaml\b|\bya make\b|\btestsuite\b/,
+    );
   }
-  assert.match(init, /node \.\.\/sdd-flow\/scripts\/sdd\.mjs/);
 });

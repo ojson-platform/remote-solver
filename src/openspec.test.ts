@@ -662,7 +662,10 @@ spec('pull-request', () => {
       const pushed: string[] = [];
       const id = await publish(
         {key: '7', title: '#7: again'},
-        {review: memory.review, vcs: {dirty: async () => [], push: async key => void pushed.push(key)}},
+        {
+          review: memory.review,
+          vcs: {dirty: async () => [], push: async key => void pushed.push(key)},
+        },
       );
       assert.equal(id, '#7: pull 9');
       assert.deepEqual(pushed, ['7']);
@@ -1156,7 +1159,10 @@ spec('publish', () => {
       await assert.rejects(
         publish(
           {key: '7', title: '#7: fix'},
-          {review: memory.review, vcs: {dirty: async () => [], push: async key => void pushed.push(key)}},
+          {
+            review: memory.review,
+            vcs: {dirty: async () => [], push: async key => void pushed.push(key)},
+          },
         ),
         /3, 4/,
       );
@@ -1476,7 +1482,12 @@ spec('reviewer', () => {
   requirement('The verdict posts a note, remarks, or nothing', () => {
     scenario('An empty answer posts nothing and the command fails', async () => {
       const quiet = memoryPorts();
-      await applyReview({kind: 'unjudged', reason: 'empty answer'}, '15', reviewedHead, quiet.review);
+      await applyReview(
+        {kind: 'unjudged', reason: 'empty answer'},
+        '15',
+        reviewedHead,
+        quiet.review,
+      );
       assert.deepEqual(quiet.calls, []);
       const {tracker, review, calls} = memoryPorts({
         issues: [
@@ -1731,8 +1742,26 @@ function planIssue(
   key: string,
   labels: string[],
   body = '',
-): {key: string; title: string; body: string; state: string; labels: string[]} {
-  return {key, title: `#${key}: title`, body, state: 'OPEN', labels};
+  assignee?: string,
+  service?: string,
+): {
+  key: string;
+  title: string;
+  body: string;
+  state: string;
+  labels: string[];
+  assignee?: string;
+  service?: string;
+} {
+  return {
+    key,
+    title: `#${key}: title`,
+    body,
+    state: 'OPEN',
+    labels,
+    ...(assignee === undefined ? {} : {assignee}),
+    ...(service === undefined ? {} : {service}),
+  };
 }
 
 function planFiles(key: string): FileSource {
@@ -1843,6 +1872,16 @@ spec('plan', () => {
       const named = printed as typeof printed & {queue?: string; base?: string};
       assert.equal(named.queue, 'FIRST');
       assert.equal(named.base, 'trunk');
+    });
+    scenario('Another assignee is left out', async () => {
+      const {printed} = await runPlan([
+        planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposed'], '', 'other'),
+        planIssue('2', ['Sandcastle', 'sdd:cycle', 'sdd:proposed']),
+      ]);
+      assert.equal(printed.kind, 'agent');
+      if (printed.kind === 'agent') {
+        assert.equal(printed.issue, '2');
+      }
     });
   });
 });
@@ -2014,6 +2053,61 @@ spec('step', () => {
       assert.equal(calls.filter(call => call === 'merge:9').length, 1);
       assert.ok(calls.some(call => call.startsWith('close:')));
     });
+    scenario('An unassigned issue is claimed', async () => {
+      const {printed, calls} = await runStep(
+        ['step', '1'],
+        [planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposed'], '', '')],
+        planFiles,
+      );
+      assert.ok(calls.includes('assign'));
+      assert.equal(printed.kind, 'agent');
+    });
+    scenario("Someone else's issue waits", async () => {
+      const {printed, calls} = await runStep(
+        ['step', '1'],
+        [planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposed'], '', 'other')],
+        planFiles,
+      );
+      assert.equal(calls.includes('assign'), false);
+      assert.equal(printed.kind, 'wait');
+      if (printed.kind === 'wait') {
+        assert.equal(printed.reason, 'assigned to other');
+      }
+    });
+    scenario('A service field for another directory waits', async () => {
+      const {printed, labels} = await runStep(
+        ['step', '1'],
+        [
+          planIssue(
+            '1',
+            ['Sandcastle', 'sdd:cycle', 'sdd:proposed'],
+            '',
+            undefined,
+            'taxi/other/service',
+          ),
+        ],
+        planFiles,
+      );
+      assert.equal(printed.kind, 'wait');
+      if (printed.kind === 'wait') {
+        assert.equal(printed.reason, 'service is taxi/other/service');
+      }
+      assert.ok((await labels('1')).includes('sdd:proposed'));
+    });
+    scenario('A Service line in the body is not the service', async () => {
+      const {printed} = await runStep(
+        ['step', '1'],
+        [
+          planIssue(
+            '1',
+            ['Sandcastle', 'sdd:cycle', 'sdd:proposed'],
+            'Service: taxi/other/service\n',
+          ),
+        ],
+        planFiles,
+      );
+      assert.equal(printed.kind, 'agent');
+    });
   });
 
   requirement('Auto tags are written only inside the cycle', () => {
@@ -2053,6 +2147,10 @@ spec('step', () => {
       }).trim();
       assert.equal(head, 'sdd/1');
       assert.equal(lstatSync(path.join(checkout, '.sandcastle', 'prompts')).isSymbolicLink(), true);
+      assert.equal(
+        readFileSync(path.join(checkout, '.sandcastle', 'service-root'), 'utf8').trim(),
+        service,
+      );
       const status = execFileSync('git', ['status', '--porcelain'], {
         cwd: service,
         encoding: 'utf8',

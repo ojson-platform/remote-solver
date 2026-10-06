@@ -70,7 +70,7 @@ The other files of `openspec/changes/issue-<issue>/`, with these headings exactl
 - `## Open questions`: `- [ ]` items. The machine counts them.
 
 `design.md`, every section filled or `none`:
-- `## Verification boundary`: where each capability's Scenarios are observed, and the commands. For each capability: a narrow command that runs one test file and contains `<test-file>`, and the fast suite. The last line of the section is the type check, once for the change, or `none`. The trace line and the test path rule, when the service named them, are copied once after that.
+- `## Verification boundary`: where each capability's Scenarios are observed, and the commands. For each capability: a one-file command that contains `<test-file>`, and the layer command. A fast suite is included when the init block names one, otherwise `none`. The last line of the section is the type check, once for the change, or `none`. The trace line and the test path rule, when the service named them, are copied once after that.
 - `## External contracts`: what another service must provide, not its API.
 - `## Technical prerequisites`: each one code in this PR, an issue `Depends: #N`, or a flag with a safe default.
 - `## Approach`: how this change is built. Module boundaries, risks, rejected alternatives, or `none`. The machine does not read it.
@@ -80,7 +80,7 @@ The other files of `openspec/changes/issue-<issue>/`, with these headings exactl
 
 `tasks/<id>.md`: the Scenario titles, then
 - `## Source`: what changes, what the task leaves untouched, every file the implementer may edit. The test file is not here.
-- `## Proof`: the test file path, what the test observes, which files it may read, the commands that must exit 0 (the narrow command and the fast suite, and the type check when the card names it), and the trace line when the boundary copied one.
+- `## Proof`: the test file path, what the test observes, which files it may read, the commands that must exit 0 (the one-file command and the layer command, the fast suite when the card names one, and the type check when the card names it), and the trace line when the boundary copied one.
 
 ## Threads
 

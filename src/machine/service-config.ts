@@ -1,5 +1,6 @@
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
+
 import {parse} from 'yaml';
 
 export type QueueConfig = {name: string; description?: string};
@@ -10,6 +11,67 @@ export type ServiceConfig = {
   branchScope: string;
   ignoreComments: RegExp[];
 };
+
+/** True when `root` is the directory `declared` names, absolute or relative to the repository. */
+export function sameService(root: string, declared: string): boolean {
+  const here = path.resolve(root);
+  const raw = declared.trim().replace(/\/+$/, '');
+  if (raw === '') {
+    return false;
+  }
+  if (path.isAbsolute(raw)) {
+    return here === path.resolve(raw);
+  }
+  return here === raw || here.endsWith(`/${raw}`);
+}
+
+/**
+ * The closest directory at or above `start` whose `openspec/config.yaml` has an
+ * `sdd` key. A checkout without one uses `.sandcastle/service-root` written by `worktree`.
+ */
+export function resolveServiceRoot(start: string): string {
+  for (const dir of upwards(start)) {
+    if (hasSddConfig(dir)) {
+      return dir;
+    }
+  }
+  for (const dir of upwards(start)) {
+    const marker = path.join(dir, '.sandcastle', 'service-root');
+    if (existsSync(marker)) {
+      const pointed = readFileSync(marker, 'utf8').trim();
+      if (pointed) {
+        return pointed;
+      }
+    }
+  }
+  return path.resolve(start);
+}
+
+function* upwards(start: string): Generator<string> {
+  let dir = path.resolve(start);
+  for (;;) {
+    yield dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      return;
+    }
+    dir = parent;
+  }
+}
+
+function hasSddConfig(dir: string): boolean {
+  const file = path.join(dir, 'openspec', 'config.yaml');
+  if (!existsSync(file)) {
+    return false;
+  }
+  try {
+    const raw = parse(readFileSync(file, 'utf8')) as {sdd?: unknown} | null;
+    return Boolean(raw && typeof raw === 'object' && raw.sdd && typeof raw.sdd === 'object');
+  } catch {
+    // A broken file is not this service.
+    return false;
+  }
+}
 
 export function loadServiceConfig(serviceRoot: string): ServiceConfig {
   const file = path.join(serviceRoot, 'openspec', 'config.yaml');
@@ -34,7 +96,8 @@ export function loadServiceConfig(serviceRoot: string): ServiceConfig {
     throw new Error('openspec/config.yaml: queues is empty');
   }
   const queues = section.queues.map(item => {
-    const record = item && typeof item === 'object' ? (item as {name?: unknown; description?: unknown}) : {};
+    const record =
+      item && typeof item === 'object' ? (item as {name?: unknown; description?: unknown}) : {};
     if (typeof record.name !== 'string' || record.name === '') {
       throw new Error('openspec/config.yaml: queue name is missing');
     }
@@ -67,7 +130,9 @@ function compileIgnore(value: unknown): RegExp[] {
     try {
       return new RegExp(item, 'i');
     } catch {
-      throw new Error(`openspec/config.yaml: ignore-comments pattern ${JSON.stringify(item)} does not compile`);
+      throw new Error(
+        `openspec/config.yaml: ignore-comments pattern ${JSON.stringify(item)} does not compile`,
+      );
     }
   });
 }

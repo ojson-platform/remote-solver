@@ -1,5 +1,9 @@
 import type {Review, Vcs} from './machine/port.ts';
 
+import {spawnSync} from 'node:child_process';
+import {mkdirSync, writeFileSync} from 'node:fs';
+import path from 'node:path';
+
 import {solverRoot, turn, type Machine} from './adapters/compose.ts';
 import {openMachine} from './adapters/load.ts';
 import {packageLinks} from './adapters/vcs.ts';
@@ -13,6 +17,7 @@ import {labelsAfterAdvance, PHASES, type Phase} from './machine/phase.ts';
 import {accept as acceptGate, publishChoice, type Decision} from './machine/policy.ts';
 import {queueOf} from './machine/queues.ts';
 import {threadsReport} from './machine/review.ts';
+import {resolveServiceRoot, sameService} from './machine/service-config.ts';
 import {loadCycle} from './machine/snapshot.ts';
 
 // Verbs the skills call. The GitHub and git adapters sit behind them.
@@ -41,7 +46,7 @@ function need(value: string | undefined, usage: string): string {
 }
 
 const usage =
-  'Usage: sdd plan | step <key> [--auto-plan] [--auto-spec] [--auto-design] | worktree <key> | set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key> | publish <key> "<title>" | checks <pull> | threads <pull> [--layer <layer>] [--unmarked] | thread open|reply|say|resolve ... | thread fix <key> <pull> <thread>|--conversation | mirror <key> <Layer> <text>';
+  'Usage: sdd plan | step <key> [--auto-plan] [--auto-spec] [--auto-design] | worktree <key> | assign <key> | set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key> | publish <key> "<title>" | checks <pull> | threads <pull> [--layer <layer>] [--unmarked] | thread open|reply|say|resolve ... | thread fix <key> <pull> <thread>|--conversation | mirror <key> <Layer> <text>';
 
 const AUTO_LABEL: Record<string, string> = {
   '--auto-plan': 'sdd:auto-plan',
@@ -180,7 +185,7 @@ export async function runSdd(argv: string[], box?: Machine): Promise<void> {
     fail(usage);
   }
   try {
-    await dispatch(box ?? (await openMachine(process.cwd())), command, rest);
+    await dispatch(box ?? (await openMachine(resolveServiceRoot(process.cwd()))), command, rest);
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error));
   }
@@ -200,6 +205,7 @@ const verbs: Record<string, Verb> = {
   plan,
   step,
   worktree,
+  assign,
   set,
   wait,
   unwait,
@@ -232,7 +238,33 @@ async function step(box: Machine, rest: string[]): Promise<void> {
   const inCycle =
     queueOf(record.labels, box.config.queues) !== undefined && record.labels.includes('sdd:cycle');
   if (!inCycle) {
-    await printStep({kind: 'done', issue: args.key, reason: 'not in the open cycle'}, box, record.labels);
+    await printStep(
+      {kind: 'done', issue: args.key, reason: 'not in the open cycle'},
+      box,
+      record.labels,
+    );
+    return;
+  }
+  const me = await box.tracker.login();
+  const owner = record.assignee ?? '';
+  if (owner !== '' && owner !== me) {
+    await printStep(
+      {kind: 'wait', issue: args.key, reason: `assigned to ${owner}`},
+      box,
+      record.labels,
+    );
+    return;
+  }
+  if (owner === '') {
+    await box.tracker.assign(args.key, me);
+  }
+  const declared = (record.service ?? '').trim();
+  if (declared !== '' && !sameService(box.root, declared)) {
+    await printStep(
+      {kind: 'wait', issue: args.key, reason: `service is ${declared}`},
+      box,
+      record.labels,
+    );
     return;
   }
   if (args.labels.length) {
@@ -262,8 +294,23 @@ async function worktree(box: Machine, rest: string[]): Promise<void> {
   if (rest.length !== 1) {
     fail(usage);
   }
-  const dir = await box.vcs.prepare(key, {worktreesDir: SESSION_WORKTREES, links: packageLinks(solverRoot())});
+  const dir = await box.vcs.prepare(key, {
+    worktreesDir: SESSION_WORKTREES,
+    links: packageLinks(solverRoot()),
+  });
+  const marker = path.join(dir, '.sandcastle');
+  mkdirSync(marker, {recursive: true});
+  writeFileSync(path.join(marker, 'service-root'), `${box.root}\n`);
   console.log(dir);
+}
+
+/** Take an issue that belongs to someone else, after the person has agreed. */
+async function assign(box: Machine, rest: string[]): Promise<void> {
+  const key = need(rest[0], usage);
+  if (rest.length !== 1) {
+    fail(usage);
+  }
+  await box.tracker.assign(key, await box.tracker.login());
 }
 
 async function set(box: Machine, rest: string[]): Promise<void> {
@@ -296,7 +343,12 @@ async function accept(box: Machine, rest: string[]): Promise<void> {
   if (decision.kind !== 'advance') {
     throw new Error(decision.reason);
   }
-  await applyLabels(box.tracker, key, record.labels, labelsAfterAdvance(record.labels, decision.to));
+  await applyLabels(
+    box.tracker,
+    key,
+    record.labels,
+    labelsAfterAdvance(record.labels, decision.to),
+  );
   const login = await box.tracker.login();
   await box.tracker.comment(key, `sdd:accept ${decision.reason} by @${login}`);
   console.log(`#${key}: ${decision.reason}`);
@@ -323,10 +375,14 @@ async function threads(box: Machine, rest: string[]): Promise<void> {
   if (!args) {
     fail(usage);
   }
-  const report = threadsReport(await box.review.threadList(args.pull), await box.review.comments(args.pull), {
-    layer: args.layer,
-    unmarked: args.unmarked,
-  });
+  const report = threadsReport(
+    await box.review.threadList(args.pull),
+    await box.review.comments(args.pull),
+    {
+      layer: args.layer,
+      unmarked: args.unmarked,
+    },
+  );
   console.log(JSON.stringify(report, null, 2));
 }
 
@@ -399,6 +455,22 @@ async function mirror(box: Machine, rest: string[]): Promise<void> {
   await box.tracker.updateBody(key, updateMirror(record.body, layer, text));
 }
 
+/** Node 22 trusts the public roots only, until this flag. Restart once so agentproxy's certificate verifies. */
+function ensureSystemCa(): void {
+  const entry = process.argv[1];
+  const major = Number(process.versions.node.split('.')[0]);
+  if (!entry || major < 22 || process.execArgv.includes('--use-system-ca')) {
+    return;
+  }
+  const child = spawnSync(
+    process.execPath,
+    ['--use-system-ca', ...process.execArgv, entry, ...process.argv.slice(2)],
+    {stdio: 'inherit'},
+  );
+  process.exit(child.status ?? 1);
+}
+
 if (process.argv[1]?.endsWith('sdd.ts') || process.argv[1]?.endsWith('sdd.mjs')) {
+  ensureSystemCa();
   await runSdd(process.argv.slice(2));
 }

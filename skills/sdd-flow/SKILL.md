@@ -4,6 +4,7 @@ description: >
   Drives one issue in this chat until the machine waits. The machine names
   the skill; this chat runs it. Start with /sdd-flow <key>, optionally
   auto-plan, auto-spec, and auto-design.
+short_description: Drives one issue through the SDD cycle until the machine waits.
 mode: judgment
 ---
 
@@ -13,7 +14,11 @@ One chat, one issue. `/sdd-flow <key>` starts it. Words `auto-plan`, `auto-spec`
 
 Do not run `remote-solver issue`. Do not choose a skill from the phase. `step` names it.
 
-The issue is already in the cycle: the queue label and `sdd:cycle` are set before this session. This skill does not add them.
+Run this from the service root, the directory whose `openspec/config.yaml` names the queue. This skill does not add cycle membership. If `scripts/adapters/host.md` exists, membership is what that note says. Otherwise the issue already carries `sdd:cycle` and the queue label.
+
+An issue with no assignee is claimed by the caller inside `step`. An issue assigned to someone else waits with `assigned to <login>`. Agreement to take it runs `node scripts/sdd.mjs assign <key>`, then Start again.
+
+The issue's service directory, when set, names where the specs live. A value that is not this directory waits with `service is <path>`. Start again from that directory. An empty value means this directory is the service.
 
 ## Start
 
@@ -30,6 +35,8 @@ The issue is already in the cycle: the queue label and `sdd:cycle` are set befor
 ## The next message
 
 Agreement (`ok`, `accept`, `/sdd-flow ok`, `/sdd-flow accept`, «план ок», «спека ок», «дизайн ок») when the printed decision has `gate`: run `node scripts/sdd.mjs accept <key>`, then Act from a fresh `step`.
+
+Agreement when the reason is `assigned to <login>`: run `node scripts/sdd.mjs assign <key>`, then Start again.
 
 Any other wait: say the reason. Leave it in place.
 

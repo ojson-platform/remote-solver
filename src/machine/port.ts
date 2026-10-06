@@ -15,6 +15,13 @@ export type IssueRecord = {
   body: string;
   state: string;
   labels: string[];
+  /** Login of the assignee. Empty when the issue is unassigned. */
+  assignee?: string;
+  /**
+   * Directory of the service, relative to the repository root or absolute.
+   * Empty when the chat's directory is the service.
+   */
+  service?: string;
   parent?: IssueKey;
   dependsOn: IssueKey[];
 };
@@ -52,6 +59,8 @@ export type Tracker = {
   login(): Promise<string>;
   listOpen(): Promise<IssueRecord[]>;
   issue(key: IssueKey): Promise<IssueRecord>;
+  /** Give the issue to this login, replacing whoever holds it. */
+  assign(key: IssueKey, login: string): Promise<void>;
   labels(key: IssueKey): Promise<string[]>;
   editLabels(key: IssueKey, add: string[], remove: string[]): Promise<void>;
   updateBody(key: IssueKey, body: string): Promise<void>;

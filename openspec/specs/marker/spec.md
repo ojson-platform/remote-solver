@@ -77,6 +77,25 @@ Among open threads and the conversation, the earliest of `proposal`, `spec`, `de
 - **WHEN** the phase is `accepting`, the change is archived, the checks are green, and the conversation marks `code` and then `fixed`
 - **THEN** the machine does not move the issue to `implementing`
 
+### Requirement: A classified marker moves before a held review gate
+
+A classified layer marker SHALL move the phase, or start the current layer's action, before a held review gate is repeated. An open thread with no marker SHALL still be classified first. `wait-human` SHALL keep the gate when no thread carries a layer marker.
+
+#### Scenario: An unlabeled thread during a held design review is classified
+
+- **WHEN** `designing` has `wait-human` and an open thread has no marker
+- **THEN** the machine classifies the thread and does not repeat the design gate
+
+#### Scenario: A spec marker during a held design review moves to specifying
+
+- **WHEN** `designing` has `wait-human` and an open thread marks `spec`
+- **THEN** the machine moves the issue to `specifying`
+
+#### Scenario: A design marker during a held design review improves the design
+
+- **WHEN** `designing` has `wait-human` and an open thread marks `design`
+- **THEN** the machine improves the design and does not repeat the design gate
+
 ### Requirement: Thread fix closes a thread in one call
 
 `thread fix` SHALL refuse while HEAD is not the tip of the remote issue branch. Otherwise it SHALL reply `fixed` with that HEAD and resolve the thread in the same call. A thread that is already `fixed` and still open SHALL only be resolved. A resolved thread SHALL be left unchanged. The conversation form SHALL post that same line to the conversation.

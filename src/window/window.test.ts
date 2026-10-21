@@ -739,6 +739,27 @@ test('a fresh launch still reads an overlay after home drops the name', () => {
   rmSync(dir, {recursive: true, force: true});
 });
 
+test('a name only in an overlay under the old root leaves when the roots change', () => {
+  const {dir, home} = yard();
+  const oldRoot = path.join(dir, 'old-arcadia');
+  const newRoot = path.join(dir, 'new-arcadia');
+  const oldCheckout = path.join(oldRoot, 'services', 'billing');
+  mkdirSync(oldCheckout, {recursive: true});
+  writeOverlay(oldCheckout, ['beta']);
+  writeServiceConfig(oldCheckout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia: oldRoot});
+  const tickets = [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})];
+  const window = openWindow({homePath: home, adapter: 'tracker'}, {tickets: () => tickets});
+  assert.deepEqual(window.board().watch, ['alpha', 'beta']);
+  window.leaveRoots({arcadia: newRoot});
+  assert.deepEqual(window.board().watch, ['alpha']);
+  const reached = path.join(newRoot, 'services', 'billing');
+  mkdirSync(reached, {recursive: true});
+  writeOverlay(reached, ['beta']);
+  assert.deepEqual(window.board().watch, ['alpha', 'beta']);
+  rmSync(dir, {recursive: true, force: true});
+});
+
 test('empty watch lists leave the board with no cards', () => {
   const {dir, home, arcadia} = yard();
   writeLaunch(home, [], {arcadia});

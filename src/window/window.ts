@@ -354,8 +354,6 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
   let baseline = textOf(launch.homePath);
   let doc = parseDoc(baseline);
   let settingsOpen = false;
-  /** Checkouts this process has already gathered, so the next read can open their overlay files. */
-  const knownCheckouts = new Set<string>();
 
   function adopt(text: string | null): void {
     baseline = text;
@@ -520,7 +518,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     let grew = true;
     while (grew) {
       grew = false;
-      const checkouts = new Set<string>(knownCheckouts);
+      const checkouts = new Set<string>();
       for (const item of sortedTickets()) {
         const checkout = gathered(item);
         if (!checkout || !existsSync(checkout)) {
@@ -533,7 +531,6 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
           continue;
         }
         seen.add(checkout);
-        knownCheckouts.add(checkout);
         const before = names.length;
         for (const name of overlayNames(checkout)) {
           if (!names.includes(name)) {

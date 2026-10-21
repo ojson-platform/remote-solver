@@ -985,7 +985,7 @@ test('a missing catalog keeps the card and the choice and does not start a step'
   rmSync(dir, {recursive: true, force: true});
 });
 
-test('a tracker ticket with no sddService offers checkouts that already have the queue', () => {
+test('one tracker service that already lists the queue writes itself', () => {
   const {dir, home, arcadia} = yard();
   const billing = path.join(arcadia, 'services', 'billing');
   const other = path.join(arcadia, 'services', 'other');
@@ -994,19 +994,92 @@ test('a tracker ticket with no sddService offers checkouts that already have the
   writeServiceConfig(billing, ['alpha']);
   writeServiceConfig(other, ['beta']);
   writeLaunch(home, ['alpha'], {arcadia});
-  let writes = 0;
+  const tickets = [
+    ticket({key: '1', queue: 'alpha', sddService: 'services/billing'}),
+    ticket({key: '2', queue: 'alpha', sddService: 'services/other'}),
+    ticket({key: '3', queue: 'alpha'}),
+  ];
+  const writes: {key: string; service: string}[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      tickets: () => tickets,
+      writeService: (key, service) => {
+        writes.push({key, service});
+        const found = tickets.find(item => item.key === key);
+        if (found) {
+          found.sddService = service;
+        }
+      },
+    },
+  );
+  const card = window.board().cards.find(item => item.key === '3');
+  assert.ok(card);
+  assert.deepEqual(writes, [{key: '3', service: 'services/billing'}]);
+  assert.equal(card.checkout, billing);
+  assert.equal(card.reason, '');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a blank tracker sddService writes the single service that lists the queue', () => {
+  const {dir, home, arcadia} = yard();
+  const billing = path.join(arcadia, 'services', 'billing');
+  mkdirSync(billing, {recursive: true});
+  writeServiceConfig(billing, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  const tickets = [
+    ticket({key: '1', queue: 'alpha', sddService: 'services/billing'}),
+    ticket({key: '2', queue: 'alpha', sddService: ''}),
+  ];
+  const writes: {key: string; service: string}[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      tickets: () => tickets,
+      writeService: (key, service) => {
+        writes.push({key, service});
+        const found = tickets.find(item => item.key === key);
+        if (found) {
+          found.sddService = service;
+        }
+      },
+    },
+  );
+  const card = window.board().cards.find(item => item.key === '2');
+  assert.ok(card);
+  assert.deepEqual(writes, [{key: '2', service: 'services/billing'}]);
+  assert.equal(card.checkout, billing);
+  assert.equal(card.reason, '');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('several tracker services that list the queue stay a choice', () => {
+  const {dir, home, arcadia} = yard();
+  const billing = path.join(arcadia, 'services', 'billing');
+  const other = path.join(arcadia, 'services', 'other');
+  mkdirSync(billing, {recursive: true});
+  mkdirSync(other, {recursive: true});
+  writeServiceConfig(billing, ['alpha']);
+  writeServiceConfig(other, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
   let assignees = 0;
   const tickets = [
     ticket({key: '1', queue: 'alpha', sddService: 'services/billing'}),
     ticket({key: '2', queue: 'alpha', sddService: 'services/other'}),
     ticket({key: '3', queue: 'alpha'}),
   ];
+  const writes: {key: string; service: string}[] = [];
   const window = openWindow(
     {homePath: home, adapter: 'tracker'},
     {
+      answers: () => true,
       tickets: () => tickets,
-      writeService: () => {
-        writes += 1;
+      writeService: (key, service) => {
+        writes.push({key, service});
+        const found = tickets.find(item => item.key === key);
+        if (found) {
+          found.sddService = service;
+        }
       },
       writeAssignee: () => {
         assignees += 1;
@@ -1015,13 +1088,15 @@ test('a tracker ticket with no sddService offers checkouts that already have the
   );
   const card = window.board().cards.find(item => item.key === '3');
   assert.ok(card);
-  assert.deepEqual(card.choices, ['services/billing']);
+  assert.deepEqual(card.choices, ['services/billing', 'services/other']);
   assert.equal(card.reason, 'не назван сервис');
   assert.equal(card.takeDisabled, true);
+  assert.equal(
+    writes.some(item => item.key === '3'),
+    false,
+  );
   window.take('3');
-  assert.equal(writes, 0);
   assert.equal(assignees, 0);
-  assert.equal(tickets[2].sddService, undefined);
   rmSync(dir, {recursive: true, force: true});
 });
 

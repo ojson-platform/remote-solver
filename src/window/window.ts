@@ -634,17 +634,29 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
   }
 
   function writeMissingServices(names: readonly string[]): void {
-    if (kind() !== 'github' || !outside.writeService) {
+    if (!outside.writeService) {
+      return;
+    }
+    if (kind() === 'github') {
+      for (const item of sortedTickets()) {
+        if (!onWatch(item, names) || item.sddService !== undefined) {
+          continue;
+        }
+        const root = repoRootOf(item);
+        const dirs = root ? serviceDirs(root) : [];
+        if (dirs.length === 1) {
+          outside.writeService(item.key, dirs[0]);
+        }
+      }
       return;
     }
     for (const item of sortedTickets()) {
-      if (!onWatch(item, names) || item.sddService !== undefined) {
+      if (!onWatch(item, names) || !unnamed(item)) {
         continue;
       }
-      const root = repoRootOf(item);
-      const dirs = root ? serviceDirs(root) : [];
-      if (dirs.length === 1) {
-        outside.writeService(item.key, dirs[0]);
+      const choices = trackerChoices(item.queue ?? '');
+      if (choices.length === 1) {
+        outside.writeService(item.key, choices[0]);
       }
     }
   }

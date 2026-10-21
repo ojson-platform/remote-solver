@@ -8,6 +8,7 @@ import {parse} from 'yaml';
 import {memoryPorts} from '../adapters/github.ts';
 import type {FileSource} from '../machine/port.ts';
 import {loadCycle} from '../machine/snapshot.ts';
+import {changeDir} from '../machine/naming.ts';
 import {openWindow, type WindowTicket} from './window.ts';
 
 function scratch(): {dir: string; home: string} {
@@ -1322,6 +1323,475 @@ test('the machine spy leaves a bare cycle out and does not read .aifactory', asy
     reads.some(rel => rel.includes('.aifactory')),
     false,
   );
+});
+
+const MANAGER = 'ada';
+
+const COLUMN_NAMES = [
+  'proposing',
+  'specifying',
+  'designing',
+  'tasking',
+  'implementing',
+  'verifying',
+  'accepting',
+];
+
+function prepare(arcadia: string, home: string): string {
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  return checkout;
+}
+
+function cycle(key: string, phase: string, over: Partial<WindowTicket> = {}): WindowTicket {
+  return ticket({
+    key,
+    assignee: MANAGER,
+    queue: 'alpha',
+    sddService: 'services/billing',
+    ...over,
+    title: over.title ?? key,
+    labels: over.labels ?? ['sdd:cycle', `sdd:${phase}`],
+  });
+}
+
+function openCycles(
+  home: string,
+  tickets: readonly WindowTicket[],
+  leading?: (key: string) => boolean,
+) {
+  return openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      leading,
+      tickets: () => tickets,
+    },
+  );
+}
+
+function writeChange(checkout: string, key: string, name: string, body: string): void {
+  const dir = path.join(checkout, changeDir(key));
+  mkdirSync(dir, {recursive: true});
+  writeFileSync(path.join(dir, name), body);
+}
+
+function columnCards(
+  board: ReturnType<ReturnType<typeof openWindow>['board']>,
+  name: string,
+): {key: string}[] | undefined {
+  return board.columns?.find(column => column.name === name)?.cards;
+}
+
+test('an empty specifying column stays and the window writes no phase', () => {
+  const window = openWindow({});
+  const board = window.board();
+  assert.deepEqual(board.pool, []);
+  assert.deepEqual(
+    board.columns?.map(column => column.name),
+    COLUMN_NAMES,
+  );
+  assert.deepEqual(columnCards(board, 'specifying'), []);
+  assert.equal(
+    Object.keys(window).some(name => name.toLowerCase().includes('phase')),
+    false,
+  );
+  assert.equal('panel' in board, false);
+});
+
+test('proposed stands in proposing and specified stands in specifying', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    cycle('2', 'proposed', {title: 'Propose it'}),
+    cycle('1', 'specified', {title: 'Specify it'}),
+    cycle('3', 'designed', {title: 'Design it'}),
+    ticket({key: '9', queue: 'alpha', sddService: 'services/billing', title: 'Bare'}),
+  ]);
+  const board = window.board();
+  const proposing = columnCards(board, 'proposing');
+  const specifying = columnCards(board, 'specifying');
+  const designing = columnCards(board, 'designing');
+  assert.deepEqual(
+    proposing?.map(card => card.key),
+    ['2'],
+  );
+  assert.equal(proposing?.[0]?.title, 'Propose it');
+  assert.equal(proposing?.[0]?.icon, true);
+  assert.equal(proposing?.[0]?.reason, 'proposed');
+  assert.equal(proposing?.[0]?.layers, undefined);
+  assert.deepEqual(
+    specifying?.map(card => card.key),
+    ['1'],
+  );
+  assert.equal(specifying?.[0]?.reason, 'specified');
+  assert.deepEqual(
+    designing?.map(card => card.key),
+    ['3'],
+  );
+  assert.equal(designing?.[0]?.reason, 'designed');
+  assert.deepEqual(
+    board.cards.map(card => card.key),
+    ['9'],
+  );
+  assert.deepEqual(board.pool, []);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('another assignee is absent and a phase with no assignee stands in the pool', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    cycle('b', 'implementing', {assignee: 'other', title: 'Other'}),
+    cycle('c', 'implementing', {assignee: '', title: 'Open seat'}),
+    cycle('a', 'tasking', {assignee: undefined, title: 'Also open'}),
+    ticket({
+      key: '9',
+      queue: 'alpha',
+      sddService: 'services/billing',
+      assignee: 'other',
+      title: 'Bare',
+    }),
+  ]);
+  const board = window.board();
+  const keys = [
+    ...board.cards.map(card => card.key),
+    ...(board.pool ?? []).map(card => card.key),
+    ...(board.columns ?? []).flatMap(column => column.cards.map(card => card.key)),
+  ];
+  assert.equal(keys.includes('b'), false);
+  assert.deepEqual(
+    (board.pool ?? []).map(card => card.key),
+    ['a', 'c'],
+  );
+  assert.equal(columnCards(board, 'implementing')?.length, 0);
+  assert.equal(columnCards(board, 'tasking')?.length, 0);
+  assert.deepEqual(
+    board.cards.map(card => card.key),
+    ['9'],
+  );
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('sdd:cancelled with an earlier phase shows no card', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    cycle('1', 'proposing', {labels: ['sdd:cycle', 'sdd:proposing', 'sdd:cancelled']}),
+    cycle('2', 'proposing'),
+  ]);
+  const board = window.board();
+  const keys = [
+    ...board.cards.map(card => card.key),
+    ...(board.pool ?? []).map(card => card.key),
+    ...(board.columns ?? []).flatMap(column => column.cards.map(card => card.key)),
+  ];
+  assert.equal(keys.includes('1'), false);
+  assert.deepEqual(
+    columnCards(board, 'proposing')?.map(card => card.key),
+    ['2'],
+  );
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('an open merge stands in accepting and a closed issue leaves', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    cycle('1', 'verifying', {open: true, mergeAhead: true, title: 'Still open'}),
+    cycle('2', 'verifying', {open: false, mergeAhead: true, title: 'Closed'}),
+    cycle('3', 'accepted', {open: true, title: 'Accepted'}),
+    cycle('4', 'accepted', {open: false, title: 'Accepted closed'}),
+  ]);
+  const board = window.board();
+  const accepting = columnCards(board, 'accepting');
+  assert.deepEqual(
+    accepting?.map(card => card.key),
+    ['1', '3'],
+  );
+  assert.equal(accepting?.find(card => card.key === '1')?.reason?.includes('мерж'), true);
+  assert.equal(columnCards(board, 'verifying')?.length, 0);
+  const keys = [
+    ...board.cards.map(card => card.key),
+    ...(board.pool ?? []).map(card => card.key),
+    ...(board.columns ?? []).flatMap(column => column.cards.map(card => card.key)),
+  ];
+  assert.equal(keys.includes('2'), false);
+  assert.equal(keys.includes('4'), false);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('proposing shows two open questions under the heading', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  writeChange(
+    checkout,
+    '1',
+    'proposal.md',
+    [
+      '## Open questions',
+      '',
+      '- [ ] one',
+      '- [x] done',
+      '- [ ] two',
+      '',
+      '## Later',
+      '',
+      '- [ ] skip',
+      '',
+    ].join('\n'),
+  );
+  const window = openCycles(home, [cycle('1', 'proposed')]);
+  const card = columnCards(window.board(), 'proposing')?.[0];
+  assert.equal(card?.phaseRow, 2);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('specifying has no phase row', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  writeChange(checkout, '1', 'proposal.md', '## Open questions\n\n- [ ] one\n');
+  const window = openCycles(home, [cycle('1', 'specified')]);
+  const card = columnCards(window.board(), 'specifying')?.[0];
+  assert.ok(card);
+  assert.equal(card.phaseRow, undefined);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('designing counts open decisions including zero and tasking has no row', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  writeChange(
+    checkout,
+    '1',
+    'design.md',
+    '## Open decisions\n\n- [ ] one\n- [x] done\n\n## Later\n\n- [ ] skip\n',
+  );
+  writeChange(checkout, '3', 'tasks.md', '- [x] done\n- [ ] open\n');
+  const window = openCycles(home, [
+    cycle('1', 'designed'),
+    cycle('2', 'designing'),
+    cycle('3', 'tasking'),
+  ]);
+  const board = window.board();
+  assert.equal(columnCards(board, 'designing')?.find(card => card.key === '1')?.phaseRow, 1);
+  assert.equal(columnCards(board, 'designing')?.find(card => card.key === '2')?.phaseRow, 0);
+  assert.equal(columnCards(board, 'tasking')?.[0]?.phaseRow, undefined);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('implementing counts tasks.md and omits the count when the file is absent', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  writeChange(checkout, '1', 'tasks.md', '- [x] one\n- [x] two\n- [ ] three\n');
+  const window = openCycles(home, [cycle('1', 'implementing'), cycle('2', 'implementing')]);
+  const cards = columnCards(window.board(), 'implementing');
+  assert.deepEqual(cards?.find(card => card.key === '1')?.phaseRow, {done: 2, open: 1});
+  const missing = cards?.find(card => card.key === '2');
+  assert.ok(missing);
+  assert.equal(missing.phaseRow, undefined);
+  assert.equal('done' in missing, false);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('verifying shows red and none leaves the check row blank', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    cycle('1', 'verifying', {checks: 'red', title: 'Red'}),
+    cycle('2', 'verifying', {checks: 'none', title: 'None'}),
+  ]);
+  const cards = columnCards(window.board(), 'verifying');
+  const red = cards?.find(card => card.key === '1');
+  const none = cards?.find(card => card.key === '2');
+  assert.equal(red?.phaseRow, 'red');
+  assert.equal(JSON.stringify(red).includes('lint'), false);
+  assert.equal(red && 'checks' in red, false);
+  assert.equal(none?.phaseRow, undefined);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a focus gap shows Specify and hides a solid Plan', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    cycle('1', 'implementing', {
+      comments: [
+        {body: 'hello', manager: true},
+        {body: 'sdd:focus\nPlan solid\nSpecify thread 4\nwhy this gap\n'},
+        {body: 'sdd:focus\nPlan gap\n', manager: true},
+        {body: 'a later note'},
+      ],
+    }),
+    cycle('2', 'implementing', {
+      comments: [{body: 'sdd:focus\nCode gap\nChange solid\nPlan gap\n'}],
+    }),
+  ]);
+  const cards = columnCards(window.board(), 'implementing');
+  const gap = cards?.find(card => card.key === '1');
+  assert.equal(gap?.layers, 'Specify');
+  assert.equal(gap?.layers?.includes('Plan'), false);
+  assert.equal(JSON.stringify(gap).includes('thread'), false);
+  assert.equal(JSON.stringify(gap).includes('why'), false);
+  assert.equal(cards?.find(card => card.key === '2')?.layers, 'Code · Plan');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('every recorded layer solid has no layer line', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    cycle('1', 'implementing', {
+      comments: [{body: 'sdd:focus\nChange solid\nPlan solid\nSpecify solid\n'}],
+    }),
+  ]);
+  const card = columnCards(window.board(), 'implementing')?.[0];
+  assert.ok(card);
+  assert.equal(card.layers, undefined);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a running step hides the icon while the occasion still sorts first', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(
+    home,
+    [
+      cycle('1', 'specifying'),
+      cycle('3', 'specifying', {labels: ['sdd:cycle', 'sdd:specifying', 'sdd:wait-human']}),
+      cycle('2', 'specifying', {labels: ['sdd:cycle', 'sdd:specifying', 'sdd:wait-human']}),
+      cycle('4', 'specifying', {labels: ['sdd:cycle', 'sdd:specifying', 'sdd:wait-human']}),
+    ],
+    key => key === '2' || key === '3',
+  );
+  const cards = columnCards(window.board(), 'specifying');
+  assert.deepEqual(
+    cards?.map(card => card.key),
+    ['2', '3', '4', '1'],
+  );
+  const hidden = cards?.find(card => card.key === '2');
+  const shown = cards?.find(card => card.key === '4');
+  assert.equal(hidden?.icon, undefined);
+  assert.equal(hidden?.reason, undefined);
+  assert.equal(shown?.icon, true);
+  assert.equal(shown?.reason, 'Ask');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('pending checks hide the icon and the phase row stays pending', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    cycle('1', 'verifying', {checks: 'green'}),
+    cycle('2', 'verifying', {
+      checks: 'pending',
+      labels: ['sdd:cycle', 'sdd:verifying', 'sdd:wait-human'],
+    }),
+  ]);
+  const cards = columnCards(window.board(), 'verifying');
+  assert.deepEqual(
+    cards?.map(card => card.key),
+    ['2', '1'],
+  );
+  assert.equal(cards?.[0]?.icon, undefined);
+  assert.equal(cards?.[0]?.phaseRow, 'pending');
+  assert.equal(cards?.[1]?.phaseRow, 'green');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a missing catalog outranks a missing service config in the reason', () => {
+  const {dir, home, arcadia} = yard();
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openCycles(home, [cycle('1', 'proposed', {sddService: 'services/missing'})]);
+  const card = columnCards(window.board(), 'proposing')?.[0];
+  assert.equal(card?.reason?.startsWith('каталога нет'), true);
+  assert.equal(card?.reason?.startsWith('конфига сервиса нет'), false);
+  assert.equal(card?.reason?.includes('конфига сервиса нет'), false);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a question-only occasion whose phase row shows the count has no reason line', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  writeChange(checkout, 'b', 'proposal.md', '## Open questions\n\n- [ ] one\n- [ ] two\n');
+  writeChange(checkout, 'c', 'proposal.md', '## Open questions\n\n- [ ] one\n- [ ] two\n');
+  const window = openCycles(home, [
+    cycle('a', 'proposing'),
+    cycle('b', 'proposing'),
+    cycle('c', 'specifying'),
+  ]);
+  const board = window.board();
+  const proposing = columnCards(board, 'proposing');
+  assert.deepEqual(
+    proposing?.map(card => card.key),
+    ['b', 'a'],
+  );
+  const questions = proposing?.find(card => card.key === 'b');
+  assert.equal(questions?.phaseRow, 2);
+  assert.equal(questions?.icon, true);
+  assert.equal(questions?.reason, undefined);
+  const elsewhere = columnCards(board, 'specifying')?.find(card => card.key === 'c');
+  assert.equal(elsewhere?.phaseRow, undefined);
+  assert.equal(elsewhere?.reason, 'вопросы 2');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('decisions are the only occasion and the phase row already shows the count', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  writeChange(checkout, '1', 'design.md', '## Open decisions\n\n- [ ] one\n');
+  const window = openCycles(home, [cycle('1', 'designing')]);
+  const card = columnCards(window.board(), 'designing')?.[0];
+  assert.equal(card?.phaseRow, 1);
+  assert.equal(card?.icon, true);
+  assert.equal(card?.reason, undefined);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a child record puts дети and that key on the reason', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    cycle('p', 'implementing'),
+    ticket({key: 'c-2', parent: 'p', queue: 'other', labels: ['sdd:cycle']}),
+    ticket({key: 'c-1', parent: 'p', queue: 'other', labels: ['sdd:cycle']}),
+    ticket({key: 'no', parent: 'p', queue: 'other', labels: ['other']}),
+  ]);
+  const card = columnCards(window.board(), 'implementing')?.[0];
+  assert.equal(card?.reason, 'дети c-1 c-2');
+  assert.equal(card?.reason?.includes('no'), false);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('blockers are dependsOn keys found in this reading, in key order', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    cycle('p', 'implementing', {dependsOn: ['z', 'missing', 'a', 'a']}),
+    ticket({key: 'z', queue: 'other', labels: ['note']}),
+    ticket({key: 'a', queue: 'other', labels: ['note']}),
+  ]);
+  const card = columnCards(window.board(), 'implementing')?.[0];
+  assert.equal(card?.reason, 'блокеры a z');
+  assert.equal(card?.reason?.includes('missing'), false);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('several open pull requests are one reason part', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    cycle('1', 'implementing', {openPullRequests: 2}),
+    cycle('2', 'implementing', {openPullRequests: 1}),
+  ]);
+  const cards = columnCards(window.board(), 'implementing');
+  assert.equal(cards?.find(card => card.key === '1')?.reason, 'несколько pull request');
+  assert.equal(cards?.find(card => card.key === '1')?.icon, true);
+  assert.equal(cards?.find(card => card.key === '2')?.reason, undefined);
+  assert.equal(cards?.find(card => card.key === '2')?.icon, undefined);
+  rmSync(dir, {recursive: true, force: true});
 });
 
 test('a missing home file leaves settings closed until the manager opens them', () => {

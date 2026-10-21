@@ -4,6 +4,9 @@ import path from 'node:path';
 
 import {parse, stringify} from 'yaml';
 
+import {HEADINGS} from '../machine/change.ts';
+import {changeDir} from '../machine/naming.ts';
+import {GATE_CLOSES, GATE_PHASES, phaseOf, type Phase} from '../machine/phase.ts';
 import {queueOf} from '../machine/queues.ts';
 
 const NEEDS_AGENT = 'фабрике ещё нужен агент';
@@ -74,6 +77,21 @@ export type WindowTicket = {
   /** Absent when the field is missing. An empty string is a present value. */
   sddService?: string;
   assignee?: string;
+  /** Absent when the adapter did not say. Closed is `false`. */
+  open?: boolean;
+  /** The merge is still ahead. The window does not discover this from a host. */
+  mergeAhead?: boolean;
+  checks?: 'green' | 'red' | 'pending' | 'none';
+  parent?: string;
+  dependsOn?: readonly string[];
+  openPullRequests?: number;
+  comments?: readonly WindowComment[];
+};
+
+export type WindowComment = {
+  body: string;
+  /** A manager comment is not an `sdd:focus` record. */
+  manager?: boolean;
 };
 
 export type WindowOutside = {
@@ -87,6 +105,10 @@ export type WindowOutside = {
   startStep?: (checkout?: string) => void;
   /** Open tickets this adapter can see. The window filters them by the watch list. */
   tickets?: () => readonly WindowTicket[];
+  /** Login of this process. Not a Tracker or GitHub call. */
+  login?: () => string;
+  /** True while an agent leads a step for this key. */
+  leading?: (key: string) => boolean;
   /** Write `sddService`. The next read sees it. */
   writeService?: (key: string, service: string) => void;
 };
@@ -114,6 +136,30 @@ export type CardState = {
   queue: string;
 };
 
+const COLUMN_NAMES = [
+  'proposing',
+  'specifying',
+  'designing',
+  'tasking',
+  'implementing',
+  'verifying',
+  'accepting',
+] as const;
+
+export type ColumnName = (typeof COLUMN_NAMES)[number];
+
+export type PhaseRow = number | {done: number; open: number} | 'green' | 'red' | 'pending';
+
+/** A column card. `icon` is present or absent: one mark, no letters. */
+export type CycleCard = {
+  key: string;
+  title: string;
+  icon?: true;
+  reason?: string;
+  phaseRow?: PhaseRow;
+  layers?: string;
+};
+
 export type BoardState = {
   visible: true;
   rows: {text: string}[];
@@ -122,6 +168,8 @@ export type BoardState = {
   takeDisabled: boolean;
   cards: CardState[];
   watch: string[];
+  pool: CycleCard[];
+  columns: {name: ColumnName; cards: CycleCard[]}[];
 };
 
 const CATALOG_MISSING = 'каталога нет';
@@ -346,6 +394,295 @@ function modelRow(doc: Doc): {text: string}[] {
     return [{text: 'нужна модель judgment'}];
   }
   return [];
+}
+
+const LAYERS = ['Change', 'Plan', 'Specify', 'Design', 'Tasks', 'Code'] as const;
+
+type Placed = {card: CycleCard; occasion: boolean};
+
+function isColumn(phase: Phase): phase is ColumnName {
+  return (COLUMN_NAMES as readonly string[]).includes(phase);
+}
+
+function isGate(phase: Phase): boolean {
+  return (GATE_PHASES as readonly string[]).includes(phase);
+}
+
+function keyOrder(left: string, right: string): number {
+  return left.localeCompare(right, undefined, {numeric: true});
+}
+
+function byKey<T extends {key: string}>(left: T, right: T): number {
+  return keyOrder(left.key, right.key);
+}
+
+/** `sdd:cancelled` removes the card. `phaseOf` leaves an earlier phase in place. */
+function slotOf(
+  item: WindowTicket,
+  phase: Phase | null,
+  manager: string | undefined,
+): 'cards' | 'hide' | 'pool' | ColumnName {
+  if (item.labels.includes('sdd:cancelled') || phase === 'cancelled') {
+    return 'hide';
+  }
+  if (phase === null) {
+    return 'cards';
+  }
+  if (item.open === false && (item.mergeAhead === true || phase === 'accepted')) {
+    return 'hide';
+  }
+  const column = columnOf(phase, item);
+  if (!column) {
+    return 'hide';
+  }
+  if (item.assignee === undefined || item.assignee === '') {
+    if (item.open === true && item.mergeAhead === true) {
+      return column;
+    }
+    return 'pool';
+  }
+  if (manager !== undefined && item.assignee === manager) {
+    return column;
+  }
+  return 'hide';
+}
+
+function columnOf(phase: Phase, item: WindowTicket): ColumnName | null {
+  if (item.open === true && item.mergeAhead === true) {
+    return 'accepting';
+  }
+  if (phase === 'accepted') {
+    return 'accepting';
+  }
+  const closed = GATE_CLOSES[phase];
+  if (closed && isColumn(closed)) {
+    return closed;
+  }
+  if (isColumn(phase)) {
+    return phase;
+  }
+  return null;
+}
+
+function section(text: string, heading: string): string {
+  const match = new RegExp(`^## ${heading}\\s*$`, 'm').exec(text);
+  if (!match) {
+    return '';
+  }
+  const rest = text.slice(match.index + match[0].length);
+  const next = rest.search(/^## /m);
+  return next === -1 ? rest : rest.slice(0, next);
+}
+
+function unchecked(text: string, heading: string): number {
+  return section(text, heading)
+    .split('\n')
+    .filter(line => line.trimStart().startsWith('- [ ]')).length;
+}
+
+function readChangeText(checkout: string | undefined, key: string, name: string): string {
+  if (!checkout) {
+    return '';
+  }
+  const file = path.join(checkout, changeDir(key), name);
+  if (!existsSync(file)) {
+    return '';
+  }
+  return readFileSync(file, 'utf8');
+}
+
+function openCount(
+  checkout: string | undefined,
+  key: string,
+  name: string,
+  heading: string,
+): number {
+  return unchecked(readChangeText(checkout, key, name), heading);
+}
+
+function taskRow(
+  checkout: string | undefined,
+  key: string,
+): {done: number; open: number} | undefined {
+  if (!checkout) {
+    return undefined;
+  }
+  const file = path.join(checkout, changeDir(key), 'tasks.md');
+  if (!existsSync(file)) {
+    return undefined;
+  }
+  let done = 0;
+  let open = 0;
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith('- [x]')) {
+      done += 1;
+    } else if (trimmed.startsWith('- [ ]')) {
+      open += 1;
+    }
+  }
+  return {done, open};
+}
+
+function phaseRowOf(
+  column: ColumnName,
+  item: WindowTicket,
+  checkout: string | undefined,
+  questions: number,
+  decisions: number,
+): PhaseRow | undefined {
+  if (column === 'proposing') {
+    return questions;
+  }
+  if (column === 'designing') {
+    return decisions;
+  }
+  if (column === 'implementing') {
+    return taskRow(checkout, item.key);
+  }
+  if (
+    (column === 'verifying' || column === 'accepting') &&
+    (item.checks === 'green' || item.checks === 'red' || item.checks === 'pending')
+  ) {
+    return item.checks;
+  }
+  return undefined;
+}
+
+function childKeys(item: WindowTicket, reading: readonly WindowTicket[]): string[] {
+  return reading
+    .filter(
+      record =>
+        record.key !== item.key &&
+        record.labels.includes('sdd:cycle') &&
+        record.parent === item.key,
+    )
+    .map(record => record.key)
+    .sort(keyOrder);
+}
+
+function blockerKeys(item: WindowTicket, reading: readonly WindowTicket[]): string[] {
+  const known = new Set(reading.map(record => record.key));
+  const found = new Set<string>();
+  for (const key of item.dependsOn ?? []) {
+    if (known.has(key)) {
+      found.add(key);
+    }
+  }
+  return [...found].sort(keyOrder);
+}
+
+/** The phase row already shows this count, so the card keeps the occasion and drops the line. */
+function reasonHidden(parts: readonly string[], phaseRow: PhaseRow | undefined): boolean {
+  if (parts.length !== 1 || typeof phaseRow !== 'number') {
+    return false;
+  }
+  return parts[0] === `вопросы ${phaseRow}` || parts[0] === `решения ${phaseRow}`;
+}
+
+function focusLayers(comments: readonly WindowComment[] | undefined): string | undefined {
+  let body: string | undefined;
+  for (const comment of comments ?? []) {
+    if (comment.manager) {
+      continue;
+    }
+    const first = comment.body.split('\n', 1)[0] ?? '';
+    if (first.trim() === 'sdd:focus') {
+      body = comment.body;
+    }
+  }
+  if (body === undefined) {
+    return undefined;
+  }
+  const names: string[] = [];
+  for (const line of body.split('\n').slice(1)) {
+    const trimmed = line.trim();
+    if (trimmed === '') {
+      continue;
+    }
+    const token = trimmed.split(/\s+/)[0] ?? '';
+    if (!(LAYERS as readonly string[]).includes(token)) {
+      continue;
+    }
+    const rest = trimmed.slice(token.length).trim();
+    if (rest === 'solid') {
+      continue;
+    }
+    names.push(token);
+  }
+  return names.length === 0 ? undefined : names.join(' · ');
+}
+
+function ordered(items: readonly Placed[]): CycleCard[] {
+  const occasion = items
+    .filter(item => item.occasion)
+    .map(item => item.card)
+    .sort(byKey);
+  const rest = items
+    .filter(item => !item.occasion)
+    .map(item => item.card)
+    .sort(byKey);
+  return [...occasion, ...rest];
+}
+
+function buildCycle(
+  item: WindowTicket,
+  phase: Phase,
+  column: ColumnName,
+  checkout: string | undefined,
+  breakReason: string,
+  reading: readonly WindowTicket[],
+  hideIcon: boolean,
+): Placed {
+  const questions = openCount(checkout, item.key, 'proposal.md', HEADINGS.openQuestions);
+  const decisions = openCount(checkout, item.key, 'design.md', HEADINGS.openDecisions);
+  const phaseRow = phaseRowOf(column, item, checkout, questions, decisions);
+  const parts: string[] = [];
+  if (breakReason !== '') {
+    parts.push(breakReason);
+  }
+  if (isGate(phase)) {
+    parts.push(phase);
+  }
+  if (item.labels.includes('sdd:wait-human')) {
+    parts.push('Ask');
+  }
+  if (questions > 0) {
+    parts.push(`вопросы ${questions}`);
+  }
+  if (decisions > 0) {
+    parts.push(`решения ${decisions}`);
+  }
+  if (item.mergeAhead === true) {
+    parts.push('мерж');
+  }
+  const children = childKeys(item, reading);
+  if (children.length > 0) {
+    parts.push(`дети ${children.join(' ')}`);
+  }
+  const blockers = blockerKeys(item, reading);
+  if (blockers.length > 0) {
+    parts.push(`блокеры ${blockers.join(' ')}`);
+  }
+  if ((item.openPullRequests ?? 0) > 1) {
+    parts.push('несколько pull request');
+  }
+  const occasion = parts.length > 0;
+  const card: CycleCard = {key: item.key, title: item.title};
+  if (occasion && !hideIcon) {
+    card.icon = true;
+  }
+  if (occasion && !hideIcon && !reasonHidden(parts, phaseRow)) {
+    card.reason = parts.join(' · ');
+  }
+  if (phaseRow !== undefined) {
+    card.phaseRow = phaseRow;
+  }
+  const layers = focusLayers(item.comments);
+  if (layers) {
+    card.layers = layers;
+  }
+  return {card, occasion};
 }
 
 /** The window for one launch. Another launch has its own home path. */
@@ -686,17 +1023,73 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     return {watch, cards};
   }
 
+  function lay(watch: readonly string[]): {
+    taken: Set<string>;
+    pool: CycleCard[];
+    columns: {name: ColumnName; cards: CycleCard[]}[];
+  } {
+    const reading = sortedTickets();
+    const manager = outside.login?.();
+    const taken = new Set<string>();
+    const pool: CycleCard[] = [];
+    const buckets = new Map<ColumnName, Placed[]>();
+    for (const item of reading) {
+      if (!onWatch(item, watch)) {
+        continue;
+      }
+      const phase = phaseOf([...item.labels]);
+      const where = slotOf(item, phase, manager);
+      if (where === 'cards') {
+        continue;
+      }
+      taken.add(item.key);
+      if (where === 'hide' || !phase) {
+        continue;
+      }
+      const column = where === 'pool' ? columnOf(phase, item) : where;
+      if (!column) {
+        continue;
+      }
+      const checkout = cardOf(item);
+      const placed = buildCycle(
+        item,
+        phase,
+        column,
+        checkout.checkout,
+        checkout.reason,
+        reading,
+        outside.leading?.(item.key) === true || item.checks === 'pending',
+      );
+      if (where === 'pool') {
+        pool.push(placed.card);
+      } else {
+        const list = buckets.get(column) ?? [];
+        list.push(placed);
+        buckets.set(column, list);
+      }
+    }
+    pool.sort(byKey);
+    return {
+      taken,
+      pool,
+      columns: COLUMN_NAMES.map(name => ({name, cards: ordered(buckets.get(name) ?? [])})),
+    };
+  }
+
   function board(): BoardState {
     const live = answers();
     const view = settle();
+    const cycles = lay(view.watch);
     return {
       visible: true,
       rows: rows(live),
       settingsOpen,
       stepsStart: live && modelsReady(),
       takeDisabled: !live,
-      cards: outside.tickets ? view.cards : [],
+      cards: outside.tickets ? view.cards.filter(card => !cycles.taken.has(card.key)) : [],
       watch: view.watch,
+      pool: cycles.pool,
+      columns: cycles.columns,
     };
   }
 

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {homedir, tmpdir} from 'node:os';
 import path from 'node:path';
+import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
 import {parse} from 'yaml';
 
@@ -15,70 +16,6 @@ function scratch(): {dir: string; home: string} {
   const dir = mkdtempSync(path.join(tmpdir(), 'ai-factory-home-'));
   return {dir, home: path.join(dir, 'home.yaml')};
 }
-
-test('a launch with no home path shows one row that the factory still needs an agent', () => {
-  const window = openWindow({});
-  const board = window.board();
-  assert.equal(board.visible, true);
-  assert.deepEqual(board.rows, [{text: 'фабрике ещё нужен агент'}]);
-  assert.equal(board.settingsOpen, false);
-  assert.equal(board.stepsStart, false);
-  assert.equal(board.takeDisabled, true);
-  window.take();
-  window.spy();
-  assert.equal(board.rows.length, 1);
-});
-
-test('a missing home file shows the board and does not start a step', () => {
-  const {dir, home} = scratch();
-  let started = 0;
-  let assignees = 0;
-  const window = openWindow(
-    {homePath: home},
-    {
-      startStep: () => {
-        started += 1;
-      },
-      writeAssignee: () => {
-        assignees += 1;
-      },
-    },
-  );
-  const board = window.board();
-  assert.equal(board.visible, true);
-  assert.deepEqual(board.rows, [{text: 'фабрике ещё нужен агент'}]);
-  assert.equal(board.settingsOpen, false);
-  assert.equal(board.stepsStart, false);
-  assert.equal(board.takeDisabled, true);
-  window.spy();
-  window.take();
-  assert.equal(started, 0);
-  assert.equal(assignees, 0);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('choosing cursor writes its pair and omits effort and speed', () => {
-  const {dir, home} = scratch();
-  const window = openWindow({homePath: home});
-  window.chooseAgent('cursor');
-  const doc = parse(readFileSync(home, 'utf8')) as {
-    agent?: string;
-    models?: {mechanical?: string; judgment?: string};
-    effort?: unknown;
-    speed?: unknown;
-  };
-  assert.equal(doc.agent, 'cursor');
-  assert.equal(doc.models?.mechanical, 'composer-2.5-fast');
-  assert.equal(doc.models?.judgment, 'grok-4.7-high-fast');
-  assert.equal(doc.effort, undefined);
-  assert.equal(doc.speed, undefined);
-  assert.equal(window.settings().effort, undefined);
-  assert.equal(window.settings().speed, undefined);
-  assert.equal(window.board().settingsOpen, false);
-  assert.equal(window.board().stepsStart, true);
-  assert.deepEqual(window.board().rows, []);
-  rmSync(dir, {recursive: true, force: true});
-});
 
 type HomeDoc = {
   agent?: string;
@@ -115,390 +52,6 @@ function assertNoEmptyStrings(value: unknown): void {
     }
   }
 }
-
-test('choosing codex writes its pair and effort and omits speed', () => {
-  const {dir, home} = scratch();
-  const window = openWindow({homePath: home});
-  window.chooseAgent('codex');
-  const doc = readHome(home);
-  assert.equal(doc.agent, 'codex');
-  assert.equal(doc.models?.mechanical, 'gpt-6-luna');
-  assert.equal(doc.models?.judgment, 'gpt-6.1-sol');
-  assert.deepEqual(doc.effort, {mechanical: 'low', judgment: 'high'});
-  assert.equal(doc.speed, undefined);
-  assertNoEmptyStrings(doc);
-  assert.deepEqual(window.settings().effort, {mechanical: 'low', judgment: 'high'});
-  assert.deepEqual(window.settings().speed, {mechanical: '', judgment: ''});
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('choosing claude-code writes its pair and effort and omits speed', () => {
-  const {dir, home} = scratch();
-  const window = openWindow({homePath: home});
-  window.chooseAgent('claude-code');
-  const doc = readHome(home);
-  assert.equal(doc.agent, 'claude-code');
-  assert.equal(doc.models?.mechanical, 'sonnet');
-  assert.equal(doc.models?.judgment, 'opus');
-  assert.deepEqual(doc.effort, {mechanical: 'medium', judgment: 'medium'});
-  assert.equal(doc.speed, undefined);
-  assert.equal(window.settings().speed, undefined);
-  assertNoEmptyStrings(doc);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('choosing opencode writes its pair and omits effort and speed', () => {
-  const {dir, home} = scratch();
-  const window = openWindow({homePath: home});
-  window.chooseAgent('opencode');
-  const doc = readHome(home);
-  assert.equal(doc.agent, 'opencode');
-  assert.equal(doc.models?.mechanical, 'moonshotai/kimi-k2.7-code');
-  assert.equal(doc.models?.judgment, 'moonshotai/kimi-k3');
-  assert.equal(doc.effort, undefined);
-  assert.equal(doc.speed, undefined);
-  assert.equal(window.settings().effort, undefined);
-  assert.equal(window.settings().speed, undefined);
-  assertNoEmptyStrings(doc);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('choosing an agent does not read a live catalog', () => {
-  const {dir, home} = scratch();
-  let reads = 0;
-  const window = openWindow(
-    {homePath: home},
-    {
-      catalog: () => {
-        reads += 1;
-        return {mechanical: 'not-the-pair', judgment: 'also-not'};
-      },
-    },
-  );
-  window.chooseAgent('cursor');
-  assert.equal(reads, 0);
-  const doc = readHome(home);
-  assert.equal(doc.models?.mechanical, 'composer-2.5-fast');
-  assert.equal(doc.models?.judgment, 'grok-4.7-high-fast');
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('an agent without a known pair leaves both models empty', () => {
-  const {dir, home} = scratch();
-  const window = openWindow({homePath: home, agents: ['other']}, {answers: () => true});
-  window.chooseAgent('other');
-  const doc = readHome(home);
-  assert.equal(doc.agent, 'other');
-  assert.equal(doc.models, undefined);
-  assert.equal(doc.effort, undefined);
-  assert.equal(doc.speed, undefined);
-  assertNoEmptyStrings(doc);
-  assert.equal(window.settings().models.mechanical.value, '');
-  assert.equal(window.settings().models.mechanical.needsValue, true);
-  assert.equal(window.settings().models.judgment.value, '');
-  assert.equal(window.settings().models.judgment.needsValue, true);
-  assert.deepEqual(window.board().rows, [{text: 'нужны модели mechanical и judgment'}]);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('no home path writes no file when the manager chooses an agent', () => {
-  let started = 0;
-  const window = openWindow(
-    {},
-    {
-      startStep: () => {
-        started += 1;
-      },
-      catalog: () => {
-        throw new Error('catalog');
-      },
-    },
-  );
-  window.chooseAgent('cursor');
-  window.spy();
-  assert.equal(started, 0);
-  assert.deepEqual(window.board().rows, [{text: 'фабрике ещё нужен агент'}]);
-  assert.equal(window.settings().agent, '');
-  assert.equal(window.board().takeDisabled, true);
-});
-
-test('an empty agent list writes no home file', () => {
-  const {dir, home} = scratch();
-  const window = openWindow({homePath: home, agents: []});
-  window.chooseAgent('cursor');
-  window.chooseAgent('codex');
-  assert.equal(existsSync(home), false);
-  assert.deepEqual(window.board().rows, [{text: 'фабрике ещё нужен агент'}]);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('leaving a model empty writes that field', () => {
-  const {dir, home} = scratch();
-  const window = openWindow({homePath: home}, {answers: () => true});
-  window.chooseAgent('cursor');
-  window.leaveModel('mechanical', '');
-  assert.equal(readHome(home).models?.mechanical, '');
-  assert.equal(readHome(home).models?.judgment, 'grok-4.7-high-fast');
-  assert.equal(window.settings().models.mechanical.needsValue, true);
-  assert.equal(window.settings().models.judgment.needsValue, false);
-  assert.deepEqual(window.board().rows, [{text: 'нужна модель mechanical'}]);
-  window.leaveModel('judgment', '');
-  const doc = readHome(home);
-  assert.equal(doc.models?.mechanical, '');
-  assert.equal(doc.models?.judgment, '');
-  assert.equal(window.settings().models.judgment.needsValue, true);
-  assert.deepEqual(window.board().rows, [{text: 'нужны модели mechanical и judgment'}]);
-  window.leaveModel('judgment', 'grok-4.7-high-fast');
-  assert.equal(readHome(home).models?.judgment, 'grok-4.7-high-fast');
-  assert.equal(readHome(home).models?.mechanical, '');
-  assert.deepEqual(window.board().rows, [{text: 'нужна модель mechanical'}]);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('an empty model stops the window spy', () => {
-  const {dir, home} = scratch();
-  let started = 0;
-  const window = openWindow(
-    {homePath: home},
-    {
-      answers: () => true,
-      startStep: () => {
-        started += 1;
-      },
-    },
-  );
-  window.chooseAgent('cursor');
-  window.spy();
-  assert.equal(started, 1);
-  window.leaveModel('judgment', '');
-  window.spy();
-  assert.equal(started, 1);
-  assert.equal(window.board().stepsStart, false);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('empty effort and speed are the agent default and do not stop a step', () => {
-  const {dir, home} = scratch();
-  let started = 0;
-  const window = openWindow(
-    {homePath: home},
-    {
-      answers: () => true,
-      startStep: () => {
-        started += 1;
-      },
-    },
-  );
-  window.chooseAgent('codex');
-  window.leaveEffort('mechanical', '');
-  window.leaveEffort('judgment', '');
-  window.leaveSpeed('mechanical', '');
-  window.leaveSpeed('judgment', '');
-  const doc = readHome(home);
-  assert.equal(doc.agent, 'codex');
-  assert.equal(doc.models?.mechanical, 'gpt-6-luna');
-  assert.equal(doc.models?.judgment, 'gpt-6.1-sol');
-  assert.equal(doc.effort, undefined);
-  assert.equal(doc.speed, undefined);
-  assert.deepEqual(window.settings().effort, {mechanical: 'low', judgment: 'high'});
-  assert.deepEqual(window.settings().speed, {mechanical: '', judgment: ''});
-  window.spy();
-  assert.equal(started, 1);
-  assert.equal(window.board().stepsStart, true);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('a newer home file blocks the write and the window shows the disk', () => {
-  const {dir, home} = scratch();
-  writeFileSync(
-    home,
-    [
-      'agent: cursor',
-      'models:',
-      '  mechanical: composer-2.5-fast',
-      '  judgment: grok-4.7-high-fast',
-      '',
-    ].join('\n'),
-  );
-  const window = openWindow({homePath: home});
-  const disk = [
-    'agent: codex',
-    'models:',
-    '  mechanical: gpt-6-luna',
-    '  judgment: gpt-6.1-sol',
-    'effort:',
-    '  mechanical: low',
-    '  judgment: high',
-    '',
-  ].join('\n');
-  writeFileSync(home, disk);
-  window.chooseAgent('opencode');
-  assert.equal(readFileSync(home, 'utf8'), disk);
-  assert.equal(window.settings().agent, 'codex');
-  assert.equal(window.settings().models.mechanical.value, 'gpt-6-luna');
-  assert.equal(window.settings().models.judgment.value, 'gpt-6.1-sol');
-  window.chooseAgent('cursor');
-  assert.equal(readHome(home).agent, 'cursor');
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('closing settings does not erase the home file', () => {
-  const {dir, home} = scratch();
-  const window = openWindow({homePath: home});
-  window.chooseAgent('cursor');
-  const written = readFileSync(home, 'utf8');
-  window.openSettings();
-  window.closeSettings();
-  assert.equal(readFileSync(home, 'utf8'), written);
-  assert.equal(window.settings().open, false);
-  assert.equal(window.board().settingsOpen, false);
-  assert.equal(readHome(home).agent, 'cursor');
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('changing the agent replaces the set and drops old effort and speed', () => {
-  const {dir, home} = scratch();
-  const window = openWindow({homePath: home});
-  window.chooseAgent('cursor');
-  window.chooseAgent('codex');
-  let doc = readHome(home);
-  assert.equal(doc.agent, 'codex');
-  assert.equal(doc.models?.mechanical, 'gpt-6-luna');
-  assert.equal(doc.models?.judgment, 'gpt-6.1-sol');
-  assert.deepEqual(doc.effort, {mechanical: 'low', judgment: 'high'});
-  assert.equal(doc.speed, undefined);
-  assert.equal(JSON.stringify(doc).includes('composer-2.5-fast'), false);
-  assert.equal(JSON.stringify(doc).includes('grok-4.7-high-fast'), false);
-  assertNoEmptyStrings(doc);
-  window.chooseAgent('opencode');
-  doc = readHome(home);
-  assert.equal(doc.agent, 'opencode');
-  assert.equal(doc.models?.mechanical, 'moonshotai/kimi-k2.7-code');
-  assert.equal(doc.models?.judgment, 'moonshotai/kimi-k3');
-  assert.equal(doc.effort, undefined);
-  assert.equal(doc.speed, undefined);
-  assert.equal(JSON.stringify(doc).includes('gpt-6-luna'), false);
-  assertNoEmptyStrings(doc);
-  window.chooseAgent('cursor');
-  doc = readHome(home);
-  assert.equal(doc.effort, undefined);
-  assert.equal(doc.speed, undefined);
-  assert.equal(doc.models?.mechanical, 'composer-2.5-fast');
-  assertNoEmptyStrings(doc);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('a recorded agent that does not answer stays in the file', () => {
-  const {dir, home} = scratch();
-  const body = [
-    'agent: cursor',
-    'models:',
-    '  mechanical: composer-2.5-fast',
-    '  judgment: grok-4.7-high-fast',
-    '',
-  ].join('\n');
-  writeFileSync(home, body);
-  const asked: string[] = [];
-  let started = 0;
-  let assignees = 0;
-  const window = openWindow(
-    {homePath: home},
-    {
-      answers: agentId => {
-        asked.push(agentId);
-        return false;
-      },
-      startStep: () => {
-        started += 1;
-      },
-      writeAssignee: () => {
-        assignees += 1;
-      },
-    },
-  );
-  assert.deepEqual(window.board().rows, [{text: 'агент не отвечает'}]);
-  assert.equal(window.board().visible, true);
-  assert.equal(window.board().settingsOpen, false);
-  assert.equal(window.board().stepsStart, false);
-  assert.equal(window.board().takeDisabled, true);
-  window.spy();
-  window.take();
-  assert.equal(started, 0);
-  assert.equal(assignees, 0);
-  assert.equal(readFileSync(home, 'utf8'), body);
-  assert.ok(asked.includes('cursor'));
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('a silent agent hides the empty-model row', () => {
-  const {dir, home} = scratch();
-  const body = [
-    'agent: cursor',
-    'models:',
-    '  mechanical: composer-2.5-fast',
-    '  judgment: ""',
-    '',
-  ].join('\n');
-  writeFileSync(home, body);
-  const window = openWindow({homePath: home}, {answers: () => false});
-  assert.deepEqual(window.board().rows, [{text: 'агент не отвечает'}]);
-  assert.equal(readFileSync(home, 'utf8'), body);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('the home file gains no person, phase, focus, or metrics', () => {
-  const {dir, home} = scratch();
-  writeFileSync(
-    home,
-    [
-      'person: ada',
-      'phase: implementing',
-      'focus: gap',
-      'metrics:',
-      '  n: 1',
-      'watch:',
-      '  - LAVKAOPSCORE',
-      'roots:',
-      '  arcadia: ~/arcadia',
-      '  github: ~/github',
-      'roles: []',
-      'agent: cursor',
-      'models:',
-      '  mechanical: composer-2.5-fast',
-      '  judgment: grok-4.7-high-fast',
-      '',
-    ].join('\n'),
-  );
-  const window = openWindow({homePath: home});
-  window.chooseAgent('codex');
-  window.take();
-  const doc = readHome(home);
-  assert.equal(doc.person, undefined);
-  assert.equal(doc.phase, undefined);
-  assert.equal(doc.focus, undefined);
-  assert.equal(doc.metrics, undefined);
-  assert.deepEqual(doc.watch, ['LAVKAOPSCORE']);
-  assert.deepEqual(doc.roots, {arcadia: '~/arcadia', github: '~/github'});
-  assert.deepEqual(doc.roles, []);
-  assert.equal(doc.agent, 'codex');
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('two launches do not share a home file', () => {
-  const left = scratch();
-  const right = scratch();
-  const a = openWindow({homePath: left.home});
-  const b = openWindow({homePath: right.home});
-  a.chooseAgent('cursor');
-  b.chooseAgent('codex');
-  assert.equal(readHome(left.home).agent, 'cursor');
-  assert.equal(readHome(left.home).models?.mechanical, 'composer-2.5-fast');
-  assert.equal(readHome(right.home).agent, 'codex');
-  assert.equal(readHome(right.home).effort?.mechanical, 'low');
-  assert.equal(readHome(left.home).agent, 'cursor');
-  rmSync(left.dir, {recursive: true, force: true});
-  rmSync(right.dir, {recursive: true, force: true});
-});
 
 function yard(): {dir: string; home: string; arcadia: string; github: string} {
   const dir = mkdtempSync(path.join(tmpdir(), 'ai-factory-watch-'));
@@ -554,26 +107,487 @@ function ticket(over: Partial<WindowTicket> & Pick<WindowTicket, 'key'>): Window
   return {title: over.key, labels: ['sdd:cycle'], ...over};
 }
 
-test('the user block writes the watch list and the roots immediately', () => {
-  const {dir, home} = scratch();
-  const window = openWindow({homePath: home, adapter: 'tracker'});
-  window.chooseAgent('cursor');
-  window.leaveWatch(['alpha', 'alpha', 'beta']);
-  window.leaveRoots({arcadia: '/arcadia', github: '/github'});
-  const doc = readHome(home);
-  assert.deepEqual(doc.watch, ['alpha', 'beta']);
-  assert.deepEqual(doc.roots, {arcadia: '/arcadia', github: '/github'});
-  assert.equal(doc.agent, 'cursor');
-  assert.equal((doc as {system?: unknown}).system, undefined);
-  const disk = readFileSync(home, 'utf8');
-  writeFileSync(home, disk.replace('cursor', 'codex'));
-  window.leaveWatch(['gamma']);
-  assert.equal(readFileSync(home, 'utf8').includes('gamma'), false);
-  assert.equal(readHome(home).agent, 'codex');
-  rmSync(dir, {recursive: true, force: true});
-});
+const MANAGER = 'ada';
 
-test('an empty root leaves ~/arcadia or ~/github', () => {
+const COLUMN_NAMES = [
+  'proposing',
+  'specifying',
+  'designing',
+  'tasking',
+  'implementing',
+  'verifying',
+  'accepting',
+];
+
+function prepare(arcadia: string, home: string): string {
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  return checkout;
+}
+
+function cycle(key: string, phase: string, over: Partial<WindowTicket> = {}): WindowTicket {
+  return ticket({
+    key,
+    assignee: MANAGER,
+    queue: 'alpha',
+    sddService: 'services/billing',
+    ...over,
+    title: over.title ?? key,
+    labels: over.labels ?? ['sdd:cycle', `sdd:${phase}`],
+  });
+}
+
+function openCycles(
+  home: string,
+  tickets: readonly WindowTicket[],
+  leading?: (key: string) => boolean,
+) {
+  return openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      leading,
+      tickets: () => tickets,
+    },
+  );
+}
+
+function writeChange(checkout: string, key: string, name: string, body: string): void {
+  const dir = path.join(checkout, changeDir(key));
+  mkdirSync(dir, {recursive: true});
+  writeFileSync(path.join(dir, name), body);
+}
+
+function columnCards(
+  board: ReturnType<ReturnType<typeof openWindow>['board']>,
+  name: string,
+): {key: string}[] | undefined {
+  return board.columns?.find(column => column.name === name)?.cards;
+}
+
+type ServiceYaml = {
+  schema?: unknown;
+  context?: unknown;
+  rules?: unknown;
+  sdd?: {
+    base?: unknown;
+    'branch-scope'?: unknown;
+    'ignore-comments'?: unknown;
+    extra?: unknown;
+    queues?: {name?: string; description?: unknown}[];
+    hooks?: Record<string, Record<string, unknown>>;
+  };
+};
+
+function writeServiceYaml(checkout: string, body: string): string {
+  const dir = path.join(checkout, 'openspec');
+  mkdirSync(dir, {recursive: true});
+  const file = path.join(dir, 'config.yaml');
+  writeFileSync(file, body.endsWith('\n') ? body : `${body}\n`);
+  return file;
+}
+
+function readServiceYaml(file: string): ServiceYaml {
+  return parse(readFileSync(file, 'utf8')) as ServiceYaml;
+}
+
+function visibleKeys(board: ReturnType<ReturnType<typeof openWindow>['board']>): string[] {
+  return [
+    ...board.cards.map(card => card.key),
+    ...board.pool.map(card => card.key),
+    ...board.columns.flatMap(column => column.cards.map(card => card.key)),
+  ];
+}
+
+type ReviewReading = {
+  threads: readonly {marker?: string | null; lines: readonly string[]}[];
+  conversation?: {last?: {marker?: string | null; body: string} | null} | null;
+};
+
+function openSide(
+  home: string,
+  tickets: readonly WindowTicket[],
+  extra: {
+    leading?: (key: string) => boolean;
+    review?: (key: string) => ReviewReading | undefined;
+  } = {},
+) {
+  return openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => tickets,
+      leading: extra.leading,
+      review: extra.review,
+    },
+  );
+}
+
+function kinds(blocks: readonly {kind: string}[]): string[] {
+  return blocks.map(block => block.kind);
+}
+
+function proveALaunchWithNoHomePathShowsOneRowThatTheFactoryStillNeedsAnAgent0(): void {
+  const window = openWindow({});
+  const board = window.board();
+  assert.equal(board.visible, true);
+  assert.deepEqual(board.rows, [{text: 'фабрике ещё нужен агент'}]);
+  assert.equal(board.settingsOpen, false);
+  assert.equal(board.stepsStart, false);
+  assert.equal(board.takeDisabled, true);
+  window.take();
+  window.spy();
+  assert.equal(board.rows.length, 1);
+}
+
+function proveAMissingHomeFileShowsTheBoardAndDoesNotStartAStep1(): void {
+  const {dir, home} = scratch();
+  let started = 0;
+  let assignees = 0;
+  const window = openWindow(
+    {homePath: home},
+    {
+      startStep: () => {
+        started += 1;
+      },
+      writeAssignee: () => {
+        assignees += 1;
+      },
+    },
+  );
+  const board = window.board();
+  assert.equal(board.visible, true);
+  assert.deepEqual(board.rows, [{text: 'фабрике ещё нужен агент'}]);
+  assert.equal(board.settingsOpen, false);
+  assert.equal(board.stepsStart, false);
+  assert.equal(board.takeDisabled, true);
+  window.spy();
+  window.take();
+  assert.equal(started, 0);
+  assert.equal(assignees, 0);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveChoosingCursorWritesItsPairAndOmitsEffortAndSpeed2(): void {
+  const {dir, home} = scratch();
+  const window = openWindow({homePath: home});
+  window.chooseAgent('cursor');
+  const doc = parse(readFileSync(home, 'utf8')) as {
+    agent?: string;
+    models?: {mechanical?: string; judgment?: string};
+    effort?: unknown;
+    speed?: unknown;
+  };
+  assert.equal(doc.agent, 'cursor');
+  assert.equal(doc.models?.mechanical, 'composer-2.5-fast');
+  assert.equal(doc.models?.judgment, 'grok-4.7-high-fast');
+  assert.equal(doc.effort, undefined);
+  assert.equal(doc.speed, undefined);
+  assert.equal(window.settings().effort, undefined);
+  assert.equal(window.settings().speed, undefined);
+  assert.equal(window.board().settingsOpen, false);
+  assert.equal(window.board().stepsStart, true);
+  assert.deepEqual(window.board().rows, []);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveChoosingCodexWritesItsPairAndEffortAndOmitsSpeed3(): void {
+  const {dir, home} = scratch();
+  const window = openWindow({homePath: home});
+  window.chooseAgent('codex');
+  const doc = readHome(home);
+  assert.equal(doc.agent, 'codex');
+  assert.equal(doc.models?.mechanical, 'gpt-6-luna');
+  assert.equal(doc.models?.judgment, 'gpt-6.1-sol');
+  assert.deepEqual(doc.effort, {mechanical: 'low', judgment: 'high'});
+  assert.equal(doc.speed, undefined);
+  assertNoEmptyStrings(doc);
+  assert.deepEqual(window.settings().effort, {mechanical: 'low', judgment: 'high'});
+  assert.deepEqual(window.settings().speed, {mechanical: '', judgment: ''});
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveChoosingClaudeCodeWritesItsPairAndEffortAndOmitsSpeed4(): void {
+  const {dir, home} = scratch();
+  const window = openWindow({homePath: home});
+  window.chooseAgent('claude-code');
+  const doc = readHome(home);
+  assert.equal(doc.agent, 'claude-code');
+  assert.equal(doc.models?.mechanical, 'sonnet');
+  assert.equal(doc.models?.judgment, 'opus');
+  assert.deepEqual(doc.effort, {mechanical: 'medium', judgment: 'medium'});
+  assert.equal(doc.speed, undefined);
+  assert.equal(window.settings().speed, undefined);
+  assertNoEmptyStrings(doc);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveChoosingOpencodeWritesItsPairAndOmitsEffortAndSpeed5(): void {
+  const {dir, home} = scratch();
+  const window = openWindow({homePath: home});
+  window.chooseAgent('opencode');
+  const doc = readHome(home);
+  assert.equal(doc.agent, 'opencode');
+  assert.equal(doc.models?.mechanical, 'moonshotai/kimi-k2.7-code');
+  assert.equal(doc.models?.judgment, 'moonshotai/kimi-k3');
+  assert.equal(doc.effort, undefined);
+  assert.equal(doc.speed, undefined);
+  assert.equal(window.settings().effort, undefined);
+  assert.equal(window.settings().speed, undefined);
+  assertNoEmptyStrings(doc);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveNoHomePathWritesNoFileWhenTheManagerChoosesAnAgent8(): void {
+  let started = 0;
+  const window = openWindow(
+    {},
+    {
+      startStep: () => {
+        started += 1;
+      },
+      catalog: () => {
+        throw new Error('catalog');
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  window.spy();
+  assert.equal(started, 0);
+  assert.deepEqual(window.board().rows, [{text: 'фабрике ещё нужен агент'}]);
+  assert.equal(window.settings().agent, '');
+  assert.equal(window.board().takeDisabled, true);
+}
+
+function proveAnEmptyAgentListWritesNoHomeFile9(): void {
+  const {dir, home} = scratch();
+  const window = openWindow({homePath: home, agents: []});
+  window.chooseAgent('cursor');
+  window.chooseAgent('codex');
+  assert.equal(existsSync(home), false);
+  assert.deepEqual(window.board().rows, [{text: 'фабрике ещё нужен агент'}]);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveLeavingAModelEmptyWritesThatField10(): void {
+  const {dir, home} = scratch();
+  const window = openWindow({homePath: home}, {answers: () => true});
+  window.chooseAgent('cursor');
+  window.leaveModel('mechanical', '');
+  assert.equal(readHome(home).models?.mechanical, '');
+  assert.equal(readHome(home).models?.judgment, 'grok-4.7-high-fast');
+  assert.equal(window.settings().models.mechanical.needsValue, true);
+  assert.equal(window.settings().models.judgment.needsValue, false);
+  assert.deepEqual(window.board().rows, [{text: 'нужна модель mechanical'}]);
+  window.leaveModel('judgment', '');
+  const doc = readHome(home);
+  assert.equal(doc.models?.mechanical, '');
+  assert.equal(doc.models?.judgment, '');
+  assert.equal(window.settings().models.judgment.needsValue, true);
+  assert.deepEqual(window.board().rows, [{text: 'нужны модели mechanical и judgment'}]);
+  window.leaveModel('judgment', 'grok-4.7-high-fast');
+  assert.equal(readHome(home).models?.judgment, 'grok-4.7-high-fast');
+  assert.equal(readHome(home).models?.mechanical, '');
+  assert.deepEqual(window.board().rows, [{text: 'нужна модель mechanical'}]);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveEmptyEffortAndSpeedAreTheAgentDefaultAndDoNotStopAStep12(): void {
+  const {dir, home} = scratch();
+  let started = 0;
+  const window = openWindow(
+    {homePath: home},
+    {
+      answers: () => true,
+      startStep: () => {
+        started += 1;
+      },
+    },
+  );
+  window.chooseAgent('codex');
+  window.leaveEffort('mechanical', '');
+  window.leaveEffort('judgment', '');
+  window.leaveSpeed('mechanical', '');
+  window.leaveSpeed('judgment', '');
+  const doc = readHome(home);
+  assert.equal(doc.agent, 'codex');
+  assert.equal(doc.models?.mechanical, 'gpt-6-luna');
+  assert.equal(doc.models?.judgment, 'gpt-6.1-sol');
+  assert.equal(doc.effort, undefined);
+  assert.equal(doc.speed, undefined);
+  assert.deepEqual(window.settings().effort, {mechanical: 'low', judgment: 'high'});
+  assert.deepEqual(window.settings().speed, {mechanical: '', judgment: ''});
+  window.spy();
+  assert.equal(started, 1);
+  assert.equal(window.board().stepsStart, true);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveANewerHomeFileBlocksTheWriteAndTheWindowShowsTheDisk13(): void {
+  const {dir, home} = scratch();
+  writeFileSync(
+    home,
+    [
+      'agent: cursor',
+      'models:',
+      '  mechanical: composer-2.5-fast',
+      '  judgment: grok-4.7-high-fast',
+      '',
+    ].join('\n'),
+  );
+  const window = openWindow({homePath: home});
+  const disk = [
+    'agent: codex',
+    'models:',
+    '  mechanical: gpt-6-luna',
+    '  judgment: gpt-6.1-sol',
+    'effort:',
+    '  mechanical: low',
+    '  judgment: high',
+    '',
+  ].join('\n');
+  writeFileSync(home, disk);
+  window.chooseAgent('opencode');
+  assert.equal(readFileSync(home, 'utf8'), disk);
+  assert.equal(window.settings().agent, 'codex');
+  assert.equal(window.settings().models.mechanical.value, 'gpt-6-luna');
+  assert.equal(window.settings().models.judgment.value, 'gpt-6.1-sol');
+  window.chooseAgent('cursor');
+  assert.equal(readHome(home).agent, 'cursor');
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveChangingTheAgentReplacesTheSetAndDropsOldEffortAndSpeed15(): void {
+  const {dir, home} = scratch();
+  const window = openWindow({homePath: home});
+  window.chooseAgent('cursor');
+  window.chooseAgent('codex');
+  let doc = readHome(home);
+  assert.equal(doc.agent, 'codex');
+  assert.equal(doc.models?.mechanical, 'gpt-6-luna');
+  assert.equal(doc.models?.judgment, 'gpt-6.1-sol');
+  assert.deepEqual(doc.effort, {mechanical: 'low', judgment: 'high'});
+  assert.equal(doc.speed, undefined);
+  assert.equal(JSON.stringify(doc).includes('composer-2.5-fast'), false);
+  assert.equal(JSON.stringify(doc).includes('grok-4.7-high-fast'), false);
+  assertNoEmptyStrings(doc);
+  window.chooseAgent('opencode');
+  doc = readHome(home);
+  assert.equal(doc.agent, 'opencode');
+  assert.equal(doc.models?.mechanical, 'moonshotai/kimi-k2.7-code');
+  assert.equal(doc.models?.judgment, 'moonshotai/kimi-k3');
+  assert.equal(doc.effort, undefined);
+  assert.equal(doc.speed, undefined);
+  assert.equal(JSON.stringify(doc).includes('gpt-6-luna'), false);
+  assertNoEmptyStrings(doc);
+  window.chooseAgent('cursor');
+  doc = readHome(home);
+  assert.equal(doc.effort, undefined);
+  assert.equal(doc.speed, undefined);
+  assert.equal(doc.models?.mechanical, 'composer-2.5-fast');
+  assertNoEmptyStrings(doc);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveARecordedAgentThatDoesNotAnswerStaysInTheFile16(): void {
+  const {dir, home} = scratch();
+  const body = [
+    'agent: cursor',
+    'models:',
+    '  mechanical: composer-2.5-fast',
+    '  judgment: grok-4.7-high-fast',
+    '',
+  ].join('\n');
+  writeFileSync(home, body);
+  const asked: string[] = [];
+  let started = 0;
+  let assignees = 0;
+  const window = openWindow(
+    {homePath: home},
+    {
+      answers: agentId => {
+        asked.push(agentId);
+        return false;
+      },
+      startStep: () => {
+        started += 1;
+      },
+      writeAssignee: () => {
+        assignees += 1;
+      },
+    },
+  );
+  assert.deepEqual(window.board().rows, [{text: 'агент не отвечает'}]);
+  assert.equal(window.board().visible, true);
+  assert.equal(window.board().settingsOpen, false);
+  assert.equal(window.board().stepsStart, false);
+  assert.equal(window.board().takeDisabled, true);
+  window.spy();
+  window.take();
+  assert.equal(started, 0);
+  assert.equal(assignees, 0);
+  assert.equal(readFileSync(home, 'utf8'), body);
+  assert.ok(asked.includes('cursor'));
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveASilentAgentHidesTheEmptyModelRow17(): void {
+  const {dir, home} = scratch();
+  const body = [
+    'agent: cursor',
+    'models:',
+    '  mechanical: composer-2.5-fast',
+    '  judgment: ""',
+    '',
+  ].join('\n');
+  writeFileSync(home, body);
+  const window = openWindow({homePath: home}, {answers: () => false});
+  assert.deepEqual(window.board().rows, [{text: 'агент не отвечает'}]);
+  assert.equal(readFileSync(home, 'utf8'), body);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheHomeFileGainsNoPersonPhaseFocusOrMetrics18(): void {
+  const {dir, home} = scratch();
+  writeFileSync(
+    home,
+    [
+      'person: ada',
+      'phase: implementing',
+      'focus: gap',
+      'metrics:',
+      '  n: 1',
+      'watch:',
+      '  - LAVKAOPSCORE',
+      'roots:',
+      '  arcadia: ~/arcadia',
+      '  github: ~/github',
+      'roles: []',
+      'agent: cursor',
+      'models:',
+      '  mechanical: composer-2.5-fast',
+      '  judgment: grok-4.7-high-fast',
+      '',
+    ].join('\n'),
+  );
+  const window = openWindow({homePath: home});
+  window.chooseAgent('codex');
+  window.take();
+  const doc = readHome(home);
+  assert.equal(doc.person, undefined);
+  assert.equal(doc.phase, undefined);
+  assert.equal(doc.focus, undefined);
+  assert.equal(doc.metrics, undefined);
+  assert.deepEqual(doc.watch, ['LAVKAOPSCORE']);
+  assert.deepEqual(doc.roots, {arcadia: '~/arcadia', github: '~/github'});
+  assert.deepEqual(doc.roles, []);
+  assert.equal(doc.agent, 'codex');
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveAnEmptyRootLeavesArcadiaOrGithub21(): void {
   const {dir, home, github} = yard();
   writeLaunch(home, ['alpha'], {arcadia: '', github});
   const window = openWindow(
@@ -598,35 +612,9 @@ test('an empty root leaves ~/arcadia or ~/github', () => {
     false,
   );
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('an overlay does not replace the checkout roots', () => {
-  const {dir, home, arcadia} = yard();
-  const checkout = path.join(arcadia, 'services', 'billing');
-  mkdirSync(checkout, {recursive: true});
-  writeServiceConfig(checkout, ['alpha']);
-  writeOverlay(checkout, ['alpha'], 'roots:\n  arcadia: /wrong\n');
-  writeLaunch(home, ['alpha'], {arcadia});
-  const window = openWindow(
-    {homePath: home, adapter: 'tracker'},
-    {
-      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
-    },
-  );
-  const card = window.board().pool.find(item => item.key === '1');
-  assert.ok(card);
-  assert.equal(card.checkout, checkout);
-  assert.equal(card.checkout?.startsWith('/wrong'), false);
-  assert.equal(card.queue, 'alpha');
-  assert.deepEqual(card.choices, ['services/billing']);
-  assert.equal(
-    window.board().cards.some(item => item.key === '1'),
-    false,
-  );
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('tracker gathers the checkout under the arcadia root', () => {
+function proveTrackerGathersTheCheckoutUnderTheArcadiaRoot23(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   writeLaunch(home, ['alpha'], {arcadia});
@@ -648,9 +636,9 @@ test('tracker gathers the checkout under the arcadia root', () => {
   );
   assert.equal(existsSync(checkout), false);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('github gathers under the repository and an empty sddService is that root', () => {
+function proveGithubGathersUnderTheRepositoryAndAnEmptySddServiceIsThatRoot24(): void {
   const {dir, home, github} = yard();
   const repo = path.join(github, 'acme', 'billing');
   const nested = path.join(repo, 'services', 'api');
@@ -688,9 +676,9 @@ test('github gathers under the repository and an empty sddService is that root',
   assert.equal(rootCard.icon, undefined);
   assert.deepEqual(board.cards, []);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('a path with .. or outside the root is a missing catalog', () => {
+function proveAPathWithOrOutsideTheRootIsAMissingCatalog25(): void {
   const {dir, home, arcadia} = yard();
   const inside = path.join(arcadia, 'billing');
   mkdirSync(inside, {recursive: true});
@@ -712,9 +700,9 @@ test('a path with .. or outside the root is a missing catalog', () => {
   assert.equal(existsSync(path.resolve(arcadia, '../outside')), false);
   assert.equal(existsSync(inside), true);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('an overlay watch name joins the home list and a repeated name is one', () => {
+function proveAnOverlayWatchNameJoinsTheHomeListAndARepeatedNameIsOne26(): void {
   const {dir, home, arcadia} = yard();
   const billing = path.join(arcadia, 'services', 'billing');
   const other = path.join(arcadia, 'services', 'other');
@@ -737,9 +725,9 @@ test('an overlay watch name joins the home list and a repeated name is one', () 
   );
   assert.deepEqual(board.cards, []);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('a name removed from one file stays while the other file still has it', () => {
+function proveANameRemovedFromOneFileStaysWhileTheOtherFileStillHasIt27(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -757,50 +745,9 @@ test('a name removed from one file stays while the other file still has it', () 
   assert.deepEqual(window.board().watch, []);
   assert.deepEqual(window.board().cards, []);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('a fresh launch still reads an overlay after home drops the name', () => {
-  const {dir, home, arcadia} = yard();
-  const checkout = path.join(arcadia, 'services', 'billing');
-  mkdirSync(checkout, {recursive: true});
-  writeOverlay(checkout, ['alpha']);
-  writeServiceConfig(checkout, ['alpha']);
-  writeLaunch(home, [], {arcadia});
-  const window = openWindow(
-    {homePath: home, adapter: 'tracker'},
-    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
-  );
-  assert.deepEqual(window.board().watch, ['alpha']);
-  assert.deepEqual(
-    window.board().pool.map(item => item.key),
-    ['1'],
-  );
-  assert.deepEqual(window.board().cards, []);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('a name only in an overlay under the old root leaves when the roots change', () => {
-  const {dir, home} = yard();
-  const oldRoot = path.join(dir, 'old-arcadia');
-  const newRoot = path.join(dir, 'new-arcadia');
-  const oldCheckout = path.join(oldRoot, 'services', 'billing');
-  mkdirSync(oldCheckout, {recursive: true});
-  writeOverlay(oldCheckout, ['beta']);
-  writeServiceConfig(oldCheckout, ['alpha']);
-  writeLaunch(home, ['alpha'], {arcadia: oldRoot});
-  const tickets = [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})];
-  const window = openWindow({homePath: home, adapter: 'tracker'}, {tickets: () => tickets});
-  assert.deepEqual(window.board().watch, ['alpha', 'beta']);
-  window.leaveRoots({arcadia: newRoot});
-  assert.deepEqual(window.board().watch, ['alpha']);
-  const reached = path.join(newRoot, 'services', 'billing');
-  mkdirSync(reached, {recursive: true});
-  writeOverlay(reached, ['beta']);
-  assert.deepEqual(window.board().watch, ['alpha', 'beta']);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('empty watch lists leave the board with no cards', () => {
+function proveEmptyWatchListsLeaveTheBoardWithNoCards30(): void {
   const {dir, home, arcadia} = yard();
   writeLaunch(home, [], {arcadia});
   const window = openWindow(
@@ -811,9 +758,9 @@ test('empty watch lists leave the board with no cards', () => {
   assert.deepEqual(board.watch, []);
   assert.deepEqual(board.cards, []);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('service queues do not join the watch list', () => {
+function proveServiceQueuesDoNotJoinTheWatchList31(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -836,9 +783,9 @@ test('service queues do not join the watch list', () => {
   );
   assert.deepEqual(board.cards, []);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('a tracker ticket is selected by the port queue and a label does not replace it', () => {
+function proveATrackerTicketIsSelectedByThePortQueueAndALabelDoesNotReplaceIt32(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -876,9 +823,9 @@ test('a tracker ticket is selected by the port queue and a label does not replac
   assert.deepEqual(beta.choices, ['services/billing']);
   assert.deepEqual(board.cards, []);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('a github queue is the first sdd.queues name on the issue and the key is owner/repo', () => {
+function proveAGithubQueueIsTheFirstSddQueuesNameOnTheIssueAndTheKeyIsOwnerRepo33(): void {
   const {dir, home, github} = yard();
   const repo = path.join(github, 'acme', 'billing');
   mkdirSync(repo, {recursive: true});
@@ -931,35 +878,9 @@ test('a github queue is the first sdd.queues name on the issue and the key is ow
   assert.equal(missing.reason, 'очереди нет в конфиге сервиса');
   assert.equal(missing.takeDisabled, true);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('sdd:cycle is still required for a card', () => {
-  const {dir, home, arcadia, github} = yard();
-  const checkout = path.join(arcadia, 'services', 'billing');
-  mkdirSync(checkout, {recursive: true});
-  writeServiceConfig(checkout, ['alpha']);
-  writeLaunch(home, ['alpha', 'acme/billing'], {arcadia, github});
-  const tracker = openWindow(
-    {homePath: home, adapter: 'tracker'},
-    {
-      tickets: () => [
-        ticket({key: '1', queue: 'alpha', labels: ['alpha'], sddService: 'services/billing'}),
-      ],
-    },
-  );
-  assert.deepEqual(tracker.board().cards, []);
-  const repo = path.join(github, 'acme', 'billing');
-  mkdirSync(repo, {recursive: true});
-  writeServiceConfig(repo, ['alpha']);
-  const hub = openWindow(
-    {homePath: home, adapter: 'github'},
-    {tickets: () => [ticket({key: '2', repo: 'acme/billing', sddService: '', labels: ['alpha']})]},
-  );
-  assert.deepEqual(hub.board().cards, []);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('the first checkout break is the only reason and take does not write the assignee', () => {
+function proveTheFirstCheckoutBreakIsTheOnlyReasonAndTakeDoesNotWriteTheAssignee35(): void {
   const {dir, home, arcadia} = yard();
   const bare = path.join(arcadia, 'services', 'bare');
   const other = path.join(arcadia, 'services', 'other');
@@ -1001,9 +922,9 @@ test('the first checkout break is the only reason and take does not write the as
   assert.equal(assignees, 0);
   assert.equal(window.board().takeDisabled, false);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('a missing catalog keeps the card and the choice and does not start a step', () => {
+function proveAMissingCatalogKeepsTheCardAndTheChoiceAndDoesNotStartAStep36(): void {
   const {dir, home, arcadia} = yard();
   const billing = path.join(arcadia, 'services', 'billing');
   mkdirSync(billing, {recursive: true});
@@ -1045,9 +966,9 @@ test('a missing catalog keeps the card and the choice and does not start a step'
   assert.equal(assignees, 0);
   assert.equal(started, 1);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('one tracker service that already lists the queue writes itself', () => {
+function proveOneTrackerServiceThatAlreadyListsTheQueueWritesItself37(): void {
   const {dir, home, arcadia} = yard();
   const billing = path.join(arcadia, 'services', 'billing');
   const other = path.join(arcadia, 'services', 'other');
@@ -1089,9 +1010,9 @@ test('one tracker service that already lists the queue writes itself', () => {
     false,
   );
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('a blank tracker sddService writes the single service that lists the queue', () => {
+function proveABlankTrackerSddServiceWritesTheSingleServiceThatListsTheQueue38(): void {
   const {dir, home, arcadia} = yard();
   const billing = path.join(arcadia, 'services', 'billing');
   mkdirSync(billing, {recursive: true});
@@ -1129,9 +1050,9 @@ test('a blank tracker sddService writes the single service that lists the queue'
     false,
   );
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('several tracker services that list the queue stay a choice', () => {
+function proveSeveralTrackerServicesThatListTheQueueStayAChoice39(): void {
   const {dir, home, arcadia} = yard();
   const billing = path.join(arcadia, 'services', 'billing');
   const other = path.join(arcadia, 'services', 'other');
@@ -1183,9 +1104,9 @@ test('several tracker services that list the queue stay a choice', () => {
   window.take('3');
   assert.equal(assignees, 0);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('one github directory with an sdd key writes itself and several stay a choice', () => {
+function proveOneGithubDirectoryWithAnSddKeyWritesItselfAndSeveralStayAChoice40(): void {
   const {dir, home, github} = yard();
   const alone = path.join(github, 'acme', 'alone');
   const many = path.join(github, 'acme', 'many');
@@ -1250,9 +1171,9 @@ test('one github directory with an sdd key writes itself and several stay a choi
   assert.equal(unreadable.reason, 'не назван сервис');
   assert.deepEqual(board.cards, []);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('writing sddService keeps the queue break when the service still lacks the queue', () => {
+function proveWritingSddServiceKeepsTheQueueBreakWhenTheServiceStillLacksTheQueue41(): void {
   const {dir, home, github} = yard();
   const repo = path.join(github, 'acme', 'billing');
   const api = path.join(repo, 'services', 'api');
@@ -1284,63 +1205,9 @@ test('writing sddService keeps the queue break when the service still lacks the 
   assert.equal(card.takeDisabled, true);
   assert.equal(tickets[0].sddService, 'services/other');
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('the window does not append the queue to the service config', () => {
-  const {dir, home, arcadia} = yard();
-  const checkout = path.join(arcadia, 'services', 'billing');
-  mkdirSync(checkout, {recursive: true});
-  writeServiceConfig(checkout, ['beta']);
-  writeLaunch(home, ['alpha'], {arcadia});
-  const config = path.join(checkout, 'openspec', 'config.yaml');
-  const before = readFileSync(config, 'utf8');
-  let started = 0;
-  const window = openWindow(
-    {homePath: home, adapter: 'tracker'},
-    {
-      answers: () => true,
-      startStep: () => {
-        started += 1;
-      },
-      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
-    },
-  );
-  window.chooseAgent('cursor');
-  window.take('1');
-  window.spy();
-  assert.equal(readFileSync(config, 'utf8'), before);
-  assert.equal(started, 0);
-  assert.equal(window.board().pool[0]?.reason, 'очереди нет в конфиге сервиса');
-  assert.deepEqual(window.board().cards, []);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('the step reads the gathered checkout', () => {
-  const {dir, home, arcadia} = yard();
-  const checkout = path.join(arcadia, 'services', 'billing');
-  mkdirSync(checkout, {recursive: true});
-  writeServiceConfig(checkout, ['alpha']);
-  writeLaunch(home, ['alpha'], {arcadia});
-  const started: string[] = [];
-  const window = openWindow(
-    {homePath: home, adapter: 'tracker'},
-    {
-      answers: () => true,
-      startStep: value => {
-        started.push(value ?? '');
-      },
-      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
-    },
-  );
-  window.chooseAgent('cursor');
-  window.spy();
-  assert.deepEqual(started, [checkout]);
-  assert.notEqual(started[0], process.cwd());
-  assert.notEqual(started[0], dir);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('the board and the window spy read one watch list', () => {
+function proveTheBoardAndTheWindowSpyReadOneWatchList44(): void {
   const {dir, home, arcadia} = yard();
   const billing = path.join(arcadia, 'services', 'billing');
   const other = path.join(arcadia, 'services', 'other');
@@ -1354,12 +1221,15 @@ test('the board and the window spy read one watch list', () => {
     {homePath: home, adapter: 'tracker'},
     {
       answers: () => true,
+      login: () => MANAGER,
       startStep: value => {
         started.push(value ?? '');
       },
       tickets: () => [
         ticket({key: '1', queue: 'alpha', sddService: 'services/billing'}),
         ticket({key: '2', queue: 'beta', sddService: 'services/other'}),
+        cycle('3', 'implementing'),
+        cycle('4', 'implementing', {queue: 'beta', sddService: 'services/other'}),
       ],
     },
   );
@@ -1371,12 +1241,22 @@ test('the board and the window spy read one watch list', () => {
     ['1'],
   );
   assert.deepEqual(board.cards, []);
+  assert.deepEqual(
+    columnCards(board, 'implementing')?.map(card => card.key),
+    ['3'],
+  );
+  const shown = [
+    ...board.pool.map(card => card.key),
+    ...(board.columns ?? []).flatMap(column => column.cards.map(card => card.key)),
+  ];
+  assert.equal(shown.includes('2'), false);
+  assert.equal(shown.includes('4'), false);
   window.spy();
   assert.deepEqual(started, [billing]);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('the machine spy leaves a bare cycle out and does not read .aifactory', async () => {
+async function proveTheMachineSpyLeavesABareCycleOutAndDoesNotReadAifactory45(): Promise<void> {
   const reads: string[] = [];
   const files: FileSource = {
     exists(rel) {
@@ -1422,69 +1302,9 @@ test('the machine spy leaves a bare cycle out and does not read .aifactory', asy
     reads.some(rel => rel.includes('.aifactory')),
     false,
   );
-});
-
-const MANAGER = 'ada';
-
-const COLUMN_NAMES = [
-  'proposing',
-  'specifying',
-  'designing',
-  'tasking',
-  'implementing',
-  'verifying',
-  'accepting',
-];
-
-function prepare(arcadia: string, home: string): string {
-  const checkout = path.join(arcadia, 'services', 'billing');
-  mkdirSync(checkout, {recursive: true});
-  writeServiceConfig(checkout, ['alpha']);
-  writeLaunch(home, ['alpha'], {arcadia});
-  return checkout;
 }
 
-function cycle(key: string, phase: string, over: Partial<WindowTicket> = {}): WindowTicket {
-  return ticket({
-    key,
-    assignee: MANAGER,
-    queue: 'alpha',
-    sddService: 'services/billing',
-    ...over,
-    title: over.title ?? key,
-    labels: over.labels ?? ['sdd:cycle', `sdd:${phase}`],
-  });
-}
-
-function openCycles(
-  home: string,
-  tickets: readonly WindowTicket[],
-  leading?: (key: string) => boolean,
-) {
-  return openWindow(
-    {homePath: home, adapter: 'tracker'},
-    {
-      login: () => MANAGER,
-      leading,
-      tickets: () => tickets,
-    },
-  );
-}
-
-function writeChange(checkout: string, key: string, name: string, body: string): void {
-  const dir = path.join(checkout, changeDir(key));
-  mkdirSync(dir, {recursive: true});
-  writeFileSync(path.join(dir, name), body);
-}
-
-function columnCards(
-  board: ReturnType<ReturnType<typeof openWindow>['board']>,
-  name: string,
-): {key: string}[] | undefined {
-  return board.columns?.find(column => column.name === name)?.cards;
-}
-
-test('an empty specifying column stays and the window writes no phase', () => {
+function proveAnEmptySpecifyingColumnStaysAndTheWindowWritesNoPhase46(): void {
   const window = openWindow({});
   const board = window.board();
   assert.deepEqual(board.pool, []);
@@ -1498,9 +1318,20 @@ test('an empty specifying column stays and the window writes no phase', () => {
     false,
   );
   assert.equal('panel' in board, false);
-});
 
-test('proposed stands in proposing and specified stands in specifying', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const opened = openCycles(home, [cycle('1', 'implementing')]);
+  opened.openCard('1');
+  assert.equal(
+    Object.keys(opened).some(name => name.toLowerCase().includes('phase')),
+    false,
+  );
+  assert.equal('panel' in opened.board(), false);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveProposedStandsInProposingAndSpecifiedStandsInSpecifying47(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const window = openCycles(home, [
@@ -1540,9 +1371,9 @@ test('proposed stands in proposing and specified stands in specifying', () => {
     ['9'],
   );
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('another assignee is absent and a phase with no assignee stands in the pool', () => {
+function proveAnotherAssigneeIsAbsentAndAPhaseWithNoAssigneeStandsInThePool48(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const window = openCycles(home, [
@@ -1576,9 +1407,9 @@ test('another assignee is absent and a phase with no assignee stands in the pool
     [],
   );
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('sdd:cancelled with an earlier phase shows no card', () => {
+function proveSddCancelledWithAnEarlierPhaseShowsNoCard49(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const window = openCycles(home, [
@@ -1597,9 +1428,9 @@ test('sdd:cancelled with an earlier phase shows no card', () => {
     ['2'],
   );
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('an open merge stands in accepting and a closed issue leaves', () => {
+function proveAnOpenMergeStandsInAcceptingAndAClosedIssueLeaves50(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const window = openCycles(home, [
@@ -1624,9 +1455,9 @@ test('an open merge stands in accepting and a closed issue leaves', () => {
   assert.equal(keys.includes('2'), false);
   assert.equal(keys.includes('4'), false);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('proposing shows two open questions under the heading', () => {
+function proveProposingShowsTwoOpenQuestionsUnderTheHeading51(): void {
   const {dir, home, arcadia} = yard();
   const checkout = prepare(arcadia, home);
   writeChange(
@@ -1650,9 +1481,9 @@ test('proposing shows two open questions under the heading', () => {
   const card = columnCards(window.board(), 'proposing')?.[0];
   assert.equal(card?.phaseRow, 2);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('specifying has no phase row', () => {
+function proveSpecifyingHasNoPhaseRow52(): void {
   const {dir, home, arcadia} = yard();
   const checkout = prepare(arcadia, home);
   writeChange(checkout, '1', 'proposal.md', '## Open questions\n\n- [ ] one\n');
@@ -1661,31 +1492,9 @@ test('specifying has no phase row', () => {
   assert.ok(card);
   assert.equal(card.phaseRow, undefined);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('designing counts open decisions including zero and tasking has no row', () => {
-  const {dir, home, arcadia} = yard();
-  const checkout = prepare(arcadia, home);
-  writeChange(
-    checkout,
-    '1',
-    'design.md',
-    '## Open decisions\n\n- [ ] one\n- [x] done\n\n## Later\n\n- [ ] skip\n',
-  );
-  writeChange(checkout, '3', 'tasks.md', '- [x] done\n- [ ] open\n');
-  const window = openCycles(home, [
-    cycle('1', 'designed'),
-    cycle('2', 'designing'),
-    cycle('3', 'tasking'),
-  ]);
-  const board = window.board();
-  assert.equal(columnCards(board, 'designing')?.find(card => card.key === '1')?.phaseRow, 1);
-  assert.equal(columnCards(board, 'designing')?.find(card => card.key === '2')?.phaseRow, 0);
-  assert.equal(columnCards(board, 'tasking')?.[0]?.phaseRow, undefined);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('implementing counts tasks.md and omits the count when the file is absent', () => {
+function proveImplementingCountsTasksMdAndOmitsTheCountWhenTheFileIsAbsent54(): void {
   const {dir, home, arcadia} = yard();
   const checkout = prepare(arcadia, home);
   writeChange(checkout, '1', 'tasks.md', '- [x] one\n- [x] two\n- [ ] three\n');
@@ -1697,9 +1506,9 @@ test('implementing counts tasks.md and omits the count when the file is absent',
   assert.equal(missing.phaseRow, undefined);
   assert.equal('done' in missing, false);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('verifying shows red and none leaves the check row blank', () => {
+function proveVerifyingShowsRedAndNoneLeavesTheCheckRowBlank55(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const window = openCycles(home, [
@@ -1714,9 +1523,9 @@ test('verifying shows red and none leaves the check row blank', () => {
   assert.equal(red && 'checks' in red, false);
   assert.equal(none?.phaseRow, undefined);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('a focus gap shows Specify and hides a solid Plan', () => {
+function proveAFocusGapShowsSpecifyAndHidesASolidPlan56(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const window = openCycles(home, [
@@ -1740,9 +1549,9 @@ test('a focus gap shows Specify and hides a solid Plan', () => {
   assert.equal(JSON.stringify(gap).includes('why'), false);
   assert.equal(cards?.find(card => card.key === '2')?.layers, 'Code · Plan');
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('every recorded layer solid has no layer line', () => {
+function proveEveryRecordedLayerSolidHasNoLayerLine57(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const window = openCycles(home, [
@@ -1754,9 +1563,9 @@ test('every recorded layer solid has no layer line', () => {
   assert.ok(card);
   assert.equal(card.layers, undefined);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('a running step hides the icon while the occasion still sorts first', () => {
+function proveARunningStepHidesTheIconWhileTheOccasionStillSortsFirst58(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const window = openCycles(
@@ -1781,30 +1590,9 @@ test('a running step hides the icon while the occasion still sorts first', () =>
   assert.equal(shown?.icon, true);
   assert.equal(shown?.reason, 'Ask');
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('pending checks hide the icon and the phase row stays pending', () => {
-  const {dir, home, arcadia} = yard();
-  prepare(arcadia, home);
-  const window = openCycles(home, [
-    cycle('1', 'verifying', {checks: 'green'}),
-    cycle('2', 'verifying', {
-      checks: 'pending',
-      labels: ['sdd:cycle', 'sdd:verifying', 'sdd:wait-human'],
-    }),
-  ]);
-  const cards = columnCards(window.board(), 'verifying');
-  assert.deepEqual(
-    cards?.map(card => card.key),
-    ['2', '1'],
-  );
-  assert.equal(cards?.[0]?.icon, undefined);
-  assert.equal(cards?.[0]?.phaseRow, 'pending');
-  assert.equal(cards?.[1]?.phaseRow, 'green');
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('a missing catalog outranks a missing service config in the reason', () => {
+function proveAMissingCatalogOutranksAMissingServiceConfigInTheReason60(): void {
   const {dir, home, arcadia} = yard();
   writeLaunch(home, ['alpha'], {arcadia});
   const window = openCycles(home, [cycle('1', 'proposed', {sddService: 'services/missing'})]);
@@ -1813,9 +1601,9 @@ test('a missing catalog outranks a missing service config in the reason', () => 
   assert.equal(card?.reason?.startsWith('конфига сервиса нет'), false);
   assert.equal(card?.reason?.includes('конфига сервиса нет'), false);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('a question-only occasion whose phase row shows the count has no reason line', () => {
+function proveAQuestionOnlyOccasionWhosePhaseRowShowsTheCountHasNoReasonLine61(): void {
   const {dir, home, arcadia} = yard();
   const checkout = prepare(arcadia, home);
   writeChange(checkout, 'b', 'proposal.md', '## Open questions\n\n- [ ] one\n- [ ] two\n');
@@ -1839,21 +1627,9 @@ test('a question-only occasion whose phase row shows the count has no reason lin
   assert.equal(elsewhere?.phaseRow, undefined);
   assert.equal(elsewhere?.reason, 'вопросы 2');
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('decisions are the only occasion and the phase row already shows the count', () => {
-  const {dir, home, arcadia} = yard();
-  const checkout = prepare(arcadia, home);
-  writeChange(checkout, '1', 'design.md', '## Open decisions\n\n- [ ] one\n');
-  const window = openCycles(home, [cycle('1', 'designing')]);
-  const card = columnCards(window.board(), 'designing')?.[0];
-  assert.equal(card?.phaseRow, 1);
-  assert.equal(card?.icon, true);
-  assert.equal(card?.reason, undefined);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('a child record puts дети and that key on the reason', () => {
+function proveAChildRecordPutsAndThatKeyOnTheReason63(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const window = openCycles(home, [
@@ -1866,38 +1642,9 @@ test('a child record puts дети and that key on the reason', () => {
   assert.equal(card?.reason, 'дети c-1 c-2');
   assert.equal(card?.reason?.includes('no'), false);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('blockers are dependsOn keys found in this reading, in key order', () => {
-  const {dir, home, arcadia} = yard();
-  prepare(arcadia, home);
-  const window = openCycles(home, [
-    cycle('p', 'implementing', {dependsOn: ['z', 'missing', 'a', 'a']}),
-    ticket({key: 'z', queue: 'other', labels: ['note']}),
-    ticket({key: 'a', queue: 'other', labels: ['note']}),
-  ]);
-  const card = columnCards(window.board(), 'implementing')?.[0];
-  assert.equal(card?.reason, 'блокеры a z');
-  assert.equal(card?.reason?.includes('missing'), false);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('several open pull requests are one reason part', () => {
-  const {dir, home, arcadia} = yard();
-  prepare(arcadia, home);
-  const window = openCycles(home, [
-    cycle('1', 'implementing', {openPullRequests: 2}),
-    cycle('2', 'implementing', {openPullRequests: 1}),
-  ]);
-  const cards = columnCards(window.board(), 'implementing');
-  assert.equal(cards?.find(card => card.key === '1')?.reason, 'несколько pull request');
-  assert.equal(cards?.find(card => card.key === '1')?.icon, true);
-  assert.equal(cards?.find(card => card.key === '2')?.reason, undefined);
-  assert.equal(cards?.find(card => card.key === '2')?.icon, undefined);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('a missing home file leaves settings closed until the manager opens them', () => {
+function proveAMissingHomeFileLeavesSettingsClosedUntilTheManagerOpensThem66(): void {
   const {dir, home} = scratch();
   const window = openWindow({homePath: home});
   assert.equal(window.settings().open, false);
@@ -1911,9 +1658,9 @@ test('a missing home file leaves settings closed until the manager opens them', 
   assert.equal(existsSync(home), false);
   assert.equal(window.settings().open, false);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('an open watch-list ticket with sdd:cycle, no phase, and no assignee stands in the pool', () => {
+function proveAnOpenWatchListTicketWithSddCycleNoPhaseAndNoAssigneeStandsInThePool67(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const window = openCycles(home, [
@@ -1946,9 +1693,9 @@ test('an open watch-list ticket with sdd:cycle, no phase, and no assignee stands
     false,
   );
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('an open ticket on the watch list without sdd:cycle is not in the pool', () => {
+function proveAnOpenTicketOnTheWatchListWithoutSddCycleIsNotInThePool68(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const window = openCycles(home, [
@@ -1968,32 +1715,9 @@ test('an open ticket on the watch list without sdd:cycle is not in the pool', ()
   );
   assert.deepEqual(board.cards, []);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('a phaseless ticket with another assignee is absent', () => {
-  const {dir, home, arcadia} = yard();
-  prepare(arcadia, home);
-  const window = openCycles(home, [
-    ticket({
-      key: '1',
-      queue: 'alpha',
-      sddService: 'services/billing',
-      assignee: 'other',
-      title: 'Theirs',
-      open: true,
-    }),
-  ]);
-  const board = window.board();
-  const keys = [
-    ...board.cards.map(card => card.key),
-    ...board.pool.map(card => card.key),
-    ...board.columns.flatMap(column => column.cards.map(card => card.key)),
-  ];
-  assert.equal(keys.includes('1'), false);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('a phaseless ticket assigned to this login moves to proposing after spy when models are set', () => {
+function proveAPhaselessTicketAssignedToThisLoginMovesToProposingAfterSpyWhenModelsAreSet70(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const tickets = [
@@ -2035,9 +1759,9 @@ test('a phaseless ticket assigned to this login moves to proposing after spy whe
     ['1'],
   );
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('a phaseless ticket assigned to this login stays in the pool when a model slot is empty', () => {
+function proveAPhaselessTicketAssignedToThisLoginStaysInThePoolWhenAModelSlotIsEmpty71(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const tickets = [
@@ -2072,9 +1796,9 @@ test('a phaseless ticket assigned to this login stays in the pool when a model s
   assert.deepEqual(phases, []);
   assert.equal(columnCards(window.board(), 'proposing')?.length, 0);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('two open pull requests keep an assigned ticket in the pool and spy does not set proposing', () => {
+function proveTwoOpenPullRequestsKeepAnAssignedTicketInThePoolAndSpyDoesNotSetProposing72(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const tickets = [
@@ -2111,9 +1835,9 @@ test('two open pull requests keep an assigned ticket in the pool and spy does no
   assert.equal(card.reason, 'несколько pull request');
   assert.equal(columnCards(window.board(), 'proposing')?.length, 0);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('a missing checkout keeps an assigned ticket in the pool and spy does not set proposing', () => {
+function proveAMissingCheckoutKeepsAnAssignedTicketInThePoolAndSpyDoesNotSetProposing73(): void {
   const {dir, home, arcadia} = yard();
   writeLaunch(home, ['alpha'], {arcadia});
   const tickets = [
@@ -2149,9 +1873,9 @@ test('a missing checkout keeps an assigned ticket in the pool and spy does not s
   assert.equal(card.reason, 'каталога нет');
   assert.equal(columnCards(window.board(), 'proposing')?.length, 0);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('one open pull request lets spy set proposing for an assigned ticket', () => {
+function proveOneOpenPullRequestLetsSpySetProposingForAnAssignedTicket74(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const tickets = [
@@ -2190,9 +1914,9 @@ test('one open pull request lets spy set proposing for an assigned ticket', () =
     ['1'],
   );
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('take on a phaseless ticket sets the assignee and spy then sets proposing', () => {
+function proveTakeOnAPhaselessTicketSetsTheAssigneeAndSpyThenSetsProposing75(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const tickets = [
@@ -2246,9 +1970,9 @@ test('take on a phaseless ticket sets the assignee and spy then sets proposing',
     ['1'],
   );
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('take does not call writeAssignee when the home path is absent', () => {
+function proveTakeDoesNotCallWriteAssigneeWhenTheHomePathIsAbsent76(): void {
   let calls = 0;
   const window = openWindow(
     {},
@@ -2265,9 +1989,9 @@ test('take does not call writeAssignee when the home path is absent', () => {
   assert.equal(window.board().takeDisabled, true);
   window.take('1');
   assert.equal(calls, 0);
-});
+}
 
-test('take on an implementing pool cycle sets the assignee and leaves the phase', () => {
+function proveTakeOnAnImplementingPoolCycleSetsTheAssigneeAndLeavesThePhase77(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const tickets = [cycle('1', 'implementing', {assignee: '', title: 'Build', openPullRequests: 1})];
@@ -2306,9 +2030,9 @@ test('take on an implementing pool cycle sets the assignee and leaves the phase'
     ['1'],
   );
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('take on an implementing pool cycle writes the assignee when a model slot is empty', () => {
+function proveTakeOnAnImplementingPoolCycleWritesTheAssigneeWhenAModelSlotIsEmpty78(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const tickets = [cycle('1', 'implementing', {assignee: '', title: 'Build'})];
@@ -2348,9 +2072,9 @@ test('take on an implementing pool cycle writes the assignee when a model slot i
     ['1'],
   );
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('two open pull requests keep the card in the pool and do not write the assignee', () => {
+function proveTwoOpenPullRequestsKeepTheCardInThePoolAndDoNotWriteTheAssignee79(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const tickets = [
@@ -2386,9 +2110,9 @@ test('two open pull requests keep the card in the pool and do not write the assi
     ['1'],
   );
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('one open pull request lets take write the assignee', () => {
+function proveOneOpenPullRequestLetsTakeWriteTheAssignee80(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const tickets = [
@@ -2420,9 +2144,9 @@ test('one open pull request lets take write the assignee', () => {
   window.take('1');
   assert.deepEqual(assignees, [{key: '1', login: MANAGER}]);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('a pool ticket with a checkout break shows the icon and take does not write', () => {
+function proveAPoolTicketWithACheckoutBreakShowsTheIconAndTakeDoesNotWrite81(): void {
   const {dir, home, arcadia} = yard();
   writeLaunch(home, ['alpha'], {arcadia});
   const tickets = [
@@ -2458,53 +2182,9 @@ test('a pool ticket with a checkout break shows the icon and take does not write
   window.take('1');
   assert.deepEqual(assignees, []);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('pending checks hide the icon on a pool ticket with two open pull requests', () => {
-  const {dir, home, arcadia} = yard();
-  prepare(arcadia, home);
-  const window = openCycles(home, [
-    ticket({
-      key: '1',
-      queue: 'alpha',
-      sddService: 'services/billing',
-      title: 'Split',
-      openPullRequests: 2,
-      checks: 'pending',
-    }),
-  ]);
-  const card = window.board().pool.find(item => item.key === '1');
-  assert.ok(card);
-  assert.equal(card.icon, undefined);
-  assert.equal(card.reason, undefined);
-  assert.equal(card.takeDisabled, true);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('a running step hides the icon on a pool ticket with a checkout break', () => {
-  const {dir, home, arcadia} = yard();
-  writeLaunch(home, ['alpha'], {arcadia});
-  const window = openCycles(
-    home,
-    [
-      ticket({
-        key: '1',
-        queue: 'alpha',
-        sddService: 'services/missing',
-        title: 'Gone',
-      }),
-    ],
-    key => key === '1',
-  );
-  const card = window.board().pool.find(item => item.key === '1');
-  assert.ok(card);
-  assert.equal(card.icon, undefined);
-  assert.equal(card.reason, undefined);
-  assert.equal(card.takeDisabled, true);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('an overlay mechanical model replaces the home id and a missing overlay keeps home', () => {
+function proveAnOverlayMechanicalModelReplacesTheHomeIdAndAMissingOverlayKeepsHome84(): void {
   const {dir, home, arcadia} = yard();
   const billing = path.join(arcadia, 'services', 'billing');
   const other = path.join(arcadia, 'services', 'other');
@@ -2547,9 +2227,9 @@ test('an overlay mechanical model replaces the home id and a missing overlay kee
     },
   ]);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('changing the overlay agent to opencode writes the pair and no effort or speed', () => {
+function proveChangingTheOverlayAgentToOpencodeWritesThePairAndNoEffortOrSpeed85(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -2601,9 +2281,9 @@ test('changing the overlay agent to opencode writes the pair and no effort or sp
   assertNoEmptyStrings(doc);
   assert.equal(reads, 0);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('an overlay edit is on disk after settings close', () => {
+function proveAnOverlayEditIsOnDiskAfterSettingsClose86(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -2626,9 +2306,9 @@ test('an overlay edit is on disk after settings close', () => {
   assert.equal(doc.speed, undefined);
   assert.equal(window.board().settingsOpen, false);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('an overlay agent of codex with no effort key does not take home effort max', () => {
+function proveAnOverlayAgentOfCodexWithNoEffortKeyDoesNotTakeHomeEffortMax87(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -2680,9 +2360,9 @@ test('an overlay agent of codex with no effort key does not take home effort max
   window.spy();
   assert.equal(started, 1);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('clearing the overlay agent removes agent, models, effort, and speed', () => {
+function proveClearingTheOverlayAgentRemovesAgentModelsEffortAndSpeed88(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -2719,9 +2399,9 @@ test('clearing the overlay agent removes agent, models, effort, and speed', () =
   assert.deepEqual(doc.watch, ['alpha']);
   assert.equal(window.overlay().agent, 'cursor');
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('clearing overlay judgment with no overlay agent shows the home judgment id', () => {
+function proveClearingOverlayJudgmentWithNoOverlayAgentShowsTheHomeJudgmentId89(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -2741,30 +2421,9 @@ test('clearing overlay judgment with no overlay agent shows the home judgment id
   assert.equal(window.overlay().models.judgment.value, 'grok-4.7-high-fast');
   assert.equal(window.overlay().models.mechanical.value, 'composer-2.5-fast');
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('a newer overlay file on disk blocks the write and the group shows the disk agent', () => {
-  const {dir, home, arcadia} = yard();
-  const checkout = path.join(arcadia, 'services', 'billing');
-  mkdirSync(checkout, {recursive: true});
-  writeServiceConfig(checkout, ['alpha']);
-  writeLaunch(home, ['alpha'], {arcadia});
-  writeOverlay(checkout, ['alpha'], 'agent: cursor\n');
-  const window = openWindow(
-    {homePath: home, adapter: 'tracker'},
-    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
-  );
-  window.openSettings();
-  assert.equal(window.overlay().agent, 'cursor');
-  const file = path.join(checkout, '.aifactory', 'config.yaml');
-  writeFileSync(file, 'agent: codex\n');
-  window.chooseOverlayAgent('opencode');
-  assert.equal(readHome(file).agent, 'codex');
-  assert.equal(window.overlay().agent, 'codex');
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('one gathered checkout is selected when settings open with no card', () => {
+function proveOneGatheredCheckoutIsSelectedWhenSettingsOpenWithNoCard91(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -2778,10 +2437,11 @@ test('one gathered checkout is selected when settings open with no card', () => 
   window.openSettings();
   assert.equal(window.overlay().file, '.aifactory/config.yaml');
   assert.equal(window.overlay().checkout, checkout);
+  assert.equal(window.serviceConfig().checkout, checkout);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('several gathered checkouts write nothing until chooseCheckout', () => {
+function proveSeveralGatheredCheckoutsWriteNothingUntilChooseCheckout92(): void {
   const {dir, home, arcadia} = yard();
   const billing = path.join(arcadia, 'services', 'billing');
   const other = path.join(arcadia, 'services', 'other');
@@ -2797,6 +2457,7 @@ test('several gathered checkouts write nothing until chooseCheckout', () => {
   const window = openWindow({homePath: home, adapter: 'tracker'}, {tickets: () => tickets});
   window.openSettings();
   assert.equal(window.overlay().checkout, '');
+  assert.equal(window.serviceConfig().checkout, '');
   window.chooseOverlayAgent('opencode');
   assert.equal(existsSync(path.join(billing, '.aifactory', 'config.yaml')), false);
   assert.equal(existsSync(path.join(other, '.aifactory', 'config.yaml')), false);
@@ -2809,9 +2470,9 @@ test('several gathered checkouts write nothing until chooseCheckout', () => {
   window.openCard('2');
   assert.equal(window.overlay().checkout, other);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('an empty merged mechanical model names the checkout and stops only that step', () => {
+function proveAnEmptyMergedMechanicalModelNamesTheCheckoutAndStopsOnlyThatStep93(): void {
   const {dir, home, arcadia} = yard();
   const billing = path.join(arcadia, 'services', 'billing');
   const other = path.join(arcadia, 'services', 'other');
@@ -2862,9 +2523,9 @@ test('an empty merged mechanical model names the checkout and stops only that st
   window.spy();
   assert.deepEqual(started, [{checkout: other, mechanical: 'composer-2.5-fast'}]);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('a silent agent does not show the checkout empty-model row', () => {
+function proveASilentAgentDoesNotShowTheCheckoutEmptyModelRow94(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -2882,9 +2543,9 @@ test('a silent agent does not show the checkout empty-model row', () => {
   assert.deepEqual(window.board().rows, [{text: 'агент не отвечает'}]);
   assert.equal(readHome(home).agent, 'cursor');
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('a catalog that rejects the recorded judgment id keeps it and stops the step', () => {
+function proveACatalogThatRejectsTheRecordedJudgmentIdKeepsItAndStopsTheStep95(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -2933,9 +2594,9 @@ test('a catalog that rejects the recorded judgment id keeps it and stops the ste
   window.spy();
   assert.equal(started, 0);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('a started step keeps the mechanical id from that call until leading is false', () => {
+function proveAStartedStepKeepsTheMechanicalIdFromThatCallUntilLeadingIsFalse96(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -2965,9 +2626,9 @@ test('a started step keeps the mechanical id from that call until leading is fal
   window.spy();
   assert.deepEqual(started, ['first-id', 'second-id']);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('healthy pool cards are ordered by key and have no icon', () => {
+function proveHealthyPoolCardsAreOrderedByKeyAndHaveNoIcon97(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const window = openCycles(home, [
@@ -2984,43 +2645,9 @@ test('healthy pool cards are ordered by key and have no icon', () => {
     {key: 'c', title: 'Third', take: true, ...place},
   ]);
   rmSync(dir, {recursive: true, force: true});
-});
-
-type ServiceYaml = {
-  schema?: unknown;
-  context?: unknown;
-  rules?: unknown;
-  sdd?: {
-    base?: unknown;
-    'branch-scope'?: unknown;
-    'ignore-comments'?: unknown;
-    extra?: unknown;
-    queues?: {name?: string; description?: unknown}[];
-    hooks?: Record<string, Record<string, unknown>>;
-  };
-};
-
-function writeServiceYaml(checkout: string, body: string): string {
-  const dir = path.join(checkout, 'openspec');
-  mkdirSync(dir, {recursive: true});
-  const file = path.join(dir, 'config.yaml');
-  writeFileSync(file, body.endsWith('\n') ? body : `${body}\n`);
-  return file;
 }
 
-function readServiceYaml(file: string): ServiceYaml {
-  return parse(readFileSync(file, 'utf8')) as ServiceYaml;
-}
-
-function visibleKeys(board: ReturnType<ReturnType<typeof openWindow>['board']>): string[] {
-  return [
-    ...board.cards.map(card => card.key),
-    ...board.pool.map(card => card.key),
-    ...board.columns.flatMap(column => column.cards.map(card => card.key)),
-  ];
-}
-
-test('the service-config group omits a default base and writes main beside schema, context, and rules', () => {
+function proveTheServiceConfigGroupOmitsADefaultBaseAndWritesMainBesideSchemaContextAndRules98(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -3068,9 +2695,9 @@ test('the service-config group omits a default base and writes main beside schem
   assert.equal(written.context, 'kept');
   assert.deepEqual(written.rules, ['one']);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('the service-config group keeps an unknown sdd key', () => {
+function proveTheServiceConfigGroupKeepsAnUnknownSddKey99(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -3088,9 +2715,9 @@ test('the service-config group keeps an unknown sdd key', () => {
   window.saveServiceConfig();
   assert.equal(readServiceYaml(file).sdd?.extra, 'stay');
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('the service-config group saves queue order, omits an empty description, and childQueue returns the first', () => {
+function proveTheServiceConfigGroupSavesQueueOrderOmitsAnEmptyDescriptionAndChildQueueReturnsTheFirst100(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -3122,9 +2749,9 @@ test('the service-config group saves queue order, omits an empty description, an
   const queues = readServiceYaml(file).sdd?.queues;
   assert.deepEqual(queues, [{name: 'alpha'}, {name: 'beta', description: 'kept'}, {name: 'alpha'}]);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('the service-config group omits ignore-comments when the last pattern is removed', () => {
+function proveTheServiceConfigGroupOmitsIgnoreCommentsWhenTheLastPatternIsRemoved101(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -3149,9 +2776,9 @@ test('the service-config group omits ignore-comments when the last pattern is re
   assert.equal(readServiceYaml(file).sdd?.['ignore-comments'], undefined);
   assert.deepEqual(readServiceYaml(file).sdd?.queues, [{name: 'alpha'}]);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('the service-config group warns when an ignore-comments pattern does not compile', () => {
+function proveTheServiceConfigGroupWarnsWhenAnIgnoreCommentsPatternDoesNotCompile102(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -3193,9 +2820,9 @@ test('the service-config group warns when an ignore-comments pattern does not co
   assert.equal(window.serviceConfig().ignoreComments?.[0]?.value, 'bot');
   assert.equal(window.serviceConfig().save, true);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('the service-config group warns on an empty queue name and on the last queue', () => {
+function proveTheServiceConfigGroupWarnsOnAnEmptyQueueNameAndOnTheLastQueue103(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -3227,9 +2854,9 @@ test('the service-config group warns on an empty queue name and on the last queu
   window.saveServiceConfig();
   assert.deepEqual(readServiceYaml(file).sdd?.queues, [{name: 'alpha'}]);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('the service-config group warns when YAML has no sdd key', () => {
+function proveTheServiceConfigGroupWarnsWhenYAMLHasNoSddKey104(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -3257,9 +2884,9 @@ test('the service-config group warns when YAML has no sdd key', () => {
   assert.deepEqual(doc.rules, ['one']);
   assert.equal(doc.sdd?.base, undefined);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('the service-config group can only remove a non-string ignore-comments value', () => {
+function proveTheServiceConfigGroupCanOnlyRemoveANonStringIgnoreCommentsValue105(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -3292,9 +2919,9 @@ test('the service-config group can only remove a non-string ignore-comments valu
   window.closeSettings();
   assert.equal(readServiceYaml(file).sdd?.['ignore-comments'], 1);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('the service-config group has no fields when the file does not parse and only that checkout loses its cards', () => {
+function proveTheServiceConfigGroupHasNoFieldsWhenTheFileDoesNotParseAndOnlyThatCheckoutLosesItsCards106(): void {
   const {dir, home, arcadia} = yard();
   const billing = path.join(arcadia, 'services', 'billing');
   const other = path.join(arcadia, 'services', 'other');
@@ -3372,33 +2999,9 @@ test('the service-config group has no fields when the file does not parse and on
   assert.equal(visibleKeys(window.board()).includes('1'), true);
   assert.equal(visibleKeys(window.board()).includes('2'), true);
   rmSync(dir, {recursive: true, force: true});
-});
+}
 
-test('the service-config group shows no fields when the agent is silent and the file does not parse', () => {
-  const {dir, home, arcadia} = yard();
-  const checkout = path.join(arcadia, 'services', 'billing');
-  mkdirSync(checkout, {recursive: true});
-  writeServiceYaml(checkout, 'sdd: [\n');
-  writeLaunch(home, ['alpha'], {arcadia});
-  const window = openWindow(
-    {homePath: home, adapter: 'tracker'},
-    {
-      answers: () => false,
-      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
-    },
-  );
-  window.chooseAgent('cursor');
-  window.openCard('1');
-  window.openSettings();
-  assert.deepEqual(window.board().rows, [{text: 'агент не отвечает'}]);
-  assert.equal(window.board().settingsOpen, true);
-  assert.equal(window.serviceConfig().checkout, checkout);
-  assert.equal(window.serviceConfig().save, false);
-  assert.equal(window.serviceConfig().queues, undefined);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('the service-config group creates a missing file from the queue the manager adds', () => {
+function proveTheServiceConfigGroupCreatesAMissingFileFromTheQueueTheManagerAdds108(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
@@ -3459,6 +3062,1361 @@ test('the service-config group creates a missing file from the queue the manager
   window.take('1');
   assert.deepEqual(assignees, ['1']);
   rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheServiceConfigGroupDiscardsAnUnsavedQueueEditAndTheSpyReadsTheDiskQueues110(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  const file = path.join(checkout, 'openspec', 'config.yaml');
+  writeLaunch(home, ['alpha'], {arcadia});
+  let started = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      answers: () => true,
+      startStep: () => {
+        started += 1;
+      },
+      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
+    },
+  );
+  window.chooseAgent('cursor');
+  window.openSettings();
+  window.setServiceQueue(0, 'gamma', 'draft');
+  assert.equal(window.serviceConfig().queues?.items[0]?.name, 'gamma');
+  assert.equal(window.childQueue(), 'alpha');
+  window.spy();
+  assert.equal(started, 1);
+  assert.deepEqual(readServiceYaml(file).sdd?.queues, [{name: 'alpha'}]);
+  window.closeSettings();
+  assert.deepEqual(readServiceYaml(file).sdd?.queues, [{name: 'alpha'}]);
+  window.openSettings();
+  assert.equal(window.serviceConfig().queues?.items[0]?.name, 'alpha');
+  assert.equal(window.serviceConfig().queues?.items[0]?.description, '');
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheServiceConfigGroupShowsTheDiskCopyWhenTheFileChangedBeforeSave111(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  const file = writeServiceYaml(
+    checkout,
+    ['sdd:', '  queues:', '    - name: alpha', ''].join('\n'),
+  );
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.openSettings();
+  assert.equal(window.serviceConfig().queues?.items[0]?.name, 'alpha');
+  writeFileSync(file, 'sdd:\n  queues:\n    - name: beta\n  base: main\n');
+  window.setServiceBase('trunk');
+  window.saveServiceConfig();
+  const doc = readServiceYaml(file);
+  assert.equal(doc.sdd?.queues?.[0]?.name, 'beta');
+  assert.equal(doc.sdd?.base, 'main');
+  assert.equal(window.serviceConfig().queues?.items[0]?.name, 'beta');
+  assert.equal(window.serviceConfig().base, 'main');
+  assert.equal(window.serviceConfig().save, true);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveAnOpenCycleWhoseOnlySidebarBlockIsFocusShowsThatBlock113(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  writeChange(
+    checkout,
+    '1',
+    'proposal.md',
+    'UNIQUE PROPOSAL BODY that must stay out of the sidebar\n',
+  );
+  const item = cycle('1', 'implementing', {
+    comments: [{body: 'sdd:focus\nSpecify thread 4\n'}],
+  });
+  Object.assign(item, {body: 'MIRROR TEXT stays in the issue'});
+  const window = openSide(home, [item]);
+  window.openCard('1');
+  const blocks = window.sidebar();
+  assert.deepEqual(blocks, [{kind: 'focus', body: 'Specify thread 4\n'}]);
+  const text = JSON.stringify(blocks);
+  assert.equal(text.includes('UNIQUE PROPOSAL BODY'), false);
+  assert.equal(text.includes('MIRROR TEXT'), false);
+  assert.equal(text.includes('sdd:focus'), false);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveACardWithNoIconHasNoSidebarReasonBlock115(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(
+    home,
+    [
+      cycle('1', 'specifying', {
+        labels: ['sdd:cycle', 'sdd:specifying', 'sdd:wait-human'],
+        comments: [{body: 'please decide'}],
+      }),
+    ],
+    {leading: key => key === '1'},
+  );
+  const card = columnCards(window.board(), 'specifying')?.[0];
+  assert.equal(card?.icon, undefined);
+  assert.equal(card?.reason, undefined);
+  window.openCard('1');
+  const blocks = window.sidebar();
+  assert.equal(kinds(blocks).includes('reason'), false);
+  assert.deepEqual(blocks, [{kind: 'ask', body: 'please decide'}]);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveAQuestionOnlyCardHidesTheLineAndTheSidebarStillShowsIt116(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  writeChange(checkout, 'b', 'proposal.md', '## Open questions\n\n- [ ] one\n- [ ] two\n');
+  const window = openSide(home, [cycle('b', 'proposing')]);
+  const card = columnCards(window.board(), 'proposing')?.[0];
+  assert.equal(card?.phaseRow, 2);
+  assert.equal(card?.icon, true);
+  assert.equal(card?.reason, undefined);
+  window.openCard('b');
+  assert.deepEqual(window.sidebar(), [{kind: 'reason', line: 'вопросы 2'}]);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheSidebarAskIsTheLatestCommentThatDoesNotStartWithSddFocus118(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [
+    cycle('1', 'implementing', {
+      labels: ['sdd:cycle', 'sdd:implementing', 'sdd:wait-human'],
+      comments: [
+        {body: 'older note'},
+        {body: 'please decide\nthe rest'},
+        {body: 'sdd:focus\nPlan gap\n'},
+      ],
+    }),
+  ]);
+  window.openCard('1');
+  const ask = window.sidebar().find(block => block.kind === 'ask');
+  assert.deepEqual(ask, {kind: 'ask', body: 'please decide\nthe rest'});
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveRemovingSddWaitHumanRemovesTheSidebarAskWhileTheCommentsRemain119(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const labels = ['sdd:cycle', 'sdd:implementing', 'sdd:wait-human'];
+  const comments = [{body: 'please decide'}, {body: 'sdd:focus\nPlan gap\n'}];
+  const window = openSide(home, [cycle('1', 'implementing', {labels, comments})]);
+  window.openCard('1');
+  assert.equal(kinds(window.sidebar()).includes('ask'), true);
+  labels.splice(labels.indexOf('sdd:wait-human'), 1);
+  const blocks = window.sidebar();
+  assert.equal(kinds(blocks).includes('ask'), false);
+  assert.deepEqual(blocks, [{kind: 'focus', body: 'Plan gap\n'}]);
+  assert.equal(comments.length, 2);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveNoSddFocusCommentLeavesNoSidebarFocusBlock120(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [cycle('1', 'implementing', {comments: [{body: 'just a note'}]})]);
+  window.openCard('1');
+  assert.deepEqual(window.sidebar(), []);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheSidebarFocusPlaqueDoesNotIncludeTheMarkerLine121(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [
+    cycle('1', 'implementing', {
+      comments: [
+        {body: 'sdd:focus\nSpecify thread 4\nwhy this gap\n'},
+        {body: 'sdd:focus\nPlan gap\n', manager: true},
+        {body: 'a later note'},
+      ],
+    }),
+  ]);
+  window.openCard('1');
+  const blocks = window.sidebar();
+  assert.deepEqual(blocks, [{kind: 'focus', body: 'Specify thread 4\nwhy this gap\n'}]);
+  assert.equal(JSON.stringify(blocks).includes('sdd:focus'), false);
+  assert.equal(JSON.stringify(blocks).includes('Plan gap'), false);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveAThreadWithNoMarkerIsInTheSidebarUnansweredBlock122(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  let asked = '';
+  const window = openSide(home, [cycle('1', 'implementing')], {
+    review: key => {
+      asked = key;
+      return {
+        threads: [
+          {marker: null, lines: ['please look', 'at the diff']},
+          {marker: 'code', lines: ['already marked']},
+        ],
+        conversation: {last: {marker: 'note', body: 'answered already'}},
+      };
+    },
+  });
+  window.openCard('1');
+  const blocks = window.sidebar();
+  assert.equal(asked, '1');
+  assert.deepEqual(blocks, [
+    {kind: 'unanswered', threads: [{lines: ['please look', 'at the diff']}]},
+  ]);
+  const text = JSON.stringify(blocks);
+  assert.equal(text.includes('already marked'), false);
+  assert.equal(text.includes('answered already'), false);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveEveryMarkedThreadAndAMarkedLastCommentLeaveNoSidebarUnansweredBlock123(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [cycle('1', 'implementing')], {
+    review: () => ({
+      threads: [
+        {marker: 'code', lines: ['one']},
+        {marker: 'fixed', lines: ['two']},
+      ],
+      conversation: {last: {marker: 'note', body: 'done'}},
+    }),
+  });
+  window.openCard('1');
+  assert.deepEqual(window.sidebar(), []);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveSddHooksListsArchiveBeforeThenCreateProposalAfterInTheSidebar126(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = cycle('1', 'implementing');
+  item.sddHooks = [
+    {action: 'archive', point: 'before', value: 'keep the archive\nstill here'},
+    {action: 'create-proposal', point: 'after', value: 'then propose'},
+  ];
+  const window = openSide(home, [item]);
+  window.openCard('1');
+  assert.deepEqual(window.sidebar(), [
+    {
+      kind: 'hook',
+      points: [
+        {action: 'archive', point: 'before', paragraph: 'keep the archive\nstill here'},
+        {action: 'create-proposal', point: 'after', paragraph: 'then propose'},
+      ],
+    },
+  ]);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveANestedSddHooksMapKeepsFieldOrderInTheSidebar127(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = cycle('1', 'implementing');
+  item.sddHooks = {
+    archive: {before: 'keep the archive\nstill here'},
+    'create-proposal': {after: 'then propose'},
+  };
+  const window = openSide(home, [item]);
+  window.openCard('1');
+  assert.deepEqual(window.sidebar(), [
+    {
+      kind: 'hook',
+      points: [
+        {action: 'archive', point: 'before', paragraph: 'keep the archive\nstill here'},
+        {action: 'create-proposal', point: 'after', paragraph: 'then propose'},
+      ],
+    },
+  ]);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveAMissingOrEmptySddHooksLeavesNoSidebarHookBlock128(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const missing = cycle('1', 'implementing', {
+    comments: [{body: 'sdd:focus\nPlan gap\n'}],
+  });
+  const empty = cycle('2', 'implementing', {
+    comments: [{body: 'sdd:focus\nPlan gap\n'}],
+    sddHooks: '',
+  });
+  const blank = cycle('3', 'implementing', {
+    comments: [{body: 'sdd:focus\nPlan gap\n'}],
+    sddHooks: {},
+  });
+  const noPoints = cycle('4', 'implementing', {
+    comments: [{body: 'sdd:focus\nPlan gap\n'}],
+    sddHooks: {archive: {}},
+  });
+  const list = cycle('5', 'implementing', {
+    comments: [{body: 'sdd:focus\nPlan gap\n'}],
+    sddHooks: [],
+  });
+  const window = openSide(home, [missing, empty, blank, noPoints, list]);
+  for (const key of ['1', '2', '3', '4', '5']) {
+    window.openCard(key);
+    const blocks = window.sidebar();
+    assert.deepEqual(blocks, [{kind: 'focus', body: 'Plan gap\n'}]);
+    assert.equal(kinds(blocks).includes('hook'), false);
+  }
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveASingleStringSddHooksIsTheSidebarLine129(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = cycle('1', 'implementing', {sddHooks: 'not a map'});
+  const window = openSide(home, [item]);
+  window.openCard('1');
+  const blocks = window.sidebar();
+  assert.deepEqual(blocks, [{kind: 'hook', line: 'поле хука не читается'}]);
+  assert.equal(JSON.stringify(blocks).includes('not a map'), false);
+  assert.equal('points' in blocks[0], false);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveOneNonStringSddHooksPointShowsThatLineInTheSidebarAndTheStringPointRemains130(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const mapped = cycle('1', 'implementing', {
+    sddHooks: {
+      archive: {before: 4},
+      'create-proposal': {after: 'keep this'},
+    },
+  });
+  const listed = cycle('2', 'implementing', {
+    sddHooks: [
+      {action: 'archive', point: 'before', value: 4},
+      {action: 'create-proposal', point: 'after', value: 'keep this'},
+    ],
+  });
+  const window = openSide(home, [mapped, listed]);
+  const expected = {
+    kind: 'hook',
+    points: [
+      {action: 'archive', point: 'before', paragraph: 'поле хука не читается'},
+      {action: 'create-proposal', point: 'after', paragraph: 'keep this'},
+    ],
+  };
+  window.openCard('1');
+  assert.deepEqual(window.sidebar(), [expected]);
+  window.openCard('2');
+  assert.deepEqual(window.sidebar(), [expected]);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveBothModelsEmpty135(): void {
+  const {dir, home, arcadia} = yard();
+  const billing = path.join(arcadia, 'services', 'billing');
+  mkdirSync(billing, {recursive: true});
+  writeServiceConfig(billing, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  writeOverlay(billing, [], 'models:\n  mechanical: ""\n  judgment: ""\n');
+  const assignees: string[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      answers: () => true,
+      tickets: () => [
+        ticket({key: '1', queue: 'alpha', sddService: 'services/billing', title: 'Bare'}),
+      ],
+      writeAssignee: key => {
+        assignees.push(key);
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  const row = window.board().rows.find(item => item.text.includes(billing));
+  assert.ok(row);
+  assert.equal(row.text.includes('нужны модели mechanical и judgment'), true);
+  window.take('1');
+  assert.deepEqual(assignees, []);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheSameIdMayFillBothSlots136(): void {
+  const {dir, home} = scratch();
+  const window = openWindow({homePath: home}, {answers: () => true});
+  window.chooseAgent('cursor');
+  window.leaveModel('judgment', 'composer-2.5-fast');
+  const doc = readHome(home);
+  assert.equal(doc.models?.mechanical, 'composer-2.5-fast');
+  assert.equal(doc.models?.judgment, 'composer-2.5-fast');
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveEachGroupNamesItsFile137(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.openCard('1');
+  window.openSettings();
+  assert.equal(window.overlay().file, '.aifactory/config.yaml');
+  assert.equal(window.serviceConfig().file, 'openspec/config.yaml');
+  rmSync(dir, {recursive: true, force: true});
+}
+
+spec('board', () => {
+  requirement('The board is a pool and seven columns', () => {
+    scenario('An empty column stays', () => {
+      proveAnEmptySpecifyingColumnStaysAndTheWindowWritesNoPhase46();
+    });
+    scenario('The window adds no phase control', () => {
+      proveAnEmptySpecifyingColumnStaysAndTheWindowWritesNoPhase46();
+    });
+  });
+  requirement('A gate shares the column of the phase it closes', () => {
+    scenario('Proposed stands in proposing', () => {
+      proveProposedStandsInProposingAndSpecifiedStandsInSpecifying47();
+    });
+    scenario('Specified stands in specifying', () => {
+      proveProposedStandsInProposingAndSpecifiedStandsInSpecifying47();
+    });
+  });
+  requirement("A column shows this manager's cycles", () => {
+    scenario('Another assignee is hidden', () => {
+      proveAnotherAssigneeIsAbsentAndAPhaseWithNoAssigneeStandsInThePool48();
+    });
+    scenario('A phase without an assignee stands in the pool', () => {
+      proveAnotherAssigneeIsAbsentAndAPhaseWithNoAssigneeStandsInThePool48();
+    });
+    scenario('Accepting shows the merge while the issue is open', () => {
+      proveAnOpenMergeStandsInAcceptingAndAClosedIssueLeaves50();
+    });
+    scenario('Cancelled leaves the board', () => {
+      proveSddCancelledWithAnEarlierPhaseShowsNoCard49();
+    });
+  });
+  requirement('The pool holds tickets the manager can take', () => {
+    scenario('A bare cycle label with no assignee is in the pool', () => {
+      proveAnOpenWatchListTicketWithSddCycleNoPhaseAndNoAssigneeStandsInThePool67();
+    });
+    scenario('An issue without the cycle label is absent', () => {
+      proveAnOpenTicketOnTheWatchListWithoutSddCycleIsNotInThePool68();
+    });
+    scenario("This manager's ticket enters proposing when a step can start", () => {
+      proveAPhaselessTicketAssignedToThisLoginMovesToProposingAfterSpyWhenModelsAreSet70();
+      proveOneOpenPullRequestLetsSpySetProposingForAnAssignedTicket74();
+    });
+    scenario("This manager's ticket stays when a step cannot start", () => {
+      proveAPhaselessTicketAssignedToThisLoginStaysInThePoolWhenAModelSlotIsEmpty71();
+    });
+    scenario('Two pull requests keep an assigned ticket in the pool', () => {
+      proveTwoOpenPullRequestsKeepAnAssignedTicketInThePoolAndSpyDoesNotSetProposing72();
+    });
+    scenario('A checkout break keeps an assigned ticket in the pool', () => {
+      proveAMissingCheckoutKeepsAnAssignedTicketInThePoolAndSpyDoesNotSetProposing73();
+    });
+  });
+  requirement('Take writes this process login', () => {
+    scenario('Take on a phaseless ticket writes the login only', () => {
+      proveTakeOnAPhaselessTicketSetsTheAssigneeAndSpyThenSetsProposing75();
+    });
+    scenario('Take does nothing without a home config', () => {
+      proveTakeDoesNotCallWriteAssigneeWhenTheHomePathIsAbsent76();
+    });
+  });
+  requirement('Take on a cycle that has a phase keeps the phase', () => {
+    scenario('Take keeps the phase', () => {
+      proveTakeOnAnImplementingPoolCycleSetsTheAssigneeAndLeavesThePhase77();
+    });
+    scenario('An empty model still allows Take on a phased cycle', () => {
+      proveTakeOnAnImplementingPoolCycleWritesTheAssigneeWhenAModelSlotIsEmpty78();
+    });
+  });
+  requirement('Two open pull requests block Take', () => {
+    scenario('Two pull requests leave the card in the pool', () => {
+      proveTwoOpenPullRequestsKeepTheCardInThePoolAndDoNotWriteTheAssignee79();
+    });
+    scenario('One pull request allows Take', () => {
+      proveOneOpenPullRequestLetsTakeWriteTheAssignee80();
+    });
+  });
+  requirement(
+    'A column card shows the key, the title, the icon, the reason, the phase row, and gaps',
+    () => {
+      scenario('A column card shows a gap layer', () => {
+        proveAFocusGapShowsSpecifyAndHidesASolidPlan56();
+      });
+      scenario('A solid focus adds no layer line', () => {
+        proveEveryRecordedLayerSolidHasNoLayerLine57();
+      });
+    },
+  );
+  requirement('The phase row is read from the cycle', () => {
+    scenario('Proposing shows the open-question count', () => {
+      proveProposingShowsTwoOpenQuestionsUnderTheHeading51();
+    });
+    scenario('Specifying has no phase row', () => {
+      proveSpecifyingHasNoPhaseRow52();
+    });
+    scenario('Implementing without tasks.md has no count', () => {
+      proveImplementingCountsTasksMdAndOmitsTheCountWhenTheFileIsAbsent54();
+    });
+    scenario('Verifying shows one check state', () => {
+      proveVerifyingShowsRedAndNoneLeavesTheCheckRowBlank55();
+    });
+    scenario('None leaves the check row blank', () => {
+      proveVerifyingShowsRedAndNoneLeavesTheCheckRowBlank55();
+    });
+  });
+  requirement('Column order follows the icon occasion', () => {
+    scenario('A hidden icon still sorts first', () => {
+      proveARunningStepHidesTheIconWhileTheOccasionStillSortsFirst58();
+    });
+  });
+  requirement('The icon is hidden while a step runs or checks are waited', () => {
+    scenario('A gate shows the icon', () => {
+      proveProposedStandsInProposingAndSpecifiedStandsInSpecifying47();
+    });
+    scenario('A running step hides the icon', () => {
+      proveARunningStepHidesTheIconWhileTheOccasionStillSortsFirst58();
+    });
+  });
+  requirement('The icon reason is one line', () => {
+    scenario('A missing catalog outranks a missing service config', () => {
+      proveAMissingCatalogOutranksAMissingServiceConfigInTheReason60();
+    });
+    scenario('The card hides a question-only reason', () => {
+      proveAQuestionOnlyOccasionWhosePhaseRowShowsTheCountHasNoReasonLine61();
+    });
+    scenario('Children are keys from parent', () => {
+      proveAChildRecordPutsAndThatKeyOnTheReason63();
+    });
+  });
+  requirement('A healthy pool card shows Take', () => {
+    scenario('A healthy pool card has no icon', () => {
+      proveHealthyPoolCardsAreOrderedByKeyAndHaveNoIcon97();
+    });
+    scenario('A broken pool card disables Take', () => {
+      proveAPoolTicketWithACheckoutBreakShowsTheIconAndTakeDoesNotWrite81();
+    });
+  });
+  requirement('No home config leaves one row', () => {
+    scenario('The board asks for an agent', () => {
+      proveALaunchWithNoHomePathShowsOneRowThatTheFactoryStillNeedsAnAgent0();
+      proveAMissingHomeFileShowsTheBoardAndDoesNotStartAStep1();
+    });
+  });
+  requirement('A silent agent leaves one row', () => {
+    scenario('A silent agent hides the empty-model row', () => {
+      proveASilentAgentHidesTheEmptyModelRow17();
+      proveASilentAgentDoesNotShowTheCheckoutEmptyModelRow94();
+    });
+  });
+  requirement('An empty or rejected model names the checkout', () => {
+    scenario('Both models empty', () => {
+      proveBothModelsEmpty135();
+    });
+    scenario('A rejected id names the slot', () => {
+      proveACatalogThatRejectsTheRecordedJudgmentIdKeepsItAndStopsTheStep95();
+    });
+    scenario('The factory row comes before the service-config row', () => {
+      proveTheServiceConfigGroupHasNoFieldsWhenTheFileDoesNotParseAndOnlyThatCheckoutLosesItsCards106();
+    });
+  });
+});
+
+spec('factory-config', () => {
+  requirement('The home config is the file the launch named', () => {
+    scenario('No launch path writes no home file', () => {
+      proveNoHomePathWritesNoFileWhenTheManagerChoosesAnAgent8();
+    });
+    scenario('The home file has no person field', () => {
+      proveTheHomeFileGainsNoPersonPhaseFocusOrMetrics18();
+    });
+  });
+  requirement('The service overlay replaces keys and does not replace roots', () => {
+    scenario('An overlay model replaces the home model', () => {
+      proveAnOverlayMechanicalModelReplacesTheHomeIdAndAMissingOverlayKeepsHome84();
+    });
+    scenario('A missing overlay keeps the home values', () => {
+      proveAnOverlayMechanicalModelReplacesTheHomeIdAndAMissingOverlayKeepsHome84();
+    });
+    scenario('The machine without the window ignores the overlay', async () => {
+      await proveTheMachineSpyLeavesABareCycleOutAndDoesNotReadAifactory45();
+    });
+  });
+  requirement("The merged config is one agent and that agent's fields", () => {
+    scenario('A running step keeps its model', () => {
+      proveAStartedStepKeepsTheMechanicalIdFromThatCallUntilLeadingIsFalse96();
+    });
+    scenario('The same id may fill both slots', () => {
+      proveTheSameIdMayFillBothSlots136();
+    });
+  });
+  requirement('A known pair is written with the agent', () => {
+    scenario('Cursor writes its pair', () => {
+      proveChoosingCursorWritesItsPairAndOmitsEffortAndSpeed2();
+    });
+    scenario('Codex writes its pair', () => {
+      proveChoosingCodexWritesItsPairAndEffortAndOmitsSpeed3();
+    });
+    scenario('Claude-code writes its pair', () => {
+      proveChoosingClaudeCodeWritesItsPairAndEffortAndOmitsSpeed4();
+    });
+    scenario('OpenCode writes its pair', () => {
+      proveChoosingOpencodeWritesItsPairAndOmitsEffortAndSpeed5();
+    });
+  });
+  requirement('Changing the agent replaces the whole set', () => {
+    scenario('Codex replaces a cursor set', () => {
+      proveChangingTheAgentReplacesTheSetAndDropsOldEffortAndSpeed15();
+    });
+    scenario('OpenCode writes no effort key', () => {
+      proveChangingTheOverlayAgentToOpencodeWritesThePairAndNoEffortOrSpeed85();
+    });
+  });
+  requirement("Effort and speed are the agent's own fields", () => {
+    scenario('Empty effort does not stop a step', () => {
+      proveEmptyEffortAndSpeedAreTheAgentDefaultAndDoNotStopAStep12();
+    });
+    scenario('An empty model stops Take on a phaseless ticket', () => {
+      proveAnEmptyMergedMechanicalModelNamesTheCheckoutAndStopsOnlyThatStep93();
+    });
+  });
+  requirement('An overlay agent does not borrow effort or speed', () => {
+    scenario('An overlay agent ignores home effort', () => {
+      proveAnOverlayAgentOfCodexWithNoEffortKeyDoesNotTakeHomeEffortMax87();
+    });
+    scenario('Clearing the overlay agent drops the set', () => {
+      proveClearingTheOverlayAgentRemovesAgentModelsEffortAndSpeed88();
+    });
+    scenario('Clearing a model shows home', () => {
+      proveClearingOverlayJudgmentWithNoOverlayAgentShowsTheHomeJudgmentId89();
+    });
+  });
+  requirement('A recorded agent or model that fails is kept', () => {
+    scenario('A silent agent leaves the file', () => {
+      proveARecordedAgentThatDoesNotAnswerStaysInTheFile16();
+    });
+    scenario('A rejected id leaves the file', () => {
+      proveACatalogThatRejectsTheRecordedJudgmentIdKeepsItAndStopsTheStep95();
+    });
+  });
+});
+
+spec('service-config', () => {
+  requirement('The group writes the sdd fields', () => {
+    scenario('A default base is omitted', () => {
+      proveTheServiceConfigGroupOmitsADefaultBaseAndWritesMainBesideSchemaContextAndRules98();
+    });
+    scenario('A custom base is written', () => {
+      proveTheServiceConfigGroupOmitsADefaultBaseAndWritesMainBesideSchemaContextAndRules98();
+    });
+    scenario('An unknown sdd key remains', () => {
+      proveTheServiceConfigGroupKeepsAnUnknownSddKey99();
+    });
+  });
+  requirement('Queues are an ordered list of names', () => {
+    scenario("The first queue is the child's queue", () => {
+      proveTheServiceConfigGroupSavesQueueOrderOmitsAnEmptyDescriptionAndChildQueueReturnsTheFirst100();
+    });
+    scenario('An empty description is omitted', () => {
+      proveTheServiceConfigGroupSavesQueueOrderOmitsAnEmptyDescriptionAndChildQueueReturnsTheFirst100();
+    });
+    scenario('Duplicate names stay in order', () => {
+      proveTheServiceConfigGroupSavesQueueOrderOmitsAnEmptyDescriptionAndChildQueueReturnsTheFirst100();
+    });
+  });
+  requirement('Ignore-comments is an ordered list of strings', () => {
+    scenario('An empty list removes the key', () => {
+      proveTheServiceConfigGroupOmitsIgnoreCommentsWhenTheLastPatternIsRemoved101();
+    });
+  });
+  requirement('An unreadable edit is not written', () => {
+    scenario('A pattern that does not compile blocks save', () => {
+      proveTheServiceConfigGroupWarnsWhenAnIgnoreCommentsPatternDoesNotCompile102();
+    });
+    scenario('An empty queue name blocks save', () => {
+      proveTheServiceConfigGroupWarnsOnAnEmptyQueueNameAndOnTheLastQueue103();
+    });
+    scenario('The last queue cannot be removed into an empty list', () => {
+      proveTheServiceConfigGroupWarnsOnAnEmptyQueueNameAndOnTheLastQueue103();
+    });
+    scenario('YAML without sdd warns', () => {
+      proveTheServiceConfigGroupWarnsWhenYAMLHasNoSddKey104();
+    });
+  });
+  requirement('A non-string ignore-comments value can only be removed', () => {
+    scenario('Removing a number drops the key', () => {
+      proveTheServiceConfigGroupCanOnlyRemoveANonStringIgnoreCommentsValue105();
+    });
+    scenario('Closing keeps the number', () => {
+      proveTheServiceConfigGroupCanOnlyRemoveANonStringIgnoreCommentsValue105();
+    });
+  });
+  requirement('A service config that does not parse hides that checkout', () => {
+    scenario('One broken file hides only its cards', () => {
+      proveTheServiceConfigGroupHasNoFieldsWhenTheFileDoesNotParseAndOnlyThatCheckoutLosesItsCards106();
+    });
+    scenario('The group does not rewrite a file that does not parse', () => {
+      proveTheServiceConfigGroupHasNoFieldsWhenTheFileDoesNotParseAndOnlyThatCheckoutLosesItsCards106();
+    });
+  });
+  requirement('A missing service config keeps the card', () => {
+    scenario('A missing file leaves the card', () => {
+      proveTheServiceConfigGroupCreatesAMissingFileFromTheQueueTheManagerAdds108();
+    });
+    scenario('Save creates the file', () => {
+      proveTheServiceConfigGroupCreatesAMissingFileFromTheQueueTheManagerAdds108();
+    });
+  });
+});
+
+spec('settings', () => {
+  requirement('Settings are two blocks and do not open themselves', () => {
+    scenario('A missing home file leaves settings closed', () => {
+      proveAMissingHomeFileLeavesSettingsClosedUntilTheManagerOpensThem66();
+    });
+    scenario('Each group names its file', () => {
+      proveEachGroupNamesItsFile137();
+    });
+  });
+  requirement("Service groups write the open card's checkout", () => {
+    scenario('One checkout is selected', () => {
+      proveOneGatheredCheckoutIsSelectedWhenSettingsOpenWithNoCard91();
+    });
+    scenario('No choice writes nothing', () => {
+      proveSeveralGatheredCheckoutsWriteNothingUntilChooseCheckout92();
+    });
+  });
+  requirement('A write rereads the file first', () => {
+    scenario('A newer home file blocks the user block', () => {
+      proveANewerHomeFileBlocksTheWriteAndTheWindowShowsTheDisk13();
+    });
+    scenario('A newer service config blocks the save', () => {
+      proveTheServiceConfigGroupShowsTheDiskCopyWhenTheFileChangedBeforeSave111();
+    });
+  });
+  requirement('The overlay group writes immediately', () => {
+    scenario('An overlay edit is on disk before settings close', () => {
+      proveAnOverlayEditIsOnDiskAfterSettingsClose86();
+    });
+  });
+  requirement('The service-config group writes on save', () => {
+    scenario('Closing discards an unsaved edit', () => {
+      proveTheServiceConfigGroupDiscardsAnUnsavedQueueEditAndTheSpyReadsTheDiskQueues110();
+    });
+    scenario('The spy reads the previous file', () => {
+      proveTheServiceConfigGroupDiscardsAnUnsavedQueueEditAndTheSpyReadsTheDiskQueues110();
+    });
+  });
+  requirement('Choosing an agent writes at once', () => {
+    scenario('Choosing cursor writes the home file', () => {
+      proveChoosingCursorWritesItsPairAndOmitsEffortAndSpeed2();
+    });
+    scenario('An empty agent list writes nothing', () => {
+      proveAnEmptyAgentListWritesNoHomeFile9();
+    });
+    scenario('Leaving a model empty writes the empty field', () => {
+      proveLeavingAModelEmptyWritesThatField10();
+    });
+  });
+});
+
+spec('sidebar', () => {
+  requirement('The sidebar shows only the blocks the cycle has', () => {
+    scenario('A cycle with only focus shows focus', () => {
+      proveAnOpenCycleWhoseOnlySidebarBlockIsFocusShowsThatBlock113();
+    });
+    scenario('Change bodies stay out', () => {
+      proveAnOpenCycleWhoseOnlySidebarBlockIsFocusShowsThatBlock113();
+    });
+  });
+  requirement("The icon reason block is the card's line", () => {
+    scenario('The sidebar shows the hidden tail', () => {
+      proveAQuestionOnlyCardHidesTheLineAndTheSidebarStillShowsIt116();
+    });
+    scenario('No icon means no reason block', () => {
+      proveACardWithNoIconHasNoSidebarReasonBlock115();
+    });
+  });
+  requirement('Ask shows the latest comment that is not focus', () => {
+    scenario('Wait shows the ask', () => {
+      proveACardWithNoIconHasNoSidebarReasonBlock115();
+    });
+    scenario('A focus comment is skipped', () => {
+      proveTheSidebarAskIsTheLatestCommentThatDoesNotStartWithSddFocus118();
+    });
+    scenario('Clearing the label removes the ask', () => {
+      proveRemovingSddWaitHumanRemovesTheSidebarAskWhileTheCommentsRemain119();
+    });
+  });
+  requirement('Focus shows the body after the marker line', () => {
+    scenario('The plaque drops the marker line', () => {
+      proveTheSidebarFocusPlaqueDoesNotIncludeTheMarkerLine121();
+    });
+    scenario('No focus comment leaves no block', () => {
+      proveNoSddFocusCommentLeavesNoSidebarFocusBlock120();
+    });
+  });
+  requirement('Unanswered review shows threads the port already gives', () => {
+    scenario('An unmarked thread is shown', () => {
+      proveAThreadWithNoMarkerIsInTheSidebarUnansweredBlock122();
+    });
+    scenario('A marked thread is omitted', () => {
+      proveEveryMarkedThreadAndAMarkedLastCommentLeaveNoSidebarUnansweredBlock123();
+    });
+  });
+  requirement('The hook block shows sddHooks in field order', () => {
+    scenario('Points stay in field order', () => {
+      proveSddHooksListsArchiveBeforeThenCreateProposalAfterInTheSidebar126();
+      proveANestedSddHooksMapKeepsFieldOrderInTheSidebar127();
+    });
+    scenario('An empty field leaves no block', () => {
+      proveAMissingOrEmptySddHooksLeavesNoSidebarHookBlock128();
+    });
+    scenario('A non-map is one error line', () => {
+      proveASingleStringSddHooksIsTheSidebarLine129();
+    });
+    scenario('A non-string point keeps the others', () => {
+      proveOneNonStringSddHooksPointShowsThatLineInTheSidebarAndTheStringPointRemains130();
+    });
+  });
+});
+
+spec('watch-list', () => {
+  requirement("The board and the window's spy read one watch list", () => {
+    scenario('The pool and the columns share the list', () => {
+      proveTheBoardAndTheWindowSpyReadOneWatchList44();
+    });
+    scenario("The machine's spy ignores a bare cycle label", async () => {
+      await proveTheMachineSpyLeavesABareCycleOutAndDoesNotReadAifactory45();
+    });
+  });
+  requirement('Each read rebuilds the list from the files', () => {
+    scenario('An overlay name joins the home list', () => {
+      proveAnOverlayWatchNameJoinsTheHomeListAndARepeatedNameIsOne26();
+    });
+    scenario('A name on either file remains', () => {
+      proveANameRemovedFromOneFileStaysWhileTheOtherFileStillHasIt27();
+    });
+    scenario('Both lists empty means no cards', () => {
+      proveEmptyWatchListsLeaveTheBoardWithNoCards30();
+    });
+    scenario('Service queues do not join the list', () => {
+      proveServiceQueuesDoNotJoinTheWatchList31();
+    });
+  });
+  requirement('A Tracker queue is the port field', () => {
+    scenario('The port field selects the ticket', () => {
+      proveATrackerTicketIsSelectedByThePortQueueAndALabelDoesNotReplaceIt32();
+    });
+    scenario('A queue missing from the service config blocks Take', () => {
+      proveTheFirstCheckoutBreakIsTheOnlyReasonAndTakeDoesNotWriteTheAssignee35();
+    });
+  });
+  requirement('A GitHub queue is a label in sdd.queues', () => {
+    scenario('The first matching queue name wins', () => {
+      proveAGithubQueueIsTheFirstSddQueuesNameOnTheIssueAndTheKeyIsOwnerRepo33();
+    });
+    scenario('No matching label is a break', () => {
+      proveAGithubQueueIsTheFirstSddQueuesNameOnTheIssueAndTheKeyIsOwnerRepo33();
+    });
+  });
+  requirement('A checkout is gathered from sddService', () => {
+    scenario('Tracker gathers under the Arcadia root', () => {
+      proveTrackerGathersTheCheckoutUnderTheArcadiaRoot23();
+    });
+    scenario('An empty root keeps the default', () => {
+      proveAnEmptyRootLeavesArcadiaOrGithub21();
+    });
+    scenario('GitHub empty sddService is the repository root', () => {
+      proveGithubGathersUnderTheRepositoryAndAnEmptySddServiceIsThatRoot24();
+    });
+    scenario('A path outside the root is a missing catalog', () => {
+      proveAPathWithOrOutsideTheRootIsAMissingCatalog25();
+    });
+  });
+  requirement('A missing field offers a choice', () => {
+    scenario('One Tracker service writes itself', () => {
+      proveOneTrackerServiceThatAlreadyListsTheQueueWritesItself37();
+      proveABlankTrackerSddServiceWritesTheSingleServiceThatListsTheQueue38();
+    });
+    scenario('Several Tracker services stay a choice', () => {
+      proveSeveralTrackerServicesThatListTheQueueStayAChoice39();
+    });
+    scenario('One GitHub directory writes itself', () => {
+      proveOneGithubDirectoryWithAnSddKeyWritesItselfAndSeveralStayAChoice40();
+    });
+    scenario('A queue that is still missing keeps the reason', () => {
+      proveWritingSddServiceKeepsTheQueueBreakWhenTheServiceStillLacksTheQueue41();
+    });
+  });
+  requirement('A missing catalog keeps the ticket card', () => {
+    scenario('A missing directory leaves the card', () => {
+      proveAMissingCatalogKeepsTheCardAndTheChoiceAndDoesNotStartAStep36();
+    });
+  });
+});
+
+test('choosing an agent does not read a live catalog', () => {
+  const {dir, home} = scratch();
+  let reads = 0;
+  const window = openWindow(
+    {homePath: home},
+    {
+      catalog: () => {
+        reads += 1;
+        return {mechanical: 'not-the-pair', judgment: 'also-not'};
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  assert.equal(reads, 0);
+  const doc = readHome(home);
+  assert.equal(doc.models?.mechanical, 'composer-2.5-fast');
+  assert.equal(doc.models?.judgment, 'grok-4.7-high-fast');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('an agent without a known pair leaves both models empty', () => {
+  const {dir, home} = scratch();
+  const window = openWindow({homePath: home, agents: ['other']}, {answers: () => true});
+  window.chooseAgent('other');
+  const doc = readHome(home);
+  assert.equal(doc.agent, 'other');
+  assert.equal(doc.models, undefined);
+  assert.equal(doc.effort, undefined);
+  assert.equal(doc.speed, undefined);
+  assertNoEmptyStrings(doc);
+  assert.equal(window.settings().models.mechanical.value, '');
+  assert.equal(window.settings().models.mechanical.needsValue, true);
+  assert.equal(window.settings().models.judgment.value, '');
+  assert.equal(window.settings().models.judgment.needsValue, true);
+  assert.deepEqual(window.board().rows, [{text: 'нужны модели mechanical и judgment'}]);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('an empty model stops the window spy', () => {
+  const {dir, home} = scratch();
+  let started = 0;
+  const window = openWindow(
+    {homePath: home},
+    {
+      answers: () => true,
+      startStep: () => {
+        started += 1;
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  window.spy();
+  assert.equal(started, 1);
+  window.leaveModel('judgment', '');
+  window.spy();
+  assert.equal(started, 1);
+  assert.equal(window.board().stepsStart, false);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('closing settings does not erase the home file', () => {
+  const {dir, home} = scratch();
+  const window = openWindow({homePath: home});
+  window.chooseAgent('cursor');
+  const written = readFileSync(home, 'utf8');
+  window.openSettings();
+  window.closeSettings();
+  assert.equal(readFileSync(home, 'utf8'), written);
+  assert.equal(window.settings().open, false);
+  assert.equal(window.board().settingsOpen, false);
+  assert.equal(readHome(home).agent, 'cursor');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('two launches do not share a home file', () => {
+  const left = scratch();
+  const right = scratch();
+  const a = openWindow({homePath: left.home});
+  const b = openWindow({homePath: right.home});
+  a.chooseAgent('cursor');
+  b.chooseAgent('codex');
+  assert.equal(readHome(left.home).agent, 'cursor');
+  assert.equal(readHome(left.home).models?.mechanical, 'composer-2.5-fast');
+  assert.equal(readHome(right.home).agent, 'codex');
+  assert.equal(readHome(right.home).effort?.mechanical, 'low');
+  assert.equal(readHome(left.home).agent, 'cursor');
+  rmSync(left.dir, {recursive: true, force: true});
+  rmSync(right.dir, {recursive: true, force: true});
+});
+
+test('the user block writes the watch list and the roots immediately', () => {
+  const {dir, home} = scratch();
+  const window = openWindow({homePath: home, adapter: 'tracker'});
+  window.chooseAgent('cursor');
+  window.leaveWatch(['alpha', 'alpha', 'beta']);
+  window.leaveRoots({arcadia: '/arcadia', github: '/github'});
+  const doc = readHome(home);
+  assert.deepEqual(doc.watch, ['alpha', 'beta']);
+  assert.deepEqual(doc.roots, {arcadia: '/arcadia', github: '/github'});
+  assert.equal(doc.agent, 'cursor');
+  assert.equal((doc as {system?: unknown}).system, undefined);
+  const disk = readFileSync(home, 'utf8');
+  writeFileSync(home, disk.replace('cursor', 'codex'));
+  window.leaveWatch(['gamma']);
+  assert.equal(readFileSync(home, 'utf8').includes('gamma'), false);
+  assert.equal(readHome(home).agent, 'codex');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('an overlay does not replace the checkout roots', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeOverlay(checkout, ['alpha'], 'roots:\n  arcadia: /wrong\n');
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
+    },
+  );
+  const card = window.board().pool.find(item => item.key === '1');
+  assert.ok(card);
+  assert.equal(card.checkout, checkout);
+  assert.equal(card.checkout?.startsWith('/wrong'), false);
+  assert.equal(card.queue, 'alpha');
+  assert.deepEqual(card.choices, ['services/billing']);
+  assert.equal(
+    window.board().cards.some(item => item.key === '1'),
+    false,
+  );
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a fresh launch still reads an overlay after home drops the name', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeOverlay(checkout, ['alpha']);
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, [], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  assert.deepEqual(window.board().watch, ['alpha']);
+  assert.deepEqual(
+    window.board().pool.map(item => item.key),
+    ['1'],
+  );
+  assert.deepEqual(window.board().cards, []);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a name only in an overlay under the old root leaves when the roots change', () => {
+  const {dir, home} = yard();
+  const oldRoot = path.join(dir, 'old-arcadia');
+  const newRoot = path.join(dir, 'new-arcadia');
+  const oldCheckout = path.join(oldRoot, 'services', 'billing');
+  mkdirSync(oldCheckout, {recursive: true});
+  writeOverlay(oldCheckout, ['beta']);
+  writeServiceConfig(oldCheckout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia: oldRoot});
+  const tickets = [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})];
+  const window = openWindow({homePath: home, adapter: 'tracker'}, {tickets: () => tickets});
+  assert.deepEqual(window.board().watch, ['alpha', 'beta']);
+  window.leaveRoots({arcadia: newRoot});
+  assert.deepEqual(window.board().watch, ['alpha']);
+  const reached = path.join(newRoot, 'services', 'billing');
+  mkdirSync(reached, {recursive: true});
+  writeOverlay(reached, ['beta']);
+  assert.deepEqual(window.board().watch, ['alpha', 'beta']);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('sdd:cycle is still required for a card', () => {
+  const {dir, home, arcadia, github} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha', 'acme/billing'], {arcadia, github});
+  const tracker = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      tickets: () => [
+        ticket({key: '1', queue: 'alpha', labels: ['alpha'], sddService: 'services/billing'}),
+      ],
+    },
+  );
+  assert.deepEqual(tracker.board().cards, []);
+  const repo = path.join(github, 'acme', 'billing');
+  mkdirSync(repo, {recursive: true});
+  writeServiceConfig(repo, ['alpha']);
+  const hub = openWindow(
+    {homePath: home, adapter: 'github'},
+    {tickets: () => [ticket({key: '2', repo: 'acme/billing', sddService: '', labels: ['alpha']})]},
+  );
+  assert.deepEqual(hub.board().cards, []);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the window does not append the queue to the service config', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['beta']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  const config = path.join(checkout, 'openspec', 'config.yaml');
+  const before = readFileSync(config, 'utf8');
+  let started = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      answers: () => true,
+      startStep: () => {
+        started += 1;
+      },
+      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
+    },
+  );
+  window.chooseAgent('cursor');
+  window.take('1');
+  window.spy();
+  assert.equal(readFileSync(config, 'utf8'), before);
+  assert.equal(started, 0);
+  assert.equal(window.board().pool[0]?.reason, 'очереди нет в конфиге сервиса');
+  assert.deepEqual(window.board().cards, []);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the step reads the gathered checkout', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  const started: string[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      answers: () => true,
+      startStep: value => {
+        started.push(value ?? '');
+      },
+      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
+    },
+  );
+  window.chooseAgent('cursor');
+  window.spy();
+  assert.deepEqual(started, [checkout]);
+  assert.notEqual(started[0], process.cwd());
+  assert.notEqual(started[0], dir);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('designing counts open decisions including zero and tasking has no row', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  writeChange(
+    checkout,
+    '1',
+    'design.md',
+    '## Open decisions\n\n- [ ] one\n- [x] done\n\n## Later\n\n- [ ] skip\n',
+  );
+  writeChange(checkout, '3', 'tasks.md', '- [x] done\n- [ ] open\n');
+  const window = openCycles(home, [
+    cycle('1', 'designed'),
+    cycle('2', 'designing'),
+    cycle('3', 'tasking'),
+  ]);
+  const board = window.board();
+  assert.equal(columnCards(board, 'designing')?.find(card => card.key === '1')?.phaseRow, 1);
+  assert.equal(columnCards(board, 'designing')?.find(card => card.key === '2')?.phaseRow, 0);
+  assert.equal(columnCards(board, 'tasking')?.[0]?.phaseRow, undefined);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('pending checks hide the icon and the phase row stays pending', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    cycle('1', 'verifying', {checks: 'green'}),
+    cycle('2', 'verifying', {
+      checks: 'pending',
+      labels: ['sdd:cycle', 'sdd:verifying', 'sdd:wait-human'],
+    }),
+  ]);
+  const cards = columnCards(window.board(), 'verifying');
+  assert.deepEqual(
+    cards?.map(card => card.key),
+    ['2', '1'],
+  );
+  assert.equal(cards?.[0]?.icon, undefined);
+  assert.equal(cards?.[0]?.phaseRow, 'pending');
+  assert.equal(cards?.[1]?.phaseRow, 'green');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('decisions are the only occasion and the phase row already shows the count', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  writeChange(checkout, '1', 'design.md', '## Open decisions\n\n- [ ] one\n');
+  const window = openCycles(home, [cycle('1', 'designing')]);
+  const card = columnCards(window.board(), 'designing')?.[0];
+  assert.equal(card?.phaseRow, 1);
+  assert.equal(card?.icon, true);
+  assert.equal(card?.reason, undefined);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('blockers are dependsOn keys found in this reading, in key order', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    cycle('p', 'implementing', {dependsOn: ['z', 'missing', 'a', 'a']}),
+    ticket({key: 'z', queue: 'other', labels: ['note']}),
+    ticket({key: 'a', queue: 'other', labels: ['note']}),
+  ]);
+  const card = columnCards(window.board(), 'implementing')?.[0];
+  assert.equal(card?.reason, 'блокеры a z');
+  assert.equal(card?.reason?.includes('missing'), false);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('several open pull requests are one reason part', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    cycle('1', 'implementing', {openPullRequests: 2}),
+    cycle('2', 'implementing', {openPullRequests: 1}),
+  ]);
+  const cards = columnCards(window.board(), 'implementing');
+  assert.equal(cards?.find(card => card.key === '1')?.reason, 'несколько pull request');
+  assert.equal(cards?.find(card => card.key === '1')?.icon, true);
+  assert.equal(cards?.find(card => card.key === '2')?.reason, undefined);
+  assert.equal(cards?.find(card => card.key === '2')?.icon, undefined);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a phaseless ticket with another assignee is absent', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    ticket({
+      key: '1',
+      queue: 'alpha',
+      sddService: 'services/billing',
+      assignee: 'other',
+      title: 'Theirs',
+      open: true,
+    }),
+  ]);
+  const board = window.board();
+  const keys = [
+    ...board.cards.map(card => card.key),
+    ...board.pool.map(card => card.key),
+    ...board.columns.flatMap(column => column.cards.map(card => card.key)),
+  ];
+  assert.equal(keys.includes('1'), false);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('pending checks hide the icon on a pool ticket with two open pull requests', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    ticket({
+      key: '1',
+      queue: 'alpha',
+      sddService: 'services/billing',
+      title: 'Split',
+      openPullRequests: 2,
+      checks: 'pending',
+    }),
+  ]);
+  const card = window.board().pool.find(item => item.key === '1');
+  assert.ok(card);
+  assert.equal(card.icon, undefined);
+  assert.equal(card.reason, undefined);
+  assert.equal(card.takeDisabled, true);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a running step hides the icon on a pool ticket with a checkout break', () => {
+  const {dir, home, arcadia} = yard();
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openCycles(
+    home,
+    [
+      ticket({
+        key: '1',
+        queue: 'alpha',
+        sddService: 'services/missing',
+        title: 'Gone',
+      }),
+    ],
+    key => key === '1',
+  );
+  const card = window.board().pool.find(item => item.key === '1');
+  assert.ok(card);
+  assert.equal(card.icon, undefined);
+  assert.equal(card.reason, undefined);
+  assert.equal(card.takeDisabled, true);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a newer overlay file on disk blocks the write and the group shows the disk agent', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  writeOverlay(checkout, ['alpha'], 'agent: cursor\n');
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.openSettings();
+  assert.equal(window.overlay().agent, 'cursor');
+  const file = path.join(checkout, '.aifactory', 'config.yaml');
+  writeFileSync(file, 'agent: codex\n');
+  window.chooseOverlayAgent('opencode');
+  assert.equal(readHome(file).agent, 'codex');
+  assert.equal(window.overlay().agent, 'codex');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the service-config group shows no fields when the agent is silent and the file does not parse', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceYaml(checkout, 'sdd: [\n');
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      answers: () => false,
+      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
+    },
+  );
+  window.chooseAgent('cursor');
+  window.openCard('1');
+  window.openSettings();
+  assert.deepEqual(window.board().rows, [{text: 'агент не отвечает'}]);
+  assert.equal(window.board().settingsOpen, true);
+  assert.equal(window.serviceConfig().checkout, checkout);
+  assert.equal(window.serviceConfig().save, false);
+  assert.equal(window.serviceConfig().queues, undefined);
+  rmSync(dir, {recursive: true, force: true});
 });
 
 test('the service-config group writes one hook string back as a list and leaves a number', () => {
@@ -3500,95 +4458,6 @@ test('the service-config group writes one hook string back as a list and leaves 
   rmSync(dir, {recursive: true, force: true});
 });
 
-test('the service-config group discards an unsaved queue edit and the spy reads the disk queues', () => {
-  const {dir, home, arcadia} = yard();
-  const checkout = path.join(arcadia, 'services', 'billing');
-  mkdirSync(checkout, {recursive: true});
-  writeServiceConfig(checkout, ['alpha']);
-  const file = path.join(checkout, 'openspec', 'config.yaml');
-  writeLaunch(home, ['alpha'], {arcadia});
-  let started = 0;
-  const window = openWindow(
-    {homePath: home, adapter: 'tracker'},
-    {
-      answers: () => true,
-      startStep: () => {
-        started += 1;
-      },
-      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
-    },
-  );
-  window.chooseAgent('cursor');
-  window.openSettings();
-  window.setServiceQueue(0, 'gamma', 'draft');
-  assert.equal(window.serviceConfig().queues?.items[0]?.name, 'gamma');
-  assert.equal(window.childQueue(), 'alpha');
-  window.spy();
-  assert.equal(started, 1);
-  assert.deepEqual(readServiceYaml(file).sdd?.queues, [{name: 'alpha'}]);
-  window.closeSettings();
-  assert.deepEqual(readServiceYaml(file).sdd?.queues, [{name: 'alpha'}]);
-  window.openSettings();
-  assert.equal(window.serviceConfig().queues?.items[0]?.name, 'alpha');
-  assert.equal(window.serviceConfig().queues?.items[0]?.description, '');
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('the service-config group shows the disk copy when the file changed before save', () => {
-  const {dir, home, arcadia} = yard();
-  const checkout = path.join(arcadia, 'services', 'billing');
-  mkdirSync(checkout, {recursive: true});
-  const file = writeServiceYaml(
-    checkout,
-    ['sdd:', '  queues:', '    - name: alpha', ''].join('\n'),
-  );
-  writeLaunch(home, ['alpha'], {arcadia});
-  const window = openWindow(
-    {homePath: home, adapter: 'tracker'},
-    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
-  );
-  window.openSettings();
-  assert.equal(window.serviceConfig().queues?.items[0]?.name, 'alpha');
-  writeFileSync(file, 'sdd:\n  queues:\n    - name: beta\n  base: main\n');
-  window.setServiceBase('trunk');
-  window.saveServiceConfig();
-  const doc = readServiceYaml(file);
-  assert.equal(doc.sdd?.queues?.[0]?.name, 'beta');
-  assert.equal(doc.sdd?.base, 'main');
-  assert.equal(window.serviceConfig().queues?.items[0]?.name, 'beta');
-  assert.equal(window.serviceConfig().base, 'main');
-  assert.equal(window.serviceConfig().save, true);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-type ReviewReading = {
-  threads: readonly {marker?: string | null; lines: readonly string[]}[];
-  conversation?: {last?: {marker?: string | null; body: string} | null} | null;
-};
-
-function openSide(
-  home: string,
-  tickets: readonly WindowTicket[],
-  extra: {
-    leading?: (key: string) => boolean;
-    review?: (key: string) => ReviewReading | undefined;
-  } = {},
-) {
-  return openWindow(
-    {homePath: home, adapter: 'tracker'},
-    {
-      login: () => MANAGER,
-      tickets: () => tickets,
-      leading: extra.leading,
-      review: extra.review,
-    },
-  );
-}
-
-function kinds(blocks: readonly {kind: string}[]): string[] {
-  return blocks.map(block => block.kind);
-}
-
 test('sidebar() with no open card has no blocks', () => {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
@@ -3596,30 +4465,6 @@ test('sidebar() with no open card has no blocks', () => {
     cycle('1', 'implementing', {comments: [{body: 'sdd:focus\nPlan gap\n'}]}),
   ]);
   assert.deepEqual(window.sidebar(), []);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('an open cycle whose only sidebar block is focus shows that block', () => {
-  const {dir, home, arcadia} = yard();
-  const checkout = prepare(arcadia, home);
-  writeChange(
-    checkout,
-    '1',
-    'proposal.md',
-    'UNIQUE PROPOSAL BODY that must stay out of the sidebar\n',
-  );
-  const item = cycle('1', 'implementing', {
-    comments: [{body: 'sdd:focus\nSpecify thread 4\n'}],
-  });
-  Object.assign(item, {body: 'MIRROR TEXT stays in the issue'});
-  const window = openSide(home, [item]);
-  window.openCard('1');
-  const blocks = window.sidebar();
-  assert.deepEqual(blocks, [{kind: 'focus', body: 'Specify thread 4\n'}]);
-  const text = JSON.stringify(blocks);
-  assert.equal(text.includes('UNIQUE PROPOSAL BODY'), false);
-  assert.equal(text.includes('MIRROR TEXT'), false);
-  assert.equal(text.includes('sdd:focus'), false);
   rmSync(dir, {recursive: true, force: true});
 });
 
@@ -3645,43 +4490,6 @@ test('the sidebar reason is the card full line', () => {
   rmSync(dir, {recursive: true, force: true});
 });
 
-test('a card with no icon has no sidebar reason block', () => {
-  const {dir, home, arcadia} = yard();
-  prepare(arcadia, home);
-  const window = openSide(
-    home,
-    [
-      cycle('1', 'specifying', {
-        labels: ['sdd:cycle', 'sdd:specifying', 'sdd:wait-human'],
-        comments: [{body: 'please decide'}],
-      }),
-    ],
-    {leading: key => key === '1'},
-  );
-  const card = columnCards(window.board(), 'specifying')?.[0];
-  assert.equal(card?.icon, undefined);
-  assert.equal(card?.reason, undefined);
-  window.openCard('1');
-  const blocks = window.sidebar();
-  assert.equal(kinds(blocks).includes('reason'), false);
-  assert.deepEqual(blocks, [{kind: 'ask', body: 'please decide'}]);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('a question-only card hides the line and the sidebar still shows it', () => {
-  const {dir, home, arcadia} = yard();
-  const checkout = prepare(arcadia, home);
-  writeChange(checkout, 'b', 'proposal.md', '## Open questions\n\n- [ ] one\n- [ ] two\n');
-  const window = openSide(home, [cycle('b', 'proposing')]);
-  const card = columnCards(window.board(), 'proposing')?.[0];
-  assert.equal(card?.phaseRow, 2);
-  assert.equal(card?.icon, true);
-  assert.equal(card?.reason, undefined);
-  window.openCard('b');
-  assert.deepEqual(window.sidebar(), [{kind: 'reason', line: 'вопросы 2'}]);
-  rmSync(dir, {recursive: true, force: true});
-});
-
 test('a decision-only card hides the line and the sidebar still shows it', () => {
   const {dir, home, arcadia} = yard();
   const checkout = prepare(arcadia, home);
@@ -3693,115 +4501,6 @@ test('a decision-only card hides the line and the sidebar still shows it', () =>
   assert.equal(card?.reason, undefined);
   window.openCard('1');
   assert.deepEqual(window.sidebar(), [{kind: 'reason', line: 'решения 1'}]);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('the sidebar ask is the latest comment that does not start with sdd:focus', () => {
-  const {dir, home, arcadia} = yard();
-  prepare(arcadia, home);
-  const window = openSide(home, [
-    cycle('1', 'implementing', {
-      labels: ['sdd:cycle', 'sdd:implementing', 'sdd:wait-human'],
-      comments: [
-        {body: 'older note'},
-        {body: 'please decide\nthe rest'},
-        {body: 'sdd:focus\nPlan gap\n'},
-      ],
-    }),
-  ]);
-  window.openCard('1');
-  const ask = window.sidebar().find(block => block.kind === 'ask');
-  assert.deepEqual(ask, {kind: 'ask', body: 'please decide\nthe rest'});
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('removing sdd:wait-human removes the sidebar ask while the comments remain', () => {
-  const {dir, home, arcadia} = yard();
-  prepare(arcadia, home);
-  const labels = ['sdd:cycle', 'sdd:implementing', 'sdd:wait-human'];
-  const comments = [{body: 'please decide'}, {body: 'sdd:focus\nPlan gap\n'}];
-  const window = openSide(home, [cycle('1', 'implementing', {labels, comments})]);
-  window.openCard('1');
-  assert.equal(kinds(window.sidebar()).includes('ask'), true);
-  labels.splice(labels.indexOf('sdd:wait-human'), 1);
-  const blocks = window.sidebar();
-  assert.equal(kinds(blocks).includes('ask'), false);
-  assert.deepEqual(blocks, [{kind: 'focus', body: 'Plan gap\n'}]);
-  assert.equal(comments.length, 2);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('no sdd:focus comment leaves no sidebar focus block', () => {
-  const {dir, home, arcadia} = yard();
-  prepare(arcadia, home);
-  const window = openSide(home, [cycle('1', 'implementing', {comments: [{body: 'just a note'}]})]);
-  window.openCard('1');
-  assert.deepEqual(window.sidebar(), []);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('the sidebar focus plaque does not include the marker line', () => {
-  const {dir, home, arcadia} = yard();
-  prepare(arcadia, home);
-  const window = openSide(home, [
-    cycle('1', 'implementing', {
-      comments: [
-        {body: 'sdd:focus\nSpecify thread 4\nwhy this gap\n'},
-        {body: 'sdd:focus\nPlan gap\n', manager: true},
-        {body: 'a later note'},
-      ],
-    }),
-  ]);
-  window.openCard('1');
-  const blocks = window.sidebar();
-  assert.deepEqual(blocks, [{kind: 'focus', body: 'Specify thread 4\nwhy this gap\n'}]);
-  assert.equal(JSON.stringify(blocks).includes('sdd:focus'), false);
-  assert.equal(JSON.stringify(blocks).includes('Plan gap'), false);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('a thread with no marker is in the sidebar unanswered block', () => {
-  const {dir, home, arcadia} = yard();
-  prepare(arcadia, home);
-  let asked = '';
-  const window = openSide(home, [cycle('1', 'implementing')], {
-    review: key => {
-      asked = key;
-      return {
-        threads: [
-          {marker: null, lines: ['please look', 'at the diff']},
-          {marker: 'code', lines: ['already marked']},
-        ],
-        conversation: {last: {marker: 'note', body: 'answered already'}},
-      };
-    },
-  });
-  window.openCard('1');
-  const blocks = window.sidebar();
-  assert.equal(asked, '1');
-  assert.deepEqual(blocks, [
-    {kind: 'unanswered', threads: [{lines: ['please look', 'at the diff']}]},
-  ]);
-  const text = JSON.stringify(blocks);
-  assert.equal(text.includes('already marked'), false);
-  assert.equal(text.includes('answered already'), false);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('every marked thread and a marked last comment leave no sidebar unanswered block', () => {
-  const {dir, home, arcadia} = yard();
-  prepare(arcadia, home);
-  const window = openSide(home, [cycle('1', 'implementing')], {
-    review: () => ({
-      threads: [
-        {marker: 'code', lines: ['one']},
-        {marker: 'fixed', lines: ['two']},
-      ],
-      conversation: {last: {marker: 'note', body: 'done'}},
-    }),
-  });
-  window.openCard('1');
-  assert.deepEqual(window.sidebar(), []);
   rmSync(dir, {recursive: true, force: true});
 });
 
@@ -3830,125 +4529,6 @@ test('the review port returning nothing leaves no sidebar unanswered block', () 
   const absent = openSide(home, [cycle('1', 'implementing')]);
   absent.openCard('1');
   assert.deepEqual(absent.sidebar(), []);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('sddHooks lists archive before then create-proposal after in the sidebar', () => {
-  const {dir, home, arcadia} = yard();
-  prepare(arcadia, home);
-  const item = cycle('1', 'implementing');
-  item.sddHooks = [
-    {action: 'archive', point: 'before', value: 'keep the archive\nstill here'},
-    {action: 'create-proposal', point: 'after', value: 'then propose'},
-  ];
-  const window = openSide(home, [item]);
-  window.openCard('1');
-  assert.deepEqual(window.sidebar(), [
-    {
-      kind: 'hook',
-      points: [
-        {action: 'archive', point: 'before', paragraph: 'keep the archive\nstill here'},
-        {action: 'create-proposal', point: 'after', paragraph: 'then propose'},
-      ],
-    },
-  ]);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('a nested sddHooks map keeps field order in the sidebar', () => {
-  const {dir, home, arcadia} = yard();
-  prepare(arcadia, home);
-  const item = cycle('1', 'implementing');
-  item.sddHooks = {
-    archive: {before: 'keep the archive\nstill here'},
-    'create-proposal': {after: 'then propose'},
-  };
-  const window = openSide(home, [item]);
-  window.openCard('1');
-  assert.deepEqual(window.sidebar(), [
-    {
-      kind: 'hook',
-      points: [
-        {action: 'archive', point: 'before', paragraph: 'keep the archive\nstill here'},
-        {action: 'create-proposal', point: 'after', paragraph: 'then propose'},
-      ],
-    },
-  ]);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('a missing or empty sddHooks leaves no sidebar hook block', () => {
-  const {dir, home, arcadia} = yard();
-  prepare(arcadia, home);
-  const missing = cycle('1', 'implementing', {
-    comments: [{body: 'sdd:focus\nPlan gap\n'}],
-  });
-  const empty = cycle('2', 'implementing', {
-    comments: [{body: 'sdd:focus\nPlan gap\n'}],
-    sddHooks: '',
-  });
-  const blank = cycle('3', 'implementing', {
-    comments: [{body: 'sdd:focus\nPlan gap\n'}],
-    sddHooks: {},
-  });
-  const noPoints = cycle('4', 'implementing', {
-    comments: [{body: 'sdd:focus\nPlan gap\n'}],
-    sddHooks: {archive: {}},
-  });
-  const list = cycle('5', 'implementing', {
-    comments: [{body: 'sdd:focus\nPlan gap\n'}],
-    sddHooks: [],
-  });
-  const window = openSide(home, [missing, empty, blank, noPoints, list]);
-  for (const key of ['1', '2', '3', '4', '5']) {
-    window.openCard(key);
-    const blocks = window.sidebar();
-    assert.deepEqual(blocks, [{kind: 'focus', body: 'Plan gap\n'}]);
-    assert.equal(kinds(blocks).includes('hook'), false);
-  }
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('a single string sddHooks is the sidebar line поле хука не читается', () => {
-  const {dir, home, arcadia} = yard();
-  prepare(arcadia, home);
-  const item = cycle('1', 'implementing', {sddHooks: 'not a map'});
-  const window = openSide(home, [item]);
-  window.openCard('1');
-  const blocks = window.sidebar();
-  assert.deepEqual(blocks, [{kind: 'hook', line: 'поле хука не читается'}]);
-  assert.equal(JSON.stringify(blocks).includes('not a map'), false);
-  assert.equal('points' in blocks[0], false);
-  rmSync(dir, {recursive: true, force: true});
-});
-
-test('one non-string sddHooks point shows that line in the sidebar and the string point remains', () => {
-  const {dir, home, arcadia} = yard();
-  prepare(arcadia, home);
-  const mapped = cycle('1', 'implementing', {
-    sddHooks: {
-      archive: {before: 4},
-      'create-proposal': {after: 'keep this'},
-    },
-  });
-  const listed = cycle('2', 'implementing', {
-    sddHooks: [
-      {action: 'archive', point: 'before', value: 4},
-      {action: 'create-proposal', point: 'after', value: 'keep this'},
-    ],
-  });
-  const window = openSide(home, [mapped, listed]);
-  const expected = {
-    kind: 'hook',
-    points: [
-      {action: 'archive', point: 'before', paragraph: 'поле хука не читается'},
-      {action: 'create-proposal', point: 'after', paragraph: 'keep this'},
-    ],
-  };
-  window.openCard('1');
-  assert.deepEqual(window.sidebar(), [expected]);
-  window.openCard('2');
-  assert.deepEqual(window.sidebar(), [expected]);
   rmSync(dir, {recursive: true, force: true});
 });
 

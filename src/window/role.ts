@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import {parse} from 'yaml';
 
+import {staysInside} from './inside.ts';
 import {
   ROLE_OUTCOMES,
   isDoc,
@@ -38,13 +39,10 @@ export function rolesFrom(value: unknown): RoleRecord[] {
       continue;
     }
     const role: RoleRecord = {name: item.name, outcome: item.outcome, text: item.text};
-    if (item.outcome === 'ticket-fields') {
-      const labels = fieldLabels(item.labels);
-      if (labels.length > 0) {
-        role.labels = labels;
-      }
+    if (Array.isArray(item.labels)) {
+      role.labels = stringList(item.labels);
     }
-    out.push(role);
+    out.push(storedRole(role));
   }
   return out;
 }
@@ -57,7 +55,7 @@ export function shelfOf(roles: readonly RoleRecord[]): {name: string; outcome: R
 /** The home file shape. A `ticket-fields` role keeps `labels` only when it names some. */
 export function storedRoles(roles: readonly RoleRecord[]): Doc[] {
   return roles.map(role => {
-    const next = kept(role);
+    const next = storedRole(role);
     const stored: Doc = {name: next.name, outcome: next.outcome, text: next.text};
     if (next.labels) {
       stored.labels = [...next.labels];
@@ -66,7 +64,8 @@ export function storedRoles(roles: readonly RoleRecord[]): Doc[] {
   });
 }
 
-function kept(role: RoleRecord): RoleRecord {
+/** A stored role. Labels stay only on `ticket-fields`, and only when that list names some. */
+function storedRole(role: RoleRecord): RoleRecord {
   const stored: RoleRecord = {name: role.name, outcome: role.outcome, text: role.text};
   if (role.outcome === 'ticket-fields') {
     const labels = fieldLabels(role.labels);
@@ -89,7 +88,7 @@ export function openRoleEditor(read: () => unknown, write: (roles: readonly Role
       if (role.name === '' || !isOutcome(role.outcome)) {
         return;
       }
-      write([...list(), kept(role)]);
+      write([...list(), storedRole(role)]);
     },
     rename(name: string, nextName: string): void {
       if (nextName === '') {
@@ -116,7 +115,7 @@ export function openRoleEditor(read: () => unknown, write: (roles: readonly Role
       if (outcome !== 'ticket-fields') {
         delete role.labels;
       }
-      write(roles.map(kept));
+      write(roles.map(storedRole));
     },
     setText(name: string, text: string): void {
       const roles = list();
@@ -174,11 +173,6 @@ export function readsAsPointMap(text: string): boolean {
     }
   }
   return true;
-}
-
-function staysInside(root: string, target: string): boolean {
-  const rel = path.relative(root, target);
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 }
 
 /** The file's text, or the absent line. This read does not create the file. */

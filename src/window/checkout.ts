@@ -6,6 +6,7 @@ import {parse} from 'yaml';
 
 import {queueOf} from '../machine/queues.ts';
 
+import {staysInside} from './inside.ts';
 import {
   isDoc,
   stringList,
@@ -42,11 +43,6 @@ export function rootText(doc: Doc, kind: 'arcadia' | 'github'): string {
 
 function hasDotDot(service: string): boolean {
   return service.split(/[/\\]/).includes('..');
-}
-
-function staysInside(root: string, target: string): boolean {
-  const rel = path.relative(root, target);
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 }
 
 /** A service path that stays under `root`. `..` is the missing-catalog break. */

@@ -82,7 +82,7 @@ export type WindowOutside = {
   leading?: (key: string) => boolean;
   /** Write `sddService`. The next read sees it. */
   writeService?: (key: string, service: string) => void;
-  /** Labels a `ticket-fields` role adds. The window does not call a tracker client. */
+  /** Labels a `ticket-fields` role adds. The window calls this port. */
   editLabels?: (key: string, add: readonly string[]) => void;
   /**
    * Replace `sddHooks` with the role text.

@@ -232,12 +232,38 @@ function cycleField(values: unknown): unknown | undefined {
   try {
     const parsed = parse(field.value) as unknown;
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed;
+      return nonEmptyPoints(parsed as Record<string, unknown>);
     }
   } catch {
     // The text is not a map. The port keeps it so a reader can say it does not parse.
   }
   return field.value;
+}
+
+function isDoc(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** A string of spaces is not a point. An action with none is absent. */
+function nonEmptyPoints(value: Record<string, unknown>): Record<string, unknown> {
+  const map: Record<string, unknown> = {};
+  for (const [action, points] of Object.entries(value)) {
+    if (!isDoc(points)) {
+      map[action] = points;
+      continue;
+    }
+    const kept: Record<string, unknown> = {};
+    for (const [point, text] of Object.entries(points)) {
+      if (typeof text === 'string' && text.trim() === '') {
+        continue;
+      }
+      kept[point] = text;
+    }
+    if (Object.keys(kept).length > 0) {
+      map[action] = kept;
+    }
+  }
+  return map;
 }
 
 export type GitHubAdapters = {

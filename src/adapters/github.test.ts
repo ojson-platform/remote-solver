@@ -186,8 +186,8 @@ test('an organization issue field named sddHooks is the cycle field', async () =
     },
   });
   const record = await tracker.issue('7');
-  assert.deepEqual(record.sddHooks, {archive: {before: 'keep', after: '   '}});
-  assert.deepEqual((await tracker.listOpen())[0]?.sddHooks, {archive: {before: 'keep', after: '   '}});
+  assert.deepEqual(record.sddHooks, {archive: {before: 'keep'}});
+  assert.deepEqual((await tracker.listOpen())[0]?.sddHooks, {archive: {before: 'keep'}});
   assert.equal(
     calls.some(call => call.includes('repos/ojson-platform/remote-solver/issues/7/issue-field-values')),
     true,
@@ -250,6 +250,25 @@ test('a missing or unreadable organization field does not create sddHooks', asyn
     },
   });
   assert.equal((await prose.tracker.issue('9')).sddHooks, 'not: [a map');
+
+  const spaces = githubAdapters({
+    run: async args => {
+      if (args.join(' ').includes('issue-field-values')) {
+        return JSON.stringify([
+          {issue_field_name: 'sddHooks', data_type: 'text', value: 'archive:\n  after: "   "\n'},
+        ]);
+      }
+      return JSON.stringify({
+        number: 10,
+        title: 't',
+        body: '',
+        state: 'OPEN',
+        labels: [],
+        assignees: [],
+      });
+    },
+  });
+  assert.deepEqual((await spaces.tracker.issue('10')).sddHooks, {});
 });
 
 test('a focus comment stays sdd:focus on the first line', async () => {

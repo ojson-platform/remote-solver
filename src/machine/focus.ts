@@ -36,9 +36,6 @@ const MIRROR: Record<string, Exclude<LayerName, 'Change'>> = {
   code: 'Code',
 };
 
-const PHASE_WORD =
-  /^(proposing|specifying|designing|tasking|implementing|verifying|accepting)\b\s*/;
-
 type Gap = {token: string; why: string};
 
 type StepDeps = {
@@ -56,6 +53,70 @@ function signalOf(outcome: {commits: number; signal?: Signal | null}): Signal | 
   }
   if (outcome.signal === 'Wait' || outcome.signal === 'Hand-off') {
     return outcome.signal;
+  }
+  return null;
+}
+
+/** What a step run had already left on the issue and the pull request. */
+export type RunMarks = {
+  waiting: boolean;
+  comments: number;
+  threads: readonly string[];
+  spoken: readonly string[];
+};
+
+function handedOff(body: string): boolean {
+  const name = markerOf(body);
+  return name !== null && name !== 'note' && name !== 'fixed' && name !== 'begin';
+}
+
+/** Labels, comments, and layer markers already on the cycle. */
+export async function runMarks(
+  key: string,
+  deps: {
+    tracker: Pick<Tracker, 'labels' | 'comments'>;
+    review: Pick<Review, 'pulls' | 'threadList' | 'comments'>;
+  },
+): Promise<RunMarks> {
+  const labels = await deps.tracker.labels(key);
+  const comments = await deps.tracker.comments(key);
+  const open = (await deps.review.pulls(key)).filter(pull => pull.state === 'OPEN');
+  const threads: string[] = [];
+  const spoken: string[] = [];
+  if (open.length === 1 && open[0]) {
+    for (const thread of await deps.review.threadList(open[0].id)) {
+      if (!thread.resolved && handedOff(thread.body)) {
+        threads.push(thread.id);
+      }
+    }
+    for (const comment of await deps.review.comments(open[0].id)) {
+      if (handedOff(comment.body)) {
+        spoken.push(comment.body);
+      }
+    }
+  }
+  return {waiting: labels.includes('sdd:wait-human'), comments: comments.length, threads, spoken};
+}
+
+/**
+ * A commit is Publish. A new layer marker is Hand-off. A wait label gained in
+ * the run, or a new comment while that label is on, is Wait. Nothing new is no signal.
+ */
+export function observedSignal(commits: number, before: RunMarks, after: RunMarks): Signal | null {
+  if (commits > 0) {
+    return 'Publish';
+  }
+  const knownThreads = new Set(before.threads);
+  const knownSpoken = new Set(before.spoken);
+  const handed =
+    after.threads.some(id => !knownThreads.has(id)) ||
+    after.spoken.some(body => !knownSpoken.has(body));
+  if (handed) {
+    return 'Hand-off';
+  }
+  const waited = after.waiting && (!before.waiting || after.comments > before.comments);
+  if (waited) {
+    return 'Wait';
   }
   return null;
 }
@@ -80,7 +141,7 @@ function latestFocus(comments: readonly FocusComment[]): string | undefined {
 }
 
 function isDiffLine(line: string): boolean {
-  return /^(diff |index |@@ |\+\+\+ |--- )/.test(line) || /^[+-]/.test(line);
+  return /^(diff |index |@@ |\+\+\+ |--- )/.test(line) || /^[+-]\S/.test(line);
 }
 
 function cleanProse(text: string): string {
@@ -91,7 +152,6 @@ function cleanProse(text: string): string {
     .map(line =>
       line
         .replace(/\bcoverage\s*[:=]?\s*\d+(?:\s*\/\s*\d+)?/gi, '')
-        .replace(/\b\d+\s*\/\s*\d+\b/g, '')
         .replace(/\s+/g, ' ')
         .trim(),
     )
@@ -101,7 +161,7 @@ function cleanProse(text: string): string {
 
 function proseFromBody(body: string): string {
   const arrow = body.indexOf('→');
-  const tail = (arrow === -1 ? body : body.slice(arrow + 1)).trim().replace(PHASE_WORD, '');
+  const tail = (arrow === -1 ? body : body.slice(arrow + 1)).trim();
   return cleanProse(tail);
 }
 

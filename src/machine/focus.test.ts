@@ -8,7 +8,7 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import type {FileSource, Review, Tracker, Vcs} from './port.ts';
 import {changeDir} from './naming.ts';
-import {endStep} from './focus.ts';
+import {endStep, observedSignal, type RunMarks} from './focus.ts';
 import {openWindow, type WindowComment} from '../window/window.ts';
 
 const KEY = '1';
@@ -212,7 +212,7 @@ async function proveASpecMarkerLandsOnSpecify(): Promise<void> {
       'sdd:focus',
       'Change solid',
       'Specify thread PRRT_4',
-      'the remark asks for a scenario',
+      'specifying the remark asks for a scenario',
       '',
     ].join('\n'),
   ]);
@@ -259,13 +259,14 @@ async function proveTheCommentHasNoCoverageCount(): Promise<void> {
     threads: [
       {
         id: 'PRRT_1',
-        body: 'sdd:layer=spec → specifying the scenario is missing\ncoverage 12/40\ndiff --git a/src/a.ts\n+added',
+        body: 'sdd:layer=spec → specifying the scenario is missing\nretry 1/3\ncoverage 12/40\ndiff --git a/src/a.ts\n+added',
       },
     ],
   });
   assert.equal(posted.length, 1);
   const body = posted[0] ?? '';
   assert.equal(body.includes('the scenario is missing'), true);
+  assert.equal(body.includes('retry 1/3'), true);
   assert.equal(body.includes('12/40'), false);
   assert.equal(body.includes('DIFF_BODY_UNIQUE'), false);
   assert.equal(body.includes('diff --git'), false);
@@ -293,15 +294,15 @@ test('a marker lands on its mirror layer, and Plan and Tasks with no thread are 
       'sdd:focus',
       'Change solid',
       'Plan thread P1',
-      'the outcome line is wrong',
+      'proposing the outcome line is wrong',
       'Specify solid',
       'Design thread D1; boundary preset',
-      'the boundary is missing',
+      'designing the boundary is missing',
       'the boundary names no command',
       'Tasks thread T1',
-      'the slice is too big',
+      'tasking the slice is too big',
       'Code thread C1',
-      'the test fails',
+      'implementing the test fails',
       '',
     ].join('\n'),
   ]);
@@ -319,6 +320,30 @@ test('a review place names the file and the line on Code', async () => {
   assert.deepEqual(posted, [
     ['sdd:focus', 'Change solid', 'Code src/a.ts:4', 'the check failed', ''].join('\n'),
   ]);
+});
+
+test('a commit is Publish, a new marker is Hand-off, a new wait is Wait, and a still cycle is no signal', () => {
+  const quiet: RunMarks = {waiting: false, comments: 0, threads: [], spoken: []};
+  assert.equal(observedSignal(1, quiet, quiet), 'Publish');
+  assert.equal(observedSignal(0, quiet, quiet), null);
+  assert.equal(observedSignal(0, quiet, {...quiet, waiting: true, comments: 1}), 'Wait');
+  assert.equal(
+    observedSignal(0, {...quiet, waiting: true, comments: 1}, {...quiet, waiting: true, comments: 1}),
+    null,
+  );
+  assert.equal(observedSignal(0, quiet, {...quiet, threads: ['T1']}), 'Hand-off');
+  assert.equal(
+    observedSignal(0, quiet, {...quiet, spoken: ['sdd:layer=code → implementing the test fails']}),
+    'Hand-off',
+  );
+  assert.equal(
+    observedSignal(
+      0,
+      {...quiet, spoken: ['sdd:layer=spec → kept']},
+      {...quiet, spoken: ['sdd:layer=spec → kept']},
+    ),
+    null,
+  );
 });
 
 spec('focus', () => {

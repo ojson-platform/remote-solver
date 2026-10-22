@@ -153,6 +153,35 @@ test('setPhase keeps a single phase label and refuses a gate label', async () =>
   await assert.rejects(setPhase('7', 'proposed', tracker), /gate label sdd:proposed/);
 });
 
+function viewedIssue(number: number, login?: string): string {
+  return JSON.stringify({
+    number,
+    title: 't',
+    body: '',
+    state: 'OPEN',
+    labels: [],
+    assignees: login ? [{login}] : [],
+  });
+}
+
+function issueRead(number: number, fields: string | Error, login?: string) {
+  return async (args: string[]) => {
+    if (args.join(' ').includes('issue-field-values')) {
+      if (fields instanceof Error) {
+        throw fields;
+      }
+      return fields;
+    }
+    if (args[0] === 'issue' && args[1] === 'view') {
+      return viewedIssue(number, login);
+    }
+    if (args[0] === 'issue' && args[1] === 'list') {
+      return `[${viewedIssue(number, login)}]`;
+    }
+    throw new Error(args.join(' '));
+  };
+}
+
 test('an organization issue field named sddHooks is the cycle field', async () => {
   const calls: string[] = [];
   const yaml = 'archive:\n  before: keep\n  after: "   "\n';
@@ -168,19 +197,10 @@ test('an organization issue field named sddHooks is the cycle field', async () =
         ]);
       }
       if (args[0] === 'issue' && args[1] === 'view') {
-        return JSON.stringify({
-          number: 7,
-          title: 't',
-          body: '',
-          state: 'OPEN',
-          labels: [],
-          assignees: [{login: 'me'}],
-        });
+        return viewedIssue(7, 'me');
       }
       if (args[0] === 'issue' && args[1] === 'list') {
-        return JSON.stringify([
-          {number: 7, title: 't', body: '', state: 'OPEN', labels: [], assignees: [{login: 'me'}]},
-        ]);
+        return `[${viewedIssue(7, 'me')}]`;
       }
       throw new Error(joined);
     },
@@ -198,77 +218,34 @@ test('an organization issue field named sddHooks is the cycle field', async () =
   );
 });
 
-test('a missing or unreadable organization field does not create sddHooks', async () => {
-  const missing = githubAdapters({
-    run: async args => {
-      if (args.join(' ').includes('issue-field-values')) {
-        throw new Error('404');
-      }
-      return JSON.stringify({
-        number: 7,
-        title: 't',
-        body: '',
-        state: 'OPEN',
-        labels: [],
-        assignees: [],
-      });
-    },
-  });
-  const absent = await missing.tracker.issue('7');
+test('a failed organization field read leaves sddHooks absent', async () => {
+  const {tracker} = githubAdapters({run: issueRead(7, new Error('404'))});
+  const absent = await tracker.issue('7');
   assert.equal('sddHooks' in absent, false);
+});
 
-  const blank = githubAdapters({
-    run: async args => {
-      if (args.join(' ').includes('issue-field-values')) {
-        return JSON.stringify([{issue_field_name: 'sddHooks', data_type: 'text', value: '   '}]);
-      }
-      return JSON.stringify({
-        number: 8,
-        title: 't',
-        body: '',
-        state: 'OPEN',
-        labels: [],
-        assignees: [],
-      });
-    },
+test('blank organization text is an empty cycle field', async () => {
+  const {tracker} = githubAdapters({
+    run: issueRead(8, JSON.stringify([{issue_field_name: 'sddHooks', data_type: 'text', value: '   '}])),
   });
-  assert.equal((await blank.tracker.issue('8')).sddHooks, '');
+  assert.equal((await tracker.issue('8')).sddHooks, '');
+});
 
-  const prose = githubAdapters({
-    run: async args => {
-      if (args.join(' ').includes('issue-field-values')) {
-        return JSON.stringify([{issue_field_name: 'sddHooks', data_type: 'text', value: 'not: [a map'}]);
-      }
-      return JSON.stringify({
-        number: 9,
-        title: 't',
-        body: '',
-        state: 'OPEN',
-        labels: [],
-        assignees: [],
-      });
-    },
+test('organization text that is not a map stays text', async () => {
+  const {tracker} = githubAdapters({
+    run: issueRead(9, JSON.stringify([{issue_field_name: 'sddHooks', data_type: 'text', value: 'not: [a map'}])),
   });
-  assert.equal((await prose.tracker.issue('9')).sddHooks, 'not: [a map');
+  assert.equal((await tracker.issue('9')).sddHooks, 'not: [a map');
+});
 
-  const spaces = githubAdapters({
-    run: async args => {
-      if (args.join(' ').includes('issue-field-values')) {
-        return JSON.stringify([
-          {issue_field_name: 'sddHooks', data_type: 'text', value: 'archive:\n  after: "   "\n'},
-        ]);
-      }
-      return JSON.stringify({
-        number: 10,
-        title: 't',
-        body: '',
-        state: 'OPEN',
-        labels: [],
-        assignees: [],
-      });
-    },
+test('a cycle field of only spaces has no points', async () => {
+  const {tracker} = githubAdapters({
+    run: issueRead(
+      10,
+      JSON.stringify([{issue_field_name: 'sddHooks', data_type: 'text', value: 'archive:\n  after: "   "\n'}]),
+    ),
   });
-  assert.deepEqual((await spaces.tracker.issue('10')).sddHooks, {});
+  assert.deepEqual((await tracker.issue('10')).sddHooks, {});
 });
 
 test('a focus comment stays sdd:focus on the first line', async () => {

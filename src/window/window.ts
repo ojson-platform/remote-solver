@@ -1,1794 +1,139 @@
-import {existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync} from 'node:fs';
-import {homedir} from 'node:os';
-import path from 'node:path';
-
-import {parse, stringify} from 'yaml';
-
-import {HEADINGS} from '../machine/change.ts';
-import {changeDir} from '../machine/naming.ts';
-import {GATE_CLOSES, GATE_PHASES, phaseOf, type Phase} from '../machine/phase.ts';
-import {queueOf} from '../machine/queues.ts';
-
-const NEEDS_AGENT = 'фабрике ещё нужен агент';
-const SILENT_AGENT = 'агент не отвечает';
-
-const FACTORY_AGENTS = ['cursor', 'codex', 'claude-code', 'opencode'] as const;
-
-type SkillMode = 'mechanical' | 'judgment';
-
-type Pair = {
-  mechanical: string;
-  judgment: string;
-  effort?: {mechanical: string; judgment: string};
-  /** Codex has a speed field. The default is to omit the key. */
-  speed: boolean;
-};
-
-/** Known pairs. Choosing an agent does not read a live catalog. */
-const PAIRS: Record<string, Pair> = {
-  cursor: {
-    mechanical: 'composer-2.5-fast',
-    judgment: 'grok-4.7-high-fast',
-    speed: false,
-  },
-  codex: {
-    mechanical: 'gpt-6-luna',
-    judgment: 'gpt-6.1-sol',
-    effort: {mechanical: 'low', judgment: 'high'},
-    speed: true,
-  },
-  'claude-code': {
-    mechanical: 'sonnet',
-    judgment: 'opus',
-    effort: {mechanical: 'medium', judgment: 'medium'},
-    speed: false,
-  },
-  opencode: {
-    mechanical: 'moonshotai/kimi-k2.7-code',
-    judgment: 'moonshotai/kimi-k3',
-    speed: false,
-  },
-};
-
-const AGENT_KEYS = new Set(['agent', 'models', 'effort', 'speed']);
-const FORBIDDEN = new Set(['person', 'phase', 'focus', 'metrics']);
-
-type Doc = Record<string, unknown>;
-
-export type AdapterKind = 'tracker' | 'github';
-
-export type Launch = {
-  /** Path the launch passed. No path means no home file is written. */
-  homePath?: string;
-  /** Agents this window can offer. An empty list writes no home file. */
-  agents?: readonly string[];
-  /** One running ai-factory. Not stored in the home file. */
-  adapter?: AdapterKind;
-};
-
-export type WindowTicket = {
-  key: string;
-  title: string;
-  labels: readonly string[];
-  /** Tracker port field. A label of another queue does not replace it. */
-  queue?: string;
-  /** GitHub watch-list key, `owner/repo`. */
-  repo?: string;
-  /** Absent when the field is missing. An empty string is a present value. */
-  sddService?: string;
-  assignee?: string;
-  /** Absent when the adapter did not say. Closed is `false`. */
-  open?: boolean;
-  /** The merge is still ahead. The window does not discover this from a host. */
-  mergeAhead?: boolean;
-  checks?: 'green' | 'red' | 'pending' | 'none';
-  parent?: string;
-  dependsOn?: readonly string[];
-  openPullRequests?: number;
-  comments?: readonly WindowComment[];
-  /**
-   * Cycle hook field the adapter already returned.
-   * A map of action to point, an ordered list of `{action, point, value}`, or another value.
-   */
-  sddHooks?: unknown;
-};
-
-export type WindowComment = {
-  body: string;
-  /** A manager comment is not an `sdd:focus` record. */
-  manager?: boolean;
-};
-
-export type WindowOutside = {
-  /** Whether a recorded agent id still answers. The window asks; it does not start that agent. */
-  answers?: (agentId: string) => boolean;
-  /** Live model catalog. Choosing an agent does not read it. */
-  catalog?: (agentId: string) => {mechanical: string; judgment: string};
-  /** Assignee write. Take calls this with the ticket key and `login()`. */
-  writeAssignee?: (key: string, login: string) => void;
-  /** Phase write. The window's spy calls this with `proposing`. */
-  writePhase?: (key: string, phase: string) => void;
-  /** A step the window's spy would start, in the gathered checkout. The models are the merged pair from that call. */
-  startStep?: (checkout?: string, models?: {mechanical: string; judgment: string}) => void;
-  /** Open tickets this adapter can see. The window filters them by the watch list. */
-  tickets?: () => readonly WindowTicket[];
-  /** Login of this process. Not a Tracker or GitHub call. */
-  login?: () => string;
-  /** True while an agent leads a step for this key. */
-  leading?: (key: string) => boolean;
-  /** Write `sddService`. The next read sees it. */
-  writeService?: (key: string, service: string) => void;
-  /** Threads and the conversation for this key. The window does not call a review host. */
-  review?: (key: string) => WindowReview | undefined;
-};
-
-/** Threads and the last conversation comment the review port already returned. */
-export type WindowReview = {
-  threads: readonly {marker?: string | null; lines: readonly string[]}[];
-  conversation?: {last?: {marker?: string | null; body: string} | null} | null;
-};
-
-export type SidebarHookPoint = {action: string; point: string; paragraph: string};
-
-/** One block the open ticket has. Absent blocks are omitted. */
-export type SidebarBlock =
-  | {kind: 'reason'; line: string}
-  | {kind: 'ask'; body: string}
-  | {kind: 'focus'; body: string}
-  | {
-      kind: 'unanswered';
-      threads?: readonly {lines: readonly string[]}[];
-      comment?: string;
-    }
-  | {kind: 'hook'; line: string}
-  | {kind: 'hook'; points: readonly SidebarHookPoint[]};
-
-export type ModelField = {value: string; needsValue: boolean};
-
-export type SettingsState = {
-  open: boolean;
-  agent: string;
-  models: {mechanical: ModelField; judgment: ModelField};
-  effort?: {mechanical: string; judgment: string};
-  speed?: {mechanical: string; judgment: string};
-  watch: string[];
-  roots: {arcadia: string; github: string};
-};
-
-/** The overlay group. It shows `.aifactory/config.yaml` of the chosen checkout. */
-export type OverlayGroup = {
-  file: '.aifactory/config.yaml';
-  checkout: string;
-  agent: string;
-  models: {mechanical: ModelField; judgment: ModelField};
-  effort?: {mechanical: string; judgment: string};
-  speed?: {mechanical: string; judgment: string};
-  watch: string[];
-};
-
-export type ServiceQueueField = {
-  name: string;
-  description: string;
-  warning?: true;
-};
-
-export type ServiceIgnoreField = {
-  value: string;
-  warning?: true;
-  removeOnly?: true;
-};
-
-export type ServiceHookField = {
-  action: string;
-  point: string;
-  values: string[];
-};
-
-/** The service-config group. It shows `openspec/config.yaml` of the chosen checkout. */
-export type ServiceConfigGroup = {
-  file: 'openspec/config.yaml';
-  checkout: string;
-  save: boolean;
-  queues?: {items: ServiceQueueField[]; warning?: true};
-  base?: string;
-  branchScope?: string;
-  ignoreComments?: ServiceIgnoreField[];
-  hooks?: ServiceHookField[];
-};
-
-export type CardState = {
-  key: string;
-  reason: string;
-  takeDisabled: boolean;
-  choices: string[];
-  /** Gathered checkout when the path stays inside the root. */
-  checkout?: string;
-  /** Tracker port field, or the GitHub label `queueOf` found. */
-  queue: string;
-};
-
-/** A pool card. `take` is the same gesture as dragging the card onto the board. */
-export type PoolCard = {
-  key: string;
-  title: string;
-  take: true;
-  takeDisabled?: true;
-  icon?: true;
-  reason?: string;
-  /** Gathered checkout copied from the checkout card. */
-  checkout?: string;
-  /** Tracker port field, or the GitHub label `queueOf` found. */
-  queue: string;
-  /** Service choices copied from the checkout card. */
-  choices: string[];
-};
-
-const COLUMN_NAMES = [
-  'proposing',
-  'specifying',
-  'designing',
-  'tasking',
-  'implementing',
-  'verifying',
-  'accepting',
-] as const;
-
-export type ColumnName = (typeof COLUMN_NAMES)[number];
-
-export type PhaseRow = number | {done: number; open: number} | 'green' | 'red' | 'pending';
-
-/** A column card. `icon` is present or absent: one mark, no letters. */
-export type CycleCard = {
-  key: string;
-  title: string;
-  icon?: true;
-  reason?: string;
-  phaseRow?: PhaseRow;
-  layers?: string;
-};
-
-export type BoardState = {
-  visible: true;
-  rows: {text: string}[];
-  settingsOpen: boolean;
-  stepsStart: boolean;
-  takeDisabled: boolean;
-  cards: CardState[];
-  watch: string[];
-  pool: PoolCard[];
-  columns: {name: ColumnName; cards: CycleCard[]}[];
-};
-
-const CATALOG_MISSING = 'каталога нет';
-const SERVICE_UNNAMED = 'не назван сервис';
-const CONFIG_MISSING = 'конфига сервиса нет';
-const CONFIG_UNREADABLE = 'конфиг сервиса не читается';
-const QUEUE_MISSING = 'очереди нет в конфиге сервиса';
-
-function isDoc(value: unknown): value is Doc {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function stringList(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  const out: string[] = [];
-  for (const item of value) {
-    if (typeof item === 'string' && item !== '' && !out.includes(item)) {
-      out.push(item);
-    }
-  }
-  return out;
-}
-
-function expandRoot(value: string): string {
-  if (value === '~') {
-    return homedir();
-  }
-  if (value.startsWith('~/')) {
-    return path.join(homedir(), value.slice(2));
-  }
-  return value;
-}
-
-function rootText(doc: Doc, kind: 'arcadia' | 'github'): string {
-  const roots = isDoc(doc.roots) ? doc.roots : {};
-  const value = roots[kind];
-  if (typeof value !== 'string' || value.trim() === '') {
-    return kind === 'arcadia' ? '~/arcadia' : '~/github';
-  }
-  return value.trim();
-}
-
-function hasDotDot(service: string): boolean {
-  return service.split(/[/\\]/).includes('..');
-}
-
-function staysInside(root: string, target: string): boolean {
-  const rel = path.relative(root, target);
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
-}
-
-/** A service path that stays under `root`. `..` is the missing-catalog break. */
-function joinInside(root: string, service: string): string | undefined {
-  if (service.trim() === '' || hasDotDot(service)) {
-    return undefined;
-  }
-  const resolved = path.resolve(root, service);
-  if (!staysInside(root, resolved)) {
-    return undefined;
-  }
-  return resolved;
-}
-
-function overlayNames(checkout: string): string[] {
-  const file = path.join(checkout, '.aifactory', 'config.yaml');
-  if (!existsSync(file)) {
-    return [];
-  }
-  try {
-    const raw = parse(readFileSync(file, 'utf8'));
-    if (!isDoc(raw)) {
-      return [];
-    }
-    return stringList(raw.watch);
-  } catch {
-    return [];
-  }
-}
-
-function readSdd(checkout: string): Doc | undefined {
-  const file = path.join(checkout, 'openspec', 'config.yaml');
-  if (!existsSync(file)) {
-    return undefined;
-  }
-  try {
-    const raw = parse(readFileSync(file, 'utf8'));
-    if (!isDoc(raw) || !isDoc(raw.sdd)) {
-      return undefined;
-    }
-    return raw.sdd;
-  } catch {
-    return undefined;
-  }
-}
-
-function queueNames(checkout: string): string[] | undefined {
-  const sdd = readSdd(checkout);
-  if (!sdd || !Array.isArray(sdd.queues)) {
-    return undefined;
-  }
-  const names: string[] = [];
-  for (const item of sdd.queues) {
-    if (typeof item === 'string' && item !== '') {
-      names.push(item);
-    } else if (isDoc(item) && typeof item.name === 'string' && item.name !== '') {
-      names.push(item.name);
-    }
-  }
-  return names;
-}
-
-function serviceFile(checkout: string): string {
-  return path.join(checkout, 'openspec', 'config.yaml');
-}
-
-type ServiceRead =
-  {kind: 'missing'} | {kind: 'broken'; text: string} | {kind: 'doc'; text: string; doc: Doc};
-
-function readServiceFile(checkout: string): ServiceRead {
-  const file = serviceFile(checkout);
-  if (!existsSync(file)) {
-    return {kind: 'missing'};
-  }
-  let text: string;
-  try {
-    text = readFileSync(file, 'utf8');
-  } catch {
-    return {kind: 'broken', text: ''};
-  }
-  try {
-    const raw = parse(text);
-    if (!isDoc(raw)) {
-      return {kind: 'broken', text};
-    }
-    return {kind: 'doc', text, doc: raw};
-  } catch {
-    return {kind: 'broken', text};
-  }
-}
-
-function serviceBroken(checkout: string): boolean {
-  return readServiceFile(checkout).kind === 'broken';
-}
-
-type ServiceQueueDraft = {name: string; description: string};
-
-type ServiceIgnoreDraft = {value: string; removeOnly?: true};
-
-type ServiceDraft = {
-  queues: ServiceQueueDraft[];
-  base: string;
-  branchScope: string;
-  ignore: ServiceIgnoreDraft[];
-  hooks: ServiceHookField[];
-};
-
-function queueDraft(value: unknown): ServiceQueueDraft[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.map(item => {
-    if (typeof item === 'string') {
-      return {name: item, description: ''};
-    }
-    if (!isDoc(item)) {
-      return {name: '', description: ''};
-    }
-    return {
-      name: typeof item.name === 'string' ? item.name : '',
-      description: typeof item.description === 'string' ? item.description : '',
-    };
-  });
-}
-
-function ignoreText(value: unknown): string {
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-  if (value === null) {
-    return 'null';
-  }
-  try {
-    return stringify(value).trim();
-  } catch {
-    return '';
-  }
-}
-
-function ignoreDraft(value: unknown): ServiceIgnoreDraft[] {
-  if (value === undefined) {
-    return [];
-  }
-  if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
-    return value.map(item => ({value: item}));
-  }
-  return [{value: ignoreText(value), removeOnly: true}];
-}
-
-function hooksFrom(sdd: Doc): ServiceHookField[] {
-  if (!isDoc(sdd.hooks)) {
-    return [];
-  }
-  const hooks: ServiceHookField[] = [];
-  for (const [action, points] of Object.entries(sdd.hooks)) {
-    if (!isDoc(points)) {
-      continue;
-    }
-    for (const [point, value] of Object.entries(points)) {
-      if (typeof value === 'string') {
-        hooks.push({action, point, values: [value]});
-      } else if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
-        hooks.push({action, point, values: [...value]});
-      }
-    }
-  }
-  return hooks;
-}
-
-function textField(value: unknown, fallback: string): string {
-  return typeof value === 'string' && value !== '' ? value : fallback;
-}
-
-function draftFrom(doc: Doc): ServiceDraft {
-  const sdd = isDoc(doc.sdd) ? doc.sdd : {};
-  return {
-    queues: queueDraft(sdd.queues),
-    base: textField(sdd.base, 'trunk'),
-    branchScope: textField(sdd['branch-scope'], 'sdd'),
-    ignore: ignoreDraft(sdd['ignore-comments']),
-    hooks: hooksFrom(sdd),
-  };
-}
-
-function blankDraft(): ServiceDraft {
-  return {queues: [], base: 'trunk', branchScope: 'sdd', ignore: [], hooks: []};
-}
-
-/** Same flags as `compileIgnore`: a pattern that throws is not saved. */
-function patternCompiles(pattern: string): boolean {
-  try {
-    new RegExp(pattern, 'i');
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function queueFields(queues: readonly ServiceQueueDraft[]): {
-  items: ServiceQueueField[];
-  warning?: true;
-} {
-  const items = queues.map(queue => {
-    const field: ServiceQueueField = {name: queue.name, description: queue.description};
-    if (queue.name === '') {
-      field.warning = true;
-    }
-    return field;
-  });
-  if (items.length === 0) {
-    return {items, warning: true};
-  }
-  return {items};
-}
-
-function ignoreFields(ignore: readonly ServiceIgnoreDraft[]): ServiceIgnoreField[] {
-  return ignore.map(item => {
-    const field: ServiceIgnoreField = {value: item.value};
-    if (item.removeOnly) {
-      field.removeOnly = true;
-      field.warning = true;
-      return field;
-    }
-    if (!patternCompiles(item.value)) {
-      field.warning = true;
-    }
-    return field;
-  });
-}
-
-function groupOf(checkout: string, draft: ServiceDraft): ServiceConfigGroup {
-  const queues = queueFields(draft.queues);
-  const ignoreComments = ignoreFields(draft.ignore);
-  const warned =
-    queues.warning === true ||
-    queues.items.some(item => item.warning === true) ||
-    ignoreComments.some(item => item.warning === true);
-  return {
-    file: 'openspec/config.yaml',
-    checkout,
-    save: !warned,
-    queues,
-    base: draft.base,
-    branchScope: draft.branchScope,
-    ignoreComments,
-    hooks: draft.hooks,
-  };
-}
-
-function emptyService(checkout: string): ServiceConfigGroup {
-  return {file: 'openspec/config.yaml', checkout, save: false};
-}
-
-function normalizeHooks(hooks: unknown): unknown {
-  if (!isDoc(hooks)) {
-    return hooks;
-  }
-  const next: Doc = {};
-  for (const [action, points] of Object.entries(hooks)) {
-    if (!isDoc(points)) {
-      next[action] = points;
-      continue;
-    }
-    const copy: Doc = {};
-    for (const [point, value] of Object.entries(points)) {
-      if (typeof value === 'string') {
-        copy[point] = [value];
-      } else if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
-        copy[point] = [...value];
-      } else {
-        copy[point] = value;
-      }
-    }
-    next[action] = copy;
-  }
-  return next;
-}
-
-function writtenService(doc: Doc | null, draft: ServiceDraft): Doc {
-  const next: Doc = {...(doc ?? {})};
-  const sdd: Doc = {...(isDoc(next.sdd) ? next.sdd : {})};
-  sdd.queues = draft.queues.map(queue => {
-    const item: Doc = {name: queue.name};
-    if (queue.description !== '') {
-      item.description = queue.description;
-    }
-    return item;
-  });
-  if (draft.base === 'trunk') {
-    delete sdd.base;
-  } else {
-    sdd.base = draft.base;
-  }
-  if (draft.branchScope === 'sdd') {
-    delete sdd['branch-scope'];
-  } else {
-    sdd['branch-scope'] = draft.branchScope;
-  }
-  if (!draft.ignore.some(item => item.removeOnly)) {
-    if (draft.ignore.length === 0) {
-      delete sdd['ignore-comments'];
-    } else {
-      sdd['ignore-comments'] = draft.ignore.map(item => item.value);
-    }
-  }
-  if (Object.prototype.hasOwnProperty.call(sdd, 'hooks')) {
-    sdd.hooks = normalizeHooks(sdd.hooks);
-  }
-  next.sdd = sdd;
-  return next;
-}
-
-function serviceDirs(repoRoot: string): string[] {
-  if (!existsSync(repoRoot)) {
-    return [];
-  }
-  const found: string[] = [];
-  const walk = (dir: string): void => {
-    if (readSdd(dir)) {
-      found.push(path.relative(repoRoot, dir));
-    }
-    let entries;
-    try {
-      entries = readdirSync(dir, {withFileTypes: true});
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name === '.git' || entry.name === 'node_modules') {
-        continue;
-      }
-      walk(path.join(dir, entry.name));
-    }
-  };
-  walk(repoRoot);
-  found.sort((left, right) => {
-    if (left === '') {
-      return -1;
-    }
-    if (right === '') {
-      return 1;
-    }
-    return left.localeCompare(right);
-  });
-  return found;
-}
-
-function textOf(homePath: string | undefined): string | null {
-  if (!homePath || !existsSync(homePath)) {
-    return null;
-  }
-  return readFileSync(homePath, 'utf8');
-}
-
-function parseDoc(text: string | null): Doc {
-  if (text === null || text.trim() === '') {
-    return {};
-  }
-  const raw = parse(text);
-  return isDoc(raw) ? raw : {};
-}
-
-function agentOf(doc: Doc): string {
-  return typeof doc.agent === 'string' ? doc.agent : '';
-}
-
-function slot(models: unknown, mode: SkillMode): string {
-  if (!isDoc(models)) {
-    return '';
-  }
-  const value = models[mode];
-  return typeof value === 'string' ? value : '';
-}
-
-function modeValues(value: unknown): {mechanical?: string; judgment?: string} {
-  if (!isDoc(value)) {
-    return {};
-  }
-  const out: {mechanical?: string; judgment?: string} = {};
-  if (typeof value.mechanical === 'string' && value.mechanical !== '') {
-    out.mechanical = value.mechanical;
-  }
-  if (typeof value.judgment === 'string' && value.judgment !== '') {
-    out.judgment = value.judgment;
-  }
-  return out;
-}
-
-function restOf(doc: Doc): Doc {
-  const rest: Doc = {};
-  for (const [key, value] of Object.entries(doc)) {
-    if (AGENT_KEYS.has(key) || FORBIDDEN.has(key) || value === undefined) {
-      continue;
-    }
-    rest[key] = value;
-  }
-  return rest;
-}
-
-function replaceAgent(previous: Doc, agentId: string): Doc {
-  const next: Doc = {agent: agentId};
-  const pair = PAIRS[agentId];
-  if (pair) {
-    next.models = {mechanical: pair.mechanical, judgment: pair.judgment};
-    if (pair.effort) {
-      next.effort = {mechanical: pair.effort.mechanical, judgment: pair.effort.judgment};
-    }
-  }
-  return {...next, ...restOf(previous)};
-}
-
-function overlayFile(checkout: string): string {
-  return path.join(checkout, '.aifactory', 'config.yaml');
-}
-
-function readOverlayDoc(checkout: string): Doc | null {
-  const text = textOf(overlayFile(checkout));
-  if (text === null) {
-    return null;
-  }
-  return parseDoc(text);
-}
-
-function hasKey(doc: Doc | null, key: string): doc is Doc {
-  return doc !== null && Object.prototype.hasOwnProperty.call(doc, key);
-}
-
-/** An overlay agent uses its own field. Otherwise a present overlay key replaces home. */
-function ownOrHome(
-  overlay: Doc | null,
-  ownAgent: boolean,
-  key: 'effort' | 'speed',
-  home: Doc,
-): unknown {
-  if (ownAgent) {
-    return overlay?.[key];
-  }
-  if (hasKey(overlay, key)) {
-    return overlay[key];
-  }
-  return home[key];
-}
-
-/** A present slot, including an empty string. Absent means the caller keeps the home id. */
-function slotPresent(models: unknown, mode: SkillMode): string | undefined {
-  if (!isDoc(models) || !Object.prototype.hasOwnProperty.call(models, mode)) {
-    return undefined;
-  }
-  const value = models[mode];
-  return typeof value === 'string' ? value : '';
-}
-
-type Factory = {
-  agent: string;
-  mechanical: string;
-  judgment: string;
-  effort?: {mechanical: string; judgment: string};
-  speed?: {mechanical: string; judgment: string};
-};
-
-/** Overlay keys replace home keys. An overlay agent does not borrow effort or speed. */
-function mergeFactory(home: Doc, overlay: Doc | null): Factory {
-  const overlayAgent =
-    overlay && typeof overlay.agent === 'string' && overlay.agent !== '' ? overlay.agent : '';
-  const agent = overlayAgent || agentOf(home);
-  const pair = PAIRS[agent];
-  const factory: Factory = {
-    agent,
-    mechanical: slotPresent(overlay?.models, 'mechanical') ?? slot(home.models, 'mechanical'),
-    judgment: slotPresent(overlay?.models, 'judgment') ?? slot(home.models, 'judgment'),
-  };
-  const ownAgent = overlayAgent !== '';
-  if (pair?.effort) {
-    const source = modeValues(ownOrHome(overlay, ownAgent, 'effort', home));
-    factory.effort = {
-      mechanical: source.mechanical ?? pair.effort.mechanical,
-      judgment: source.judgment ?? pair.effort.judgment,
-    };
-  }
-  if (pair?.speed) {
-    const source = modeValues(ownOrHome(overlay, ownAgent, 'speed', home));
-    factory.speed = {
-      mechanical: source.mechanical ?? '',
-      judgment: source.judgment ?? '',
-    };
-  }
-  return factory;
-}
-
-function modelRow(doc: Doc): {text: string}[] {
-  const mechanical = slot(doc.models, 'mechanical');
-  const judgment = slot(doc.models, 'judgment');
-  if (mechanical === '' && judgment === '') {
-    return [{text: 'нужны модели mechanical и judgment'}];
-  }
-  if (mechanical === '') {
-    return [{text: 'нужна модель mechanical'}];
-  }
-  if (judgment === '') {
-    return [{text: 'нужна модель judgment'}];
-  }
-  return [];
-}
-
-const LAYERS = ['Change', 'Plan', 'Specify', 'Design', 'Tasks', 'Code'] as const;
-
-type Placed = {card: CycleCard; occasion: boolean};
-
-function isColumn(phase: Phase): phase is ColumnName {
-  return (COLUMN_NAMES as readonly string[]).includes(phase);
-}
-
-function isGate(phase: Phase): boolean {
-  return (GATE_PHASES as readonly string[]).includes(phase);
-}
-
-function keyOrder(left: string, right: string): number {
-  return left.localeCompare(right, undefined, {numeric: true});
-}
-
-function byKey<T extends {key: string}>(left: T, right: T): number {
-  return keyOrder(left.key, right.key);
-}
-
-/** `sdd:cancelled` removes the card. `phaseOf` leaves an earlier phase in place. */
-function slotOf(
-  item: WindowTicket,
-  phase: Phase | null,
-  manager: string | undefined,
-): 'cards' | 'hide' | 'pool' | ColumnName {
-  if (item.labels.includes('sdd:cancelled') || phase === 'cancelled') {
-    return 'hide';
-  }
-  if (phase === null) {
-    if (item.open === false) {
-      return 'cards';
-    }
-    if (item.assignee !== undefined && item.assignee !== '' && item.assignee !== manager) {
-      return 'hide';
-    }
-    return 'pool';
-  }
-  if (item.open === false && (item.mergeAhead === true || phase === 'accepted')) {
-    return 'hide';
-  }
-  const column = columnOf(phase, item);
-  if (!column) {
-    return 'hide';
-  }
-  if (item.assignee === undefined || item.assignee === '') {
-    if (item.open === true && item.mergeAhead === true) {
-      return column;
-    }
-    return 'pool';
-  }
-  if (manager !== undefined && item.assignee === manager) {
-    return column;
-  }
-  return 'hide';
-}
-
-function columnOf(phase: Phase, item: WindowTicket): ColumnName | null {
-  if (item.open === true && item.mergeAhead === true) {
-    return 'accepting';
-  }
-  if (phase === 'accepted') {
-    return 'accepting';
-  }
-  const closed = GATE_CLOSES[phase];
-  if (closed && isColumn(closed)) {
-    return closed;
-  }
-  if (isColumn(phase)) {
-    return phase;
-  }
-  return null;
-}
-
-function section(text: string, heading: string): string {
-  const match = new RegExp(`^## ${heading}\\s*$`, 'm').exec(text);
-  if (!match) {
-    return '';
-  }
-  const rest = text.slice(match.index + match[0].length);
-  const next = rest.search(/^## /m);
-  return next === -1 ? rest : rest.slice(0, next);
-}
-
-function unchecked(text: string, heading: string): number {
-  return section(text, heading)
-    .split('\n')
-    .filter(line => line.trimStart().startsWith('- [ ]')).length;
-}
-
-function readChangeText(checkout: string | undefined, key: string, name: string): string {
-  if (!checkout) {
-    return '';
-  }
-  const file = path.join(checkout, changeDir(key), name);
-  if (!existsSync(file)) {
-    return '';
-  }
-  return readFileSync(file, 'utf8');
-}
-
-function openCount(
-  checkout: string | undefined,
-  key: string,
-  name: string,
-  heading: string,
-): number {
-  return unchecked(readChangeText(checkout, key, name), heading);
-}
-
-function taskRow(
-  checkout: string | undefined,
-  key: string,
-): {done: number; open: number} | undefined {
-  if (!checkout) {
-    return undefined;
-  }
-  const file = path.join(checkout, changeDir(key), 'tasks.md');
-  if (!existsSync(file)) {
-    return undefined;
-  }
-  let done = 0;
-  let open = 0;
-  for (const line of readFileSync(file, 'utf8').split('\n')) {
-    const trimmed = line.trimStart();
-    if (trimmed.startsWith('- [x]')) {
-      done += 1;
-    } else if (trimmed.startsWith('- [ ]')) {
-      open += 1;
-    }
-  }
-  return {done, open};
-}
-
-function phaseRowOf(
-  column: ColumnName,
-  item: WindowTicket,
-  checkout: string | undefined,
-  questions: number,
-  decisions: number,
-): PhaseRow | undefined {
-  if (column === 'proposing') {
-    return questions;
-  }
-  if (column === 'designing') {
-    return decisions;
-  }
-  if (column === 'implementing') {
-    return taskRow(checkout, item.key);
-  }
-  if (
-    (column === 'verifying' || column === 'accepting') &&
-    (item.checks === 'green' || item.checks === 'red' || item.checks === 'pending')
-  ) {
-    return item.checks;
-  }
-  return undefined;
-}
-
-function childKeys(item: WindowTicket, reading: readonly WindowTicket[]): string[] {
-  return reading
-    .filter(
-      record =>
-        record.key !== item.key &&
-        record.labels.includes('sdd:cycle') &&
-        record.parent === item.key,
-    )
-    .map(record => record.key)
-    .sort(keyOrder);
-}
-
-function blockerKeys(item: WindowTicket, reading: readonly WindowTicket[]): string[] {
-  const known = new Set(reading.map(record => record.key));
-  const found = new Set<string>();
-  for (const key of item.dependsOn ?? []) {
-    if (known.has(key)) {
-      found.add(key);
-    }
-  }
-  return [...found].sort(keyOrder);
-}
-
-/** The phase row already shows this count, so the card keeps the occasion and drops the line. */
-function reasonHidden(parts: readonly string[], phaseRow: PhaseRow | undefined): boolean {
-  if (parts.length !== 1 || typeof phaseRow !== 'number') {
-    return false;
-  }
-  return parts[0] === `вопросы ${phaseRow}` || parts[0] === `решения ${phaseRow}`;
-}
-
-function focusLayers(comments: readonly WindowComment[] | undefined): string | undefined {
-  let body: string | undefined;
-  for (const comment of comments ?? []) {
-    if (comment.manager) {
-      continue;
-    }
-    const first = comment.body.split('\n', 1)[0] ?? '';
-    if (first.trim() === 'sdd:focus') {
-      body = comment.body;
-    }
-  }
-  if (body === undefined) {
-    return undefined;
-  }
-  const names: string[] = [];
-  for (const line of body.split('\n').slice(1)) {
-    const trimmed = line.trim();
-    if (trimmed === '') {
-      continue;
-    }
-    const token = trimmed.split(/\s+/)[0] ?? '';
-    if (!(LAYERS as readonly string[]).includes(token)) {
-      continue;
-    }
-    const rest = trimmed.slice(token.length).trim();
-    if (rest === 'solid') {
-      continue;
-    }
-    names.push(token);
-  }
-  return names.length === 0 ? undefined : names.join(' · ');
-}
-
-function ordered(items: readonly Placed[]): CycleCard[] {
-  const occasion = items
-    .filter(item => item.occasion)
-    .map(item => item.card)
-    .sort(byKey);
-  const rest = items
-    .filter(item => !item.occasion)
-    .map(item => item.card)
-    .sort(byKey);
-  return [...occasion, ...rest];
-}
-
-function reasonParts(
-  item: WindowTicket,
-  phase: Phase,
-  breakReason: string,
-  reading: readonly WindowTicket[],
-  questions: number,
-  decisions: number,
-): string[] {
-  const parts: string[] = [];
-  if (breakReason !== '') {
-    parts.push(breakReason);
-  }
-  if (isGate(phase)) {
-    parts.push(phase);
-  }
-  if (item.labels.includes('sdd:wait-human')) {
-    parts.push('Ask');
-  }
-  if (questions > 0) {
-    parts.push(`вопросы ${questions}`);
-  }
-  if (decisions > 0) {
-    parts.push(`решения ${decisions}`);
-  }
-  if (item.mergeAhead === true) {
-    parts.push('мерж');
-  }
-  const children = childKeys(item, reading);
-  if (children.length > 0) {
-    parts.push(`дети ${children.join(' ')}`);
-  }
-  const blockers = blockerKeys(item, reading);
-  if (blockers.length > 0) {
-    parts.push(`блокеры ${blockers.join(' ')}`);
-  }
-  if ((item.openPullRequests ?? 0) > 1) {
-    parts.push('несколько pull request');
-  }
-  return parts;
-}
-
-function commentLine(body: string): string {
-  return (body.split('\n', 1)[0] ?? '').trim();
-}
-
-function isFocusLine(body: string): boolean {
-  return commentLine(body) === 'sdd:focus';
-}
-
-/** Body after the marker of the latest focus comment. A manager comment is not the plaque. */
-function focusBody(comments: readonly WindowComment[] | undefined): string | undefined {
-  let body: string | undefined;
-  for (const comment of comments ?? []) {
-    if (comment.manager || !isFocusLine(comment.body)) {
-      continue;
-    }
-    body = comment.body.split('\n').slice(1).join('\n');
-  }
-  return body;
-}
-
-/** Latest issue comment whose first line is not `sdd:focus`. */
-function askBody(comments: readonly WindowComment[] | undefined): string | undefined {
-  const list = comments ?? [];
-  for (let index = list.length - 1; index >= 0; index -= 1) {
-    const comment = list[index];
-    if (!comment || isFocusLine(comment.body)) {
-      continue;
-    }
-    return comment.body;
-  }
-  return undefined;
-}
-
-const HOOK_UNREADABLE = 'поле хука не читается';
-
-function hookParagraph(value: unknown): string {
-  return typeof value === 'string' ? value : HOOK_UNREADABLE;
-}
-
-function isPointRecord(value: unknown): value is {action: string; point: string; value?: unknown} {
-  return isDoc(value) && typeof value.action === 'string' && typeof value.point === 'string';
-}
-
-function hookBlock(value: unknown): SidebarBlock | undefined {
-  if (value === undefined || value === null || value === '') {
-    return undefined;
-  }
-  if (Array.isArray(value)) {
-    if (value.length === 0) {
-      return undefined;
-    }
-    if (!value.every(isPointRecord)) {
-      return {kind: 'hook', line: HOOK_UNREADABLE};
-    }
-    return {
-      kind: 'hook',
-      points: value.map(item => ({
-        action: item.action,
-        point: item.point,
-        paragraph: hookParagraph(item.value),
-      })),
-    };
-  }
-  if (!isDoc(value)) {
-    return {kind: 'hook', line: HOOK_UNREADABLE};
-  }
-  const points: SidebarHookPoint[] = [];
-  for (const [action, inner] of Object.entries(value)) {
-    if (!isDoc(inner)) {
-      continue;
-    }
-    for (const [point, pointValue] of Object.entries(inner)) {
-      points.push({action, point, paragraph: hookParagraph(pointValue)});
-    }
-  }
-  if (points.length === 0) {
-    return undefined;
-  }
-  return {kind: 'hook', points};
-}
-
-function hasMarker(marker: string | null | undefined): boolean {
-  return typeof marker === 'string' && marker !== '';
-}
-
-function unansweredBlock(reading: WindowReview | undefined): SidebarBlock | undefined {
-  if (!reading) {
-    return undefined;
-  }
-  const threads = (reading.threads ?? [])
-    .filter(thread => !hasMarker(thread.marker))
-    .map(thread => ({lines: thread.lines}));
-  const last = reading.conversation?.last;
-  const comment = last && !hasMarker(last.marker) ? last.body : undefined;
-  if (threads.length === 0 && comment === undefined) {
-    return undefined;
-  }
-  if (threads.length > 0 && comment !== undefined) {
-    return {kind: 'unanswered', threads, comment};
-  }
-  if (threads.length > 0) {
-    return {kind: 'unanswered', threads};
-  }
-  return {kind: 'unanswered', comment};
-}
-
-function buildCycle(
-  item: WindowTicket,
-  phase: Phase,
-  column: ColumnName,
-  checkout: string | undefined,
-  breakReason: string,
-  reading: readonly WindowTicket[],
-  hideIcon: boolean,
-): Placed {
-  const questions = openCount(checkout, item.key, 'proposal.md', HEADINGS.openQuestions);
-  const decisions = openCount(checkout, item.key, 'design.md', HEADINGS.openDecisions);
-  const phaseRow = phaseRowOf(column, item, checkout, questions, decisions);
-  const parts = reasonParts(item, phase, breakReason, reading, questions, decisions);
-  const occasion = parts.length > 0;
-  const card: CycleCard = {key: item.key, title: item.title};
-  if (occasion && !hideIcon) {
-    card.icon = true;
-  }
-  if (occasion && !hideIcon && !reasonHidden(parts, phaseRow)) {
-    card.reason = parts.join(' · ');
-  }
-  if (phaseRow !== undefined) {
-    card.phaseRow = phaseRow;
-  }
-  const layers = focusLayers(item.comments);
-  if (layers) {
-    card.layers = layers;
-  }
-  return {card, occasion};
-}
-
-/** A pool card copies the checkout, queue, and choices. A break or two pull requests keeps the column reason. */
-function poolCard(
-  item: WindowTicket,
-  checkout: CardState,
-  phase: Phase | null,
-  reading: readonly WindowTicket[],
-  block: {emptyModel: boolean; rejected: boolean},
-  live: boolean,
-  hideIcon: boolean,
-): PoolCard {
-  const several = (item.openPullRequests ?? 0) > 1;
-  const broken = checkout.reason !== '';
-  const card: PoolCard = {
-    key: item.key,
-    title: item.title,
-    take: true,
-    queue: checkout.queue,
-    choices: checkout.choices,
-  };
-  if (checkout.checkout) {
-    card.checkout = checkout.checkout;
-  }
-  if (broken || several) {
-    card.takeDisabled = true;
-    const column = (phase && columnOf(phase, item)) || 'implementing';
-    const placed = buildCycle(
-      item,
-      phase ?? 'implementing',
-      column,
-      checkout.checkout,
-      checkout.reason,
-      reading,
-      hideIcon,
-    );
-    if (placed.card.icon) {
-      card.icon = true;
-    }
-    if (placed.card.reason !== undefined) {
-      card.reason = placed.card.reason;
-    }
-    return card;
-  }
-  if (!live || block.rejected || (phase === null && block.emptyModel)) {
-    card.takeDisabled = true;
-  }
-  return card;
-}
+import type {BoardState, Launch, SkillMode, WindowOutside} from './types.ts';
+
+import {phaseOf} from '../machine/phase.ts';
+
+import {lay, slotOf} from './board.ts';
+import {openCheckout, unreadableRow} from './checkout.ts';
+import {
+  FACTORY_AGENTS,
+  agentRows,
+  gapRows,
+  mergeFactory,
+  modelRow,
+  openHome,
+  openOverlay,
+  readOverlayDoc,
+  rejectedSlots,
+  takeBlock,
+  type Factory,
+} from './factory.ts';
+import {openServiceGroup} from './service-group.ts';
+import {blocksFor} from './sidebar.ts';
+
+export type {
+  AdapterKind,
+  BoardState,
+  CardState,
+  ColumnName,
+  CycleCard,
+  Launch,
+  ModelField,
+  OverlayGroup,
+  PhaseRow,
+  PoolCard,
+  ServiceConfigGroup,
+  ServiceHookField,
+  ServiceIgnoreField,
+  ServiceQueueField,
+  SettingsState,
+  SidebarBlock,
+  SidebarHookPoint,
+  WindowComment,
+  WindowOutside,
+  WindowReview,
+  WindowTicket,
+} from './types.ts';
 
 /** The window for one launch. Another launch has its own home path. */
 export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
   const offered = launch.agents ?? FACTORY_AGENTS;
-  let baseline = textOf(launch.homePath);
-  let doc = parseDoc(baseline);
+  const home = openHome(launch.homePath, offered);
+  const overlaySession = openOverlay(offered);
+  const service = openServiceGroup();
+  const checkout = openCheckout({
+    kind: launch.adapter ?? 'tracker',
+    home: () => home.disk(),
+    tickets: outside.tickets,
+    writeService: outside.writeService,
+  });
   let settingsOpen = false;
-  let chosenCheckout = '';
   let openKey = '';
-  let overlayBaseline: string | null = null;
-  let overlayDoc: Doc = {};
-  let serviceBaseline: string | null = null;
-  let serviceDoc: Doc | null = null;
-  let serviceDraft: ServiceDraft | null = null;
-  let serviceDirty = false;
 
-  function adopt(text: string | null): void {
-    baseline = text;
-    doc = parseDoc(text);
-  }
-
-  function recorded(): boolean {
-    return Boolean(launch.homePath) && baseline !== null && agentOf(doc) !== '';
+  function remember(next: string): void {
+    overlaySession.bind(next);
+    service.bind(next);
   }
 
   function answers(): boolean {
-    if (!recorded()) {
+    if (!home.recorded()) {
       return false;
     }
-    return outside.answers?.(agentOf(doc)) ?? true;
+    return outside.answers?.(home.agent()) ?? true;
   }
 
-  function canWrite(): boolean {
-    if (!launch.homePath) {
-      return false;
-    }
-    const disk = textOf(launch.homePath);
-    if (disk !== baseline) {
-      adopt(disk);
-      return false;
-    }
-    return true;
+  function factoryFor(located: string | undefined): Factory {
+    return mergeFactory(home.doc(), located ? readOverlayDoc(located) : null);
   }
 
-  function commit(next: Doc): void {
-    if (!launch.homePath) {
-      return;
-    }
-    const clean: Doc = {};
-    for (const [key, value] of Object.entries(next)) {
-      if (FORBIDDEN.has(key) || value === undefined) {
-        continue;
-      }
-      clean[key] = value;
-    }
-    const text = stringify(clean);
-    writeFileSync(launch.homePath, text);
-    baseline = text;
-    doc = clean;
-  }
-
-  function settings(): SettingsState {
-    const agent = agentOf(doc);
-    const pair = PAIRS[agent];
-    const effortFile = modeValues(doc.effort);
-    const speedFile = modeValues(doc.speed);
-    const mechanical = slot(doc.models, 'mechanical');
-    const judgment = slot(doc.models, 'judgment');
-    const state: SettingsState = {
-      open: settingsOpen,
-      agent,
-      models: {
-        mechanical: {value: mechanical, needsValue: agent !== '' && mechanical === ''},
-        judgment: {value: judgment, needsValue: agent !== '' && judgment === ''},
-      },
-      watch: stringList(doc.watch),
-      roots: {arcadia: rootText(doc, 'arcadia'), github: rootText(doc, 'github')},
-    };
-    if (pair?.effort) {
-      state.effort = {
-        mechanical: effortFile.mechanical ?? pair.effort.mechanical,
-        judgment: effortFile.judgment ?? pair.effort.judgment,
-      };
-    }
-    if (pair?.speed) {
-      state.speed = {
-        mechanical: speedFile.mechanical ?? '',
-        judgment: speedFile.judgment ?? '',
-      };
-    }
-    return state;
-  }
-
-  function modelsReady(): boolean {
-    return slot(doc.models, 'mechanical') !== '' && slot(doc.models, 'judgment') !== '';
-  }
-
-  function factoryFor(checkout: string | undefined): Factory {
-    return mergeFactory(doc, checkout ? readOverlayDoc(checkout) : null);
-  }
-
-  function rejectedSlots(factory: Factory): {mode: SkillMode; id: string}[] {
+  function rejectedOf(factory: Factory): {mode: SkillMode; id: string}[] {
     if (!outside.catalog || factory.agent === '') {
       return [];
     }
-    const listed = outside.catalog(factory.agent);
-    const out: {mode: SkillMode; id: string}[] = [];
-    if (factory.mechanical !== '' && listed.mechanical !== factory.mechanical) {
-      out.push({mode: 'mechanical', id: factory.mechanical});
-    }
-    if (factory.judgment !== '' && listed.judgment !== factory.judgment) {
-      out.push({mode: 'judgment', id: factory.judgment});
-    }
-    return out;
+    return rejectedSlots(factory, outside.catalog(factory.agent));
   }
 
-  function takeBlock(factory: Factory): {emptyModel: boolean; rejected: boolean} {
-    return {
-      emptyModel: factory.mechanical === '' || factory.judgment === '',
-      rejected: rejectedSlots(factory).length > 0,
-    };
-  }
-
-  function canStart(checkout: string | undefined): boolean {
-    const factory = factoryFor(checkout);
-    return (
-      factory.mechanical !== '' && factory.judgment !== '' && rejectedSlots(factory).length === 0
-    );
+  function canStart(located: string | undefined): boolean {
+    const factory = factoryFor(located);
+    return factory.mechanical !== '' && factory.judgment !== '' && rejectedOf(factory).length === 0;
   }
 
   function checkoutRows(): {text: string}[] {
     const out: {text: string}[] = [];
-    for (const checkout of gatheredCheckouts()) {
-      const factory = factoryFor(checkout);
-      if (factory.mechanical === '' && factory.judgment === '') {
-        out.push({text: `${checkout} · нужны модели mechanical и judgment`});
-      } else if (factory.mechanical === '') {
-        out.push({text: `${checkout} · нужна модель mechanical`});
-      } else if (factory.judgment === '') {
-        out.push({text: `${checkout} · нужна модель judgment`});
-      }
-      for (const rejected of rejectedSlots(factory)) {
-        out.push({
-          text: `${checkout} · модель не запускается · ${rejected.mode} · ${rejected.id}`,
-        });
-      }
-      if (serviceBroken(checkout)) {
-        out.push({text: `${checkout} · ${CONFIG_UNREADABLE}`});
+    for (const located of checkout.gatheredCheckouts()) {
+      const factory = factoryFor(located);
+      out.push(...gapRows(located, factory, rejectedOf(factory)));
+      if (checkout.serviceBroken(located)) {
+        out.push(unreadableRow(located));
       }
     }
     return out;
   }
 
   function rows(live: boolean): {text: string}[] {
-    if (!recorded()) {
-      return [{text: NEEDS_AGENT}];
+    const blocked = agentRows(home.recorded(), live);
+    if (blocked) {
+      return blocked;
     }
-    if (!live) {
-      return [{text: SILENT_AGENT}];
-    }
-    return [...modelRow(doc), ...checkoutRows()];
+    return [...modelRow(home.doc()), ...checkoutRows()];
   }
 
-  function diskHome(): Doc {
-    return parseDoc(textOf(launch.homePath));
-  }
-
-  function kind(): AdapterKind {
-    return launch.adapter ?? 'tracker';
-  }
-
-  function unnamed(item: WindowTicket): boolean {
-    if (kind() === 'github') {
-      return item.sddService === undefined;
-    }
-    return item.sddService === undefined || item.sddService.trim() === '';
-  }
-
-  function repoRootOf(item: WindowTicket): string | undefined {
-    const repo = item.repo ?? '';
-    if (repo === '' || hasDotDot(repo)) {
-      return undefined;
-    }
-    const parts = repo.split('/').filter(part => part !== '' && part !== '.' && part !== '..');
-    if (parts.length === 0) {
-      return undefined;
-    }
-    const root = expandRoot(rootText(diskHome(), 'github'));
-    const resolved = path.join(root, ...parts);
-    if (!staysInside(root, resolved)) {
-      return undefined;
-    }
-    return resolved;
-  }
-
-  function gathered(item: WindowTicket): string | undefined {
-    if (unnamed(item)) {
-      return undefined;
-    }
-    const service = item.sddService ?? '';
-    if (kind() === 'github') {
-      const root = repoRootOf(item);
-      if (!root) {
-        return undefined;
-      }
-      if (service.trim() === '') {
-        return root;
-      }
-      return joinInside(root, service);
-    }
-    return joinInside(expandRoot(rootText(diskHome(), 'arcadia')), service);
-  }
-
-  function onWatch(item: WindowTicket, names: readonly string[]): boolean {
-    if (!item.labels.includes('sdd:cycle')) {
-      return false;
-    }
-    if (kind() === 'github') {
-      return typeof item.repo === 'string' && item.repo !== '' && names.includes(item.repo);
-    }
-    return typeof item.queue === 'string' && item.queue !== '' && names.includes(item.queue);
-  }
-
-  function sortedTickets(): WindowTicket[] {
-    return [...(outside.tickets?.() ?? [])].sort((left, right) =>
-      left.key.localeCompare(right.key, undefined, {numeric: true}),
-    );
-  }
-
-  function readWatch(): string[] {
-    const names = stringList(diskHome().watch);
-    const seen = new Set<string>();
-    let grew = true;
-    while (grew) {
-      grew = false;
-      const checkouts = new Set<string>();
-      for (const item of sortedTickets()) {
-        const checkout = gathered(item);
-        if (!checkout || !existsSync(checkout)) {
-          continue;
-        }
-        checkouts.add(checkout);
-      }
-      for (const checkout of checkouts) {
-        if (seen.has(checkout)) {
-          continue;
-        }
-        seen.add(checkout);
-        const before = names.length;
-        for (const name of overlayNames(checkout)) {
-          if (!names.includes(name)) {
-            names.push(name);
-          }
-        }
-        if (names.length !== before) {
-          grew = true;
-        }
-      }
-    }
-    return names;
-  }
-
-  function trackerChoices(queue: string): string[] {
-    const choices: string[] = [];
-    for (const item of sortedTickets()) {
-      if (unnamed(item)) {
-        continue;
-      }
-      const checkout = gathered(item);
-      if (!checkout || !existsSync(checkout)) {
-        continue;
-      }
-      const queues = queueNames(checkout);
-      if (!queues?.includes(queue)) {
-        continue;
-      }
-      const service = (item.sddService ?? '').trim();
-      if (service === '' || choices.includes(service)) {
-        continue;
-      }
-      choices.push(service);
-    }
-    return choices;
-  }
-
-  function choicesFor(item: WindowTicket): string[] {
-    if (kind() === 'github') {
-      const root = repoRootOf(item);
-      return root ? serviceDirs(root) : [];
-    }
-    return trackerChoices(item.queue ?? '');
-  }
-
-  function queueListed(item: WindowTicket, checkout: string): boolean {
-    const queues = queueNames(checkout);
-    if (!queues) {
-      return false;
-    }
-    if (kind() === 'tracker') {
-      return queues.includes(item.queue ?? '');
-    }
-    return (
-      queueOf(
-        item.labels,
-        queues.map(name => ({name})),
-      ) !== undefined
-    );
-  }
-
-  function cardOf(item: WindowTicket): CardState {
-    const found = gathered(item);
-    let reason = '';
-    let checkout: string | undefined;
-    if (unnamed(item)) {
-      reason = SERVICE_UNNAMED;
-    } else if (!found || !existsSync(found)) {
-      reason = CATALOG_MISSING;
-      checkout = found;
-    } else if (!existsSync(path.join(found, 'openspec', 'config.yaml'))) {
-      reason = CONFIG_MISSING;
-      checkout = found;
-    } else if (!queueListed(item, found)) {
-      reason = QUEUE_MISSING;
-      checkout = found;
-    } else {
-      checkout = found;
-    }
-    const queues = checkout ? queueNames(checkout) : undefined;
-    const queue =
-      kind() === 'tracker'
-        ? (item.queue ?? '')
-        : queues
-          ? (queueOf(
-              item.labels,
-              queues.map(name => ({name})),
-            )?.name ?? '')
-          : '';
-    const card: CardState = {
-      key: item.key,
-      reason,
-      takeDisabled: reason !== '',
-      choices: choicesFor(item),
-      queue,
-    };
-    if (checkout) {
-      card.checkout = checkout;
-    }
-    return card;
-  }
-
-  function writeMissingServices(names: readonly string[]): void {
-    if (!outside.writeService) {
-      return;
-    }
-    if (kind() === 'github') {
-      for (const item of sortedTickets()) {
-        if (!onWatch(item, names) || item.sddService !== undefined) {
-          continue;
-        }
-        const root = repoRootOf(item);
-        const dirs = root ? serviceDirs(root) : [];
-        if (dirs.length === 1) {
-          outside.writeService(item.key, dirs[0]);
-        }
-      }
-      return;
-    }
-    for (const item of sortedTickets()) {
-      if (!onWatch(item, names) || !unnamed(item)) {
-        continue;
-      }
-      const choices = trackerChoices(item.queue ?? '');
-      if (choices.length === 1) {
-        outside.writeService(item.key, choices[0]);
-      }
-    }
-  }
-
-  function settle(): {watch: string[]; cards: CardState[]} {
-    let watch = readWatch();
-    if (outside.tickets) {
-      let guard = 0;
-      for (;;) {
-        const before = sortedTickets()
-          .map(item => `${item.key}\0${item.sddService}`)
-          .join('\n');
-        writeMissingServices(watch);
-        watch = readWatch();
-        const after = sortedTickets()
-          .map(item => `${item.key}\0${item.sddService}`)
-          .join('\n');
-        guard += 1;
-        if (before === after || guard > 8) {
-          break;
-        }
-      }
-    }
-    const cards = sortedTickets()
-      .filter(item => onWatch(item, watch))
-      .map(cardOf);
-    return {watch, cards};
-  }
-
-  function gatheredCheckouts(): string[] {
-    if (!outside.tickets) {
-      return [];
-    }
-    const names = readWatch();
-    const found: string[] = [];
-    for (const item of sortedTickets()) {
-      if (!onWatch(item, names)) {
-        continue;
-      }
-      const checkout = gathered(item);
-      if (!checkout || found.includes(checkout)) {
-        continue;
-      }
-      found.push(checkout);
-    }
-    return found;
-  }
-
-  function lay(watch: readonly string[]): {
-    taken: Set<string>;
-    pool: PoolCard[];
-    columns: {name: ColumnName; cards: CycleCard[]}[];
-  } {
-    const reading = sortedTickets();
-    const manager = outside.login?.();
-    const live = answers();
-    const taken = new Set<string>();
-    const pool: PoolCard[] = [];
-    const buckets = new Map<ColumnName, Placed[]>();
-    for (const item of reading) {
-      if (!onWatch(item, watch)) {
-        continue;
-      }
-      const home = gathered(item);
-      if (home && serviceBroken(home)) {
-        taken.add(item.key);
-        continue;
-      }
-      const phase = phaseOf([...item.labels]);
-      const where = slotOf(item, phase, manager);
-      if (where === 'cards') {
-        continue;
-      }
-      if (where === 'hide') {
-        taken.add(item.key);
-        continue;
-      }
-      const checkout = cardOf(item);
-      const hideIcon = outside.leading?.(item.key) === true || item.checks === 'pending';
-      if (!phase) {
-        taken.add(item.key);
-        pool.push(
-          poolCard(
-            item,
-            checkout,
-            null,
-            reading,
-            takeBlock(factoryFor(checkout.checkout)),
-            live,
-            hideIcon,
-          ),
-        );
-        continue;
-      }
-      taken.add(item.key);
-      const column = where === 'pool' ? columnOf(phase, item) : where;
-      if (!column) {
-        continue;
-      }
-      if (where === 'pool') {
-        pool.push(
-          poolCard(
-            item,
-            checkout,
-            phase,
-            reading,
-            takeBlock(factoryFor(checkout.checkout)),
-            live,
-            hideIcon,
-          ),
-        );
-        continue;
-      }
-      const placed = buildCycle(
-        item,
-        phase,
-        column,
-        checkout.checkout,
-        checkout.reason,
-        reading,
-        hideIcon,
-      );
-      const list = buckets.get(column) ?? [];
-      list.push(placed);
-      buckets.set(column, list);
-    }
-    pool.sort(byKey);
-    return {
-      taken,
-      pool,
-      columns: COLUMN_NAMES.map(name => ({name, cards: ordered(buckets.get(name) ?? [])})),
-    };
+  function placed(watch: readonly string[]) {
+    return lay({
+      reading: checkout.sorted(),
+      watch,
+      manager: outside.login?.(),
+      live: answers(),
+      onWatch: (item, names) => checkout.onWatch(item, names),
+      gathered: item => checkout.gathered(item),
+      serviceBroken: located => checkout.serviceBroken(located),
+      cardOf: item => checkout.cardOf(item),
+      leading: key => outside.leading?.(key) === true,
+      takeBlock: located => {
+        const factory = factoryFor(located);
+        return takeBlock(factory, rejectedOf(factory).length > 0);
+      },
+    });
   }
 
   function board(): BoardState {
     const live = answers();
-    const view = settle();
-    const cycles = lay(view.watch);
+    const view = checkout.settle();
+    const cycles = placed(view.watch);
     return {
       visible: true,
       rows: rows(live),
       settingsOpen,
-      stepsStart: live && modelsReady(),
+      stepsStart: live && home.modelsReady(),
       takeDisabled: !live,
       cards: outside.tickets ? view.cards.filter(card => !cycles.taken.has(card.key)) : [],
       watch: view.watch,
@@ -1797,517 +142,157 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     };
   }
 
-  function loadService(checkout: string): void {
-    serviceDirty = false;
-    const read = readServiceFile(checkout);
-    if (read.kind === 'broken') {
-      serviceBaseline = read.text;
-      serviceDoc = null;
-      serviceDraft = null;
-      return;
-    }
-    if (read.kind === 'missing') {
-      serviceBaseline = null;
-      serviceDoc = null;
-      serviceDraft = null;
-      return;
-    }
-    serviceBaseline = read.text;
-    serviceDoc = read.doc;
-    serviceDraft = draftFrom(read.doc);
-  }
-
-  function serviceConfig(): ServiceConfigGroup {
-    if (chosenCheckout === '') {
-      return emptyService('');
-    }
-    const live = readServiceFile(chosenCheckout);
-    if (live.kind === 'broken') {
-      serviceDirty = false;
-      serviceBaseline = live.text;
-      serviceDoc = null;
-      serviceDraft = null;
-      return emptyService(chosenCheckout);
-    }
-    if (serviceDirty && serviceDraft) {
-      return groupOf(chosenCheckout, serviceDraft);
-    }
-    if (live.kind === 'missing') {
-      serviceBaseline = null;
-      serviceDoc = null;
-      serviceDraft = null;
-      return emptyService(chosenCheckout);
-    }
-    serviceBaseline = live.text;
-    serviceDoc = live.doc;
-    serviceDraft = draftFrom(live.doc);
-    return groupOf(chosenCheckout, serviceDraft);
-  }
-
-  function editable(): ServiceDraft | null {
-    if (chosenCheckout === '' || readServiceFile(chosenCheckout).kind === 'broken') {
-      return null;
-    }
-    if (serviceDraft) {
-      serviceDirty = true;
-      return serviceDraft;
-    }
-    const live = readServiceFile(chosenCheckout);
-    if (live.kind === 'missing') {
-      serviceBaseline = null;
-      serviceDoc = null;
-      serviceDraft = blankDraft();
-    } else if (live.kind === 'doc') {
-      serviceBaseline = live.text;
-      serviceDoc = live.doc;
-      serviceDraft = draftFrom(live.doc);
-    } else {
-      return null;
-    }
-    serviceDirty = true;
-    return serviceDraft;
-  }
-
-  function rememberOverlay(checkout: string): void {
-    chosenCheckout = checkout;
-    overlayBaseline = textOf(overlayFile(checkout));
-    overlayDoc = parseDoc(overlayBaseline);
-    loadService(checkout);
-  }
-
-  function emptyOverlay(): OverlayGroup {
-    return {
-      file: '.aifactory/config.yaml',
-      checkout: '',
-      agent: '',
-      models: {
-        mechanical: {value: '', needsValue: false},
-        judgment: {value: '', needsValue: false},
-      },
-      watch: [],
-    };
-  }
-
-  function overlay(): OverlayGroup {
-    if (chosenCheckout === '') {
-      return emptyOverlay();
-    }
-    const factory = mergeFactory(doc, overlayDoc);
-    const group: OverlayGroup = {
-      file: '.aifactory/config.yaml',
-      checkout: chosenCheckout,
-      agent: factory.agent,
-      models: {
-        mechanical: {
-          value: factory.mechanical,
-          needsValue: factory.agent !== '' && factory.mechanical === '',
-        },
-        judgment: {
-          value: factory.judgment,
-          needsValue: factory.agent !== '' && factory.judgment === '',
-        },
-      },
-      watch: stringList(overlayDoc.watch),
-    };
-    if (factory.effort) {
-      group.effort = factory.effort;
-    }
-    if (factory.speed) {
-      group.speed = factory.speed;
-    }
-    return group;
-  }
-
-  function canWriteOverlay(): boolean {
-    if (chosenCheckout === '') {
-      return false;
-    }
-    const disk = textOf(overlayFile(chosenCheckout));
-    if (disk !== overlayBaseline) {
-      overlayBaseline = disk;
-      overlayDoc = parseDoc(disk);
-      return false;
-    }
-    return true;
-  }
-
-  function commitOverlay(next: Doc): void {
-    const clean: Doc = {};
-    for (const [key, value] of Object.entries(next)) {
-      if (
-        FORBIDDEN.has(key) ||
-        key === 'roots' ||
-        key === 'roles' ||
-        value === undefined ||
-        value === ''
-      ) {
-        continue;
-      }
-      clean[key] = value;
-    }
-    const file = overlayFile(chosenCheckout);
-    mkdirSync(path.dirname(file), {recursive: true});
-    const text = stringify(clean);
-    writeFileSync(file, text);
-    overlayBaseline = text;
-    overlayDoc = clean;
-  }
-
-  function reasonLine(item: WindowTicket): string | undefined {
-    const phase = phaseOf([...item.labels]);
-    const where = slotOf(item, phase, outside.login?.());
-    if (where === 'hide' || where === 'cards') {
-      return undefined;
-    }
-    const located = gathered(item);
-    if (located && serviceBroken(located)) {
-      return undefined;
-    }
-    const checkout = cardOf(item);
-    const several = (item.openPullRequests ?? 0) > 1;
-    const broken = checkout.reason !== '';
-    if (where === 'pool' && !broken && !several) {
-      return undefined;
-    }
-    if (outside.leading?.(item.key) === true || item.checks === 'pending') {
-      return undefined;
-    }
-    const questions = openCount(checkout.checkout, item.key, 'proposal.md', HEADINGS.openQuestions);
-    const decisions = openCount(checkout.checkout, item.key, 'design.md', HEADINGS.openDecisions);
-    const parts = reasonParts(
-      item,
-      phase ?? 'implementing',
-      checkout.reason,
-      sortedTickets(),
-      questions,
-      decisions,
-    );
-    if (parts.length === 0) {
-      return undefined;
-    }
-    return parts.join(' · ');
-  }
-
-  function sidebar(): SidebarBlock[] {
+  function sidebar() {
     if (openKey === '') {
       return [];
     }
-    const item = sortedTickets().find(ticket => ticket.key === openKey);
+    const item = checkout.sorted().find(ticket => ticket.key === openKey);
     if (!item) {
       return [];
     }
-    const blocks: SidebarBlock[] = [];
-    const line = reasonLine(item);
-    if (line !== undefined) {
-      blocks.push({kind: 'reason', line});
+    return blocksFor(item, {
+      manager: () => outside.login?.(),
+      review: () => outside.review?.(item.key),
+      reading: () => checkout.sorted(),
+      gathered: ticket => checkout.gathered(ticket),
+      serviceBroken: located => checkout.serviceBroken(located),
+      cardOf: ticket => checkout.cardOf(ticket),
+      leading: key => outside.leading?.(key) === true,
+    });
+  }
+
+  function spy(): void {
+    if (!answers()) {
+      return;
     }
-    if (item.labels.includes('sdd:wait-human')) {
-      const body = askBody(item.comments);
-      if (body !== undefined) {
-        blocks.push({kind: 'ask', body});
+    if (!outside.tickets) {
+      if (!home.modelsReady()) {
+        return;
       }
+      const homeFactory = mergeFactory(home.doc(), null);
+      outside.startStep?.(undefined, {
+        mechanical: homeFactory.mechanical,
+        judgment: homeFactory.judgment,
+      });
+      return;
     }
-    const plaque = focusBody(item.comments);
-    if (plaque !== undefined) {
-      blocks.push({kind: 'focus', body: plaque});
+    const view = checkout.settle();
+    const manager = outside.login?.();
+    const reading = checkout.sorted();
+    for (const card of view.cards) {
+      if (card.reason !== '' || !card.checkout || checkout.serviceBroken(card.checkout)) {
+        continue;
+      }
+      const item = reading.find(ticket => ticket.key === card.key);
+      if (!item) {
+        continue;
+      }
+      const phase = phaseOf([...item.labels]);
+      const where = slotOf(item, phase, manager);
+      if (where !== 'cards' && where !== 'pool' && where !== 'hide') {
+        continue;
+      }
+      if (outside.leading?.(item.key) === true) {
+        continue;
+      }
+      const factory = factoryFor(card.checkout);
+      if (!canStart(card.checkout)) {
+        continue;
+      }
+      outside.startStep?.(card.checkout, {
+        mechanical: factory.mechanical,
+        judgment: factory.judgment,
+      });
     }
-    const unanswered = unansweredBlock(outside.review?.(item.key));
-    if (unanswered) {
-      blocks.push(unanswered);
+    if (manager === undefined) {
+      return;
     }
-    const hook = hookBlock(item.sddHooks);
-    if (hook) {
-      blocks.push(hook);
+    for (const item of reading) {
+      if (!checkout.onWatch(item, view.watch) || item.open === false) {
+        continue;
+      }
+      if (item.labels.includes('sdd:cancelled') || phaseOf([...item.labels]) !== null) {
+        continue;
+      }
+      if (item.assignee !== manager) {
+        continue;
+      }
+      const located = checkout.gathered(item);
+      if (located && checkout.serviceBroken(located)) {
+        continue;
+      }
+      const card = view.cards.find(entry => entry.key === item.key);
+      const stopped =
+        (item.openPullRequests ?? 0) > 1 ||
+        (card?.reason ?? '') !== '' ||
+        !canStart(card?.checkout);
+      if (stopped) {
+        continue;
+      }
+      outside.writePhase?.(item.key, 'proposing');
     }
-    return blocks;
   }
 
   return {
     board,
-    settings,
-    overlay,
+    settings: () => home.settings(settingsOpen),
+    overlay: () => overlaySession.view(home.doc()),
     sidebar,
     openSettings() {
       settingsOpen = true;
-      if (chosenCheckout !== '') {
+      if (overlaySession.checkout() !== '') {
         return;
       }
-      const checkouts = gatheredCheckouts();
-      if (checkouts.length !== 1 || serviceBroken(checkouts[0])) {
+      const checkouts = checkout.gatheredCheckouts();
+      if (checkouts.length !== 1 || checkout.serviceBroken(checkouts[0])) {
         return;
       }
-      rememberOverlay(checkouts[0]);
+      remember(checkouts[0]);
     },
     closeSettings() {
       settingsOpen = false;
-      serviceDirty = false;
-      if (chosenCheckout !== '') {
-        loadService(chosenCheckout);
-      }
+      service.discard();
     },
     openCard(key: string) {
-      const item = sortedTickets().find(ticket => ticket.key === key);
+      const item = checkout.sorted().find(ticket => ticket.key === key);
       if (!item) {
         return;
       }
-      const checkout = gathered(item);
-      if (!checkout || !gatheredCheckouts().includes(checkout)) {
+      const located = checkout.gathered(item);
+      if (!located || !checkout.gatheredCheckouts().includes(located)) {
         return;
       }
-      rememberOverlay(checkout);
+      remember(located);
       openKey = key;
     },
-    chooseCheckout(checkout: string) {
-      if (!gatheredCheckouts().includes(checkout)) {
+    chooseCheckout(next: string) {
+      if (!checkout.gatheredCheckouts().includes(next)) {
         return;
       }
-      rememberOverlay(checkout);
+      remember(next);
     },
-    serviceConfig,
-    childQueue() {
-      if (chosenCheckout === '') {
-        return '';
-      }
-      return queueNames(chosenCheckout)?.[0] ?? '';
-    },
-    setServiceBase(value: string) {
-      const draft = editable();
-      if (!draft) {
-        return;
-      }
-      draft.base = value === '' ? 'trunk' : value;
-    },
-    setServiceBranchScope(value: string) {
-      const draft = editable();
-      if (!draft) {
-        return;
-      }
-      draft.branchScope = value === '' ? 'sdd' : value;
-    },
-    addServiceQueue() {
-      const draft = editable();
-      if (!draft) {
-        return;
-      }
-      draft.queues.push({name: '', description: ''});
-    },
-    setServiceQueue(index: number, name: string, description: string) {
-      const draft = editable();
-      const queue = draft?.queues[index];
-      if (!draft || !queue) {
-        return;
-      }
-      queue.name = name;
-      queue.description = description;
-    },
-    removeServiceQueue(index: number) {
-      const draft = editable();
-      if (!draft || index < 0 || index >= draft.queues.length) {
-        return;
-      }
-      draft.queues.splice(index, 1);
-    },
-    moveServiceQueue(from: number, to: number) {
-      const draft = editable();
-      if (!draft || from === to) {
-        return;
-      }
-      if (from < 0 || to < 0 || from >= draft.queues.length || to >= draft.queues.length) {
-        return;
-      }
-      const [item] = draft.queues.splice(from, 1);
-      if (!item) {
-        return;
-      }
-      draft.queues.splice(to, 0, item);
-    },
-    addServiceIgnore(value: string) {
-      const draft = editable();
-      if (!draft || draft.ignore.some(item => item.removeOnly)) {
-        return;
-      }
-      draft.ignore.push({value});
-    },
-    setServiceIgnore(index: number, value: string) {
-      const draft = editable();
-      if (!draft || draft.ignore.some(item => item.removeOnly)) {
-        return;
-      }
-      if (!draft.ignore[index]) {
-        return;
-      }
-      draft.ignore[index] = {value};
-    },
-    removeServiceIgnore(index: number) {
-      const draft = editable();
-      if (!draft || index < 0 || index >= draft.ignore.length) {
-        return;
-      }
-      draft.ignore.splice(index, 1);
-    },
-    saveServiceConfig() {
-      if (chosenCheckout === '' || !serviceDraft) {
-        return;
-      }
-      const live = readServiceFile(chosenCheckout);
-      if (live.kind === 'broken') {
-        serviceDirty = false;
-        serviceBaseline = live.text;
-        serviceDoc = null;
-        serviceDraft = null;
-        return;
-      }
-      if (!groupOf(chosenCheckout, serviceDraft).save) {
-        return;
-      }
-      const disk = live.kind === 'missing' ? null : live.text;
-      if (disk !== serviceBaseline) {
-        loadService(chosenCheckout);
-        return;
-      }
-      const next = writtenService(serviceDoc, serviceDraft);
-      const file = serviceFile(chosenCheckout);
-      mkdirSync(path.dirname(file), {recursive: true});
-      const text = stringify(next);
-      writeFileSync(file, text);
-      serviceBaseline = text;
-      serviceDoc = next;
-      serviceDraft = draftFrom(next);
-      serviceDirty = false;
-    },
-    chooseOverlayAgent(agentId: string) {
-      if (chosenCheckout === '' || offered.length === 0 || !offered.includes(agentId)) {
-        return;
-      }
-      if (!canWriteOverlay()) {
-        return;
-      }
-      const next = replaceAgent(overlayDoc, agentId);
-      delete next.roots;
-      delete next.roles;
-      commitOverlay(next);
-    },
-    clearOverlayAgent() {
-      if (chosenCheckout === '' || !canWriteOverlay()) {
-        return;
-      }
-      const next: Doc = {...overlayDoc};
-      delete next.agent;
-      delete next.models;
-      delete next.effort;
-      delete next.speed;
-      commitOverlay(next);
-    },
-    leaveOverlayModel(mode: SkillMode, value: string) {
-      if (chosenCheckout === '' || !canWriteOverlay()) {
-        return;
-      }
-      const models = isDoc(overlayDoc.models) ? {...overlayDoc.models} : {};
-      if (value === '') {
-        delete models[mode];
-      } else {
-        models[mode] = value;
-      }
-      const next: Doc = {...overlayDoc};
-      if (Object.keys(models).length === 0) {
-        delete next.models;
-      } else {
-        next.models = models;
-      }
-      commitOverlay(next);
-    },
-    chooseAgent(agentId: string) {
-      if (!launch.homePath || offered.length === 0 || !offered.includes(agentId)) {
-        return;
-      }
-      if (!canWrite()) {
-        return;
-      }
-      commit(replaceAgent(doc, agentId));
-    },
-    leaveModel(mode: SkillMode, value: string) {
-      if (!recorded() || !canWrite()) {
-        return;
-      }
-      const models = isDoc(doc.models) ? {...doc.models} : {};
-      models[mode] = value;
-      commit({...doc, models});
-    },
-    leaveEffort(mode: SkillMode, value: string) {
-      const pair = PAIRS[agentOf(doc)];
-      if (!pair?.effort || !recorded() || !canWrite()) {
-        return;
-      }
-      const effort = {...modeValues(doc.effort)};
-      if (value === '') {
-        delete effort[mode];
-      } else {
-        effort[mode] = value;
-      }
-      const next: Doc = {...doc};
-      if (effort.mechanical === undefined && effort.judgment === undefined) {
-        delete next.effort;
-      } else {
-        next.effort = effort;
-      }
-      commit(next);
-    },
-    leaveSpeed(mode: SkillMode, value: string) {
-      const pair = PAIRS[agentOf(doc)];
-      if (!pair?.speed || !recorded() || !canWrite()) {
-        return;
-      }
-      const speed = {...modeValues(doc.speed)};
-      if (value === '') {
-        delete speed[mode];
-      } else {
-        speed[mode] = value;
-      }
-      const next: Doc = {...doc};
-      if (speed.mechanical === undefined && speed.judgment === undefined) {
-        delete next.speed;
-      } else {
-        next.speed = speed;
-      }
-      commit(next);
-    },
-    leaveWatch(names: readonly string[]) {
-      if (!canWrite()) {
-        return;
-      }
-      const watch = stringList(names);
-      const next: Doc = {...doc};
-      if (watch.length === 0) {
-        delete next.watch;
-      } else {
-        next.watch = watch;
-      }
-      commit(next);
-    },
-    leaveRoots(nextRoots: {arcadia?: string; github?: string}) {
-      if (!canWrite()) {
-        return;
-      }
-      const roots: Doc = isDoc(doc.roots) ? {...doc.roots} : {};
-      for (const key of ['arcadia', 'github'] as const) {
-        const value = nextRoots[key];
-        if (value === undefined) {
-          continue;
-        }
-        if (value.trim() === '') {
-          delete roots[key];
-        } else {
-          roots[key] = value.trim();
-        }
-      }
-      const next: Doc = {...doc};
-      if (Object.keys(roots).length === 0) {
-        delete next.roots;
-      } else {
-        next.roots = roots;
-      }
-      commit(next);
-    },
+    serviceConfig: () => service.view(),
+    childQueue: () => service.childQueue(),
+    setServiceBase: (value: string) => service.setBase(value),
+    setServiceBranchScope: (value: string) => service.setBranchScope(value),
+    addServiceQueue: () => service.addQueue(),
+    setServiceQueue: (index: number, name: string, description: string) =>
+      service.setQueue(index, name, description),
+    removeServiceQueue: (index: number) => service.removeQueue(index),
+    moveServiceQueue: (from: number, to: number) => service.moveQueue(from, to),
+    addServiceIgnore: (value: string) => service.addIgnore(value),
+    setServiceIgnore: (index: number, value: string) => service.setIgnore(index, value),
+    removeServiceIgnore: (index: number) => service.removeIgnore(index),
+    saveServiceConfig: () => service.save(),
+    chooseOverlayAgent: (agentId: string) => overlaySession.chooseAgent(agentId),
+    clearOverlayAgent: () => overlaySession.clearAgent(),
+    leaveOverlayModel: (mode: SkillMode, value: string) => overlaySession.leaveModel(mode, value),
+    chooseAgent: (agentId: string) => home.chooseAgent(agentId),
+    leaveModel: (mode: SkillMode, value: string) => home.leaveModel(mode, value),
+    leaveEffort: (mode: SkillMode, value: string) => home.leaveEffort(mode, value),
+    leaveSpeed: (mode: SkillMode, value: string) => home.leaveSpeed(mode, value),
+    leaveWatch: (names: readonly string[]) => home.leaveWatch(names),
+    leaveRoots: (nextRoots: {arcadia?: string; github?: string}) => home.leaveRoots(nextRoots),
     chooseService(key: string, service: string) {
       outside.writeService?.(key, service);
     },
@@ -2315,8 +300,8 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       if (!key || !answers()) {
         return;
       }
-      const view = settle();
-      const card = lay(view.watch).pool.find(item => item.key === key);
+      const view = checkout.settle();
+      const card = placed(view.watch).pool.find(item => item.key === key);
       if (!card || card.takeDisabled) {
         return;
       }
@@ -2326,76 +311,6 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       }
       outside.writeAssignee?.(key, login);
     },
-    spy() {
-      if (!answers()) {
-        return;
-      }
-      if (!outside.tickets) {
-        if (!modelsReady()) {
-          return;
-        }
-        const homeFactory = mergeFactory(doc, null);
-        outside.startStep?.(undefined, {
-          mechanical: homeFactory.mechanical,
-          judgment: homeFactory.judgment,
-        });
-        return;
-      }
-      const view = settle();
-      const manager = outside.login?.();
-      const reading = sortedTickets();
-      for (const card of view.cards) {
-        if (card.reason !== '' || !card.checkout || serviceBroken(card.checkout)) {
-          continue;
-        }
-        const item = reading.find(ticket => ticket.key === card.key);
-        if (!item) {
-          continue;
-        }
-        const phase = phaseOf([...item.labels]);
-        const where = slotOf(item, phase, manager);
-        if (where !== 'cards' && where !== 'pool' && where !== 'hide') {
-          continue;
-        }
-        if (outside.leading?.(item.key) === true) {
-          continue;
-        }
-        const factory = factoryFor(card.checkout);
-        if (!canStart(card.checkout)) {
-          continue;
-        }
-        outside.startStep?.(card.checkout, {
-          mechanical: factory.mechanical,
-          judgment: factory.judgment,
-        });
-      }
-      if (manager === undefined) {
-        return;
-      }
-      for (const item of reading) {
-        if (!onWatch(item, view.watch) || item.open === false) {
-          continue;
-        }
-        if (item.labels.includes('sdd:cancelled') || phaseOf([...item.labels]) !== null) {
-          continue;
-        }
-        if (item.assignee !== manager) {
-          continue;
-        }
-        const located = gathered(item);
-        if (located && serviceBroken(located)) {
-          continue;
-        }
-        const checkout = view.cards.find(entry => entry.key === item.key);
-        const stopped =
-          (item.openPullRequests ?? 0) > 1 ||
-          (checkout?.reason ?? '') !== '' ||
-          !canStart(checkout?.checkout);
-        if (stopped) {
-          continue;
-        }
-        outside.writePhase?.(item.key, 'proposing');
-      }
-    },
+    spy,
   };
 }

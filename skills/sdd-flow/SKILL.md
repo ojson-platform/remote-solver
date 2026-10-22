@@ -42,6 +42,8 @@ Any other wait: say the reason. Leave it in place.
 
 A request to change the artifact: edit it in the worktree, publish (`CONTEXT.md` § Publish), run `node scripts/sdd.mjs unwait <key>`, then Act from a fresh `step`.
 
+`/sdd-flow` or `/sdd-flow <key>` while waiting runs Start again. The poll reads review threads. It does not accept a gate.
+
 Any other message while waiting: say what is still waited for.
 
 ## Actions

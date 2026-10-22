@@ -1436,7 +1436,10 @@ test('proposed stands in proposing and specified stands in specifying', () => {
     board.cards.map(card => card.key),
     ['9'],
   );
-  assert.deepEqual(board.pool, []);
+  assert.deepEqual(
+    board.pool.map(card => card.key),
+    ['9'],
+  );
   rmSync(dir, {recursive: true, force: true});
 });
 
@@ -1462,6 +1465,7 @@ test('another assignee is absent and a phase with no assignee stands in the pool
     ...(board.columns ?? []).flatMap(column => column.cards.map(card => card.key)),
   ];
   assert.equal(keys.includes('b'), false);
+  assert.equal(keys.includes('9'), false);
   assert.deepEqual(
     (board.pool ?? []).map(card => card.key),
     ['a', 'c'],
@@ -1470,7 +1474,7 @@ test('another assignee is absent and a phase with no assignee stands in the pool
   assert.equal(columnCards(board, 'tasking')?.length, 0);
   assert.deepEqual(
     board.cards.map(card => card.key),
-    ['9'],
+    [],
   );
   rmSync(dir, {recursive: true, force: true});
 });
@@ -1807,5 +1811,447 @@ test('a missing home file leaves settings closed until the manager opens them', 
   window.closeSettings();
   assert.equal(existsSync(home), false);
   assert.equal(window.settings().open, false);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('an open watch-list ticket with sdd:cycle, no phase, and no assignee stands in the pool', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    ticket({key: 'b', queue: 'alpha', sddService: 'services/billing', title: 'Second', open: true}),
+    ticket({key: 'a', queue: 'alpha', sddService: 'services/billing', title: 'First'}),
+    ticket({
+      key: 'c',
+      queue: 'alpha',
+      sddService: 'services/billing',
+      title: 'Closed',
+      open: false,
+    }),
+    ticket({key: 'd', queue: 'beta', sddService: 'services/billing', title: 'Other queue'}),
+  ]);
+  const board = window.board();
+  assert.deepEqual(
+    board.pool.map(card => card.key),
+    ['a', 'b'],
+  );
+  assert.equal(
+    board.pool.some(card => card.key === 'c'),
+    false,
+  );
+  assert.deepEqual(
+    board.cards.map(card => card.key),
+    ['a', 'b', 'c'],
+  );
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('an open ticket on the watch list without sdd:cycle is not in the pool', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    ticket({
+      key: '1',
+      queue: 'alpha',
+      sddService: 'services/billing',
+      title: 'Plain',
+      open: true,
+      labels: ['alpha'],
+    }),
+  ]);
+  const board = window.board();
+  assert.equal(
+    board.pool.some(card => card.key === '1'),
+    false,
+  );
+  assert.deepEqual(board.cards, []);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a phaseless ticket with another assignee is absent', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    ticket({
+      key: '1',
+      queue: 'alpha',
+      sddService: 'services/billing',
+      assignee: 'other',
+      title: 'Theirs',
+      open: true,
+    }),
+  ]);
+  const board = window.board();
+  const keys = [
+    ...board.cards.map(card => card.key),
+    ...board.pool.map(card => card.key),
+    ...board.columns.flatMap(column => column.cards.map(card => card.key)),
+  ];
+  assert.equal(keys.includes('1'), false);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a phaseless ticket assigned to this login moves to proposing after spy when models are set', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const tickets = [
+    ticket({
+      key: '1',
+      queue: 'alpha',
+      sddService: 'services/billing',
+      assignee: MANAGER,
+      title: 'Mine',
+      labels: ['sdd:cycle'],
+    }),
+  ];
+  const phases: {key: string; phase: string}[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => tickets,
+      writePhase: (key, phase) => {
+        phases.push({key, phase});
+        const found = tickets.find(item => item.key === key);
+        if (found && !found.labels.includes(`sdd:${phase}`)) {
+          found.labels = [...found.labels, `sdd:${phase}`];
+        }
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  assert.deepEqual(
+    window.board().pool.map(card => card.key),
+    ['1'],
+  );
+  window.spy();
+  assert.deepEqual(phases, [{key: '1', phase: 'proposing'}]);
+  const board = window.board();
+  assert.deepEqual(board.pool, []);
+  assert.deepEqual(
+    columnCards(board, 'proposing')?.map(card => card.key),
+    ['1'],
+  );
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a phaseless ticket assigned to this login stays in the pool when a model slot is empty', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const tickets = [
+    ticket({
+      key: '1',
+      queue: 'alpha',
+      sddService: 'services/billing',
+      assignee: MANAGER,
+      title: 'Mine',
+      labels: ['sdd:cycle'],
+    }),
+  ];
+  const phases: {key: string; phase: string}[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      answers: () => true,
+      tickets: () => tickets,
+      writePhase: (key, phase) => {
+        phases.push({key, phase});
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  window.leaveModel('judgment', '');
+  window.spy();
+  const card = window.board().pool.find(item => item.key === '1');
+  assert.ok(card);
+  assert.equal(card.takeDisabled, true);
+  assert.equal(card.take, true);
+  assert.deepEqual(phases, []);
+  assert.equal(columnCards(window.board(), 'proposing')?.length, 0);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('take on a phaseless ticket sets the assignee and spy then sets proposing', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const tickets = [
+    ticket({
+      key: '1',
+      queue: 'alpha',
+      sddService: 'services/billing',
+      title: 'Take me',
+      labels: ['sdd:cycle'],
+    }),
+  ];
+  const assignees: {key: string; login: string}[] = [];
+  const phases: {key: string; phase: string}[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => tickets,
+      writeAssignee: (key, login) => {
+        assignees.push({key, login});
+        const found = tickets.find(item => item.key === key);
+        if (found) {
+          found.assignee = login;
+        }
+      },
+      writePhase: (key, phase) => {
+        phases.push({key, phase});
+        const found = tickets.find(item => item.key === key);
+        if (found && !found.labels.includes(`sdd:${phase}`)) {
+          found.labels = [...found.labels, `sdd:${phase}`];
+        }
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  window.take('1');
+  assert.deepEqual(assignees, [{key: '1', login: MANAGER}]);
+  assert.deepEqual(phases, []);
+  assert.equal(tickets[0]?.labels.includes('sdd:proposing'), false);
+  assert.deepEqual(
+    window.board().pool.map(card => card.key),
+    ['1'],
+  );
+  window.spy();
+  assert.deepEqual(phases, [{key: '1', phase: 'proposing'}]);
+  assert.equal(tickets[0]?.labels.includes('sdd:proposing'), true);
+  const board = window.board();
+  assert.deepEqual(board.pool, []);
+  assert.deepEqual(
+    columnCards(board, 'proposing')?.map(card => card.key),
+    ['1'],
+  );
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('take does not call writeAssignee when the home path is absent', () => {
+  let calls = 0;
+  const window = openWindow(
+    {},
+    {
+      login: () => MANAGER,
+      writeAssignee: () => {
+        calls += 1;
+      },
+      tickets: () => [
+        ticket({key: '1', queue: 'alpha', sddService: 'services/billing', title: 'Bare'}),
+      ],
+    },
+  );
+  assert.equal(window.board().takeDisabled, true);
+  window.take('1');
+  assert.equal(calls, 0);
+});
+
+test('take on an implementing pool cycle sets the assignee and leaves the phase', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const tickets = [cycle('1', 'implementing', {assignee: '', title: 'Build', openPullRequests: 1})];
+  const assignees: {key: string; login: string}[] = [];
+  const phases: {key: string; phase: string}[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => tickets,
+      writeAssignee: (key, login) => {
+        assignees.push({key, login});
+        const found = tickets.find(item => item.key === key);
+        if (found) {
+          found.assignee = login;
+        }
+      },
+      writePhase: (key, phase) => {
+        phases.push({key, phase});
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  const before = window.board().pool.find(card => card.key === '1');
+  assert.equal(before?.take, true);
+  assert.equal(before?.icon, undefined);
+  assert.equal(before?.takeDisabled, undefined);
+  window.take('1');
+  assert.deepEqual(assignees, [{key: '1', login: MANAGER}]);
+  assert.deepEqual(phases, []);
+  assert.deepEqual(tickets[0]?.labels, ['sdd:cycle', 'sdd:implementing']);
+  const board = window.board();
+  assert.deepEqual(board.pool, []);
+  assert.deepEqual(
+    columnCards(board, 'implementing')?.map(card => card.key),
+    ['1'],
+  );
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('take on an implementing pool cycle writes the assignee when a model slot is empty', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const tickets = [cycle('1', 'implementing', {assignee: '', title: 'Build'})];
+  const assignees: {key: string; login: string}[] = [];
+  const phases: {key: string; phase: string}[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      answers: () => true,
+      tickets: () => tickets,
+      writeAssignee: (key, login) => {
+        assignees.push({key, login});
+        const found = tickets.find(item => item.key === key);
+        if (found) {
+          found.assignee = login;
+        }
+      },
+      writePhase: (key, phase) => {
+        phases.push({key, phase});
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  window.leaveModel('mechanical', '');
+  const before = window.board().pool.find(card => card.key === '1');
+  assert.equal(before?.take, true);
+  assert.equal(before?.takeDisabled, undefined);
+  window.take('1');
+  assert.deepEqual(assignees, [{key: '1', login: MANAGER}]);
+  assert.deepEqual(phases, []);
+  assert.deepEqual(tickets[0]?.labels, ['sdd:cycle', 'sdd:implementing']);
+  const board = window.board();
+  assert.deepEqual(board.pool, []);
+  assert.deepEqual(
+    columnCards(board, 'implementing')?.map(card => card.key),
+    ['1'],
+  );
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('two open pull requests keep the card in the pool and do not write the assignee', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const tickets = [
+    ticket({
+      key: '1',
+      queue: 'alpha',
+      sddService: 'services/billing',
+      title: 'Split',
+      openPullRequests: 2,
+    }),
+  ];
+  const assignees: {key: string; login: string}[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => tickets,
+      writeAssignee: (key, login) => {
+        assignees.push({key, login});
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  const card = window.board().pool.find(item => item.key === '1');
+  assert.ok(card);
+  assert.equal(card.icon, true);
+  assert.equal(card.reason, 'несколько pull request');
+  assert.equal(card.takeDisabled, true);
+  window.take('1');
+  assert.deepEqual(assignees, []);
+  assert.deepEqual(
+    window.board().pool.map(item => item.key),
+    ['1'],
+  );
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('one open pull request lets take write the assignee', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const tickets = [
+    ticket({
+      key: '1',
+      queue: 'alpha',
+      sddService: 'services/billing',
+      title: 'One',
+      openPullRequests: 1,
+    }),
+  ];
+  const assignees: {key: string; login: string}[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => tickets,
+      writeAssignee: (key, login) => {
+        assignees.push({key, login});
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  const card = window.board().pool.find(item => item.key === '1');
+  assert.ok(card);
+  assert.equal(card.icon, undefined);
+  assert.equal(card.take, true);
+  assert.equal(card.takeDisabled, undefined);
+  window.take('1');
+  assert.deepEqual(assignees, [{key: '1', login: MANAGER}]);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a pool ticket with a checkout break shows the icon and take does not write', () => {
+  const {dir, home, arcadia} = yard();
+  writeLaunch(home, ['alpha'], {arcadia});
+  const tickets = [
+    ticket({
+      key: '1',
+      queue: 'alpha',
+      sddService: 'services/missing',
+      title: 'Gone',
+    }),
+  ];
+  const assignees: {key: string; login: string}[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => tickets,
+      writeAssignee: (key, login) => {
+        assignees.push({key, login});
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  const board = window.board();
+  const card = board.pool.find(item => item.key === '1');
+  assert.ok(card);
+  assert.equal(card.icon, true);
+  assert.equal(card.reason, 'каталога нет');
+  assert.equal(card.takeDisabled, true);
+  assert.deepEqual(
+    board.cards.map(item => item.key),
+    ['1'],
+  );
+  window.take('1');
+  assert.deepEqual(assignees, []);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('healthy pool cards are ordered by key and have no icon', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    ticket({key: 'c', queue: 'alpha', sddService: 'services/billing', title: 'Third'}),
+    cycle('b', 'proposed', {assignee: '', title: 'Gate', openPullRequests: 1}),
+    ticket({key: 'a', queue: 'alpha', sddService: 'services/billing', title: 'First'}),
+  ]);
+  window.chooseAgent('cursor');
+  assert.deepEqual(window.board().pool, [
+    {key: 'a', title: 'First', take: true},
+    {key: 'b', title: 'Gate', take: true},
+    {key: 'c', title: 'Third', take: true},
+  ]);
   rmSync(dir, {recursive: true, force: true});
 });

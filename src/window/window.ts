@@ -99,8 +99,10 @@ export type WindowOutside = {
   answers?: (agentId: string) => boolean;
   /** Live model catalog. Choosing an agent does not read it. */
   catalog?: (agentId: string) => {mechanical: string; judgment: string};
-  /** Assignee write. This window does not call it: Take that writes an assignee is later. */
-  writeAssignee?: () => void;
+  /** Assignee write. Take calls this with the ticket key and `login()`. */
+  writeAssignee?: (key: string, login: string) => void;
+  /** Phase write. The window's spy calls this with `proposing`. */
+  writePhase?: (key: string, phase: string) => void;
   /** A step the window's spy would start, in the gathered checkout. */
   startStep?: (checkout?: string) => void;
   /** Open tickets this adapter can see. The window filters them by the watch list. */
@@ -136,6 +138,16 @@ export type CardState = {
   queue: string;
 };
 
+/** A pool card. `take` is the same gesture as dragging the card onto the board. */
+export type PoolCard = {
+  key: string;
+  title: string;
+  take: true;
+  takeDisabled?: true;
+  icon?: true;
+  reason?: string;
+};
+
 const COLUMN_NAMES = [
   'proposing',
   'specifying',
@@ -168,7 +180,7 @@ export type BoardState = {
   takeDisabled: boolean;
   cards: CardState[];
   watch: string[];
-  pool: CycleCard[];
+  pool: PoolCard[];
   columns: {name: ColumnName; cards: CycleCard[]}[];
 };
 
@@ -426,7 +438,13 @@ function slotOf(
     return 'hide';
   }
   if (phase === null) {
-    return 'cards';
+    if (item.open === false) {
+      return 'cards';
+    }
+    if (item.assignee !== undefined && item.assignee !== '' && item.assignee !== manager) {
+      return 'hide';
+    }
+    return 'pool';
   }
   if (item.open === false && (item.mergeAhead === true || phase === 'accepted')) {
     return 'hide';
@@ -683,6 +701,42 @@ function buildCycle(
     card.layers = layers;
   }
   return {card, occasion};
+}
+
+/** A healthy pool card is the key, the title, and Take. A break or two pull requests keeps the column reason. */
+function poolCard(
+  item: WindowTicket,
+  checkout: CardState,
+  phase: Phase | null,
+  reading: readonly WindowTicket[],
+  ready: boolean,
+  live: boolean,
+): PoolCard {
+  const several = (item.openPullRequests ?? 0) > 1;
+  const broken = checkout.reason !== '';
+  const card: PoolCard = {key: item.key, title: item.title, take: true};
+  if (broken || several) {
+    card.icon = true;
+    card.takeDisabled = true;
+    const column = (phase && columnOf(phase, item)) || 'implementing';
+    const placed = buildCycle(
+      item,
+      phase ?? 'implementing',
+      column,
+      checkout.checkout,
+      checkout.reason,
+      reading,
+      false,
+    );
+    if (placed.card.reason !== undefined) {
+      card.reason = placed.card.reason;
+    }
+    return card;
+  }
+  if (!live || (phase === null && !ready)) {
+    card.takeDisabled = true;
+  }
+  return card;
 }
 
 /** The window for one launch. Another launch has its own home path. */
@@ -1025,13 +1079,15 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
 
   function lay(watch: readonly string[]): {
     taken: Set<string>;
-    pool: CycleCard[];
+    pool: PoolCard[];
     columns: {name: ColumnName; cards: CycleCard[]}[];
   } {
     const reading = sortedTickets();
     const manager = outside.login?.();
+    const live = answers();
+    const ready = live && modelsReady();
     const taken = new Set<string>();
-    const pool: CycleCard[] = [];
+    const pool: PoolCard[] = [];
     const buckets = new Map<ColumnName, Placed[]>();
     for (const item of reading) {
       if (!onWatch(item, watch)) {
@@ -1042,15 +1098,24 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       if (where === 'cards') {
         continue;
       }
-      taken.add(item.key);
-      if (where === 'hide' || !phase) {
+      if (where === 'hide') {
+        taken.add(item.key);
         continue;
       }
+      const checkout = cardOf(item);
+      if (!phase) {
+        pool.push(poolCard(item, checkout, null, reading, ready, live));
+        continue;
+      }
+      taken.add(item.key);
       const column = where === 'pool' ? columnOf(phase, item) : where;
       if (!column) {
         continue;
       }
-      const checkout = cardOf(item);
+      if (where === 'pool') {
+        pool.push(poolCard(item, checkout, phase, reading, ready, live));
+        continue;
+      }
       const placed = buildCycle(
         item,
         phase,
@@ -1060,13 +1125,9 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
         reading,
         outside.leading?.(item.key) === true || item.checks === 'pending',
       );
-      if (where === 'pool') {
-        pool.push(placed.card);
-      } else {
-        const list = buckets.get(column) ?? [];
-        list.push(placed);
-        buckets.set(column, list);
-      }
+      const list = buckets.get(column) ?? [];
+      list.push(placed);
+      buckets.set(column, list);
     }
     pool.sort(byKey);
     return {
@@ -1201,10 +1262,16 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       if (!key || !answers()) {
         return;
       }
-      const card = settle().cards.find(item => item.key === key);
+      const view = settle();
+      const card = lay(view.watch).pool.find(item => item.key === key);
       if (!card || card.takeDisabled) {
         return;
       }
+      const login = outside.login?.();
+      if (login === undefined) {
+        return;
+      }
+      outside.writeAssignee?.(key, login);
     },
     spy() {
       if (!answers() || !modelsReady()) {
@@ -1214,10 +1281,38 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
         outside.startStep?.();
         return;
       }
-      for (const card of settle().cards) {
-        if (card.reason === '' && card.checkout) {
-          outside.startStep?.(card.checkout);
+      const view = settle();
+      const manager = outside.login?.();
+      const reading = sortedTickets();
+      for (const card of view.cards) {
+        if (card.reason !== '' || !card.checkout) {
+          continue;
         }
+        const item = reading.find(ticket => ticket.key === card.key);
+        if (!item) {
+          continue;
+        }
+        const phase = phaseOf([...item.labels]);
+        const where = slotOf(item, phase, manager);
+        if (where !== 'cards' && where !== 'pool' && where !== 'hide') {
+          continue;
+        }
+        outside.startStep?.(card.checkout);
+      }
+      if (manager === undefined) {
+        return;
+      }
+      for (const item of reading) {
+        if (!onWatch(item, view.watch) || item.open === false) {
+          continue;
+        }
+        if (item.labels.includes('sdd:cancelled') || phaseOf([...item.labels]) !== null) {
+          continue;
+        }
+        if (item.assignee !== manager) {
+          continue;
+        }
+        outside.writePhase?.(item.key, 'proposing');
       }
     },
   };

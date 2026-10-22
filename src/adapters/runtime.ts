@@ -1,11 +1,13 @@
-import {existsSync, mkdirSync, symlinkSync} from 'node:fs';
-import path from 'node:path';
-
+import type {Runtime, RuntimeAsk, SkillRun, Vcs} from '../machine/port.ts';
 import type {AgentStreamEvent} from '@ai-hero/sandcastle';
 
+import {existsSync, mkdirSync, readFileSync, symlinkSync} from 'node:fs';
+import path from 'node:path';
+
+import {serviceHookDoc, stepPrompt} from '../machine/hook.ts';
 import {branchName} from '../machine/naming.ts';
-import type {Runtime, RuntimeAsk, SkillRun, Vcs} from '../machine/port.ts';
 import {agentFor} from '../machine/skill.ts';
+
 import {runAgent} from './agent.ts';
 import {linkCommand as checkoutLinks, packageLinks} from './vcs.ts';
 
@@ -47,7 +49,11 @@ export function renderAgentEvent(event: AgentStreamEvent, atLineStart: boolean):
   if (event.type === 'text') {
     return {
       text: event.message,
-      atLineStart: event.message.endsWith('\n') ? true : event.message.length === 0 ? atLineStart : false,
+      atLineStart: event.message.endsWith('\n')
+        ? true
+        : event.message.length === 0
+          ? atLineStart
+          : false,
     };
   }
   const name = event.name.replace(/[\r\n]/g, ' ').trim() || 'tool';
@@ -79,7 +85,9 @@ const WORKTREES = '.sandcastle/worktrees';
 
 function keyFromBranch(branch: string, prefix: string): string {
   const head = `${prefix}/`;
-  return branch.startsWith(head) ? branch.slice(head.length) : branch.slice(branch.indexOf('/') + 1);
+  return branch.startsWith(head)
+    ? branch.slice(head.length)
+    : branch.slice(branch.indexOf('/') + 1);
 }
 
 async function commitCount(vcs: Vcs, before: string, after: string): Promise<number> {
@@ -100,8 +108,16 @@ export function agentRuntime(config: AgentRuntimeConfig): Runtime {
   return {
     async run(skill: SkillRun) {
       const dir = await checkout(skill.key);
+      const serviceRoot =
+        skill.service && skill.service.trim() !== ''
+          ? path.isAbsolute(skill.service)
+            ? skill.service
+            : path.join(dir, skill.service)
+          : dir;
       const before = await config.vcs.tip(skill.key);
       ensureServiceEnv(config.root, config.solverRoot);
+      const stepFile = path.join(config.solverRoot, 'skills/sdd-flow/steps', `${skill.skill}.md`);
+      const stepText = existsSync(stepFile) ? readFileSync(stepFile, 'utf8') : '';
       const answer = await runAgent({
         cwd: dir,
         hostCwd: config.root,
@@ -116,8 +132,15 @@ export function agentRuntime(config: AgentRuntimeConfig): Runtime {
           SKILL: skill.skill,
           QUEUE: config.queueLabel,
           BASE: config.prBase,
+          STEP: stepText
+            ? stepPrompt(stepText, skill.action, serviceHookDoc(serviceRoot), skill.sddHooks)
+            : '',
         },
-        logPath: agentLogPath(config.root, branchName(skill.key, config.branchPrefix), skill.action),
+        logPath: agentLogPath(
+          config.root,
+          branchName(skill.key, config.branchPrefix),
+          skill.action,
+        ),
         resumeSession: skill.resumeSession,
       });
       return {

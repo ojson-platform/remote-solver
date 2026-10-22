@@ -13,8 +13,10 @@ import type {
 
 import {execFileSync, spawn} from 'node:child_process';
 
+import {parse} from 'yaml';
+
 import {authorIgnored} from '../machine/ignore.ts';
-import {markRobot} from '../machine/marker.ts';
+import {isFocusRecord, markRobot} from '../machine/marker.ts';
 import {pullTitlePrefix} from '../machine/naming.ts';
 import {spokeByRobot} from '../machine/review.ts';
 
@@ -29,6 +31,11 @@ const PENDING = ['QUEUED', 'IN_PROGRESS', 'PENDING', 'WAITING', 'REQUESTED'];
 /** On GitHub the phase is an `sdd:<phase>` label. */
 export function labelHint(from: string, to: string): string {
   return `replace the label \`sdd:${from}\` with \`sdd:${to}\``;
+}
+
+/** A focus record starts with `sdd:focus`. Other machine comments keep the spy mark. */
+function commentBody(body: string): string {
+  return isFocusRecord(body) ? body : markRobot(body);
 }
 
 export type Repo = {owner: string; name: string; slug: string};
@@ -177,7 +184,7 @@ export function linksFrom(body: string): {parent?: string; dependsOn: string[]} 
   return {parent, dependsOn};
 }
 
-function asRecord(issue: RawIssue): IssueRecord {
+function asRecord(issue: RawIssue, sddHooks?: unknown): IssueRecord {
   const body = issue.body ?? '';
   const links = linksFrom(body);
   return {
@@ -188,20 +195,89 @@ function asRecord(issue: RawIssue): IssueRecord {
     labels: issue.labels.map(label => label.name),
     assignee: issue.assignees?.[0]?.login ?? '',
     service: '',
+    ...(sddHooks !== undefined ? {sddHooks} : {}),
     parent: links.parent,
     dependsOn: links.dependsOn,
   };
+}
+
+type IssueFieldValue = {
+  issue_field_name?: string;
+  data_type?: string;
+  value?: unknown;
+};
+
+/**
+ * The organization issue field `sddHooks`.
+ * Absent when that text field is not in the list. The port does not create it.
+ * Blank text is an empty value. Text that is not a map stays text.
+ */
+function cycleField(values: unknown): unknown | undefined {
+  if (!Array.isArray(values)) {
+    return undefined;
+  }
+  const field = values.find((item): item is IssueFieldValue => {
+    if (!item || typeof item !== 'object') {
+      return false;
+    }
+    const row = item as IssueFieldValue;
+    return row.issue_field_name === 'sddHooks' && row.data_type === 'text' && typeof row.value === 'string';
+  });
+  if (!field || typeof field.value !== 'string') {
+    return undefined;
+  }
+  if (field.value.trim() === '') {
+    return '';
+  }
+  try {
+    const parsed = parse(field.value) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return nonEmptyPoints(parsed as Record<string, unknown>);
+    }
+  } catch {
+    // The text is not a map. The port keeps it so a reader can say it does not parse.
+  }
+  return field.value;
+}
+
+function isDoc(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** A string of spaces is not a point. An action with none is absent. */
+function nonEmptyPoints(value: Record<string, unknown>): Record<string, unknown> {
+  const map: Record<string, unknown> = {};
+  for (const [action, points] of Object.entries(value)) {
+    if (!isDoc(points)) {
+      map[action] = points;
+      continue;
+    }
+    const kept: Record<string, unknown> = {};
+    for (const [point, text] of Object.entries(points)) {
+      if (typeof text === 'string' && text.trim() === '') {
+        continue;
+      }
+      kept[point] = text;
+    }
+    if (Object.keys(kept).length > 0) {
+      map[action] = kept;
+    }
+  }
+  return map;
 }
 
 export type GitHubAdapters = {
   /** Base branch passed to `gh pr create`. */
   prBase?: string;
   ignoreComments?: RegExp[];
+  /** Replaces `gh`. A test answers issue reads without calling GitHub. */
+  run?: (args: string[], input?: string) => Promise<string>;
 };
 
 export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker; review: Review} {
   const prBase = options.prBase ?? 'master';
   const ignored = options.ignoreComments ?? [];
+  const run = options.run ?? gh;
   let slug: string | null = null;
   let user: string | null = null;
   const repoSlug = () => {
@@ -212,13 +288,13 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
   };
   const login = async () => {
     if (!user) {
-      user = (await gh(['api', 'user', '--jq', '.login'])).trim();
+      user = (await run(['api', 'user', '--jq', '.login'])).trim();
     }
     return user;
   };
   const readIssue = async (key: string): Promise<RawIssue> =>
     JSON.parse(
-      await gh([
+      await run([
         'issue',
         'view',
         key,
@@ -229,11 +305,23 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       ]),
     ) as RawIssue;
 
+  const readFields = async (key: string): Promise<unknown> => {
+    try {
+      return JSON.parse(
+        await run(['api', `repos/${repoSlug()}/issues/${key}/issue-field-values?per_page=100`]),
+      ) as unknown;
+    } catch {
+      return undefined;
+    }
+  };
+  const withField = async (issue: RawIssue): Promise<IssueRecord> =>
+    asRecord(issue, cycleField(await readFields(String(issue.number))));
+
   const tracker: Tracker = {
     login,
     async listOpen() {
       const found = JSON.parse(
-        await gh([
+        await run([
           'issue',
           'list',
           '--repo',
@@ -246,11 +334,11 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
           'number,title,body,state,labels,assignees',
         ]),
       ) as RawIssue[];
-      return found.map(asRecord);
+      return Promise.all(found.map(withField));
     },
-    issue: async key => asRecord(await readIssue(key)),
+    issue: async key => withField(await readIssue(key)),
     async assign(key, login) {
-      await gh(['issue', 'edit', key, '--repo', repoSlug(), '--add-assignee', login]);
+      await run(['issue', 'edit', key, '--repo', repoSlug(), '--add-assignee', login]);
     },
     labels: async key => asRecord(await readIssue(key)).labels,
     async editLabels(key, add, remove) {
@@ -264,23 +352,28 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       if (remove.length) {
         args.push('--remove-label', remove.join(','));
       }
-      await gh(args);
+      await run(args);
     },
     async updateBody(key, body) {
-      await gh(['issue', 'edit', key, '--repo', repoSlug(), '--body', body]);
+      await run(['issue', 'edit', key, '--repo', repoSlug(), '--body', body]);
     },
     async comment(key, body) {
-      await gh(['issue', 'comment', key, '--repo', repoSlug(), '--body', markRobot(body)]);
+      await run(['issue', 'comment', key, '--repo', repoSlug(), '--body', commentBody(body)]);
+    },
+    async comments(key) {
+      return JSON.parse(
+        await run(['api', `repos/${repoSlug()}/issues/${key}/comments`, '--jq', '[.[] | {body}]']),
+      ) as {body: string}[];
     },
     async close(key, comment) {
-      await gh(['issue', 'close', key, '--repo', repoSlug(), '--comment', markRobot(comment)]);
+      await run(['issue', 'close', key, '--repo', repoSlug(), '--comment', markRobot(comment)]);
     },
     phaseHint: labelHint,
   };
 
   const linked = async (key: string) => {
     const found = JSON.parse(
-      await gh([
+      await run([
         'pr',
         'list',
         '--repo',
@@ -308,7 +401,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
           continue;
         }
         const view = JSON.parse(
-          await gh(['pr', 'view', id, '--repo', repoSlug(), '--json', 'statusCheckRollup,state']),
+          await run(['pr', 'view', id, '--repo', repoSlug(), '--json', 'statusCheckRollup,state']),
         ) as CheckRollup;
         found.push({id, title: pr.title, state: pr.state, checks: classifyChecks(view)});
       }
@@ -338,7 +431,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
         }
       }`;
       const data = JSON.parse(
-        await gh([
+        await run([
           'api',
           'graphql',
           '-f',
@@ -367,7 +460,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
     },
     async comments(pull) {
       const comments = JSON.parse(
-        await gh([
+        await run([
           'api',
           `repos/${repoSlug()}/issues/${pull}/comments`,
           '--jq',
@@ -387,7 +480,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
         return open[0];
       }
       const url = (
-        await gh([
+        await run([
           'pr',
           'create',
           '--repo',
@@ -407,7 +500,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       return id;
     },
     async openThread(pull, target: ThreadTarget) {
-      await gh([
+      await run([
         'api',
         '--method',
         'POST',
@@ -423,7 +516,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       ]);
     },
     async reply(pull, comment, body) {
-      await gh([
+      await run([
         'api',
         '--method',
         'POST',
@@ -433,10 +526,10 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       ]);
     },
     async say(pull, body) {
-      await gh(['issue', 'comment', pull, '--repo', repoSlug(), '--body', markRobot(body)]);
+      await run(['issue', 'comment', pull, '--repo', repoSlug(), '--body', markRobot(body)]);
     },
     async speak(pull, body) {
-      await gh(['issue', 'comment', pull, '--repo', repoSlug(), '--body', body]);
+      await run(['issue', 'comment', pull, '--repo', repoSlug(), '--body', body]);
     },
     async flag(pull, head, notes) {
       const payload = changesPayload(head, notes);
@@ -450,7 +543,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       } catch {
         const text = notes.map(note => note.body).join('\n\n');
         try {
-          await gh(
+          await run(
             [
               'api',
               '--method',
@@ -486,7 +579,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
     },
     async range(pull) {
       const view = JSON.parse(
-        await gh(['pr', 'view', pull, '--repo', repoSlug(), '--json', 'headRefOid,baseRefOid']),
+        await run(['pr', 'view', pull, '--repo', repoSlug(), '--json', 'headRefOid,baseRefOid']),
       ) as {
         headRefOid?: string;
         baseRefOid?: string;
@@ -496,7 +589,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
     async resolveThread(thread) {
       const query =
         'mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}) { thread { isResolved } } }';
-      await gh(['api', 'graphql', '-f', `query=${query}`, '-f', `id=${thread}`]);
+      await run(['api', 'graphql', '-f', `query=${query}`, '-f', `id=${thread}`]);
     },
     async checksText(pull) {
       try {
@@ -512,7 +605,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
     },
     async merge(pull) {
       try {
-        await gh(['pr', 'merge', pull, '--repo', repoSlug(), '--rebase']);
+        await run(['pr', 'merge', pull, '--repo', repoSlug(), '--rebase']);
       } catch (error) {
         const stderr =
           error && typeof error === 'object' && 'stderr' in error ? String(error.stderr) : '';
@@ -522,7 +615,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
         }
       }
       const view = JSON.parse(
-        await gh(['pr', 'view', pull, '--repo', repoSlug(), '--json', 'state']),
+        await run(['pr', 'view', pull, '--repo', repoSlug(), '--json', 'state']),
       ) as {
         state?: string;
       };
@@ -547,6 +640,8 @@ export type MemoryIssue = {
   assignee?: string;
   /** Directory of the service. Empty or absent means the chat's directory. */
   service?: string;
+  /** Cycle hook field. The port does not create it. */
+  sddHooks?: unknown;
 };
 
 export type MemorySeed = {
@@ -571,6 +666,7 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
     dependsOn: issue.dependsOn ? [...issue.dependsOn] : undefined,
   }));
   const calls: string[] = [];
+  const issueComments = new Map<string, {body: string}[]>();
   const find = (key: string) => {
     const issue = issues.find(item => item.key === key);
     if (!issue) {
@@ -588,6 +684,7 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
       labels: [...issue.labels],
       assignee: issue.assignee ?? seed.user ?? 'robot',
       service: issue.service ?? '',
+      ...(issue.sddHooks !== undefined ? {sddHooks: issue.sddHooks} : {}),
       parent: issue.parent ?? links.parent,
       dependsOn: issue.dependsOn ?? links.dependsOn,
     };
@@ -627,9 +724,17 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
       calls.push('updateBody');
       find(key).body = body;
     },
-    async comment(_key, body) {
+    async comment(key, body) {
       calls.push('comment');
-      calls.push(`body:${markRobot(body)}`);
+      const posted = commentBody(body);
+      calls.push(`body:${posted}`);
+      const list = issueComments.get(key) ?? [];
+      list.push({body: posted});
+      issueComments.set(key, list);
+    },
+    async comments(key) {
+      calls.push('comments');
+      return (issueComments.get(key) ?? []).map(item => ({...item}));
     },
     async close(key, comment) {
       calls.push(`close:${comment}`);

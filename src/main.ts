@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import {solverRoot, turn, type Machine} from './adapters/compose.ts';
 import {performCycle} from './machine/flow.ts';
+import {endStep, observedSignal, runMarks} from './machine/focus.ts';
 import {exited, signature, tick, type State} from './machine/scheduler.ts';
 import {modeOfSkill} from './machine/skill.ts';
 import {loadCycle} from './machine/snapshot.ts';
@@ -43,6 +44,8 @@ export async function driveIssue(box: Machine, key: string): Promise<number> {
       return 0;
     }
     console.log(`\n#${key} ${decision.phase} → ${decision.action} (${decision.skill})`);
+    const before = await runMarks(key, box);
+    const record = await box.tracker.issue(key);
     const outcome = await runtime.run({
       skill: decision.skill,
       action: decision.action,
@@ -50,13 +53,20 @@ export async function driveIssue(box: Machine, key: string): Promise<number> {
       phase: decision.phase,
       pull: decision.pr,
       mode: modeOfSkill(path.join(solverRoot(), 'skills/sdd-flow/steps'), decision.skill),
+      sddHooks: record.sddHooks,
+      service: record.service,
     });
     if (outcome.sessionId) {
       console.log(`#${key} session ${outcome.sessionId}`);
     }
     if (outcome.usage) {
-      console.log(`#${key} tokens in ${outcome.usage.inputTokens} out ${outcome.usage.outputTokens}`);
+      console.log(
+        `#${key} tokens in ${outcome.usage.inputTokens} out ${outcome.usage.outputTokens}`,
+      );
     }
+    const signal =
+      outcome.signal ?? observedSignal(outcome.commits, before, await runMarks(key, box));
+    await endStep(key, {...outcome, signal}, box);
     if (outcome.commits === 0) {
       console.error(
         `Stopped: ${decision.action} made no commit, so the next poll would repeat it.`,

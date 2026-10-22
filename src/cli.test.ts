@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync} from 'node:fs';
+import {mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {test, vi} from 'vitest';
@@ -73,6 +73,68 @@ test('the agent prompt QUEUE is the first configured queue', async () => {
     mode: 'mechanical',
   });
   assert.equal(runAgent.mock.calls[0]?.[0].promptArgs.QUEUE, 'FIRST');
+});
+
+test('the step prompt carries the service hook and then the cycle paragraph', async () => {
+  runAgent.mockClear();
+  const root = mkdtempSync(path.join(tmpdir(), 'sdd-hook-'));
+  const service = path.join(root, 'services', 'billing');
+  mkdirSync(path.join(root, 'openspec'), {recursive: true});
+  mkdirSync(path.join(service, 'openspec'), {recursive: true});
+  writeFileSync(
+    path.join(root, 'openspec', 'config.yaml'),
+    ['sdd:', '  hooks:', '    archive:', '      before:', '        - worktree line', ''].join('\n'),
+  );
+  writeFileSync(
+    path.join(service, 'openspec', 'config.yaml'),
+    [
+      'sdd:',
+      '  queues:',
+      '    - name: FIRST',
+      '  hooks:',
+      '    archive:',
+      '      before:',
+      '        - svc line',
+      '',
+    ].join('\n'),
+  );
+  const vcs: Vcs = {
+    prepare: async () => root,
+    tip: async () => 'abc',
+    filesAt: () => ({exists: () => false, read: () => '', list: () => []}),
+    compare: async () => null,
+    push: async () => {},
+    head: async () => 'abc',
+    published: async () => true,
+    dirty: async () => [],
+  };
+  const runtime = launcherRuntime({
+    root,
+    vcs,
+    config: {queues: [{name: 'FIRST'}], branchScope: 'sdd', base: 'trunk'},
+  });
+  await runtime.run({
+    skill: 'accept',
+    action: 'archive',
+    key: '7',
+    phase: 'accepting',
+    pull: '',
+    mode: 'judgment',
+    service: 'services/billing',
+    sddHooks: {archive: {before: 'cyc line'}},
+  });
+  const step = runAgent.mock.calls[0]?.[0].promptArgs.STEP ?? '';
+  const before = step.indexOf('svc line');
+  const cycle = step.indexOf('cyc line');
+  const heading = step.indexOf('## archive');
+  assert.equal(step.includes('worktree line'), false);
+  assert.ok(before >= 0 && before < cycle && cycle < heading);
+  assert.equal(step.slice(before, heading), 'svc line\n\ncyc line\n\n');
+  const prompt = readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../prompts/sdd.md'),
+    'utf8',
+  );
+  assert.match(prompt, /\{\{STEP\}\}/);
 });
 
 test('the sdd bin prints cycle verbs', () => {

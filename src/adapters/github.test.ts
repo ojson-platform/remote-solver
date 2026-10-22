@@ -4,6 +4,7 @@ import {test} from 'vitest';
 import {
   changesPayload,
   classifyChecks,
+  githubAdapters,
   linkedTitle,
   linksFrom,
   memoryPorts,
@@ -150,6 +151,115 @@ test('setPhase keeps a single phase label and refuses a gate label', async () =>
   await setPhase('7', 'specifying', tracker);
   assert.deepEqual(await tracker.labels('7'), ['Sandcastle', 'sdd:specifying']);
   await assert.rejects(setPhase('7', 'proposed', tracker), /gate label sdd:proposed/);
+});
+
+function viewedIssue(number: number, login?: string): string {
+  return JSON.stringify({
+    number,
+    title: 't',
+    body: '',
+    state: 'OPEN',
+    labels: [],
+    assignees: login ? [{login}] : [],
+  });
+}
+
+function issueRead(number: number, fields: string | Error, login?: string) {
+  return async (args: string[]) => {
+    if (args.join(' ').includes('issue-field-values')) {
+      if (fields instanceof Error) {
+        throw fields;
+      }
+      return fields;
+    }
+    if (args[0] === 'issue' && args[1] === 'view') {
+      return viewedIssue(number, login);
+    }
+    if (args[0] === 'issue' && args[1] === 'list') {
+      return `[${viewedIssue(number, login)}]`;
+    }
+    throw new Error(args.join(' '));
+  };
+}
+
+test('an organization issue field named sddHooks is the cycle field', async () => {
+  const calls: string[] = [];
+  const yaml = 'archive:\n  before: keep\n  after: "   "\n';
+  const {tracker} = githubAdapters({
+    run: async (args, input) => {
+      calls.push(`${args.join(' ')}${input ? ` <${input}>` : ''}`);
+      const joined = args.join(' ');
+      if (joined.includes('issue-field-values')) {
+        return JSON.stringify([
+          {issue_field_name: 'other', data_type: 'text', value: 'no'},
+          {issue_field_name: 'sddHooks', data_type: 'number', value: 1},
+          {issue_field_name: 'sddHooks', data_type: 'text', value: yaml},
+        ]);
+      }
+      if (args[0] === 'issue' && args[1] === 'view') {
+        return viewedIssue(7, 'me');
+      }
+      if (args[0] === 'issue' && args[1] === 'list') {
+        return `[${viewedIssue(7, 'me')}]`;
+      }
+      throw new Error(joined);
+    },
+  });
+  const record = await tracker.issue('7');
+  assert.deepEqual(record.sddHooks, {archive: {before: 'keep'}});
+  assert.deepEqual((await tracker.listOpen())[0]?.sddHooks, {archive: {before: 'keep'}});
+  assert.equal(
+    calls.some(call => call.includes('repos/ojson-platform/remote-solver/issues/7/issue-field-values')),
+    true,
+  );
+  assert.equal(
+    calls.some(call => call.includes('POST') || call.includes('<')),
+    false,
+  );
+});
+
+test('a failed organization field read leaves sddHooks absent', async () => {
+  const {tracker} = githubAdapters({run: issueRead(7, new Error('404'))});
+  const absent = await tracker.issue('7');
+  assert.equal('sddHooks' in absent, false);
+});
+
+test('blank organization text is an empty cycle field', async () => {
+  const {tracker} = githubAdapters({
+    run: issueRead(8, JSON.stringify([{issue_field_name: 'sddHooks', data_type: 'text', value: '   '}])),
+  });
+  assert.equal((await tracker.issue('8')).sddHooks, '');
+});
+
+test('organization text that is not a map stays text', async () => {
+  const {tracker} = githubAdapters({
+    run: issueRead(9, JSON.stringify([{issue_field_name: 'sddHooks', data_type: 'text', value: 'not: [a map'}])),
+  });
+  assert.equal((await tracker.issue('9')).sddHooks, 'not: [a map');
+});
+
+test('a cycle field of only spaces has no points', async () => {
+  const {tracker} = githubAdapters({
+    run: issueRead(
+      10,
+      JSON.stringify([{issue_field_name: 'sddHooks', data_type: 'text', value: 'archive:\n  after: "   "\n'}]),
+    ),
+  });
+  assert.deepEqual((await tracker.issue('10')).sddHooks, {});
+});
+
+test('a focus comment stays sdd:focus on the first line', async () => {
+  const {tracker, calls} = memoryPorts({
+    user: '3y3',
+    issues: [{key: '7', title: '#7: title', body: '', state: 'OPEN', labels: []}],
+  });
+  await tracker.comment('7', 'sdd:focus\nChange solid\n');
+  assert.equal(calls.includes('body:sdd:focus\nChange solid\n'), true);
+  assert.equal(
+    calls.some(call => call.startsWith('body:🤖 sdd:focus')),
+    false,
+  );
+  assert.equal((await tracker.comments('7'))[0]?.body.startsWith('sdd:focus\n'), true);
 });
 
 test('posted bodies carry the spy mark, and the shared login is not the robot', async () => {

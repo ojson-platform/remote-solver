@@ -22,6 +22,11 @@ export type IssueRecord = {
    * Empty when the chat's directory is the service.
    */
   service?: string;
+  /**
+   * Cycle hook field the port already returned.
+   * Absent when the port did not. The machine does not create the field.
+   */
+  sddHooks?: unknown;
   parent?: IssueKey;
   dependsOn: IssueKey[];
 };
@@ -65,6 +70,8 @@ export type Tracker = {
   editLabels(key: IssueKey, add: string[], remove: string[]): Promise<void>;
   updateBody(key: IssueKey, body: string): Promise<void>;
   comment(key: IssueKey, body: string): Promise<void>;
+  /** Issue comments in order. A manager comment is not an `sdd:focus` record. */
+  comments(key: IssueKey): Promise<{body: string; manager?: boolean}[]>;
   close(key: IssueKey, comment: string): Promise<void>;
   /** How a person moves the phase in this tracker. Pure: no tracker call. */
   phaseHint(from: Phase, to: Phase): string;
@@ -158,6 +165,10 @@ export type SkillRun = {
   pull: string;
   mode: SkillMode;
   resumeSession?: string;
+  /** Directory of the service. The step reads hooks there. Empty means the worktree root. */
+  service?: string;
+  /** Cycle hook field. The machine does not create it. */
+  sddHooks?: unknown;
 };
 
 /** What one skill run changed. Zero commits leaves the issue idle. */
@@ -165,6 +176,8 @@ export type SkillOutcome = {
   commits: number;
   sessionId?: string;
   usage?: AgentUsage;
+  /** Set when the run ended in Wait or Hand-off and made no commit. A commit is Publish. */
+  signal?: 'Wait' | 'Hand-off' | null;
 };
 
 /** One prompt, one answer. The runtime owns the sandbox, the model, and the base branch. */

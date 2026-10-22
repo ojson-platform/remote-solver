@@ -23,8 +23,8 @@ export type IssueRecord = {
    */
   service?: string;
   /**
-   * Cycle hook field the adapter already returned.
-   * Absent when the adapter did not. The machine does not create the field.
+   * Cycle hook field the port already returned.
+   * Absent when the port did not. The machine does not create the field.
    */
   sddHooks?: unknown;
   parent?: IssueKey;

@@ -557,7 +557,7 @@ export type MemoryIssue = {
   assignee?: string;
   /** Directory of the service. Empty or absent means the chat's directory. */
   service?: string;
-  /** Cycle hook field. The adapter does not create it. */
+  /** Cycle hook field. The port does not create it. */
   sddHooks?: unknown;
 };
 

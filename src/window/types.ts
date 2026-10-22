@@ -51,7 +51,7 @@ export type WindowTicket = {
   openPullRequests?: number;
   comments?: readonly WindowComment[];
   /**
-   * Cycle hook field the adapter already returned.
+   * Cycle hook field the port already returned.
    * A map of action to point, an ordered list of `{action, point, value}`, or another value.
    */
   sddHooks?: unknown;

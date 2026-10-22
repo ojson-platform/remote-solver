@@ -151,7 +151,7 @@ export function openRoleEditor(read: () => unknown, write: (roles: readonly Role
   };
 }
 
-/** YAML text whose values are maps of string points. Anything else is not that map. */
+/** YAML text with at least one non-empty string point. Anything else is not that map. */
 export function readsAsPointMap(text: string): boolean {
   let parsed: unknown;
   try {
@@ -162,17 +162,21 @@ export function readsAsPointMap(text: string): boolean {
   if (!isDoc(parsed)) {
     return false;
   }
-  for (const points of Object.values(parsed)) {
-    if (!isDoc(points)) {
+  let points = 0;
+  for (const inner of Object.values(parsed)) {
+    if (!isDoc(inner)) {
       return false;
     }
-    for (const value of Object.values(points)) {
+    for (const value of Object.values(inner)) {
       if (typeof value !== 'string') {
         return false;
       }
+      if (value.trim() !== '') {
+        points += 1;
+      }
     }
   }
-  return true;
+  return points > 0;
 }
 
 /** The file's text, or the absent line. This read does not create the file. */

@@ -5229,6 +5229,34 @@ function proveProseLeavesSddHooks(): void {
   rmSync(dir, {recursive: true, force: true});
 }
 
+test('an empty point map does not replace sddHooks', () => {
+  for (const text of ['{}\n', 'archive: {}\n', 'archive:\n  before: "   "\n']) {
+    const {dir, home, arcadia} = yard();
+    prepare(arcadia, home);
+    const item = cycle('1', 'implementing', {sddHooks: {archive: {before: 'old'}}});
+    let hooks = 0;
+    const window = openWindow(
+      {homePath: home, adapter: 'tracker'},
+      {
+        login: () => MANAGER,
+        tickets: () => [item],
+        editLabels: (_key, add) => {
+          item.labels = [...item.labels, ...add];
+        },
+        writeHooks: () => {
+          hooks += 1;
+        },
+      },
+    );
+    window.addRole({name: 'Hooks', outcome: 'ticket-fields', text, labels: ['sdd:auto-plan']});
+    window.drag('Hooks', '1');
+    assert.equal(hooks, 0);
+    assert.deepEqual(item.sddHooks, {archive: {before: 'old'}});
+    assert.ok(item.labels.includes('sdd:auto-plan'));
+    rmSync(dir, {recursive: true, force: true});
+  }
+});
+
 function proveOnePullRequestReceivesTheText(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);

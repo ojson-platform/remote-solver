@@ -4619,6 +4619,27 @@ test('an unknown point is edited and is not offered', () => {
   rmSync(dir, {recursive: true, force: true});
 });
 
+test('an empty key stays out of the free list and a new string skips the choice', () => {
+  for (const stored of ['[]', '""', '"   "']) {
+    const {dir, file, window} = openHookGroup(
+      ['sdd:', '  queues:', '    - name: alpha', '  hooks:', '    archive:', `      before: ${stored}`, ''].join(
+        '\n',
+      ),
+    );
+    assert.deepEqual(window.serviceConfig().hooks, [{action: 'archive', point: 'before', values: []}]);
+    assert.equal(
+      window.serviceConfig().hookChoices?.some(item => item.action === 'archive' && item.point === 'before'),
+      false,
+    );
+    window.chooseServiceHook('archive', 'before', 'through the choice');
+    assert.deepEqual(window.serviceConfig().hooks, [{action: 'archive', point: 'before', values: []}]);
+    window.setServiceHook('archive', 'before', ['added']);
+    window.saveServiceConfig();
+    assert.deepEqual(readServiceYaml(file).sdd?.hooks?.archive?.before, ['added']);
+    rmSync(dir, {recursive: true, force: true});
+  }
+});
+
 test('spaces stay out of a hook list and the manager can reorder it', () => {
   const {dir, file, window} = openHookGroup(
     [

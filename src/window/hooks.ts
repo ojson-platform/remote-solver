@@ -33,7 +33,7 @@ export function hooksFrom(sdd: Doc): ServiceHookField[] {
     }
     for (const [point, value] of Object.entries(points)) {
       const values = stringValues(value);
-      if (!values || values.length === 0) {
+      if (!values) {
         continue;
       }
       hooks.push({action, point, values});

@@ -31,6 +31,12 @@ export function labelHint(from: string, to: string): string {
   return `replace the label \`sdd:${from}\` with \`sdd:${to}\``;
 }
 
+/** A focus record starts with `sdd:focus`. Other machine comments keep the spy mark. */
+function postedIssue(body: string): string {
+  const first = (body.split('\n', 1)[0] ?? '').trim();
+  return first === 'sdd:focus' ? body : markRobot(body);
+}
+
 export type Repo = {owner: string; name: string; slug: string};
 
 export function repo(): Repo {
@@ -270,7 +276,12 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       await gh(['issue', 'edit', key, '--repo', repoSlug(), '--body', body]);
     },
     async comment(key, body) {
-      await gh(['issue', 'comment', key, '--repo', repoSlug(), '--body', markRobot(body)]);
+      await gh(['issue', 'comment', key, '--repo', repoSlug(), '--body', postedIssue(body)]);
+    },
+    async comments(key) {
+      return JSON.parse(
+        await gh(['api', `repos/${repoSlug()}/issues/${key}/comments`, '--jq', '[.[] | {body}]']),
+      ) as {body: string}[];
     },
     async close(key, comment) {
       await gh(['issue', 'close', key, '--repo', repoSlug(), '--comment', markRobot(comment)]);
@@ -571,6 +582,7 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
     dependsOn: issue.dependsOn ? [...issue.dependsOn] : undefined,
   }));
   const calls: string[] = [];
+  const issueComments = new Map<string, {body: string}[]>();
   const find = (key: string) => {
     const issue = issues.find(item => item.key === key);
     if (!issue) {
@@ -627,9 +639,17 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
       calls.push('updateBody');
       find(key).body = body;
     },
-    async comment(_key, body) {
+    async comment(key, body) {
       calls.push('comment');
-      calls.push(`body:${markRobot(body)}`);
+      const posted = postedIssue(body);
+      calls.push(`body:${posted}`);
+      const list = issueComments.get(key) ?? [];
+      list.push({body: posted});
+      issueComments.set(key, list);
+    },
+    async comments(key) {
+      calls.push('comments');
+      return (issueComments.get(key) ?? []).map(item => ({...item}));
     },
     async close(key, comment) {
       calls.push(`close:${comment}`);

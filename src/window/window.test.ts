@@ -4611,6 +4611,45 @@ test('opening a pool card and opening a column card both use sidebar() the same 
   rmSync(dir, {recursive: true, force: true});
 });
 
+async function proveAReviewPlaceOpensThePortUrl(): Promise<void> {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const body = ['sdd:focus', 'Change solid', 'Code src/a.ts:4', 'the check failed', ''].join('\n');
+  let asked: {file: string; line: number} | undefined;
+  let calls = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => [
+        cycle('1', 'implementing', {
+          comments: [{body}],
+        }),
+      ],
+      reviewPlace: place => {
+        calls += 1;
+        asked = place;
+        return 'https://arcanum.example/review/42';
+      },
+    },
+  );
+  window.openCard('1');
+  const card = columnCards(window.board(), 'implementing')?.[0];
+  assert.equal(card?.layers, 'Code');
+  assert.equal(JSON.stringify(card).includes('src/a.ts'), false);
+  assert.equal(JSON.stringify(card).includes('the check failed'), false);
+  assert.equal(window.openReviewPlace('src/a.ts', 4), 'https://arcanum.example/review/42');
+  assert.deepEqual(asked, {file: 'src/a.ts', line: 4});
+  assert.equal(window.openReviewPlace('src/b.ts', 4), undefined);
+  assert.equal(calls, 1);
+  const plaque = window.sidebar().find(block => block.kind === 'focus');
+  assert.deepEqual(plaque, {
+    kind: 'focus',
+    body: 'Change solid\nCode src/a.ts:4\nthe check failed\n',
+  });
+  rmSync(dir, {recursive: true, force: true});
+}
+
 test('the sidebar lists the blocks that exist from reason through hook', () => {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
@@ -4634,4 +4673,17 @@ test('the sidebar lists the blocks that exist from reason through hook', () => {
     {kind: 'hook', points: [{action: 'archive', point: 'before', paragraph: 'keep'}]},
   ]);
   rmSync(dir, {recursive: true, force: true});
+});
+
+spec('focus', () => {
+  requirement('The window shows the body after the marker line', () => {
+    scenario('A manager comment is not the plaque', () => {
+      proveTheSidebarFocusPlaqueDoesNotIncludeTheMarkerLine121();
+    });
+  });
+  requirement('A gap is one pointer and a why line', () => {
+    scenario('A review place opens the port URL', async () => {
+      await proveAReviewPlaceOpensThePortUrl();
+    });
+  });
 });

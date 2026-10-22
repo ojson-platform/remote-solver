@@ -84,6 +84,11 @@ export type WindowOutside = {
   writeService?: (key: string, service: string) => void;
   /** Threads and the conversation for this key. The window does not call a review host. */
   review?: (key: string) => WindowReview | undefined;
+  /**
+   * URL for a file and line on the pull request.
+   * Arcanum on Tracker, the pull request page on GitHub. The window does not build it.
+   */
+  reviewPlace?: (place: {file: string; line: number}) => string;
 };
 
 /** Threads and the last conversation comment the review port already returned. */

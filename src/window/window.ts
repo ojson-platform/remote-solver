@@ -16,6 +16,7 @@ import {
   takeBlock,
   type Factory,
 } from './factory.ts';
+import {focusNamesPlace} from './focus.ts';
 import {openServiceGroup} from './service-group.ts';
 import {blocksFor} from './sidebar.ts';
 import {runSpy} from './spy.ts';
@@ -240,6 +241,16 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     leaveRoots: (nextRoots: {arcadia?: string; github?: string}) => home.leaveRoots(nextRoots),
     chooseService(key: string, service: string) {
       outside.writeService?.(key, service);
+    },
+    openReviewPlace(file: string, line: number): string | undefined {
+      if (openKey === '') {
+        return undefined;
+      }
+      const item = checkout.sorted().find(ticket => ticket.key === openKey);
+      if (!item || !focusNamesPlace(item.comments, file, line)) {
+        return undefined;
+      }
+      return outside.reviewPlace?.({file, line});
     },
     take(key?: string) {
       if (!key || !answers()) {

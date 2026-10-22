@@ -152,6 +152,20 @@ test('setPhase keeps a single phase label and refuses a gate label', async () =>
   await assert.rejects(setPhase('7', 'proposed', tracker), /gate label sdd:proposed/);
 });
 
+test('a focus comment stays sdd:focus on the first line', async () => {
+  const {tracker, calls} = memoryPorts({
+    user: '3y3',
+    issues: [{key: '7', title: '#7: title', body: '', state: 'OPEN', labels: []}],
+  });
+  await tracker.comment('7', 'sdd:focus\nChange solid\n');
+  assert.equal(calls.includes('body:sdd:focus\nChange solid\n'), true);
+  assert.equal(
+    calls.some(call => call.startsWith('body:🤖 sdd:focus')),
+    false,
+  );
+  assert.equal((await tracker.comments('7'))[0]?.body.startsWith('sdd:focus\n'), true);
+});
+
 test('posted bodies carry the spy mark, and the shared login is not the robot', async () => {
   const {tracker, review, calls} = memoryPorts({
     user: '3y3',

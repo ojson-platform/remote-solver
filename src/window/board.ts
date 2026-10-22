@@ -5,6 +5,7 @@ import {HEADINGS} from '../machine/change.ts';
 import {changeDir} from '../machine/naming.ts';
 import {GATE_CLOSES, GATE_PHASES, phaseOf, type Phase} from '../machine/phase.ts';
 
+import {focusLayers} from './focus.ts';
 import {
   COLUMN_NAMES,
   type CardState,
@@ -12,11 +13,8 @@ import {
   type CycleCard,
   type PhaseRow,
   type PoolCard,
-  type WindowComment,
   type WindowTicket,
 } from './types.ts';
-
-const LAYERS = ['Change', 'Plan', 'Specify', 'Design', 'Tasks', 'Code'] as const;
 
 type Placed = {card: CycleCard; occasion: boolean};
 
@@ -212,39 +210,6 @@ function reasonHidden(parts: readonly string[], phaseRow: PhaseRow | undefined):
     return false;
   }
   return parts[0] === `вопросы ${phaseRow}` || parts[0] === `решения ${phaseRow}`;
-}
-
-function focusLayers(comments: readonly WindowComment[] | undefined): string | undefined {
-  let body: string | undefined;
-  for (const comment of comments ?? []) {
-    if (comment.manager) {
-      continue;
-    }
-    const first = comment.body.split('\n', 1)[0] ?? '';
-    if (first.trim() === 'sdd:focus') {
-      body = comment.body;
-    }
-  }
-  if (body === undefined) {
-    return undefined;
-  }
-  const names: string[] = [];
-  for (const line of body.split('\n').slice(1)) {
-    const trimmed = line.trim();
-    if (trimmed === '') {
-      continue;
-    }
-    const token = trimmed.split(/\s+/)[0] ?? '';
-    if (!(LAYERS as readonly string[]).includes(token)) {
-      continue;
-    }
-    const rest = trimmed.slice(token.length).trim();
-    if (rest === 'solid') {
-      continue;
-    }
-    names.push(token);
-  }
-  return names.length === 0 ? undefined : names.join(' · ');
 }
 
 function ordered(items: readonly Placed[]): CycleCard[] {

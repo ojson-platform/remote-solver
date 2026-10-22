@@ -1,6 +1,7 @@
 import {phaseOf} from '../machine/phase.ts';
 
 import {decisionCount, questionCount, reasonParts, slotOf} from './board.ts';
+import {focusPlaque, isFocusComment} from './focus.ts';
 import {
   isDoc,
   type CardState,
@@ -11,32 +12,12 @@ import {
   type WindowTicket,
 } from './types.ts';
 
-function commentLine(body: string): string {
-  return (body.split('\n', 1)[0] ?? '').trim();
-}
-
-function isFocusLine(body: string): boolean {
-  return commentLine(body) === 'sdd:focus';
-}
-
-/** Body after the marker of the latest focus comment. A manager comment is not the plaque. */
-function focusBody(comments: readonly WindowComment[] | undefined): string | undefined {
-  let body: string | undefined;
-  for (const comment of comments ?? []) {
-    if (comment.manager || !isFocusLine(comment.body)) {
-      continue;
-    }
-    body = comment.body.split('\n').slice(1).join('\n');
-  }
-  return body;
-}
-
 /** Latest issue comment whose first line is not `sdd:focus`. */
 function askBody(comments: readonly WindowComment[] | undefined): string | undefined {
   const list = comments ?? [];
   for (let index = list.length - 1; index >= 0; index -= 1) {
     const comment = list[index];
-    if (!comment || isFocusLine(comment.body)) {
+    if (!comment || isFocusComment(comment.body)) {
       continue;
     }
     return comment.body;
@@ -185,7 +166,7 @@ export function blocksFor(
       blocks.push({kind: 'ask', body});
     }
   }
-  const plaque = focusBody(item.comments);
+  const plaque = focusPlaque(item.comments);
   if (plaque !== undefined) {
     blocks.push({kind: 'focus', body: plaque});
   }

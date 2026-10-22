@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import {solverRoot, turn, type Machine} from './adapters/compose.ts';
 import {performCycle} from './machine/flow.ts';
+import {endStep} from './machine/focus.ts';
 import {exited, signature, tick, type State} from './machine/scheduler.ts';
 import {modeOfSkill} from './machine/skill.ts';
 import {loadCycle} from './machine/snapshot.ts';
@@ -55,8 +56,11 @@ export async function driveIssue(box: Machine, key: string): Promise<number> {
       console.log(`#${key} session ${outcome.sessionId}`);
     }
     if (outcome.usage) {
-      console.log(`#${key} tokens in ${outcome.usage.inputTokens} out ${outcome.usage.outputTokens}`);
+      console.log(
+        `#${key} tokens in ${outcome.usage.inputTokens} out ${outcome.usage.outputTokens}`,
+      );
     }
+    await endStep(key, outcome, box);
     if (outcome.commits === 0) {
       console.error(
         `Stopped: ${decision.action} made no commit, so the next poll would repeat it.`,

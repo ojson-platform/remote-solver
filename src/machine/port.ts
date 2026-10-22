@@ -65,6 +65,8 @@ export type Tracker = {
   editLabels(key: IssueKey, add: string[], remove: string[]): Promise<void>;
   updateBody(key: IssueKey, body: string): Promise<void>;
   comment(key: IssueKey, body: string): Promise<void>;
+  /** Issue comments in order. A manager comment is not an `sdd:focus` record. */
+  comments(key: IssueKey): Promise<{body: string; manager?: boolean}[]>;
   close(key: IssueKey, comment: string): Promise<void>;
   /** How a person moves the phase in this tracker. Pure: no tracker call. */
   phaseHint(from: Phase, to: Phase): string;
@@ -165,6 +167,8 @@ export type SkillOutcome = {
   commits: number;
   sessionId?: string;
   usage?: AgentUsage;
+  /** Set when the run ended in Wait or Hand-off and made no commit. A commit is Publish. */
+  signal?: 'Wait' | 'Hand-off' | null;
 };
 
 /** One prompt, one answer. The runtime owns the sandbox, the model, and the base branch. */

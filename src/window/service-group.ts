@@ -3,14 +3,12 @@ import path from 'node:path';
 
 import {stringify} from 'yaml';
 
-import {ACTION_SKILL} from '../machine/route.ts';
-
 import {queueNames, readServiceFile, serviceFile} from './checkout.ts';
+import {applyHooks, chooseHook, hookChoices, hooksFrom, setHook} from './hooks.ts';
 import {
   isDoc,
   type Doc,
   type ServiceConfigGroup,
-  type ServiceHookChoice,
   type ServiceHookField,
   type ServiceIgnoreField,
   type ServiceQueueField,
@@ -68,82 +66,6 @@ function ignoreDraft(value: unknown): ServiceIgnoreDraft[] {
     return value.map(item => ({value: item}));
   }
   return [{value: ignoreText(value), removeOnly: true}];
-}
-
-function blank(value: string): boolean {
-  return value.trim() === '';
-}
-
-/** A string or a list of strings. Anything else has no field. Spaces are not an entry. */
-function stringValues(value: unknown): string[] | undefined {
-  if (typeof value === 'string') {
-    return blank(value) ? [] : [value];
-  }
-  if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
-    return value.filter(item => !blank(item));
-  }
-  return undefined;
-}
-
-function hooksFrom(sdd: Doc): ServiceHookField[] {
-  if (!isDoc(sdd.hooks)) {
-    return [];
-  }
-  const hooks: ServiceHookField[] = [];
-  for (const [action, points] of Object.entries(sdd.hooks)) {
-    if (!isDoc(points)) {
-      continue;
-    }
-    for (const [point, value] of Object.entries(points)) {
-      const values = stringValues(value);
-      if (!values || values.length === 0) {
-        continue;
-      }
-      hooks.push({action, point, values});
-    }
-  }
-  return hooks;
-}
-
-const HOOK_POINTS = ['before', 'after'] as const;
-
-function hookId(action: string, point: string): string {
-  return `${action}\0${point}`;
-}
-
-/** Points already shown, plus a non-string value that still occupies the key. */
-function takenIds(draft: ServiceDraft, doc: Doc | null): Set<string> {
-  const taken = new Set(draft.hooks.map(item => hookId(item.action, item.point)));
-  const sdd = doc && isDoc(doc.sdd) ? doc.sdd : undefined;
-  const hooks = sdd && isDoc(sdd.hooks) ? sdd.hooks : undefined;
-  if (!hooks) {
-    return taken;
-  }
-  for (const [action, points] of Object.entries(hooks)) {
-    if (!isDoc(points)) {
-      continue;
-    }
-    for (const [point, value] of Object.entries(points)) {
-      if (stringValues(value) === undefined) {
-        taken.add(hookId(action, point));
-      }
-    }
-  }
-  return taken;
-}
-
-/** Free points of the actions the agent decision prints. An action with none is absent. */
-function hookChoices(draft: ServiceDraft, doc: Doc | null): ServiceHookChoice[] {
-  const taken = takenIds(draft, doc);
-  const choices: ServiceHookChoice[] = [];
-  for (const action of Object.keys(ACTION_SKILL)) {
-    for (const point of HOOK_POINTS) {
-      if (!taken.has(hookId(action, point))) {
-        choices.push({action, point});
-      }
-    }
-  }
-  return choices;
 }
 
 function textField(value: unknown, fallback: string): string {
@@ -223,59 +145,12 @@ function groupOf(checkout: string, draft: ServiceDraft, doc: Doc | null): Servic
     branchScope: draft.branchScope,
     ignoreComments,
     hooks: draft.hooks,
-    hookChoices: hookChoices(draft, doc),
+    hookChoices: hookChoices(draft.hooks, doc),
   };
 }
 
 function emptyService(checkout: string): ServiceConfigGroup {
   return {file: 'openspec/config.yaml', checkout, save: false};
-}
-
-/** Draft lists replace string points. A non-string stays. An empty list does not write the point. */
-function applyHooks(original: unknown, draft: readonly ServiceHookField[]): unknown {
-  const next: Doc = {};
-  const seen = new Set<string>();
-  if (isDoc(original)) {
-    for (const [action, points] of Object.entries(original)) {
-      if (!isDoc(points)) {
-        next[action] = points;
-        continue;
-      }
-      const copy: Doc = {};
-      for (const [point, value] of Object.entries(points)) {
-        seen.add(hookId(action, point));
-        if (stringValues(value) === undefined) {
-          copy[point] = value;
-          continue;
-        }
-        const field = draft.find(item => item.action === action && item.point === point);
-        const values = field?.values.filter(item => !blank(item)) ?? [];
-        if (values.length > 0) {
-          copy[point] = values;
-        }
-      }
-      if (Object.keys(copy).length > 0) {
-        next[action] = copy;
-      }
-    }
-  }
-  for (const field of draft) {
-    if (seen.has(hookId(field.action, field.point))) {
-      continue;
-    }
-    const current = next[field.action];
-    if (current !== undefined && !isDoc(current)) {
-      continue;
-    }
-    const values = field.values.filter(item => !blank(item));
-    if (values.length === 0) {
-      continue;
-    }
-    const points: Doc = isDoc(current) ? {...current} : {};
-    points[field.point] = values;
-    next[field.action] = points;
-  }
-  return Object.keys(next).length > 0 ? next : undefined;
 }
 
 function writtenService(doc: Doc | null, draft: ServiceDraft): Doc {
@@ -520,38 +395,20 @@ export function openServiceGroup() {
     serviceDirty = false;
   }
 
-  function chooseHook(action: string, point: string, first: string): void {
-    if (blank(first)) {
-      return;
-    }
+  function chooseHookPoint(action: string, point: string, first: string): void {
     const draft = editable();
     if (!draft) {
       return;
     }
-    const allowed = hookChoices(draft, serviceDoc).some(
-      item => item.action === action && item.point === point,
-    );
-    if (!allowed) {
-      return;
-    }
-    draft.hooks.push({action, point, values: [first]});
+    chooseHook(draft.hooks, serviceDoc, action, point, first);
   }
 
-  function setHook(action: string, point: string, values: readonly string[]): void {
+  function setHookPoint(action: string, point: string, values: readonly string[]): void {
     const draft = editable();
     if (!draft) {
       return;
     }
-    const index = draft.hooks.findIndex(item => item.action === action && item.point === point);
-    if (index < 0) {
-      return;
-    }
-    const next = values.filter(item => !blank(item));
-    if (next.length === 0) {
-      draft.hooks.splice(index, 1);
-      return;
-    }
-    draft.hooks[index] = {action, point, values: next};
+    setHook(draft.hooks, action, point, values);
   }
 
   function childQueue(): string {
@@ -574,8 +431,8 @@ export function openServiceGroup() {
     addIgnore,
     setIgnore,
     removeIgnore,
-    chooseHook,
-    setHook,
+    chooseHook: chooseHookPoint,
+    setHook: setHookPoint,
     save,
     childQueue,
   };

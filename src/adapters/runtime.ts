@@ -108,6 +108,12 @@ export function agentRuntime(config: AgentRuntimeConfig): Runtime {
   return {
     async run(skill: SkillRun) {
       const dir = await checkout(skill.key);
+      const serviceRoot =
+        skill.service && skill.service.trim() !== ''
+          ? path.isAbsolute(skill.service)
+            ? skill.service
+            : path.join(dir, skill.service)
+          : dir;
       const before = await config.vcs.tip(skill.key);
       ensureServiceEnv(config.root, config.solverRoot);
       const stepFile = path.join(config.solverRoot, 'skills/sdd-flow/steps', `${skill.skill}.md`);
@@ -127,7 +133,7 @@ export function agentRuntime(config: AgentRuntimeConfig): Runtime {
           QUEUE: config.queueLabel,
           BASE: config.prBase,
           STEP: stepText
-            ? stepPrompt(stepText, skill.action, serviceHookDoc(dir), skill.sddHooks)
+            ? stepPrompt(stepText, skill.action, serviceHookDoc(serviceRoot), skill.sddHooks)
             : '',
         },
         logPath: agentLogPath(

@@ -165,6 +165,8 @@ export type SkillRun = {
   pull: string;
   mode: SkillMode;
   resumeSession?: string;
+  /** Directory of the service. The step reads hooks there. Empty means the worktree root. */
+  service?: string;
   /** Cycle hook field. The machine does not create it. */
   sddHooks?: unknown;
 };

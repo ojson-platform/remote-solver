@@ -78,9 +78,15 @@ test('the agent prompt QUEUE is the first configured queue', async () => {
 test('the step prompt carries the service hook and then the cycle paragraph', async () => {
   runAgent.mockClear();
   const root = mkdtempSync(path.join(tmpdir(), 'sdd-hook-'));
+  const service = path.join(root, 'services', 'billing');
   mkdirSync(path.join(root, 'openspec'), {recursive: true});
+  mkdirSync(path.join(service, 'openspec'), {recursive: true});
   writeFileSync(
     path.join(root, 'openspec', 'config.yaml'),
+    ['sdd:', '  hooks:', '    archive:', '      before:', '        - worktree line', ''].join('\n'),
+  );
+  writeFileSync(
+    path.join(service, 'openspec', 'config.yaml'),
     [
       'sdd:',
       '  queues:',
@@ -114,12 +120,14 @@ test('the step prompt carries the service hook and then the cycle paragraph', as
     phase: 'accepting',
     pull: '',
     mode: 'judgment',
+    service: 'services/billing',
     sddHooks: {archive: {before: 'cyc line'}},
   });
   const step = runAgent.mock.calls[0]?.[0].promptArgs.STEP ?? '';
   const before = step.indexOf('svc line');
   const cycle = step.indexOf('cyc line');
   const heading = step.indexOf('## archive');
+  assert.equal(step.includes('worktree line'), false);
   assert.ok(before >= 0 && before < cycle && cycle < heading);
   assert.equal(step.slice(before, heading), 'svc line\n\ncyc line\n\n');
   const prompt = readFileSync(

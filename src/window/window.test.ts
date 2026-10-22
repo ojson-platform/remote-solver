@@ -420,6 +420,18 @@ function proveEmptyEffortAndSpeedAreTheAgentDefaultAndDoNotStopAStep12(): void {
   assert.equal(doc.speed, undefined);
   assert.deepEqual(window.settings().effort, {mechanical: 'low', judgment: 'high'});
   assert.deepEqual(window.settings().speed, {mechanical: '', judgment: ''});
+  assert.deepEqual(window.settings().effortWords, ['low', 'medium', 'high', 'xhigh', 'max']);
+  assert.deepEqual(window.settings().speedWords, ['fast']);
+  window.leaveEffort('mechanical', 'turbo');
+  window.leaveSpeed('mechanical', 'slow');
+  assert.equal(readHome(home).effort, undefined);
+  assert.equal(readHome(home).speed, undefined);
+  window.leaveEffort('mechanical', 'max');
+  window.leaveSpeed('mechanical', 'fast');
+  assert.equal(readHome(home).effort?.mechanical, 'max');
+  assert.equal(readHome(home).speed?.mechanical, 'fast');
+  window.leaveEffort('mechanical', '');
+  window.leaveSpeed('mechanical', '');
   window.spy();
   assert.equal(started, 1);
   assert.equal(window.board().stepsStart, true);
@@ -742,6 +754,10 @@ function proveANameRemovedFromOneFileStaysWhileTheOtherFileStillHasIt27(): void 
   assert.deepEqual(window.board().watch, ['alpha']);
   window.leaveWatch([]);
   assert.deepEqual(window.board().watch, ['alpha']);
+  window.openCard('1');
+  window.leaveOverlayWatch(['beta']);
+  assert.deepEqual(window.board().watch, ['beta']);
+  assert.deepEqual(readHome(path.join(checkout, '.aifactory', 'config.yaml')).watch, ['beta']);
   writeOverlay(checkout, []);
   assert.deepEqual(window.board().watch, []);
   assert.deepEqual(window.board().cards, []);
@@ -2402,6 +2418,51 @@ function proveClearingTheOverlayAgentRemovesAgentModelsEffortAndSpeed88(): void 
   rmSync(dir, {recursive: true, force: true});
 }
 
+function proveClearingOverlayEffortAndSpeedRemovesThoseKeys(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  writeOverlay(
+    checkout,
+    ['alpha'],
+    [
+      'agent: codex',
+      'models:',
+      '  mechanical: gpt-6-luna',
+      '  judgment: gpt-6.1-sol',
+      'effort:',
+      '  mechanical: high',
+      '  judgment: low',
+      'speed:',
+      '  mechanical: fast',
+      '',
+    ].join('\n'),
+  );
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.chooseAgent('cursor');
+  window.openSettings();
+  assert.deepEqual(window.overlay().effortWords, ['low', 'medium', 'high', 'xhigh', 'max']);
+  assert.deepEqual(window.overlay().speedWords, ['fast']);
+  window.leaveOverlayEffort('mechanical', 'turbo');
+  window.leaveOverlaySpeed('judgment', 'slow');
+  const kept = readHome(path.join(checkout, '.aifactory', 'config.yaml'));
+  assert.equal(kept.effort?.mechanical, 'high');
+  assert.equal(kept.speed?.mechanical, 'fast');
+  window.leaveOverlayEffort('mechanical', '');
+  window.leaveOverlayEffort('judgment', '');
+  window.leaveOverlaySpeed('mechanical', '');
+  const doc = readHome(path.join(checkout, '.aifactory', 'config.yaml'));
+  assert.equal(doc.agent, 'codex');
+  assert.equal(doc.effort, undefined);
+  assert.equal(doc.speed, undefined);
+  rmSync(dir, {recursive: true, force: true});
+}
+
 function proveClearingOverlayJudgmentWithNoOverlayAgentShowsTheHomeJudgmentId89(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
@@ -2983,6 +3044,7 @@ function proveTheServiceConfigGroupHasNoFieldsWhenTheFileDoesNotParseAndOnlyThat
   assert.equal(group.branchScope, undefined);
   assert.equal(group.ignoreComments, undefined);
   assert.equal(group.hooks, undefined);
+  assert.equal(group.line, 'конфиг сервиса не читается');
   window.addServiceQueue();
   window.saveServiceConfig();
   assert.equal(readFileSync(file, 'utf8'), bytes);
@@ -3045,10 +3107,15 @@ function proveTheServiceConfigGroupCreatesAMissingFileFromTheQueueTheManagerAdds
   window.openSettings();
   assert.equal(window.serviceConfig().file, 'openspec/config.yaml');
   assert.equal(window.serviceConfig().checkout, checkout);
-  assert.equal(window.serviceConfig().queues, undefined);
-  assert.equal(window.serviceConfig().save, false);
+  assert.deepEqual(window.serviceConfig().queues, {items: []});
+  assert.equal(window.serviceConfig().save, true);
+  assert.equal(window.serviceConfig().line, undefined);
   window.saveServiceConfig();
-  assert.equal(existsSync(file), false);
+  assert.equal(existsSync(file), true);
+  const created = readServiceYaml(file);
+  assert.equal(created.schema, undefined);
+  assert.equal(created.context, undefined);
+  assert.equal(created.rules, undefined);
   window.addServiceQueue();
   assert.equal(window.serviceConfig().save, false);
   window.setServiceQueue(0, 'alpha', '');
@@ -3340,6 +3407,22 @@ function proveANestedSddHooksMapKeepsFieldOrderInTheSidebar127(): void {
   rmSync(dir, {recursive: true, force: true});
 }
 
+function proveASpacePointDropsFromTheSidebarAndTheOtherPointRemains(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = cycle('1', 'implementing');
+  item.sddHooks = {archive: {before: '   ', after: 'keep'}};
+  const window = openSide(home, [item]);
+  window.openCard('1');
+  assert.deepEqual(window.sidebar(), [
+    {
+      kind: 'hook',
+      points: [{action: 'archive', point: 'after', paragraph: 'keep'}],
+    },
+  ]);
+  rmSync(dir, {recursive: true, force: true});
+}
+
 function proveAMissingOrEmptySddHooksLeavesNoSidebarHookBlock128(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
@@ -3362,8 +3445,12 @@ function proveAMissingOrEmptySddHooksLeavesNoSidebarHookBlock128(): void {
     comments: [{body: 'sdd:focus\nPlan gap\n'}],
     sddHooks: [],
   });
-  const window = openSide(home, [missing, empty, blank, noPoints, list]);
-  for (const key of ['1', '2', '3', '4', '5']) {
+  const spaces = cycle('6', 'implementing', {
+    comments: [{body: 'sdd:focus\nPlan gap\n'}],
+    sddHooks: {archive: {before: '   '}},
+  });
+  const window = openSide(home, [missing, empty, blank, noPoints, list, spaces]);
+  for (const key of ['1', '2', '3', '4', '5', '6']) {
     window.openCard(key);
     const blocks = window.sidebar();
     assert.deepEqual(blocks, [{kind: 'focus', body: 'Plan gap\n'}]);
@@ -3695,6 +3782,7 @@ spec('factory-config', () => {
   requirement('An overlay agent does not borrow effort or speed', () => {
     scenario('An overlay agent ignores home effort', () => {
       proveAnOverlayAgentOfCodexWithNoEffortKeyDoesNotTakeHomeEffortMax87();
+      proveClearingOverlayEffortAndSpeedRemovesThoseKeys();
     });
     scenario('Clearing the overlay agent drops the set', () => {
       proveClearingTheOverlayAgentRemovesAgentModelsEffortAndSpeed88();
@@ -3880,6 +3968,7 @@ spec('sidebar', () => {
     scenario('Points stay in field order', () => {
       proveSddHooksListsArchiveBeforeThenCreateProposalAfterInTheSidebar126();
       proveANestedSddHooksMapKeepsFieldOrderInTheSidebar127();
+      proveASpacePointDropsFromTheSidebarAndTheOtherPointRemains();
     });
     scenario('An empty field leaves no block', () => {
       proveAMissingOrEmptySddHooksLeavesNoSidebarHookBlock128();

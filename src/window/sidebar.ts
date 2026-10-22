@@ -65,6 +65,9 @@ function hookBlock(value: unknown): SidebarBlock | undefined {
       continue;
     }
     for (const [point, pointValue] of Object.entries(inner)) {
+      if (typeof pointValue === 'string' && pointValue.trim() === '') {
+        continue;
+      }
       points.push({action, point, paragraph: hookParagraph(pointValue)});
     }
   }

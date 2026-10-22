@@ -56,6 +56,8 @@ const PAIRS: Record<string, Pair> = {
 
 const AGENT_KEYS = new Set(['agent', 'models', 'effort', 'speed']);
 const FORBIDDEN = new Set(['person', 'phase', 'focus', 'metrics']);
+const EFFORT_WORDS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+const SPEED_WORDS = ['fast'] as const;
 
 export type Factory = {
   agent: string;
@@ -336,12 +338,14 @@ function settingsOf(doc: Doc, open: boolean): SettingsState {
       mechanical: effortFile.mechanical ?? pair.effort.mechanical,
       judgment: effortFile.judgment ?? pair.effort.judgment,
     };
+    state.effortWords = EFFORT_WORDS;
   }
   if (pair?.speed) {
     state.speed = {
       mechanical: speedFile.mechanical ?? '',
       judgment: speedFile.judgment ?? '',
     };
+    state.speedWords = SPEED_WORDS;
   }
   return state;
 }
@@ -382,9 +386,11 @@ function overlayOf(home: Doc, overlayDoc: Doc, checkout: string): OverlayGroup {
   };
   if (factory.effort) {
     group.effort = factory.effort;
+    group.effortWords = EFFORT_WORDS;
   }
   if (factory.speed) {
     group.speed = factory.speed;
+    group.speedWords = SPEED_WORDS;
   }
   return group;
 }
@@ -456,8 +462,10 @@ export function openHome(homePath: string | undefined, offered: readonly string[
     const effort = {...modeValues(doc.effort)};
     if (value === '') {
       delete effort[mode];
-    } else {
+    } else if ((EFFORT_WORDS as readonly string[]).includes(value)) {
       effort[mode] = value;
+    } else {
+      return;
     }
     const next: Doc = {...doc};
     if (effort.mechanical === undefined && effort.judgment === undefined) {
@@ -476,8 +484,10 @@ export function openHome(homePath: string | undefined, offered: readonly string[
     const speed = {...modeValues(doc.speed)};
     if (value === '') {
       delete speed[mode];
-    } else {
+    } else if ((SPEED_WORDS as readonly string[]).includes(value)) {
       speed[mode] = value;
+    } else {
+      return;
     }
     const next: Doc = {...doc};
     if (speed.mechanical === undefined && speed.judgment === undefined) {
@@ -635,6 +645,72 @@ export function openOverlay(offered: readonly string[]) {
     commit(next);
   }
 
+  function leaveEffort(mode: SkillMode, value: string): void {
+    if (checkout === '' || !canWrite()) {
+      return;
+    }
+    const pair = PAIRS[agentOf(doc)];
+    if (value !== '' && !pair?.effort) {
+      return;
+    }
+    if (value !== '' && !(EFFORT_WORDS as readonly string[]).includes(value)) {
+      return;
+    }
+    const effort = {...modeValues(doc.effort)};
+    if (value === '') {
+      delete effort[mode];
+    } else {
+      effort[mode] = value;
+    }
+    const next: Doc = {...doc};
+    if (effort.mechanical === undefined && effort.judgment === undefined) {
+      delete next.effort;
+    } else {
+      next.effort = effort;
+    }
+    commit(next);
+  }
+
+  function leaveSpeed(mode: SkillMode, value: string): void {
+    if (checkout === '' || !canWrite()) {
+      return;
+    }
+    const pair = PAIRS[agentOf(doc)];
+    if (value !== '' && !pair?.speed) {
+      return;
+    }
+    if (value !== '' && !(SPEED_WORDS as readonly string[]).includes(value)) {
+      return;
+    }
+    const speed = {...modeValues(doc.speed)};
+    if (value === '') {
+      delete speed[mode];
+    } else {
+      speed[mode] = value;
+    }
+    const next: Doc = {...doc};
+    if (speed.mechanical === undefined && speed.judgment === undefined) {
+      delete next.speed;
+    } else {
+      next.speed = speed;
+    }
+    commit(next);
+  }
+
+  function leaveWatch(names: readonly string[]): void {
+    if (checkout === '' || !canWrite()) {
+      return;
+    }
+    const watch = stringList(names);
+    const next: Doc = {...doc};
+    if (watch.length === 0) {
+      delete next.watch;
+    } else {
+      next.watch = watch;
+    }
+    commit(next);
+  }
+
   return {
     bind,
     checkout: () => checkout,
@@ -642,5 +718,8 @@ export function openOverlay(offered: readonly string[]) {
     chooseAgent,
     clearAgent,
     leaveModel,
+    leaveEffort,
+    leaveSpeed,
+    leaveWatch,
   };
 }

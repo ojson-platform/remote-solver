@@ -142,6 +142,10 @@ export type SettingsState = {
   models: {mechanical: ModelField; judgment: ModelField};
   effort?: {mechanical: string; judgment: string};
   speed?: {mechanical: string; judgment: string};
+  /** Words this agent's effort field accepts. */
+  effortWords?: readonly string[];
+  /** The speed field accepts `fast`. */
+  speedWords?: readonly string[];
   watch: string[];
   roots: {arcadia: string; github: string};
   roles: RoleRecord[];
@@ -155,6 +159,8 @@ export type OverlayGroup = {
   models: {mechanical: ModelField; judgment: ModelField};
   effort?: {mechanical: string; judgment: string};
   speed?: {mechanical: string; judgment: string};
+  effortWords?: readonly string[];
+  speedWords?: readonly string[];
   watch: string[];
 };
 
@@ -191,6 +197,8 @@ export type ServiceConfigGroup = {
   hooks?: ServiceHookField[];
   /** Free points. An action is absent when both of its points are taken. */
   hookChoices?: ServiceHookChoice[];
+  /** Set when the file does not read. The group then has no fields and no save. */
+  line?: string;
 };
 
 export type CardState = {

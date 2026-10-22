@@ -97,7 +97,12 @@ function patternCompiles(pattern: string): boolean {
   }
 }
 
-function queueFields(queues: readonly ServiceQueueDraft[]): {
+const UNREADABLE = 'конфиг сервиса не читается';
+
+function queueFields(
+  queues: readonly ServiceQueueDraft[],
+  allowEmpty: boolean,
+): {
   items: ServiceQueueField[];
   warning?: true;
 } {
@@ -108,7 +113,7 @@ function queueFields(queues: readonly ServiceQueueDraft[]): {
     }
     return field;
   });
-  if (items.length === 0) {
+  if (items.length === 0 && !allowEmpty) {
     return {items, warning: true};
   }
   return {items};
@@ -129,8 +134,13 @@ function ignoreFields(ignore: readonly ServiceIgnoreDraft[]): ServiceIgnoreField
   });
 }
 
-function groupOf(checkout: string, draft: ServiceDraft, doc: Doc | null): ServiceConfigGroup {
-  const queues = queueFields(draft.queues);
+function groupOf(
+  checkout: string,
+  draft: ServiceDraft,
+  doc: Doc | null,
+  allowEmpty: boolean,
+): ServiceConfigGroup {
+  const queues = queueFields(draft.queues, allowEmpty);
   const ignoreComments = ignoreFields(draft.ignore);
   const warned =
     queues.warning === true ||
@@ -232,21 +242,21 @@ export function openServiceGroup() {
       serviceBaseline = live.text;
       serviceDoc = null;
       serviceDraft = null;
-      return emptyService(checkout);
+      return {...emptyService(checkout), line: UNREADABLE};
     }
     if (serviceDirty && serviceDraft) {
-      return groupOf(checkout, serviceDraft, serviceDoc);
+      return groupOf(checkout, serviceDraft, serviceDoc, serviceBaseline === null);
     }
     if (live.kind === 'missing') {
       serviceBaseline = null;
       serviceDoc = null;
-      serviceDraft = null;
-      return emptyService(checkout);
+      serviceDraft = blankDraft();
+      return groupOf(checkout, serviceDraft, null, true);
     }
     serviceBaseline = live.text;
     serviceDoc = live.doc;
     serviceDraft = draftFrom(live.doc);
-    return groupOf(checkout, serviceDraft, serviceDoc);
+    return groupOf(checkout, serviceDraft, serviceDoc, false);
   }
 
   function editable(): ServiceDraft | null {
@@ -376,7 +386,7 @@ export function openServiceGroup() {
       serviceDraft = null;
       return;
     }
-    if (!groupOf(checkout, serviceDraft, serviceDoc).save) {
+    if (!groupOf(checkout, serviceDraft, serviceDoc, serviceBaseline === null).save) {
       return;
     }
     const disk = live.kind === 'missing' ? null : live.text;

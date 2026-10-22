@@ -54,6 +54,7 @@ export async function driveIssue(box: Machine, key: string): Promise<number> {
       pull: decision.pr,
       mode: modeOfSkill(path.join(solverRoot(), 'skills/sdd-flow/steps'), decision.skill),
       sddHooks: record.sddHooks,
+      service: record.service,
     });
     if (outcome.sessionId) {
       console.log(`#${key} session ${outcome.sessionId}`);

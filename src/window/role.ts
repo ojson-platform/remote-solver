@@ -57,9 +57,10 @@ export function shelfOf(roles: readonly RoleRecord[]): {name: string; outcome: R
 /** The home file shape. A `ticket-fields` role keeps `labels` only when it names some. */
 export function storedRoles(roles: readonly RoleRecord[]): Doc[] {
   return roles.map(role => {
-    const stored: Doc = {name: role.name, outcome: role.outcome, text: role.text};
-    if (role.outcome === 'ticket-fields' && role.labels && role.labels.length > 0) {
-      stored.labels = [...role.labels];
+    const next = kept(role);
+    const stored: Doc = {name: next.name, outcome: next.outcome, text: next.text};
+    if (next.labels) {
+      stored.labels = [...next.labels];
     }
     return stored;
   });

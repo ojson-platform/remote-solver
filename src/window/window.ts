@@ -146,6 +146,12 @@ export type PoolCard = {
   takeDisabled?: true;
   icon?: true;
   reason?: string;
+  /** Gathered checkout copied from the checkout card. */
+  checkout?: string;
+  /** Tracker port field, or the GitHub label `queueOf` found. */
+  queue: string;
+  /** Service choices copied from the checkout card. */
+  choices: string[];
 };
 
 const COLUMN_NAMES = [
@@ -703,7 +709,7 @@ function buildCycle(
   return {card, occasion};
 }
 
-/** A healthy pool card is the key, the title, and Take. A break or two pull requests keeps the column reason. */
+/** A pool card copies the checkout, queue, and choices. A break or two pull requests keeps the column reason. */
 function poolCard(
   item: WindowTicket,
   checkout: CardState,
@@ -715,7 +721,16 @@ function poolCard(
 ): PoolCard {
   const several = (item.openPullRequests ?? 0) > 1;
   const broken = checkout.reason !== '';
-  const card: PoolCard = {key: item.key, title: item.title, take: true};
+  const card: PoolCard = {
+    key: item.key,
+    title: item.title,
+    take: true,
+    queue: checkout.queue,
+    choices: checkout.choices,
+  };
+  if (checkout.checkout) {
+    card.checkout = checkout.checkout;
+  }
   if (broken || several) {
     card.takeDisabled = true;
     const column = (phase && columnOf(phase, item)) || 'implementing';

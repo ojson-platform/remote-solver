@@ -579,9 +579,7 @@ test('an empty root leaves ~/arcadia or ~/github', () => {
   const window = openWindow(
     {homePath: home, adapter: 'tracker'},
     {
-      tickets: () => [
-        ticket({key: '1', queue: 'alpha', sddService: 'services/billing', open: false}),
-      ],
+      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
     },
   );
   window.leaveRoots({arcadia: '   ', github: ''});
@@ -590,9 +588,15 @@ test('an empty root leaves ~/arcadia or ~/github', () => {
   assert.equal(doc.roots?.github, undefined);
   assert.equal(window.settings().roots.arcadia, '~/arcadia');
   assert.equal(window.settings().roots.github, '~/github');
-  const card = window.board().cards.find(item => item.key === '1');
+  const card = window.board().pool.find(item => item.key === '1');
   assert.ok(card);
   assert.equal(card.checkout, path.join(homedir(), 'arcadia', 'services', 'billing'));
+  assert.equal(card.queue, 'alpha');
+  assert.deepEqual(card.choices, []);
+  assert.equal(
+    window.board().cards.some(item => item.key === '1'),
+    false,
+  );
   rmSync(dir, {recursive: true, force: true});
 });
 
@@ -606,15 +610,19 @@ test('an overlay does not replace the checkout roots', () => {
   const window = openWindow(
     {homePath: home, adapter: 'tracker'},
     {
-      tickets: () => [
-        ticket({key: '1', queue: 'alpha', sddService: 'services/billing', open: false}),
-      ],
+      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
     },
   );
-  const card = window.board().cards.find(item => item.key === '1');
+  const card = window.board().pool.find(item => item.key === '1');
   assert.ok(card);
   assert.equal(card.checkout, checkout);
   assert.equal(card.checkout?.startsWith('/wrong'), false);
+  assert.equal(card.queue, 'alpha');
+  assert.deepEqual(card.choices, ['services/billing']);
+  assert.equal(
+    window.board().cards.some(item => item.key === '1'),
+    false,
+  );
   rmSync(dir, {recursive: true, force: true});
 });
 
@@ -625,15 +633,19 @@ test('tracker gathers the checkout under the arcadia root', () => {
   const window = openWindow(
     {homePath: home, adapter: 'tracker'},
     {
-      tickets: () => [
-        ticket({key: '1', queue: 'alpha', sddService: 'services/billing', open: false}),
-      ],
+      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
     },
   );
-  const card = window.board().cards.find(item => item.key === '1');
+  const card = window.board().pool.find(item => item.key === '1');
   assert.ok(card);
   assert.equal(card.checkout, checkout);
+  assert.equal(card.queue, 'alpha');
+  assert.deepEqual(card.choices, []);
   assert.equal(card.reason, 'каталога нет');
+  assert.equal(
+    window.board().cards.some(item => item.key === '1'),
+    false,
+  );
   assert.equal(existsSync(checkout), false);
   rmSync(dir, {recursive: true, force: true});
 });
@@ -652,25 +664,29 @@ test('github gathers under the repository and an empty sddService is that root',
       repo: 'acme/billing',
       sddService: 'services/api',
       labels: ['alpha', 'sdd:cycle'],
-      open: false,
     }),
     ticket({
       key: '2',
       repo: 'acme/billing',
       sddService: '',
       labels: ['alpha', 'sdd:cycle'],
-      open: false,
     }),
   ];
   const window = openWindow({homePath: home, adapter: 'github'}, {tickets: () => tickets});
-  const nestedCard = window.board().cards.find(item => item.key === '1');
-  const rootCard = window.board().cards.find(item => item.key === '2');
+  const board = window.board();
+  const nestedCard = board.pool.find(item => item.key === '1');
+  const rootCard = board.pool.find(item => item.key === '2');
   assert.ok(nestedCard);
   assert.ok(rootCard);
   assert.equal(nestedCard.checkout, nested);
+  assert.equal(nestedCard.queue, 'alpha');
+  assert.deepEqual(nestedCard.choices, ['', 'services/api']);
   assert.equal(rootCard.checkout, repo);
-  assert.equal(rootCard.reason, '');
-  assert.equal(rootCard.takeDisabled, false);
+  assert.equal(rootCard.queue, 'alpha');
+  assert.deepEqual(rootCard.choices, ['', 'services/api']);
+  assert.equal(rootCard.reason, undefined);
+  assert.equal(rootCard.icon, undefined);
+  assert.deepEqual(board.cards, []);
   rmSync(dir, {recursive: true, force: true});
 });
 
@@ -837,25 +853,28 @@ test('a tracker ticket is selected by the port queue and a label does not replac
           queue: 'alpha',
           labels: ['beta', 'sdd:cycle'],
           sddService: 'services/billing',
-          open: false,
         }),
         ticket({
           key: '2',
           queue: 'beta',
           labels: ['alpha', 'sdd:cycle'],
           sddService: 'services/billing',
-          open: false,
         }),
       ],
     },
   );
   const board = window.board();
-  const alpha = board.cards.find(item => item.key === '1');
-  const beta = board.cards.find(item => item.key === '2');
+  const alpha = board.pool.find(item => item.key === '1');
+  const beta = board.pool.find(item => item.key === '2');
   assert.ok(alpha);
   assert.ok(beta);
   assert.equal(alpha.queue, 'alpha');
+  assert.equal(alpha.checkout, checkout);
+  assert.deepEqual(alpha.choices, ['services/billing']);
   assert.equal(beta.queue, 'beta');
+  assert.equal(beta.checkout, checkout);
+  assert.deepEqual(beta.choices, ['services/billing']);
+  assert.deepEqual(board.cards, []);
   rmSync(dir, {recursive: true, force: true});
 });
 
@@ -874,7 +893,6 @@ test('a github queue is the first sdd.queues name on the issue and the key is ow
           repo: 'acme/billing',
           sddService: '',
           labels: ['beta', 'alpha', 'sdd:cycle'],
-          open: false,
         }),
         ticket({
           key: '2',
@@ -887,21 +905,29 @@ test('a github queue is the first sdd.queues name on the issue and the key is ow
           repo: 'acme/billing',
           sddService: '',
           labels: ['sdd:cycle'],
-          open: false,
         }),
       ],
     },
   );
   const board = window.board();
-  const matched = board.cards.find(item => item.key === '1');
-  const missing = board.cards.find(item => item.key === '3');
+  const matched = board.pool.find(item => item.key === '1');
+  const missing = board.pool.find(item => item.key === '3');
   assert.ok(matched);
   assert.equal(matched.queue, 'alpha');
+  assert.equal(matched.checkout, repo);
+  assert.deepEqual(matched.choices, ['']);
+  assert.equal(
+    board.pool.some(item => item.key === '2'),
+    false,
+  );
   assert.equal(
     board.cards.some(item => item.key === '2'),
     false,
   );
   assert.ok(missing);
+  assert.equal(missing.queue, '');
+  assert.equal(missing.checkout, repo);
+  assert.deepEqual(missing.choices, ['']);
   assert.equal(missing.reason, 'очереди нет в конфиге сервиса');
   assert.equal(missing.takeDisabled, true);
   rmSync(dir, {recursive: true, force: true});
@@ -997,15 +1023,22 @@ test('a missing catalog keeps the card and the choice and does not start a step'
       },
       tickets: () => [
         ticket({key: '1', queue: 'alpha', sddService: 'services/billing'}),
-        ticket({key: '2', queue: 'beta', sddService: 'services/gone', open: false}),
+        ticket({key: '2', queue: 'beta', sddService: 'services/gone'}),
       ],
     },
   );
   window.chooseAgent('cursor');
-  const gone = window.board().cards.find(item => item.key === '2');
+  const board = window.board();
+  const gone = board.pool.find(item => item.key === '2');
   assert.ok(gone);
+  assert.equal(gone.checkout, path.join(arcadia, 'services', 'gone'));
+  assert.equal(gone.queue, 'beta');
   assert.equal(gone.reason, 'каталога нет');
   assert.deepEqual(gone.choices, ['services/billing']);
+  assert.equal(
+    board.cards.some(item => item.key === '2'),
+    false,
+  );
   assert.equal(existsSync(path.join(arcadia, 'services', 'gone')), false);
   window.take('2');
   window.spy();
@@ -1026,7 +1059,7 @@ test('one tracker service that already lists the queue writes itself', () => {
   const tickets = [
     ticket({key: '1', queue: 'alpha', sddService: 'services/billing'}),
     ticket({key: '2', queue: 'alpha', sddService: 'services/other'}),
-    ticket({key: '3', queue: 'alpha', open: false}),
+    ticket({key: '3', queue: 'alpha'}),
   ];
   const writes: {key: string; service: string}[] = [];
   const window = openWindow(
@@ -1042,11 +1075,19 @@ test('one tracker service that already lists the queue writes itself', () => {
       },
     },
   );
-  const card = window.board().cards.find(item => item.key === '3');
+  const board = window.board();
+  const card = board.pool.find(item => item.key === '3');
   assert.ok(card);
   assert.deepEqual(writes, [{key: '3', service: 'services/billing'}]);
   assert.equal(card.checkout, billing);
-  assert.equal(card.reason, '');
+  assert.equal(card.queue, 'alpha');
+  assert.deepEqual(card.choices, ['services/billing']);
+  assert.equal(card.reason, undefined);
+  assert.equal(card.icon, undefined);
+  assert.equal(
+    board.cards.some(item => item.key === '3'),
+    false,
+  );
   rmSync(dir, {recursive: true, force: true});
 });
 
@@ -1058,7 +1099,7 @@ test('a blank tracker sddService writes the single service that lists the queue'
   writeLaunch(home, ['alpha'], {arcadia});
   const tickets = [
     ticket({key: '1', queue: 'alpha', sddService: 'services/billing'}),
-    ticket({key: '2', queue: 'alpha', sddService: '', open: false}),
+    ticket({key: '2', queue: 'alpha', sddService: ''}),
   ];
   const writes: {key: string; service: string}[] = [];
   const window = openWindow(
@@ -1074,11 +1115,19 @@ test('a blank tracker sddService writes the single service that lists the queue'
       },
     },
   );
-  const card = window.board().cards.find(item => item.key === '2');
+  const board = window.board();
+  const card = board.pool.find(item => item.key === '2');
   assert.ok(card);
   assert.deepEqual(writes, [{key: '2', service: 'services/billing'}]);
   assert.equal(card.checkout, billing);
-  assert.equal(card.reason, '');
+  assert.equal(card.queue, 'alpha');
+  assert.deepEqual(card.choices, ['services/billing']);
+  assert.equal(card.reason, undefined);
+  assert.equal(card.icon, undefined);
+  assert.equal(
+    board.cards.some(item => item.key === '2'),
+    false,
+  );
   rmSync(dir, {recursive: true, force: true});
 });
 
@@ -1095,7 +1144,7 @@ test('several tracker services that list the queue stay a choice', () => {
   const tickets = [
     ticket({key: '1', queue: 'alpha', sddService: 'services/billing'}),
     ticket({key: '2', queue: 'alpha', sddService: 'services/other'}),
-    ticket({key: '3', queue: 'alpha', open: false}),
+    ticket({key: '3', queue: 'alpha'}),
   ];
   const writes: {key: string; service: string}[] = [];
   const window = openWindow(
@@ -1115,11 +1164,18 @@ test('several tracker services that list the queue stay a choice', () => {
       },
     },
   );
-  const card = window.board().cards.find(item => item.key === '3');
+  const board = window.board();
+  const card = board.pool.find(item => item.key === '3');
   assert.ok(card);
+  assert.equal(card.checkout, undefined);
+  assert.equal(card.queue, 'alpha');
   assert.deepEqual(card.choices, ['services/billing', 'services/other']);
   assert.equal(card.reason, 'не назван сервис');
   assert.equal(card.takeDisabled, true);
+  assert.equal(
+    board.cards.some(item => item.key === '3'),
+    false,
+  );
   assert.equal(
     writes.some(item => item.key === '3'),
     false,
@@ -1145,9 +1201,9 @@ test('one github directory with an sdd key writes itself and several stay a choi
   writeFileSync(path.join(broken, 'openspec', 'config.yaml'), ':\n');
   writeLaunch(home, ['acme/alone', 'acme/many', 'acme/broken'], {github});
   const tickets = [
-    ticket({key: '1', repo: 'acme/alone', labels: ['alpha', 'sdd:cycle'], open: false}),
-    ticket({key: '2', repo: 'acme/many', labels: ['alpha', 'sdd:cycle'], open: false}),
-    ticket({key: '3', repo: 'acme/broken', labels: ['alpha', 'sdd:cycle'], open: false}),
+    ticket({key: '1', repo: 'acme/alone', labels: ['alpha', 'sdd:cycle']}),
+    ticket({key: '2', repo: 'acme/many', labels: ['alpha', 'sdd:cycle']}),
+    ticket({key: '3', repo: 'acme/broken', labels: ['alpha', 'sdd:cycle']}),
   ];
   const writes: {key: string; service: string}[] = [];
   const window = openWindow(
@@ -1165,22 +1221,34 @@ test('one github directory with an sdd key writes itself and several stay a choi
   );
   const board = window.board();
   assert.deepEqual(writes, [{key: '1', service: ''}]);
-  const written = board.cards.find(item => item.key === '1');
+  const written = board.pool.find(item => item.key === '1');
   assert.ok(written);
   assert.equal(written.checkout, alone);
-  assert.equal(written.reason, '');
-  const choice = board.cards.find(item => item.key === '2');
+  assert.equal(written.queue, 'alpha');
+  assert.deepEqual(written.choices, ['']);
+  assert.equal(written.reason, undefined);
+  assert.equal(written.icon, undefined);
+  assert.equal(
+    board.cards.some(item => item.key === '1'),
+    false,
+  );
+  const choice = board.pool.find(item => item.key === '2');
   assert.ok(choice);
+  assert.equal(choice.checkout, undefined);
+  assert.equal(choice.queue, '');
   assert.deepEqual(choice.choices, ['', 'services/api']);
   assert.equal(choice.reason, 'не назван сервис');
   assert.equal(
     writes.some(item => item.key === '2'),
     false,
   );
-  const unreadable = board.cards.find(item => item.key === '3');
+  const unreadable = board.pool.find(item => item.key === '3');
   assert.ok(unreadable);
+  assert.equal(unreadable.checkout, undefined);
+  assert.equal(unreadable.queue, '');
   assert.deepEqual(unreadable.choices, []);
   assert.equal(unreadable.reason, 'не назван сервис');
+  assert.deepEqual(board.cards, []);
   rmSync(dir, {recursive: true, force: true});
 });
 
@@ -2327,10 +2395,12 @@ test('healthy pool cards are ordered by key and have no icon', () => {
     ticket({key: 'a', queue: 'alpha', sddService: 'services/billing', title: 'First'}),
   ]);
   window.chooseAgent('cursor');
+  const checkout = path.join(arcadia, 'services', 'billing');
+  const place = {queue: 'alpha', choices: ['services/billing'], checkout};
   assert.deepEqual(window.board().pool, [
-    {key: 'a', title: 'First', take: true},
-    {key: 'b', title: 'Gate', take: true},
-    {key: 'c', title: 'Third', take: true},
+    {key: 'a', title: 'First', take: true, ...place},
+    {key: 'b', title: 'Gate', take: true, ...place},
+    {key: 'c', title: 'Third', take: true, ...place},
   ]);
   rmSync(dir, {recursive: true, force: true});
 });

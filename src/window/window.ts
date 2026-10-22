@@ -1,4 +1,4 @@
-import {existsSync, readFileSync, readdirSync, writeFileSync} from 'node:fs';
+import {existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync} from 'node:fs';
 import {homedir} from 'node:os';
 import path from 'node:path';
 
@@ -103,8 +103,8 @@ export type WindowOutside = {
   writeAssignee?: (key: string, login: string) => void;
   /** Phase write. The window's spy calls this with `proposing`. */
   writePhase?: (key: string, phase: string) => void;
-  /** A step the window's spy would start, in the gathered checkout. */
-  startStep?: (checkout?: string) => void;
+  /** A step the window's spy would start, in the gathered checkout. The models are the merged pair from that call. */
+  startStep?: (checkout?: string, models?: {mechanical: string; judgment: string}) => void;
   /** Open tickets this adapter can see. The window filters them by the watch list. */
   tickets?: () => readonly WindowTicket[];
   /** Login of this process. Not a Tracker or GitHub call. */
@@ -125,6 +125,17 @@ export type SettingsState = {
   speed?: {mechanical: string; judgment: string};
   watch: string[];
   roots: {arcadia: string; github: string};
+};
+
+/** The overlay group. It shows `.aifactory/config.yaml` of the chosen checkout. */
+export type OverlayGroup = {
+  file: '.aifactory/config.yaml';
+  checkout: string;
+  agent: string;
+  models: {mechanical: ModelField; judgment: ModelField};
+  effort?: {mechanical: string; judgment: string};
+  speed?: {mechanical: string; judgment: string};
+  watch: string[];
 };
 
 export type CardState = {
@@ -397,6 +408,84 @@ function replaceAgent(previous: Doc, agentId: string): Doc {
     }
   }
   return {...next, ...restOf(previous)};
+}
+
+function overlayFile(checkout: string): string {
+  return path.join(checkout, '.aifactory', 'config.yaml');
+}
+
+function readOverlayDoc(checkout: string): Doc | null {
+  const text = textOf(overlayFile(checkout));
+  if (text === null) {
+    return null;
+  }
+  return parseDoc(text);
+}
+
+function hasKey(doc: Doc | null, key: string): doc is Doc {
+  return doc !== null && Object.prototype.hasOwnProperty.call(doc, key);
+}
+
+/** An overlay agent uses its own field. Otherwise a present overlay key replaces home. */
+function ownOrHome(
+  overlay: Doc | null,
+  ownAgent: boolean,
+  key: 'effort' | 'speed',
+  home: Doc,
+): unknown {
+  if (ownAgent) {
+    return overlay?.[key];
+  }
+  if (hasKey(overlay, key)) {
+    return overlay[key];
+  }
+  return home[key];
+}
+
+/** A present slot, including an empty string. Absent means the caller keeps the home id. */
+function slotPresent(models: unknown, mode: SkillMode): string | undefined {
+  if (!isDoc(models) || !Object.prototype.hasOwnProperty.call(models, mode)) {
+    return undefined;
+  }
+  const value = models[mode];
+  return typeof value === 'string' ? value : '';
+}
+
+type Factory = {
+  agent: string;
+  mechanical: string;
+  judgment: string;
+  effort?: {mechanical: string; judgment: string};
+  speed?: {mechanical: string; judgment: string};
+};
+
+/** Overlay keys replace home keys. An overlay agent does not borrow effort or speed. */
+function mergeFactory(home: Doc, overlay: Doc | null): Factory {
+  const overlayAgent =
+    overlay && typeof overlay.agent === 'string' && overlay.agent !== '' ? overlay.agent : '';
+  const agent = overlayAgent || agentOf(home);
+  const pair = PAIRS[agent];
+  const factory: Factory = {
+    agent,
+    mechanical: slotPresent(overlay?.models, 'mechanical') ?? slot(home.models, 'mechanical'),
+    judgment: slotPresent(overlay?.models, 'judgment') ?? slot(home.models, 'judgment'),
+  };
+  const ownAgent = overlayAgent !== '';
+  if (pair?.effort) {
+    const source = modeValues(ownOrHome(overlay, ownAgent, 'effort', home));
+    factory.effort = {
+      mechanical: source.mechanical ?? pair.effort.mechanical,
+      judgment: source.judgment ?? pair.effort.judgment,
+    };
+  }
+  if (pair?.speed) {
+    const source = modeValues(ownOrHome(overlay, ownAgent, 'speed', home));
+    factory.speed = {
+      mechanical: source.mechanical ?? '',
+      judgment: source.judgment ?? '',
+    };
+  }
+  return factory;
 }
 
 function modelRow(doc: Doc): {text: string}[] {
@@ -715,7 +804,7 @@ function poolCard(
   checkout: CardState,
   phase: Phase | null,
   reading: readonly WindowTicket[],
-  ready: boolean,
+  block: {emptyModel: boolean; rejected: boolean},
   live: boolean,
   hideIcon: boolean,
 ): PoolCard {
@@ -751,7 +840,7 @@ function poolCard(
     }
     return card;
   }
-  if (!live || (phase === null && !ready)) {
+  if (!live || block.rejected || (phase === null && block.emptyModel)) {
     card.takeDisabled = true;
   }
   return card;
@@ -763,6 +852,9 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
   let baseline = textOf(launch.homePath);
   let doc = parseDoc(baseline);
   let settingsOpen = false;
+  let chosenCheckout = '';
+  let overlayBaseline: string | null = null;
+  let overlayDoc: Doc = {};
 
   function adopt(text: string | null): void {
     baseline = text;
@@ -845,6 +937,59 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     return slot(doc.models, 'mechanical') !== '' && slot(doc.models, 'judgment') !== '';
   }
 
+  function factoryFor(checkout: string | undefined): Factory {
+    return mergeFactory(doc, checkout ? readOverlayDoc(checkout) : null);
+  }
+
+  function rejectedSlots(factory: Factory): {mode: SkillMode; id: string}[] {
+    if (!outside.catalog || factory.agent === '') {
+      return [];
+    }
+    const listed = outside.catalog(factory.agent);
+    const out: {mode: SkillMode; id: string}[] = [];
+    if (factory.mechanical !== '' && listed.mechanical !== factory.mechanical) {
+      out.push({mode: 'mechanical', id: factory.mechanical});
+    }
+    if (factory.judgment !== '' && listed.judgment !== factory.judgment) {
+      out.push({mode: 'judgment', id: factory.judgment});
+    }
+    return out;
+  }
+
+  function takeBlock(factory: Factory): {emptyModel: boolean; rejected: boolean} {
+    return {
+      emptyModel: factory.mechanical === '' || factory.judgment === '',
+      rejected: rejectedSlots(factory).length > 0,
+    };
+  }
+
+  function canStart(checkout: string | undefined): boolean {
+    const factory = factoryFor(checkout);
+    return (
+      factory.mechanical !== '' && factory.judgment !== '' && rejectedSlots(factory).length === 0
+    );
+  }
+
+  function checkoutRows(): {text: string}[] {
+    const out: {text: string}[] = [];
+    for (const checkout of gatheredCheckouts()) {
+      const factory = factoryFor(checkout);
+      if (factory.mechanical === '' && factory.judgment === '') {
+        out.push({text: `${checkout} · нужны модели mechanical и judgment`});
+      } else if (factory.mechanical === '') {
+        out.push({text: `${checkout} · нужна модель mechanical`});
+      } else if (factory.judgment === '') {
+        out.push({text: `${checkout} · нужна модель judgment`});
+      }
+      for (const rejected of rejectedSlots(factory)) {
+        out.push({
+          text: `${checkout} · модель не запускается · ${rejected.mode} · ${rejected.id}`,
+        });
+      }
+    }
+    return out;
+  }
+
   function rows(live: boolean): {text: string}[] {
     if (!recorded()) {
       return [{text: NEEDS_AGENT}];
@@ -852,7 +997,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     if (!live) {
       return [{text: SILENT_AGENT}];
     }
-    return modelRow(doc);
+    return [...modelRow(doc), ...checkoutRows()];
   }
 
   function diskHome(): Doc {
@@ -1095,6 +1240,25 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     return {watch, cards};
   }
 
+  function gatheredCheckouts(): string[] {
+    if (!outside.tickets) {
+      return [];
+    }
+    const names = readWatch();
+    const found: string[] = [];
+    for (const item of sortedTickets()) {
+      if (!onWatch(item, names)) {
+        continue;
+      }
+      const checkout = gathered(item);
+      if (!checkout || found.includes(checkout)) {
+        continue;
+      }
+      found.push(checkout);
+    }
+    return found;
+  }
+
   function lay(watch: readonly string[]): {
     taken: Set<string>;
     pool: PoolCard[];
@@ -1103,7 +1267,6 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     const reading = sortedTickets();
     const manager = outside.login?.();
     const live = answers();
-    const ready = live && modelsReady();
     const taken = new Set<string>();
     const pool: PoolCard[] = [];
     const buckets = new Map<ColumnName, Placed[]>();
@@ -1124,7 +1287,17 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       const hideIcon = outside.leading?.(item.key) === true || item.checks === 'pending';
       if (!phase) {
         taken.add(item.key);
-        pool.push(poolCard(item, checkout, null, reading, ready, live, hideIcon));
+        pool.push(
+          poolCard(
+            item,
+            checkout,
+            null,
+            reading,
+            takeBlock(factoryFor(checkout.checkout)),
+            live,
+            hideIcon,
+          ),
+        );
         continue;
       }
       taken.add(item.key);
@@ -1133,7 +1306,17 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
         continue;
       }
       if (where === 'pool') {
-        pool.push(poolCard(item, checkout, phase, reading, ready, live, hideIcon));
+        pool.push(
+          poolCard(
+            item,
+            checkout,
+            phase,
+            reading,
+            takeBlock(factoryFor(checkout.checkout)),
+            live,
+            hideIcon,
+          ),
+        );
         continue;
       }
       const placed = buildCycle(
@@ -1174,14 +1357,164 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     };
   }
 
+  function rememberOverlay(checkout: string): void {
+    chosenCheckout = checkout;
+    overlayBaseline = textOf(overlayFile(checkout));
+    overlayDoc = parseDoc(overlayBaseline);
+  }
+
+  function emptyOverlay(): OverlayGroup {
+    return {
+      file: '.aifactory/config.yaml',
+      checkout: '',
+      agent: '',
+      models: {
+        mechanical: {value: '', needsValue: false},
+        judgment: {value: '', needsValue: false},
+      },
+      watch: [],
+    };
+  }
+
+  function overlay(): OverlayGroup {
+    if (chosenCheckout === '') {
+      return emptyOverlay();
+    }
+    const factory = mergeFactory(doc, overlayDoc);
+    const group: OverlayGroup = {
+      file: '.aifactory/config.yaml',
+      checkout: chosenCheckout,
+      agent: factory.agent,
+      models: {
+        mechanical: {
+          value: factory.mechanical,
+          needsValue: factory.agent !== '' && factory.mechanical === '',
+        },
+        judgment: {
+          value: factory.judgment,
+          needsValue: factory.agent !== '' && factory.judgment === '',
+        },
+      },
+      watch: stringList(overlayDoc.watch),
+    };
+    if (factory.effort) {
+      group.effort = factory.effort;
+    }
+    if (factory.speed) {
+      group.speed = factory.speed;
+    }
+    return group;
+  }
+
+  function canWriteOverlay(): boolean {
+    if (chosenCheckout === '') {
+      return false;
+    }
+    const disk = textOf(overlayFile(chosenCheckout));
+    if (disk !== overlayBaseline) {
+      overlayBaseline = disk;
+      overlayDoc = parseDoc(disk);
+      return false;
+    }
+    return true;
+  }
+
+  function commitOverlay(next: Doc): void {
+    const clean: Doc = {};
+    for (const [key, value] of Object.entries(next)) {
+      if (
+        FORBIDDEN.has(key) ||
+        key === 'roots' ||
+        key === 'roles' ||
+        value === undefined ||
+        value === ''
+      ) {
+        continue;
+      }
+      clean[key] = value;
+    }
+    const file = overlayFile(chosenCheckout);
+    mkdirSync(path.dirname(file), {recursive: true});
+    const text = stringify(clean);
+    writeFileSync(file, text);
+    overlayBaseline = text;
+    overlayDoc = clean;
+  }
+
   return {
     board,
     settings,
+    overlay,
     openSettings() {
       settingsOpen = true;
+      if (chosenCheckout !== '') {
+        return;
+      }
+      const checkouts = gatheredCheckouts();
+      if (checkouts.length === 1) {
+        rememberOverlay(checkouts[0]);
+      }
     },
     closeSettings() {
       settingsOpen = false;
+    },
+    openCard(key: string) {
+      const item = sortedTickets().find(ticket => ticket.key === key);
+      if (!item) {
+        return;
+      }
+      const checkout = gathered(item);
+      if (!checkout || !gatheredCheckouts().includes(checkout)) {
+        return;
+      }
+      rememberOverlay(checkout);
+    },
+    chooseCheckout(checkout: string) {
+      if (!gatheredCheckouts().includes(checkout)) {
+        return;
+      }
+      rememberOverlay(checkout);
+    },
+    chooseOverlayAgent(agentId: string) {
+      if (chosenCheckout === '' || offered.length === 0 || !offered.includes(agentId)) {
+        return;
+      }
+      if (!canWriteOverlay()) {
+        return;
+      }
+      const next = replaceAgent(overlayDoc, agentId);
+      delete next.roots;
+      delete next.roles;
+      commitOverlay(next);
+    },
+    clearOverlayAgent() {
+      if (chosenCheckout === '' || !canWriteOverlay()) {
+        return;
+      }
+      const next: Doc = {...overlayDoc};
+      delete next.agent;
+      delete next.models;
+      delete next.effort;
+      delete next.speed;
+      commitOverlay(next);
+    },
+    leaveOverlayModel(mode: SkillMode, value: string) {
+      if (chosenCheckout === '' || !canWriteOverlay()) {
+        return;
+      }
+      const models = isDoc(overlayDoc.models) ? {...overlayDoc.models} : {};
+      if (value === '') {
+        delete models[mode];
+      } else {
+        models[mode] = value;
+      }
+      const next: Doc = {...overlayDoc};
+      if (Object.keys(models).length === 0) {
+        delete next.models;
+      } else {
+        next.models = models;
+      }
+      commitOverlay(next);
     },
     chooseAgent(agentId: string) {
       if (!launch.homePath || offered.length === 0 || !offered.includes(agentId)) {
@@ -1294,11 +1627,18 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       outside.writeAssignee?.(key, login);
     },
     spy() {
-      if (!answers() || !modelsReady()) {
+      if (!answers()) {
         return;
       }
       if (!outside.tickets) {
-        outside.startStep?.();
+        if (!modelsReady()) {
+          return;
+        }
+        const homeFactory = mergeFactory(doc, null);
+        outside.startStep?.(undefined, {
+          mechanical: homeFactory.mechanical,
+          judgment: homeFactory.judgment,
+        });
         return;
       }
       const view = settle();
@@ -1317,7 +1657,17 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
         if (where !== 'cards' && where !== 'pool' && where !== 'hide') {
           continue;
         }
-        outside.startStep?.(card.checkout);
+        if (outside.leading?.(item.key) === true) {
+          continue;
+        }
+        const factory = factoryFor(card.checkout);
+        if (!canStart(card.checkout)) {
+          continue;
+        }
+        outside.startStep?.(card.checkout, {
+          mechanical: factory.mechanical,
+          judgment: factory.judgment,
+        });
       }
       if (manager === undefined) {
         return;
@@ -1333,7 +1683,10 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
           continue;
         }
         const checkout = view.cards.find(entry => entry.key === item.key);
-        const stopped = (item.openPullRequests ?? 0) > 1 || (checkout?.reason ?? '') !== '';
+        const stopped =
+          (item.openPullRequests ?? 0) > 1 ||
+          (checkout?.reason ?? '') !== '' ||
+          !canStart(checkout?.checkout);
         if (stopped) {
           continue;
         }

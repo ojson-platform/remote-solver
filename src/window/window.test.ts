@@ -2504,6 +2504,469 @@ test('a running step hides the icon on a pool ticket with a checkout break', () 
   rmSync(dir, {recursive: true, force: true});
 });
 
+test('an overlay mechanical model replaces the home id and a missing overlay keeps home', () => {
+  const {dir, home, arcadia} = yard();
+  const billing = path.join(arcadia, 'services', 'billing');
+  const other = path.join(arcadia, 'services', 'other');
+  mkdirSync(billing, {recursive: true});
+  mkdirSync(other, {recursive: true});
+  writeServiceConfig(billing, ['alpha']);
+  writeServiceConfig(other, ['beta']);
+  writeLaunch(home, ['alpha', 'beta'], {arcadia});
+  writeOverlay(billing, [], 'models:\n  mechanical: overlay-mechanical\n');
+  const started: {checkout: string; mechanical: string; judgment: string}[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      answers: () => true,
+      startStep: (checkout, models) => {
+        started.push({
+          checkout: checkout ?? '',
+          mechanical: models?.mechanical ?? '',
+          judgment: models?.judgment ?? '',
+        });
+      },
+      tickets: () => [
+        ticket({key: '1', queue: 'alpha', sddService: 'services/billing'}),
+        ticket({key: '2', queue: 'beta', sddService: 'services/other'}),
+      ],
+    },
+  );
+  window.chooseAgent('cursor');
+  window.spy();
+  assert.deepEqual(started, [
+    {
+      checkout: billing,
+      mechanical: 'overlay-mechanical',
+      judgment: 'grok-4.7-high-fast',
+    },
+    {
+      checkout: other,
+      mechanical: 'composer-2.5-fast',
+      judgment: 'grok-4.7-high-fast',
+    },
+  ]);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('changing the overlay agent to opencode writes the pair and no effort or speed', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  writeOverlay(
+    checkout,
+    ['alpha'],
+    [
+      'agent: codex',
+      'models:',
+      '  mechanical: gpt-6-luna',
+      '  judgment: gpt-6.1-sol',
+      'effort:',
+      '  mechanical: max',
+      '  judgment: max',
+      'speed:',
+      '  mechanical: fast',
+      'roots:',
+      '  arcadia: /wrong',
+      'roles:',
+      '  - someone',
+      '',
+    ].join('\n'),
+  );
+  let reads = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      catalog: () => {
+        reads += 1;
+        return {mechanical: 'not-the-pair', judgment: 'also-not'};
+      },
+      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
+    },
+  );
+  window.chooseAgent('cursor');
+  window.openSettings();
+  window.chooseOverlayAgent('opencode');
+  const doc = readHome(path.join(checkout, '.aifactory', 'config.yaml'));
+  assert.equal(doc.agent, 'opencode');
+  assert.equal(doc.models?.mechanical, 'moonshotai/kimi-k2.7-code');
+  assert.equal(doc.models?.judgment, 'moonshotai/kimi-k3');
+  assert.equal(doc.effort, undefined);
+  assert.equal(doc.speed, undefined);
+  assert.equal(doc.roots, undefined);
+  assert.equal(doc.roles, undefined);
+  assert.deepEqual(doc.watch, ['alpha']);
+  assertNoEmptyStrings(doc);
+  assert.equal(reads, 0);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('an overlay edit is on disk after settings close', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.openSettings();
+  window.chooseOverlayAgent('claude-code');
+  const file = path.join(checkout, '.aifactory', 'config.yaml');
+  assert.equal(readHome(file).agent, 'claude-code');
+  window.closeSettings();
+  const doc = readHome(file);
+  assert.equal(doc.agent, 'claude-code');
+  assert.equal(doc.models?.mechanical, 'sonnet');
+  assert.equal(doc.models?.judgment, 'opus');
+  assert.deepEqual(doc.effort, {mechanical: 'medium', judgment: 'medium'});
+  assert.equal(doc.speed, undefined);
+  assert.equal(window.board().settingsOpen, false);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('an overlay agent of codex with no effort key does not take home effort max', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeFileSync(
+    home,
+    [
+      'agent: cursor',
+      'models:',
+      '  mechanical: composer-2.5-fast',
+      '  judgment: grok-4.7-high-fast',
+      'effort:',
+      '  mechanical: max',
+      '  judgment: max',
+      'watch:',
+      '  - alpha',
+      'roots:',
+      `  arcadia: ${arcadia}`,
+      '',
+    ].join('\n'),
+  );
+  writeOverlay(
+    checkout,
+    ['alpha'],
+    ['agent: codex', 'models:', '  mechanical: gpt-6-luna', '  judgment: gpt-6.1-sol', ''].join(
+      '\n',
+    ),
+  );
+  let started = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      answers: () => true,
+      startStep: () => {
+        started += 1;
+      },
+      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
+    },
+  );
+  window.openSettings();
+  assert.equal(window.overlay().file, '.aifactory/config.yaml');
+  assert.equal(window.overlay().checkout, checkout);
+  assert.equal(window.overlay().agent, 'codex');
+  assert.equal(window.overlay().models.mechanical.value, 'gpt-6-luna');
+  assert.equal(window.overlay().models.judgment.value, 'gpt-6.1-sol');
+  assert.deepEqual(window.overlay().effort, {mechanical: 'low', judgment: 'high'});
+  assert.deepEqual(window.overlay().speed, {mechanical: '', judgment: ''});
+  assert.equal(readHome(path.join(checkout, '.aifactory', 'config.yaml')).effort, undefined);
+  window.spy();
+  assert.equal(started, 1);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('clearing the overlay agent removes agent, models, effort, and speed', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  writeOverlay(
+    checkout,
+    ['alpha'],
+    [
+      'agent: codex',
+      'models:',
+      '  mechanical: gpt-6-luna',
+      '  judgment: gpt-6.1-sol',
+      'effort:',
+      '  mechanical: high',
+      '  judgment: low',
+      'speed:',
+      '  mechanical: fast',
+      '',
+    ].join('\n'),
+  );
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.chooseAgent('cursor');
+  window.openSettings();
+  window.clearOverlayAgent();
+  const doc = readHome(path.join(checkout, '.aifactory', 'config.yaml'));
+  assert.equal(doc.agent, undefined);
+  assert.equal(doc.models, undefined);
+  assert.equal(doc.effort, undefined);
+  assert.equal(doc.speed, undefined);
+  assert.deepEqual(doc.watch, ['alpha']);
+  assert.equal(window.overlay().agent, 'cursor');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('clearing overlay judgment with no overlay agent shows the home judgment id', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  writeOverlay(checkout, ['alpha'], 'models:\n  judgment: custom-judgment\n');
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.chooseAgent('cursor');
+  window.openSettings();
+  assert.equal(window.overlay().models.judgment.value, 'custom-judgment');
+  window.leaveOverlayModel('judgment', '');
+  const doc = readHome(path.join(checkout, '.aifactory', 'config.yaml'));
+  assert.equal(doc.models?.judgment, undefined);
+  assert.equal(window.overlay().models.judgment.value, 'grok-4.7-high-fast');
+  assert.equal(window.overlay().models.mechanical.value, 'composer-2.5-fast');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a newer overlay file on disk blocks the write and the group shows the disk agent', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  writeOverlay(checkout, ['alpha'], 'agent: cursor\n');
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.openSettings();
+  assert.equal(window.overlay().agent, 'cursor');
+  const file = path.join(checkout, '.aifactory', 'config.yaml');
+  writeFileSync(file, 'agent: codex\n');
+  window.chooseOverlayAgent('opencode');
+  assert.equal(readHome(file).agent, 'codex');
+  assert.equal(window.overlay().agent, 'codex');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('one gathered checkout is selected when settings open with no card', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  assert.equal(window.overlay().checkout, '');
+  window.openSettings();
+  assert.equal(window.overlay().file, '.aifactory/config.yaml');
+  assert.equal(window.overlay().checkout, checkout);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('several gathered checkouts write nothing until chooseCheckout', () => {
+  const {dir, home, arcadia} = yard();
+  const billing = path.join(arcadia, 'services', 'billing');
+  const other = path.join(arcadia, 'services', 'other');
+  mkdirSync(billing, {recursive: true});
+  mkdirSync(other, {recursive: true});
+  writeServiceConfig(billing, ['alpha']);
+  writeServiceConfig(other, ['beta']);
+  writeLaunch(home, ['alpha', 'beta'], {arcadia});
+  const tickets = [
+    ticket({key: '1', queue: 'alpha', sddService: 'services/billing'}),
+    ticket({key: '2', queue: 'beta', sddService: 'services/other'}),
+  ];
+  const window = openWindow({homePath: home, adapter: 'tracker'}, {tickets: () => tickets});
+  window.openSettings();
+  assert.equal(window.overlay().checkout, '');
+  window.chooseOverlayAgent('opencode');
+  assert.equal(existsSync(path.join(billing, '.aifactory', 'config.yaml')), false);
+  assert.equal(existsSync(path.join(other, '.aifactory', 'config.yaml')), false);
+  window.chooseCheckout(path.join(arcadia, 'missing'));
+  assert.equal(window.overlay().checkout, '');
+  window.chooseCheckout(billing);
+  window.chooseOverlayAgent('opencode');
+  assert.equal(readHome(path.join(billing, '.aifactory', 'config.yaml')).agent, 'opencode');
+  assert.equal(existsSync(path.join(other, '.aifactory', 'config.yaml')), false);
+  window.openCard('2');
+  assert.equal(window.overlay().checkout, other);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('an empty merged mechanical model names the checkout and stops only that step', () => {
+  const {dir, home, arcadia} = yard();
+  const billing = path.join(arcadia, 'services', 'billing');
+  const other = path.join(arcadia, 'services', 'other');
+  mkdirSync(billing, {recursive: true});
+  mkdirSync(other, {recursive: true});
+  writeServiceConfig(billing, ['alpha']);
+  writeServiceConfig(other, ['beta']);
+  writeLaunch(home, ['alpha', 'beta'], {arcadia});
+  writeOverlay(billing, [], 'models:\n  mechanical: ""\n');
+  const tickets = [
+    ticket({key: '1', queue: 'alpha', sddService: 'services/billing', title: 'Bare'}),
+    ticket({key: '2', queue: 'beta', sddService: 'services/other', title: 'Other'}),
+    cycle('3', 'implementing', {assignee: '', title: 'Phased'}),
+  ];
+  const assignees: string[] = [];
+  const started: {checkout: string; mechanical: string}[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      answers: () => true,
+      tickets: () => tickets,
+      writeAssignee: key => {
+        assignees.push(key);
+        const found = tickets.find(item => item.key === key);
+        if (found) {
+          found.assignee = MANAGER;
+        }
+      },
+      startStep: (checkout, models) => {
+        started.push({checkout: checkout ?? '', mechanical: models?.mechanical ?? ''});
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  const row = window.board().rows.find(item => item.text.includes(billing));
+  assert.ok(row);
+  assert.equal(row.text.includes('нужна модель mechanical'), true);
+  assert.equal(
+    window
+      .board()
+      .rows.some(item => item.text.includes(other) && item.text.includes('нужна модель')),
+    false,
+  );
+  window.take('1');
+  window.take('3');
+  assert.deepEqual(assignees, ['3']);
+  window.spy();
+  assert.deepEqual(started, [{checkout: other, mechanical: 'composer-2.5-fast'}]);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a silent agent does not show the checkout empty-model row', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  writeOverlay(checkout, [], 'models:\n  mechanical: ""\n');
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      answers: () => false,
+      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
+    },
+  );
+  window.chooseAgent('cursor');
+  assert.deepEqual(window.board().rows, [{text: 'агент не отвечает'}]);
+  assert.equal(readHome(home).agent, 'cursor');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a catalog that rejects the recorded judgment id keeps it and stops the step', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  const tickets = [
+    ticket({key: '1', queue: 'alpha', sddService: 'services/billing', title: 'Bare'}),
+    cycle('3', 'implementing', {assignee: '', title: 'Phased'}),
+  ];
+  const assignees: string[] = [];
+  let started = 0;
+  let choosing = true;
+  let readsWhileChoosing = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      answers: () => true,
+      catalog: () => {
+        if (choosing) {
+          readsWhileChoosing += 1;
+        }
+        return {mechanical: 'composer-2.5-fast', judgment: 'not-listed'};
+      },
+      tickets: () => tickets,
+      writeAssignee: key => {
+        assignees.push(key);
+      },
+      startStep: () => {
+        started += 1;
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  choosing = false;
+  assert.equal(readsWhileChoosing, 0);
+  const row = window.board().rows.find(item => item.text.includes('модель не запускается'));
+  assert.ok(row);
+  assert.equal(row.text.includes(checkout), true);
+  assert.equal(row.text.includes('judgment'), true);
+  assert.equal(row.text.includes('grok-4.7-high-fast'), true);
+  assert.equal(readHome(home).models?.judgment, 'grok-4.7-high-fast');
+  window.take('1');
+  window.take('3');
+  assert.deepEqual(assignees, []);
+  window.spy();
+  assert.equal(started, 0);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a started step keeps the mechanical id from that call until leading is false', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  writeOverlay(checkout, [], 'models:\n  mechanical: first-id\n');
+  let leading = false;
+  const started: string[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      answers: () => true,
+      leading: () => leading,
+      startStep: (_checkout, models) => {
+        started.push(models?.mechanical ?? '');
+      },
+      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
+    },
+  );
+  window.chooseAgent('cursor');
+  window.spy();
+  leading = true;
+  writeOverlay(checkout, [], 'models:\n  mechanical: second-id\n');
+  window.spy();
+  assert.deepEqual(started, ['first-id']);
+  leading = false;
+  window.spy();
+  assert.deepEqual(started, ['first-id', 'second-id']);
+  rmSync(dir, {recursive: true, force: true});
+});
+
 test('healthy pool cards are ordered by key and have no icon', () => {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);

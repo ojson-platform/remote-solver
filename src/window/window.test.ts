@@ -3560,3 +3560,498 @@ test('the service-config group shows the disk copy when the file changed before 
   assert.equal(window.serviceConfig().save, true);
   rmSync(dir, {recursive: true, force: true});
 });
+
+type ReviewReading = {
+  threads: readonly {marker?: string | null; lines: readonly string[]}[];
+  conversation?: {last?: {marker?: string | null; body: string} | null} | null;
+};
+
+function openSide(
+  home: string,
+  tickets: readonly WindowTicket[],
+  extra: {
+    leading?: (key: string) => boolean;
+    review?: (key: string) => ReviewReading | undefined;
+  } = {},
+) {
+  return openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => tickets,
+      leading: extra.leading,
+      review: extra.review,
+    },
+  );
+}
+
+function kinds(blocks: readonly {kind: string}[]): string[] {
+  return blocks.map(block => block.kind);
+}
+
+test('sidebar() with no open card has no blocks', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [
+    cycle('1', 'implementing', {comments: [{body: 'sdd:focus\nPlan gap\n'}]}),
+  ]);
+  assert.deepEqual(window.sidebar(), []);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('an open cycle whose only sidebar block is focus shows that block', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  writeChange(
+    checkout,
+    '1',
+    'proposal.md',
+    'UNIQUE PROPOSAL BODY that must stay out of the sidebar\n',
+  );
+  const item = cycle('1', 'implementing', {
+    comments: [{body: 'sdd:focus\nSpecify thread 4\n'}],
+  });
+  Object.assign(item, {body: 'MIRROR TEXT stays in the issue'});
+  const window = openSide(home, [item]);
+  window.openCard('1');
+  const blocks = window.sidebar();
+  assert.deepEqual(blocks, [{kind: 'focus', body: 'Specify thread 4\n'}]);
+  const text = JSON.stringify(blocks);
+  assert.equal(text.includes('UNIQUE PROPOSAL BODY'), false);
+  assert.equal(text.includes('MIRROR TEXT'), false);
+  assert.equal(text.includes('sdd:focus'), false);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the sidebar reason is the card full line', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  writeChange(checkout, 'p', 'proposal.md', '## Open questions\n\n- [ ] one\n');
+  const window = openSide(home, [
+    cycle('p', 'proposed', {
+      labels: ['sdd:cycle', 'sdd:proposed', 'sdd:wait-human'],
+      open: true,
+      mergeAhead: true,
+      dependsOn: ['a'],
+    }),
+    ticket({key: 'c-1', parent: 'p', queue: 'other', labels: ['sdd:cycle']}),
+    ticket({key: 'a', queue: 'other', labels: ['note']}),
+  ]);
+  const card = columnCards(window.board(), 'accepting')?.find(item => item.key === 'p');
+  const line = 'proposed · Ask · вопросы 1 · мерж · дети c-1 · блокеры a';
+  assert.equal(card?.reason, line);
+  window.openCard('p');
+  assert.deepEqual(window.sidebar()[0], {kind: 'reason', line});
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a card with no icon has no sidebar reason block', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(
+    home,
+    [
+      cycle('1', 'specifying', {
+        labels: ['sdd:cycle', 'sdd:specifying', 'sdd:wait-human'],
+        comments: [{body: 'please decide'}],
+      }),
+    ],
+    {leading: key => key === '1'},
+  );
+  const card = columnCards(window.board(), 'specifying')?.[0];
+  assert.equal(card?.icon, undefined);
+  assert.equal(card?.reason, undefined);
+  window.openCard('1');
+  const blocks = window.sidebar();
+  assert.equal(kinds(blocks).includes('reason'), false);
+  assert.deepEqual(blocks, [{kind: 'ask', body: 'please decide'}]);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a question-only card hides the line and the sidebar still shows it', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  writeChange(checkout, 'b', 'proposal.md', '## Open questions\n\n- [ ] one\n- [ ] two\n');
+  const window = openSide(home, [cycle('b', 'proposing')]);
+  const card = columnCards(window.board(), 'proposing')?.[0];
+  assert.equal(card?.phaseRow, 2);
+  assert.equal(card?.icon, true);
+  assert.equal(card?.reason, undefined);
+  window.openCard('b');
+  assert.deepEqual(window.sidebar(), [{kind: 'reason', line: 'вопросы 2'}]);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a decision-only card hides the line and the sidebar still shows it', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  writeChange(checkout, '1', 'design.md', '## Open decisions\n\n- [ ] one\n');
+  const window = openSide(home, [cycle('1', 'designing')]);
+  const card = columnCards(window.board(), 'designing')?.[0];
+  assert.equal(card?.phaseRow, 1);
+  assert.equal(card?.icon, true);
+  assert.equal(card?.reason, undefined);
+  window.openCard('1');
+  assert.deepEqual(window.sidebar(), [{kind: 'reason', line: 'решения 1'}]);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the sidebar ask is the latest comment that does not start with sdd:focus', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [
+    cycle('1', 'implementing', {
+      labels: ['sdd:cycle', 'sdd:implementing', 'sdd:wait-human'],
+      comments: [
+        {body: 'older note'},
+        {body: 'please decide\nthe rest'},
+        {body: 'sdd:focus\nPlan gap\n'},
+      ],
+    }),
+  ]);
+  window.openCard('1');
+  const ask = window.sidebar().find(block => block.kind === 'ask');
+  assert.deepEqual(ask, {kind: 'ask', body: 'please decide\nthe rest'});
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('removing sdd:wait-human removes the sidebar ask while the comments remain', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const labels = ['sdd:cycle', 'sdd:implementing', 'sdd:wait-human'];
+  const comments = [{body: 'please decide'}, {body: 'sdd:focus\nPlan gap\n'}];
+  const window = openSide(home, [cycle('1', 'implementing', {labels, comments})]);
+  window.openCard('1');
+  assert.equal(kinds(window.sidebar()).includes('ask'), true);
+  labels.splice(labels.indexOf('sdd:wait-human'), 1);
+  const blocks = window.sidebar();
+  assert.equal(kinds(blocks).includes('ask'), false);
+  assert.deepEqual(blocks, [{kind: 'focus', body: 'Plan gap\n'}]);
+  assert.equal(comments.length, 2);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('no sdd:focus comment leaves no sidebar focus block', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [cycle('1', 'implementing', {comments: [{body: 'just a note'}]})]);
+  window.openCard('1');
+  assert.deepEqual(window.sidebar(), []);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the sidebar focus plaque does not include the marker line', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [
+    cycle('1', 'implementing', {
+      comments: [
+        {body: 'sdd:focus\nSpecify thread 4\nwhy this gap\n'},
+        {body: 'sdd:focus\nPlan gap\n', manager: true},
+        {body: 'a later note'},
+      ],
+    }),
+  ]);
+  window.openCard('1');
+  const blocks = window.sidebar();
+  assert.deepEqual(blocks, [{kind: 'focus', body: 'Specify thread 4\nwhy this gap\n'}]);
+  assert.equal(JSON.stringify(blocks).includes('sdd:focus'), false);
+  assert.equal(JSON.stringify(blocks).includes('Plan gap'), false);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a thread with no marker is in the sidebar unanswered block', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  let asked = '';
+  const window = openSide(home, [cycle('1', 'implementing')], {
+    review: key => {
+      asked = key;
+      return {
+        threads: [
+          {marker: null, lines: ['please look', 'at the diff']},
+          {marker: 'code', lines: ['already marked']},
+        ],
+        conversation: {last: {marker: 'note', body: 'answered already'}},
+      };
+    },
+  });
+  window.openCard('1');
+  const blocks = window.sidebar();
+  assert.equal(asked, '1');
+  assert.deepEqual(blocks, [
+    {kind: 'unanswered', threads: [{lines: ['please look', 'at the diff']}]},
+  ]);
+  const text = JSON.stringify(blocks);
+  assert.equal(text.includes('already marked'), false);
+  assert.equal(text.includes('answered already'), false);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('every marked thread and a marked last comment leave no sidebar unanswered block', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [cycle('1', 'implementing')], {
+    review: () => ({
+      threads: [
+        {marker: 'code', lines: ['one']},
+        {marker: 'fixed', lines: ['two']},
+      ],
+      conversation: {last: {marker: 'note', body: 'done'}},
+    }),
+  });
+  window.openCard('1');
+  assert.deepEqual(window.sidebar(), []);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a conversation last comment with no marker is in the sidebar unanswered block', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [cycle('1', 'implementing')], {
+    review: () => ({
+      threads: [{marker: 'code', lines: ['kept out']}],
+      conversation: {last: {body: 'please reply'}},
+    }),
+  });
+  window.openCard('1');
+  const blocks = window.sidebar();
+  assert.deepEqual(blocks, [{kind: 'unanswered', comment: 'please reply'}]);
+  assert.equal(JSON.stringify(blocks).includes('kept out'), false);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the review port returning nothing leaves no sidebar unanswered block', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const silent = openSide(home, [cycle('1', 'implementing')], {review: () => undefined});
+  silent.openCard('1');
+  assert.deepEqual(silent.sidebar(), []);
+  const absent = openSide(home, [cycle('1', 'implementing')]);
+  absent.openCard('1');
+  assert.deepEqual(absent.sidebar(), []);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('sddHooks lists archive before then create-proposal after in the sidebar', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = cycle('1', 'implementing');
+  item.sddHooks = [
+    {action: 'archive', point: 'before', value: 'keep the archive\nstill here'},
+    {action: 'create-proposal', point: 'after', value: 'then propose'},
+  ];
+  const window = openSide(home, [item]);
+  window.openCard('1');
+  assert.deepEqual(window.sidebar(), [
+    {
+      kind: 'hook',
+      points: [
+        {action: 'archive', point: 'before', paragraph: 'keep the archive\nstill here'},
+        {action: 'create-proposal', point: 'after', paragraph: 'then propose'},
+      ],
+    },
+  ]);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a nested sddHooks map keeps field order in the sidebar', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = cycle('1', 'implementing');
+  item.sddHooks = {
+    archive: {before: 'keep the archive\nstill here'},
+    'create-proposal': {after: 'then propose'},
+  };
+  const window = openSide(home, [item]);
+  window.openCard('1');
+  assert.deepEqual(window.sidebar(), [
+    {
+      kind: 'hook',
+      points: [
+        {action: 'archive', point: 'before', paragraph: 'keep the archive\nstill here'},
+        {action: 'create-proposal', point: 'after', paragraph: 'then propose'},
+      ],
+    },
+  ]);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a missing or empty sddHooks leaves no sidebar hook block', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const missing = cycle('1', 'implementing', {
+    comments: [{body: 'sdd:focus\nPlan gap\n'}],
+  });
+  const empty = cycle('2', 'implementing', {
+    comments: [{body: 'sdd:focus\nPlan gap\n'}],
+    sddHooks: '',
+  });
+  const blank = cycle('3', 'implementing', {
+    comments: [{body: 'sdd:focus\nPlan gap\n'}],
+    sddHooks: {},
+  });
+  const noPoints = cycle('4', 'implementing', {
+    comments: [{body: 'sdd:focus\nPlan gap\n'}],
+    sddHooks: {archive: {}},
+  });
+  const list = cycle('5', 'implementing', {
+    comments: [{body: 'sdd:focus\nPlan gap\n'}],
+    sddHooks: [],
+  });
+  const window = openSide(home, [missing, empty, blank, noPoints, list]);
+  for (const key of ['1', '2', '3', '4', '5']) {
+    window.openCard(key);
+    const blocks = window.sidebar();
+    assert.deepEqual(blocks, [{kind: 'focus', body: 'Plan gap\n'}]);
+    assert.equal(kinds(blocks).includes('hook'), false);
+  }
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a single string sddHooks is the sidebar line поле хука не читается', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = cycle('1', 'implementing', {sddHooks: 'not a map'});
+  const window = openSide(home, [item]);
+  window.openCard('1');
+  const blocks = window.sidebar();
+  assert.deepEqual(blocks, [{kind: 'hook', line: 'поле хука не читается'}]);
+  assert.equal(JSON.stringify(blocks).includes('not a map'), false);
+  assert.equal('points' in blocks[0], false);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('one non-string sddHooks point shows that line in the sidebar and the string point remains', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const mapped = cycle('1', 'implementing', {
+    sddHooks: {
+      archive: {before: 4},
+      'create-proposal': {after: 'keep this'},
+    },
+  });
+  const listed = cycle('2', 'implementing', {
+    sddHooks: [
+      {action: 'archive', point: 'before', value: 4},
+      {action: 'create-proposal', point: 'after', value: 'keep this'},
+    ],
+  });
+  const window = openSide(home, [mapped, listed]);
+  const expected = {
+    kind: 'hook',
+    points: [
+      {action: 'archive', point: 'before', paragraph: 'поле хука не читается'},
+      {action: 'create-proposal', point: 'after', paragraph: 'keep this'},
+    ],
+  };
+  window.openCard('1');
+  assert.deepEqual(window.sidebar(), [expected]);
+  window.openCard('2');
+  assert.deepEqual(window.sidebar(), [expected]);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('an action point other than before or after keeps its place in the sidebar', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = cycle('1', 'implementing', {
+    sddHooks: [
+      {action: 'other', point: 'during', value: 'stay'},
+      {action: 'archive', point: 'before', value: 'one'},
+    ],
+  });
+  const window = openSide(home, [item]);
+  window.openCard('1');
+  assert.deepEqual(window.sidebar(), [
+    {
+      kind: 'hook',
+      points: [
+        {action: 'other', point: 'during', paragraph: 'stay'},
+        {action: 'archive', point: 'before', paragraph: 'one'},
+      ],
+    },
+  ]);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the sidebar shows sddHooks after the field changes', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = cycle('1', 'implementing');
+  item.sddHooks = [{action: 'archive', point: 'before', value: 'first'}];
+  let writes = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => [item],
+      writeAssignee: () => {
+        writes += 1;
+      },
+    },
+  );
+  window.openCard('1');
+  assert.deepEqual(window.sidebar(), [
+    {kind: 'hook', points: [{action: 'archive', point: 'before', paragraph: 'first'}]},
+  ]);
+  item.sddHooks = [{action: 'archive', point: 'before', value: 'second\nline'}];
+  assert.deepEqual(window.sidebar(), [
+    {kind: 'hook', points: [{action: 'archive', point: 'before', paragraph: 'second\nline'}]},
+  ]);
+  assert.equal(writes, 0);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('opening a pool card and opening a column card both use sidebar() the same way', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  const body = 'sdd:focus\nPlan gap\nwhy\n';
+  const window = openSide(home, [
+    cycle('1', 'implementing', {assignee: '', comments: [{body}]}),
+    cycle('2', 'implementing', {comments: [{body}]}),
+  ]);
+  const board = window.board();
+  assert.equal(
+    board.pool.some(card => card.key === '1'),
+    true,
+  );
+  assert.equal(
+    columnCards(board, 'implementing')?.some(card => card.key === '2'),
+    true,
+  );
+  window.openCard('1');
+  assert.equal(window.overlay().checkout, checkout);
+  const fromPool = window.sidebar();
+  window.openCard('2');
+  assert.equal(window.overlay().checkout, checkout);
+  const fromColumn = window.sidebar();
+  assert.deepEqual(fromPool, [{kind: 'focus', body: 'Plan gap\nwhy\n'}]);
+  assert.deepEqual(fromColumn, fromPool);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the sidebar lists the blocks that exist from reason through hook', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = cycle('1', 'proposed', {
+    labels: ['sdd:cycle', 'sdd:proposed', 'sdd:wait-human'],
+    comments: [{body: 'please decide'}, {body: 'sdd:focus\nPlan gap\n'}],
+    sddHooks: [{action: 'archive', point: 'before', value: 'keep'}],
+  });
+  const window = openSide(home, [item], {
+    review: () => ({
+      threads: [{marker: null, lines: ['please look']}],
+      conversation: {last: {marker: 'note', body: 'answered'}},
+    }),
+  });
+  window.openCard('1');
+  assert.deepEqual(window.sidebar(), [
+    {kind: 'reason', line: 'proposed · Ask'},
+    {kind: 'ask', body: 'please decide'},
+    {kind: 'focus', body: 'Plan gap\n'},
+    {kind: 'unanswered', threads: [{lines: ['please look']}]},
+    {kind: 'hook', points: [{action: 'archive', point: 'before', paragraph: 'keep'}]},
+  ]);
+  rmSync(dir, {recursive: true, force: true});
+});

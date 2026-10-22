@@ -86,6 +86,11 @@ export type WindowTicket = {
   dependsOn?: readonly string[];
   openPullRequests?: number;
   comments?: readonly WindowComment[];
+  /**
+   * Cycle hook field the adapter already returned.
+   * A map of action to point, an ordered list of `{action, point, value}`, or another value.
+   */
+  sddHooks?: unknown;
 };
 
 export type WindowComment = {
@@ -113,7 +118,30 @@ export type WindowOutside = {
   leading?: (key: string) => boolean;
   /** Write `sddService`. The next read sees it. */
   writeService?: (key: string, service: string) => void;
+  /** Threads and the conversation for this key. The window does not call a review host. */
+  review?: (key: string) => WindowReview | undefined;
 };
+
+/** Threads and the last conversation comment the review port already returned. */
+export type WindowReview = {
+  threads: readonly {marker?: string | null; lines: readonly string[]}[];
+  conversation?: {last?: {marker?: string | null; body: string} | null} | null;
+};
+
+export type SidebarHookPoint = {action: string; point: string; paragraph: string};
+
+/** One block the open ticket has. Absent blocks are omitted. */
+export type SidebarBlock =
+  | {kind: 'reason'; line: string}
+  | {kind: 'ask'; body: string}
+  | {kind: 'focus'; body: string}
+  | {
+      kind: 'unanswered';
+      threads?: readonly {lines: readonly string[]}[];
+      comment?: string;
+    }
+  | {kind: 'hook'; line: string}
+  | {kind: 'hook'; points: readonly SidebarHookPoint[]};
 
 export type ModelField = {value: string; needsValue: boolean};
 
@@ -1019,18 +1047,14 @@ function ordered(items: readonly Placed[]): CycleCard[] {
   return [...occasion, ...rest];
 }
 
-function buildCycle(
+function reasonParts(
   item: WindowTicket,
   phase: Phase,
-  column: ColumnName,
-  checkout: string | undefined,
   breakReason: string,
   reading: readonly WindowTicket[],
-  hideIcon: boolean,
-): Placed {
-  const questions = openCount(checkout, item.key, 'proposal.md', HEADINGS.openQuestions);
-  const decisions = openCount(checkout, item.key, 'design.md', HEADINGS.openDecisions);
-  const phaseRow = phaseRowOf(column, item, checkout, questions, decisions);
+  questions: number,
+  decisions: number,
+): string[] {
   const parts: string[] = [];
   if (breakReason !== '') {
     parts.push(breakReason);
@@ -1061,6 +1085,128 @@ function buildCycle(
   if ((item.openPullRequests ?? 0) > 1) {
     parts.push('несколько pull request');
   }
+  return parts;
+}
+
+function commentLine(body: string): string {
+  return (body.split('\n', 1)[0] ?? '').trim();
+}
+
+function isFocusLine(body: string): boolean {
+  return commentLine(body) === 'sdd:focus';
+}
+
+/** Body after the marker of the latest focus comment. A manager comment is not the plaque. */
+function focusBody(comments: readonly WindowComment[] | undefined): string | undefined {
+  let body: string | undefined;
+  for (const comment of comments ?? []) {
+    if (comment.manager || !isFocusLine(comment.body)) {
+      continue;
+    }
+    body = comment.body.split('\n').slice(1).join('\n');
+  }
+  return body;
+}
+
+/** Latest issue comment whose first line is not `sdd:focus`. */
+function askBody(comments: readonly WindowComment[] | undefined): string | undefined {
+  const list = comments ?? [];
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const comment = list[index];
+    if (!comment || isFocusLine(comment.body)) {
+      continue;
+    }
+    return comment.body;
+  }
+  return undefined;
+}
+
+const HOOK_UNREADABLE = 'поле хука не читается';
+
+function hookParagraph(value: unknown): string {
+  return typeof value === 'string' ? value : HOOK_UNREADABLE;
+}
+
+function isPointRecord(value: unknown): value is {action: string; point: string; value?: unknown} {
+  return isDoc(value) && typeof value.action === 'string' && typeof value.point === 'string';
+}
+
+function hookBlock(value: unknown): SidebarBlock | undefined {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return undefined;
+    }
+    if (!value.every(isPointRecord)) {
+      return {kind: 'hook', line: HOOK_UNREADABLE};
+    }
+    return {
+      kind: 'hook',
+      points: value.map(item => ({
+        action: item.action,
+        point: item.point,
+        paragraph: hookParagraph(item.value),
+      })),
+    };
+  }
+  if (!isDoc(value)) {
+    return {kind: 'hook', line: HOOK_UNREADABLE};
+  }
+  const points: SidebarHookPoint[] = [];
+  for (const [action, inner] of Object.entries(value)) {
+    if (!isDoc(inner)) {
+      continue;
+    }
+    for (const [point, pointValue] of Object.entries(inner)) {
+      points.push({action, point, paragraph: hookParagraph(pointValue)});
+    }
+  }
+  if (points.length === 0) {
+    return undefined;
+  }
+  return {kind: 'hook', points};
+}
+
+function hasMarker(marker: string | null | undefined): boolean {
+  return typeof marker === 'string' && marker !== '';
+}
+
+function unansweredBlock(reading: WindowReview | undefined): SidebarBlock | undefined {
+  if (!reading) {
+    return undefined;
+  }
+  const threads = (reading.threads ?? [])
+    .filter(thread => !hasMarker(thread.marker))
+    .map(thread => ({lines: thread.lines}));
+  const last = reading.conversation?.last;
+  const comment = last && !hasMarker(last.marker) ? last.body : undefined;
+  if (threads.length === 0 && comment === undefined) {
+    return undefined;
+  }
+  if (threads.length > 0 && comment !== undefined) {
+    return {kind: 'unanswered', threads, comment};
+  }
+  if (threads.length > 0) {
+    return {kind: 'unanswered', threads};
+  }
+  return {kind: 'unanswered', comment};
+}
+
+function buildCycle(
+  item: WindowTicket,
+  phase: Phase,
+  column: ColumnName,
+  checkout: string | undefined,
+  breakReason: string,
+  reading: readonly WindowTicket[],
+  hideIcon: boolean,
+): Placed {
+  const questions = openCount(checkout, item.key, 'proposal.md', HEADINGS.openQuestions);
+  const decisions = openCount(checkout, item.key, 'design.md', HEADINGS.openDecisions);
+  const phaseRow = phaseRowOf(column, item, checkout, questions, decisions);
+  const parts = reasonParts(item, phase, breakReason, reading, questions, decisions);
   const occasion = parts.length > 0;
   const card: CycleCard = {key: item.key, title: item.title};
   if (occasion && !hideIcon) {
@@ -1134,6 +1280,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
   let doc = parseDoc(baseline);
   let settingsOpen = false;
   let chosenCheckout = '';
+  let openKey = '';
   let overlayBaseline: string | null = null;
   let overlayDoc: Doc = {};
   let serviceBaseline: string | null = null;
@@ -1806,10 +1953,80 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     overlayDoc = clean;
   }
 
+  function reasonLine(item: WindowTicket): string | undefined {
+    const phase = phaseOf([...item.labels]);
+    const where = slotOf(item, phase, outside.login?.());
+    if (where === 'hide' || where === 'cards') {
+      return undefined;
+    }
+    const located = gathered(item);
+    if (located && serviceBroken(located)) {
+      return undefined;
+    }
+    const checkout = cardOf(item);
+    const several = (item.openPullRequests ?? 0) > 1;
+    const broken = checkout.reason !== '';
+    if (where === 'pool' && !broken && !several) {
+      return undefined;
+    }
+    if (outside.leading?.(item.key) === true || item.checks === 'pending') {
+      return undefined;
+    }
+    const questions = openCount(checkout.checkout, item.key, 'proposal.md', HEADINGS.openQuestions);
+    const decisions = openCount(checkout.checkout, item.key, 'design.md', HEADINGS.openDecisions);
+    const parts = reasonParts(
+      item,
+      phase ?? 'implementing',
+      checkout.reason,
+      sortedTickets(),
+      questions,
+      decisions,
+    );
+    if (parts.length === 0) {
+      return undefined;
+    }
+    return parts.join(' · ');
+  }
+
+  function sidebar(): SidebarBlock[] {
+    if (openKey === '') {
+      return [];
+    }
+    const item = sortedTickets().find(ticket => ticket.key === openKey);
+    if (!item) {
+      return [];
+    }
+    const blocks: SidebarBlock[] = [];
+    const line = reasonLine(item);
+    if (line !== undefined) {
+      blocks.push({kind: 'reason', line});
+    }
+    if (item.labels.includes('sdd:wait-human')) {
+      const body = askBody(item.comments);
+      if (body !== undefined) {
+        blocks.push({kind: 'ask', body});
+      }
+    }
+    const plaque = focusBody(item.comments);
+    if (plaque !== undefined) {
+      blocks.push({kind: 'focus', body: plaque});
+    }
+    const unanswered = unansweredBlock(outside.review?.(item.key));
+    if (unanswered) {
+      blocks.push(unanswered);
+    }
+    const hook = hookBlock(item.sddHooks);
+    if (hook) {
+      blocks.push(hook);
+    }
+    return blocks;
+  }
+
   return {
     board,
     settings,
     overlay,
+    sidebar,
     openSettings() {
       settingsOpen = true;
       if (chosenCheckout !== '') {
@@ -1838,6 +2055,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
         return;
       }
       rememberOverlay(checkout);
+      openKey = key;
     },
     chooseCheckout(checkout: string) {
       if (!gatheredCheckouts().includes(checkout)) {

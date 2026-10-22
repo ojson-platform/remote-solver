@@ -4622,17 +4622,29 @@ test('an unknown point is edited and is not offered', () => {
 test('an empty key stays out of the free list and a new string skips the choice', () => {
   for (const stored of ['[]', '""', '"   "']) {
     const {dir, file, window} = openHookGroup(
-      ['sdd:', '  queues:', '    - name: alpha', '  hooks:', '    archive:', `      before: ${stored}`, ''].join(
-        '\n',
-      ),
+      [
+        'sdd:',
+        '  queues:',
+        '    - name: alpha',
+        '  hooks:',
+        '    archive:',
+        `      before: ${stored}`,
+        '',
+      ].join('\n'),
     );
-    assert.deepEqual(window.serviceConfig().hooks, [{action: 'archive', point: 'before', values: []}]);
+    assert.deepEqual(window.serviceConfig().hooks, [
+      {action: 'archive', point: 'before', values: []},
+    ]);
     assert.equal(
-      window.serviceConfig().hookChoices?.some(item => item.action === 'archive' && item.point === 'before'),
+      window
+        .serviceConfig()
+        .hookChoices?.some(item => item.action === 'archive' && item.point === 'before'),
       false,
     );
     window.chooseServiceHook('archive', 'before', 'through the choice');
-    assert.deepEqual(window.serviceConfig().hooks, [{action: 'archive', point: 'before', values: []}]);
+    assert.deepEqual(window.serviceConfig().hooks, [
+      {action: 'archive', point: 'before', values: []},
+    ]);
     window.setServiceHook('archive', 'before', ['added']);
     window.saveServiceConfig();
     assert.deepEqual(readServiceYaml(file).sdd?.hooks?.archive?.before, ['added']);
@@ -4910,4 +4922,563 @@ spec('hook', () => {
       proveTheWindowDoesNotWriteTheField();
     });
   });
+});
+
+function proveTheShelfShowsTheOutcomeBeforeTheDrag(): void {
+  const {dir, home, arcadia} = yard();
+  const other = scratch();
+  prepare(arcadia, home);
+  writeFileSync(
+    home,
+    [
+      'watch:',
+      '  - alpha',
+      'roots:',
+      `  arcadia: ${arcadia}`,
+      'roles:',
+      '  - name: Page',
+      '    outcome: html',
+      '    text: <p>hello</p>',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
+    other.home,
+    ['roles:', '  - name: Note', '    outcome: pull-comment', '    text: hi', ''].join('\n'),
+  );
+  const window = openWindow({homePath: home, adapter: 'tracker'});
+  const theirs = openWindow({homePath: other.home});
+  assert.deepEqual(window.shelf(), [{name: 'Page', outcome: 'html'}]);
+  assert.deepEqual(theirs.shelf(), [{name: 'Note', outcome: 'pull-comment'}]);
+  const service = readServiceYaml(
+    path.join(arcadia, 'services', 'billing', 'openspec', 'config.yaml'),
+  );
+  assert.equal('roles' in service, false);
+  rmSync(dir, {recursive: true, force: true});
+  rmSync(other.dir, {recursive: true, force: true});
+}
+
+type HomeRole = {name?: string; outcome?: string; text?: string; labels?: string[]};
+
+function homeRoles(file: string): HomeRole[] {
+  const roles = readHome(file).roles;
+  return Array.isArray(roles) ? (roles as HomeRole[]) : [];
+}
+
+function proveRemovingARoleWritesTheHomeConfig(): void {
+  const {dir, home} = scratch();
+  writeFileSync(
+    home,
+    [
+      'watch:',
+      '  - alpha',
+      'roles:',
+      '  - name: Page',
+      '    outcome: html',
+      '    text: <p>hi</p>',
+      '  - name: Note',
+      '    outcome: pull-comment',
+      '    text: hi',
+      '',
+    ].join('\n'),
+  );
+  const window = openWindow({homePath: home});
+  window.removeRole('Page');
+  assert.deepEqual(
+    homeRoles(home).map(role => role.name),
+    ['Note'],
+  );
+  assert.deepEqual(readHome(home).watch, ['alpha']);
+  assert.deepEqual(window.shelf(), [{name: 'Note', outcome: 'pull-comment'}]);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTicketFieldsStoresTheLabels(): void {
+  const {dir, home} = scratch();
+  writeFileSync(home, 'watch:\n  - alpha\n');
+  const window = openWindow({homePath: home});
+  window.addRole({
+    name: 'Plan',
+    outcome: 'ticket-fields',
+    text: 'note',
+    labels: ['sdd:auto-plan', 'sdd:auto-merge'],
+  });
+  const [role] = homeRoles(home);
+  assert.equal(role?.outcome, 'ticket-fields');
+  assert.ok(role?.labels?.includes('sdd:auto-plan'));
+  assert.equal(role?.labels?.includes('sdd:auto-merge'), false);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheUserBlockEditsARoleImmediately(): void {
+  const {dir, home} = scratch();
+  writeFileSync(home, 'watch:\n  - alpha\n');
+  const window = openWindow({homePath: home});
+  assert.equal(window.settings().open, false);
+  window.addRole({name: 'Page', outcome: 'html', text: 'one'});
+  assert.equal(homeRoles(home)[0]?.name, 'Page');
+  window.renameRole('Page', 'Sheet');
+  assert.equal(homeRoles(home)[0]?.name, 'Sheet');
+  window.chooseRoleOutcome('Sheet', 'ticket-fields');
+  assert.equal(homeRoles(home)[0]?.outcome, 'ticket-fields');
+  window.setRoleText('Sheet', 'archive:\n  before: keep\n');
+  assert.equal(homeRoles(home)[0]?.text, 'archive:\n  before: keep\n');
+  window.setRoleLabels('Sheet', ['sdd:auto-spec', 'sdd:auto-merge']);
+  assert.deepEqual(homeRoles(home)[0]?.labels, ['sdd:auto-spec']);
+  assert.deepEqual(readHome(home).watch, ['alpha']);
+  assert.equal(window.settings().open, false);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveADragDoesNotMoveThePhase(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  const config = path.join(checkout, 'openspec', 'config.yaml');
+  const before = readFileSync(config, 'utf8');
+  const item = cycle('1', 'implementing');
+  let phases = 0;
+  let assignees = 0;
+  let started = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => [item],
+      writePhase: () => {
+        phases += 1;
+      },
+      writeAssignee: () => {
+        assignees += 1;
+      },
+      startStep: () => {
+        started += 1;
+      },
+    },
+  );
+  window.addRole({name: 'Page', outcome: 'html', text: '<p>stay</p>'});
+  assert.deepEqual(window.drag('Page', '1'), {popup: '<p>stay</p>'});
+  assert.deepEqual(item.labels, ['sdd:cycle', 'sdd:implementing']);
+  assert.equal(item.assignee, MANAGER);
+  assert.equal(phases, 0);
+  assert.equal(assignees, 0);
+  assert.equal(started, 0);
+  assert.equal(readFileSync(config, 'utf8'), before);
+  assert.equal('role' in item, false);
+  assert.equal(columnCards(window.board(), 'implementing')?.[0]?.key, '1');
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveAnEmptyModelStillRunsTheRole(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = ticket({
+    key: '1',
+    queue: 'alpha',
+    sddService: 'services/billing',
+    assignee: '',
+    labels: ['sdd:cycle'],
+  });
+  let started = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      answers: () => false,
+      startStep: () => {
+        started += 1;
+      },
+      tickets: () => [item],
+    },
+  );
+  window.chooseAgent('cursor');
+  window.leaveModel('judgment', '');
+  window.addRole({name: 'Page', outcome: 'html', text: 'shown'});
+  const card = window.board().pool.find(entry => entry.key === '1');
+  assert.ok(card);
+  assert.equal(card.takeDisabled, true);
+  assert.equal(window.board().stepsStart, false);
+  assert.deepEqual(window.drag('Page', '1'), {popup: 'shown'});
+  assert.equal(started, 0);
+  assert.equal(item.assignee, '');
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheSpyDoesNotStartARole(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = cycle('1', 'implementing');
+  let labels = 0;
+  let hooks = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      answers: () => true,
+      tickets: () => [item],
+      editLabels: () => {
+        labels += 1;
+      },
+      writeHooks: () => {
+        hooks += 1;
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  window.addRole({
+    name: 'Spec',
+    outcome: 'ticket-fields',
+    text: 'just a note',
+    labels: ['sdd:auto-spec'],
+  });
+  window.drag('Spec', '1');
+  assert.equal(labels, 1);
+  assert.equal(hooks, 0);
+  window.spy();
+  assert.equal(labels, 1);
+  assert.equal(hooks, 0);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveNamedLabelsAreSet(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = cycle('1', 'implementing');
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => [item],
+      editLabels: (_key, add) => {
+        item.labels = [...item.labels, ...add];
+      },
+    },
+  );
+  window.addRole({
+    name: 'Spec',
+    outcome: 'ticket-fields',
+    text: 'just a note',
+    labels: ['sdd:auto-spec', 'sdd:auto-merge'],
+  });
+  window.drag('Spec', '1');
+  assert.ok(item.labels.includes('sdd:auto-spec'));
+  assert.equal(item.labels.includes('sdd:auto-merge'), false);
+  assert.ok(item.labels.includes('sdd:implementing'));
+  assert.equal(item.assignee, MANAGER);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveAPointMapReplacesSddHooks(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const text = 'archive:\n  before: keep the cycle\n';
+  const item = cycle('1', 'implementing', {sddHooks: {'create-proposal': {after: 'old'}}});
+  let written = '';
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => [item],
+      writeHooks: (_key, next) => {
+        written = next;
+        item.sddHooks = parse(next);
+      },
+    },
+  );
+  window.addRole({name: 'Hooks', outcome: 'ticket-fields', text, labels: ['sdd:auto-plan']});
+  window.openCard('1');
+  window.drag('Hooks', '1');
+  assert.equal(written, text);
+  assert.deepEqual(window.sidebar(), [
+    {kind: 'hook', points: [{action: 'archive', point: 'before', paragraph: 'keep the cycle'}]},
+  ]);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveProseLeavesSddHooks(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = cycle('1', 'implementing', {sddHooks: {archive: {before: 'old'}}});
+  let hooks = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => [item],
+      editLabels: (_key, add) => {
+        item.labels = [...item.labels, ...add];
+      },
+      writeHooks: () => {
+        hooks += 1;
+      },
+    },
+  );
+  window.addRole({
+    name: 'Spec',
+    outcome: 'ticket-fields',
+    text: 'just a note',
+    labels: ['sdd:auto-spec'],
+  });
+  window.openCard('1');
+  window.drag('Spec', '1');
+  assert.equal(hooks, 0);
+  assert.deepEqual(item.sddHooks, {archive: {before: 'old'}});
+  assert.ok(item.labels.includes('sdd:auto-spec'));
+  assert.deepEqual(window.sidebar(), [
+    {kind: 'hook', points: [{action: 'archive', point: 'before', paragraph: 'old'}]},
+  ]);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveOnePullRequestReceivesTheText(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = cycle('1', 'implementing', {openPullRequests: 1});
+  const comments: string[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => [item],
+      commentPull: (_key, body) => {
+        comments.push(body);
+      },
+    },
+  );
+  window.addRole({name: 'Note', outcome: 'pull-comment', text: 'ship it'});
+  window.drag('Note', '1');
+  assert.deepEqual(comments, ['ship it']);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveZeroPullRequestsSetNoIcon(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = cycle('1', 'implementing', {openPullRequests: 0});
+  const comments: string[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => [item],
+      commentPull: (_key, body) => {
+        comments.push(body);
+      },
+    },
+  );
+  window.addRole({name: 'Note', outcome: 'pull-comment', text: 'ship it'});
+  const before = columnCards(window.board(), 'implementing')?.[0];
+  assert.equal(before?.icon, undefined);
+  assert.equal(window.drag('Note', '1'), undefined);
+  const after = columnCards(window.board(), 'implementing')?.[0];
+  assert.equal(after?.icon, undefined);
+  assert.deepEqual(comments, []);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveHtmlStaysOffTheIssue(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = cycle('1', 'implementing', {comments: [{body: 'already'}]});
+  const comments: string[] = [];
+  let hooks = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => [item],
+      commentPull: (_key, body) => {
+        comments.push(body);
+      },
+      writeHooks: () => {
+        hooks += 1;
+      },
+    },
+  );
+  window.addRole({name: 'Page', outcome: 'html', text: '<p>hello</p>'});
+  assert.deepEqual(window.drag('Page', '1'), {popup: '<p>hello</p>'});
+  assert.deepEqual(comments, []);
+  assert.equal(hooks, 0);
+  assert.deepEqual(item.comments, [{body: 'already'}]);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveAMissingCycleFileSavesNothing(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  const item = cycle('1', 'implementing');
+  let started = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => [item],
+      startStep: () => {
+        started += 1;
+      },
+    },
+  );
+  window.addRole({name: 'File', outcome: 'cycle-file', text: 'notes.md'});
+  const missing = path.join(checkout, 'notes.md');
+  assert.deepEqual(window.drag('File', '1'), {popup: 'файла нет'});
+  assert.equal(existsSync(missing), false);
+  assert.equal(started, 0);
+  writeFileSync(missing, 'body\n');
+  assert.deepEqual(window.drag('File', '1'), {popup: 'body\n'});
+  assert.equal(readFileSync(missing, 'utf8'), 'body\n');
+  assert.equal(started, 0);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveSeveralPullRequestsWriteNothing(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = cycle('1', 'implementing', {openPullRequests: 2});
+  const comments: string[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => [item],
+      commentPull: (_key, body) => {
+        comments.push(body);
+      },
+    },
+  );
+  window.addRole({name: 'Note', outcome: 'pull-comment', text: 'ship it'});
+  assert.equal(columnCards(window.board(), 'implementing')?.[0]?.icon, true);
+  assert.equal(window.drag('Note', '1'), undefined);
+  assert.deepEqual(comments, []);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveAWriteThatDoesNotFitLeavesThePreviousValue(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const text = 'archive:\n  before: next\n';
+  const item = cycle('1', 'implementing', {sddHooks: {archive: {before: 'old'}}});
+  let seen = '';
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => [item],
+      writeHooks: (_key, next) => {
+        seen = next;
+      },
+    },
+  );
+  window.addRole({name: 'Wide', outcome: 'ticket-fields', text, labels: ['sdd:auto-plan']});
+  window.openCard('1');
+  window.drag('Wide', '1');
+  assert.equal(seen, text);
+  assert.deepEqual(item.sddHooks, {archive: {before: 'old'}});
+  assert.deepEqual(window.sidebar(), [
+    {kind: 'hook', points: [{action: 'archive', point: 'before', paragraph: 'old'}]},
+  ]);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheLastDragWritesItsOwnText(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const item = cycle('1', 'implementing', {sddHooks: {archive: {before: 'old'}}});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => [item],
+      writeHooks: (_key, next) => {
+        item.sddHooks = parse(next);
+      },
+    },
+  );
+  window.addRole({
+    name: 'First',
+    outcome: 'ticket-fields',
+    text: 'archive:\n  before: keep\n',
+  });
+  window.addRole({
+    name: 'Second',
+    outcome: 'ticket-fields',
+    text: 'create-proposal:\n  after: fresh\n',
+  });
+  window.openCard('1');
+  window.drag('First', '1');
+  window.drag('Second', '1');
+  assert.deepEqual(window.sidebar(), [
+    {kind: 'hook', points: [{action: 'create-proposal', point: 'after', paragraph: 'fresh'}]},
+  ]);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+spec('role', () => {
+  requirement("The shelf lists this manager's roles", () => {
+    scenario('The shelf shows the outcome before the drag', () => {
+      proveTheShelfShowsTheOutcomeBeforeTheDrag();
+    });
+    scenario('Removing a role writes the home config', () => {
+      proveRemovingARoleWritesTheHomeConfig();
+    });
+  });
+  requirement('A role record is a name, one outcome, and its text', () => {
+    scenario('Ticket-fields stores the labels', () => {
+      proveTicketFieldsStoresTheLabels();
+    });
+  });
+  requirement('The window runs one drag and does not keep the role', () => {
+    scenario('A drag does not move the phase', () => {
+      proveADragDoesNotMoveThePhase();
+    });
+    scenario('An empty model still runs the role', () => {
+      proveAnEmptyModelStillRunsTheRole();
+    });
+    scenario('The spy does not start a role', () => {
+      proveTheSpyDoesNotStartARole();
+    });
+  });
+  requirement('Ticket-fields sets the named labels and may replace sddHooks', () => {
+    scenario('Named labels are set', () => {
+      proveNamedLabelsAreSet();
+    });
+    scenario('A point map replaces sddHooks', () => {
+      proveAPointMapReplacesSddHooks();
+    });
+    scenario('Prose leaves sddHooks', () => {
+      proveProseLeavesSddHooks();
+    });
+  });
+  requirement('A pull comment needs exactly one open pull request', () => {
+    scenario('One pull request receives the text', () => {
+      proveOnePullRequestReceivesTheText();
+    });
+    scenario('Zero pull requests set no icon', () => {
+      proveZeroPullRequestsSetNoIcon();
+    });
+  });
+  requirement('HTML opens and is not written on the cycle', () => {
+    scenario('HTML stays off the issue', () => {
+      proveHtmlStaysOffTheIssue();
+    });
+  });
+  requirement("A cycle file opens from the card's checkout", () => {
+    scenario('A missing cycle file saves nothing', () => {
+      proveAMissingCycleFileSavesNothing();
+    });
+  });
+});
+
+test('the user block edits a role immediately', () => {
+  proveTheUserBlockEditsARoleImmediately();
+});
+
+test('several open pull requests write nothing', () => {
+  proveSeveralPullRequestsWriteNothing();
+});
+
+test('a write that does not fit leaves the previous value', () => {
+  proveAWriteThatDoesNotFitLeavesThePreviousValue();
+});
+
+test('the last drag writes its own text', () => {
+  proveTheLastDragWritesItsOwnText();
 });

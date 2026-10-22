@@ -82,6 +82,16 @@ export type WindowOutside = {
   leading?: (key: string) => boolean;
   /** Write `sddService`. The next read sees it. */
   writeService?: (key: string, service: string) => void;
+  /** Labels a `ticket-fields` role adds. The window does not call a tracker client. */
+  editLabels?: (key: string, add: readonly string[]) => void;
+  /**
+   * Replace `sddHooks` with the role text.
+   * The window does not POST the organization field.
+   * A write that does not fit leaves the previous value.
+   */
+  writeHooks?: (key: string, text: string) => void;
+  /** The comment on the single open pull request. */
+  commentPull?: (key: string, body: string) => void;
   /** Threads and the conversation for this key. The window does not call a review host. */
   review?: (key: string) => WindowReview | undefined;
   /**
@@ -114,6 +124,18 @@ export type SidebarBlock =
 
 export type ModelField = {value: string; needsValue: boolean};
 
+export const ROLE_OUTCOMES = ['ticket-fields', 'pull-comment', 'html', 'cycle-file'] as const;
+
+export type RoleOutcome = (typeof ROLE_OUTCOMES)[number];
+
+/** One record in this manager's collection. `labels` belong to `ticket-fields`. */
+export type RoleRecord = {
+  name: string;
+  outcome: RoleOutcome;
+  text: string;
+  labels?: string[];
+};
+
 export type SettingsState = {
   open: boolean;
   agent: string;
@@ -122,6 +144,7 @@ export type SettingsState = {
   speed?: {mechanical: string; judgment: string};
   watch: string[];
   roots: {arcadia: string; github: string};
+  roles: RoleRecord[];
 };
 
 /** The overlay group. It shows `.aifactory/config.yaml` of the chosen checkout. */

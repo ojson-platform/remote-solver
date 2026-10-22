@@ -4,11 +4,13 @@ import path from 'node:path';
 import {parse, stringify} from 'yaml';
 
 import {rootText} from './checkout.ts';
+import {rolesFrom, storedRoles} from './role.ts';
 import {
   isDoc,
   stringList,
   type Doc,
   type OverlayGroup,
+  type RoleRecord,
   type SettingsState,
   type SkillMode,
 } from './types.ts';
@@ -327,6 +329,7 @@ function settingsOf(doc: Doc, open: boolean): SettingsState {
     },
     watch: stringList(doc.watch),
     roots: {arcadia: rootText(doc, 'arcadia'), github: rootText(doc, 'github')},
+    roles: rolesFrom(doc.roles),
   };
   if (pair?.effort) {
     state.effort = {
@@ -524,6 +527,19 @@ export function openHome(homePath: string | undefined, offered: readonly string[
     commit(next);
   }
 
+  function leaveRoles(nextRoles: readonly RoleRecord[]): void {
+    if (!canWrite()) {
+      return;
+    }
+    const next: Doc = {...doc};
+    if (nextRoles.length === 0) {
+      delete next.roles;
+    } else {
+      next.roles = storedRoles(nextRoles);
+    }
+    commit(next);
+  }
+
   return {
     doc: () => doc,
     disk: () => parseDoc(textOf(homePath)),
@@ -537,6 +553,7 @@ export function openHome(homePath: string | undefined, offered: readonly string[
     leaveSpeed,
     leaveWatch,
     leaveRoots,
+    leaveRoles,
   };
 }
 

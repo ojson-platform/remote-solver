@@ -1,4 +1,11 @@
-import type {BoardState, Launch, SkillMode, WindowOutside} from './types.ts';
+import type {
+  BoardState,
+  Launch,
+  RoleOutcome,
+  RoleRecord,
+  SkillMode,
+  WindowOutside,
+} from './types.ts';
 
 import {lay} from './board.ts';
 import {openCheckout, unreadableRow} from './checkout.ts';
@@ -17,6 +24,7 @@ import {
   type Factory,
 } from './factory.ts';
 import {focusNamesPlace} from './focus.ts';
+import {openRoleEditor, runRole, shelfOf} from './role.ts';
 import {openServiceGroup} from './service-group.ts';
 import {blocksFor} from './sidebar.ts';
 import {runSpy} from './spy.ts';
@@ -32,6 +40,8 @@ export type {
   OverlayGroup,
   PhaseRow,
   PoolCard,
+  RoleOutcome,
+  RoleRecord,
   ServiceConfigGroup,
   ServiceHookChoice,
   ServiceHookField,
@@ -50,6 +60,10 @@ export type {
 export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
   const offered = launch.agents ?? FACTORY_AGENTS;
   const home = openHome(launch.homePath, offered);
+  const roles = openRoleEditor(
+    () => home.doc().roles,
+    next => home.leaveRoles(next),
+  );
   const overlaySession = openOverlay(offered);
   const service = openServiceGroup();
   const checkout = openCheckout({
@@ -182,7 +196,38 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
 
   return {
     board,
+    shelf: () => shelfOf(roles.list()),
     settings: () => home.settings(settingsOpen),
+    addRole: (role: RoleRecord) => roles.add(role),
+    renameRole: (name: string, next: string) => roles.rename(name, next),
+    chooseRoleOutcome: (name: string, outcome: RoleOutcome) => roles.choose(name, outcome),
+    setRoleText: (name: string, text: string) => roles.setText(name, text),
+    setRoleLabels: (name: string, labels: readonly string[]) => roles.setLabels(name, labels),
+    removeRole: (name: string) => roles.remove(name),
+    drag(name: string, key: string) {
+      const role = roles.list().find(item => item.name === name);
+      if (!role) {
+        return undefined;
+      }
+      const item = checkout.sorted().find(ticket => ticket.key === key);
+      if (!item) {
+        return undefined;
+      }
+      return runRole({
+        role,
+        openPullRequests: item.openPullRequests ?? 0,
+        checkout: checkout.gathered(item),
+        editLabels: add => {
+          outside.editLabels?.(key, add);
+        },
+        writeHooks: text => {
+          outside.writeHooks?.(key, text);
+        },
+        commentPull: body => {
+          outside.commentPull?.(key, body);
+        },
+      });
+    },
     overlay: () => overlaySession.view(home.doc()),
     sidebar,
     openSettings() {

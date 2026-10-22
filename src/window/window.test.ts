@@ -579,7 +579,9 @@ test('an empty root leaves ~/arcadia or ~/github', () => {
   const window = openWindow(
     {homePath: home, adapter: 'tracker'},
     {
-      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
+      tickets: () => [
+        ticket({key: '1', queue: 'alpha', sddService: 'services/billing', open: false}),
+      ],
     },
   );
   window.leaveRoots({arcadia: '   ', github: ''});
@@ -603,7 +605,11 @@ test('an overlay does not replace the checkout roots', () => {
   writeLaunch(home, ['alpha'], {arcadia});
   const window = openWindow(
     {homePath: home, adapter: 'tracker'},
-    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+    {
+      tickets: () => [
+        ticket({key: '1', queue: 'alpha', sddService: 'services/billing', open: false}),
+      ],
+    },
   );
   const card = window.board().cards.find(item => item.key === '1');
   assert.ok(card);
@@ -618,7 +624,11 @@ test('tracker gathers the checkout under the arcadia root', () => {
   writeLaunch(home, ['alpha'], {arcadia});
   const window = openWindow(
     {homePath: home, adapter: 'tracker'},
-    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+    {
+      tickets: () => [
+        ticket({key: '1', queue: 'alpha', sddService: 'services/billing', open: false}),
+      ],
+    },
   );
   const card = window.board().cards.find(item => item.key === '1');
   assert.ok(card);
@@ -642,8 +652,15 @@ test('github gathers under the repository and an empty sddService is that root',
       repo: 'acme/billing',
       sddService: 'services/api',
       labels: ['alpha', 'sdd:cycle'],
+      open: false,
     }),
-    ticket({key: '2', repo: 'acme/billing', sddService: '', labels: ['alpha', 'sdd:cycle']}),
+    ticket({
+      key: '2',
+      repo: 'acme/billing',
+      sddService: '',
+      labels: ['alpha', 'sdd:cycle'],
+      open: false,
+    }),
   ];
   const window = openWindow({homePath: home, adapter: 'github'}, {tickets: () => tickets});
   const nestedCard = window.board().cards.find(item => item.key === '1');
@@ -669,9 +686,13 @@ test('a path with .. or outside the root is a missing catalog', () => {
   ];
   const window = openWindow({homePath: home, adapter: 'tracker'}, {tickets: () => tickets});
   const board = window.board();
-  assert.equal(board.cards.find(item => item.key === '1')?.reason, 'каталога нет');
-  assert.equal(board.cards.find(item => item.key === '1')?.checkout, undefined);
-  assert.equal(board.cards.find(item => item.key === '2')?.reason, 'каталога нет');
+  const broken = (key: string) => board.pool.find(item => item.key === key);
+  assert.equal(broken('1')?.reason, 'каталога нет');
+  assert.equal(broken('2')?.reason, 'каталога нет');
+  assert.equal(
+    board.cards.some(item => item.key === '1' || item.key === '2'),
+    false,
+  );
   assert.equal(existsSync(path.resolve(arcadia, '../outside')), false);
   assert.equal(existsSync(inside), true);
   rmSync(dir, {recursive: true, force: true});
@@ -695,9 +716,10 @@ test('an overlay watch name joins the home list and a repeated name is one', () 
   const board = window.board();
   assert.deepEqual(board.watch, ['alpha', 'beta']);
   assert.deepEqual(
-    board.cards.map(item => item.key),
+    board.pool.map(item => item.key),
     ['1', '2'],
   );
+  assert.deepEqual(board.cards, []);
   rmSync(dir, {recursive: true, force: true});
 });
 
@@ -734,9 +756,10 @@ test('a fresh launch still reads an overlay after home drops the name', () => {
   );
   assert.deepEqual(window.board().watch, ['alpha']);
   assert.deepEqual(
-    window.board().cards.map(item => item.key),
+    window.board().pool.map(item => item.key),
     ['1'],
   );
+  assert.deepEqual(window.board().cards, []);
   rmSync(dir, {recursive: true, force: true});
 });
 
@@ -792,9 +815,10 @@ test('service queues do not join the watch list', () => {
   const board = window.board();
   assert.deepEqual(board.watch, ['alpha']);
   assert.deepEqual(
-    board.cards.map(item => item.key),
+    board.pool.map(item => item.key),
     ['1'],
   );
+  assert.deepEqual(board.cards, []);
   rmSync(dir, {recursive: true, force: true});
 });
 
@@ -813,12 +837,14 @@ test('a tracker ticket is selected by the port queue and a label does not replac
           queue: 'alpha',
           labels: ['beta', 'sdd:cycle'],
           sddService: 'services/billing',
+          open: false,
         }),
         ticket({
           key: '2',
           queue: 'beta',
           labels: ['alpha', 'sdd:cycle'],
           sddService: 'services/billing',
+          open: false,
         }),
       ],
     },
@@ -848,6 +874,7 @@ test('a github queue is the first sdd.queues name on the issue and the key is ow
           repo: 'acme/billing',
           sddService: '',
           labels: ['beta', 'alpha', 'sdd:cycle'],
+          open: false,
         }),
         ticket({
           key: '2',
@@ -860,6 +887,7 @@ test('a github queue is the first sdd.queues name on the issue and the key is ow
           repo: 'acme/billing',
           sddService: '',
           labels: ['sdd:cycle'],
+          open: false,
         }),
       ],
     },
@@ -932,15 +960,15 @@ test('the first checkout break is the only reason and take does not write the as
   );
   window.chooseAgent('cursor');
   const board = window.board();
-  const reason = (key: string) => board.cards.find(item => item.key === key);
+  const reason = (key: string) => board.pool.find(item => item.key === key);
   assert.equal(reason('1')?.reason, 'каталога нет');
-  assert.equal(reason('1')?.reason.startsWith('конфига сервиса нет'), false);
+  assert.equal(reason('1')?.reason?.startsWith('конфига сервиса нет'), false);
   assert.equal(reason('2')?.reason, 'не назван сервис');
-  assert.equal(reason('2')?.checkout, undefined);
   assert.equal(reason('3')?.reason, 'не назван сервис');
   assert.equal(reason('4')?.reason, 'конфига сервиса нет');
   assert.equal(reason('5')?.reason, 'очереди нет в конфиге сервиса');
-  for (const card of board.cards) {
+  assert.deepEqual(board.cards, []);
+  for (const card of board.pool) {
     assert.equal(card.takeDisabled, true);
     window.take(card.key);
   }
@@ -969,7 +997,7 @@ test('a missing catalog keeps the card and the choice and does not start a step'
       },
       tickets: () => [
         ticket({key: '1', queue: 'alpha', sddService: 'services/billing'}),
-        ticket({key: '2', queue: 'beta', sddService: 'services/gone'}),
+        ticket({key: '2', queue: 'beta', sddService: 'services/gone', open: false}),
       ],
     },
   );
@@ -998,7 +1026,7 @@ test('one tracker service that already lists the queue writes itself', () => {
   const tickets = [
     ticket({key: '1', queue: 'alpha', sddService: 'services/billing'}),
     ticket({key: '2', queue: 'alpha', sddService: 'services/other'}),
-    ticket({key: '3', queue: 'alpha'}),
+    ticket({key: '3', queue: 'alpha', open: false}),
   ];
   const writes: {key: string; service: string}[] = [];
   const window = openWindow(
@@ -1030,7 +1058,7 @@ test('a blank tracker sddService writes the single service that lists the queue'
   writeLaunch(home, ['alpha'], {arcadia});
   const tickets = [
     ticket({key: '1', queue: 'alpha', sddService: 'services/billing'}),
-    ticket({key: '2', queue: 'alpha', sddService: ''}),
+    ticket({key: '2', queue: 'alpha', sddService: '', open: false}),
   ];
   const writes: {key: string; service: string}[] = [];
   const window = openWindow(
@@ -1067,7 +1095,7 @@ test('several tracker services that list the queue stay a choice', () => {
   const tickets = [
     ticket({key: '1', queue: 'alpha', sddService: 'services/billing'}),
     ticket({key: '2', queue: 'alpha', sddService: 'services/other'}),
-    ticket({key: '3', queue: 'alpha'}),
+    ticket({key: '3', queue: 'alpha', open: false}),
   ];
   const writes: {key: string; service: string}[] = [];
   const window = openWindow(
@@ -1117,9 +1145,9 @@ test('one github directory with an sdd key writes itself and several stay a choi
   writeFileSync(path.join(broken, 'openspec', 'config.yaml'), ':\n');
   writeLaunch(home, ['acme/alone', 'acme/many', 'acme/broken'], {github});
   const tickets = [
-    ticket({key: '1', repo: 'acme/alone', labels: ['alpha', 'sdd:cycle']}),
-    ticket({key: '2', repo: 'acme/many', labels: ['alpha', 'sdd:cycle']}),
-    ticket({key: '3', repo: 'acme/broken', labels: ['alpha', 'sdd:cycle']}),
+    ticket({key: '1', repo: 'acme/alone', labels: ['alpha', 'sdd:cycle'], open: false}),
+    ticket({key: '2', repo: 'acme/many', labels: ['alpha', 'sdd:cycle'], open: false}),
+    ticket({key: '3', repo: 'acme/broken', labels: ['alpha', 'sdd:cycle'], open: false}),
   ];
   const writes: {key: string; service: string}[] = [];
   const window = openWindow(
@@ -1179,9 +1207,10 @@ test('writing sddService keeps the queue break when the service still lacks the 
       },
     },
   );
-  assert.equal(window.board().cards[0]?.reason, 'не назван сервис');
+  assert.equal(window.board().pool[0]?.reason, 'не назван сервис');
+  assert.deepEqual(window.board().cards, []);
   window.chooseService('1', 'services/other');
-  const card = window.board().cards.find(item => item.key === '1');
+  const card = window.board().pool.find(item => item.key === '1');
   assert.ok(card);
   assert.equal(card.reason, 'очереди нет в конфиге сервиса');
   assert.equal(card.takeDisabled, true);
@@ -1213,7 +1242,8 @@ test('the window does not append the queue to the service config', () => {
   window.spy();
   assert.equal(readFileSync(config, 'utf8'), before);
   assert.equal(started, 0);
-  assert.equal(window.board().cards[0]?.reason, 'очереди нет в конфиге сервиса');
+  assert.equal(window.board().pool[0]?.reason, 'очереди нет в конфиге сервиса');
+  assert.deepEqual(window.board().cards, []);
   rmSync(dir, {recursive: true, force: true});
 });
 
@@ -1269,9 +1299,10 @@ test('the board and the window spy read one watch list', () => {
   const board = window.board();
   assert.deepEqual(board.watch, ['alpha']);
   assert.deepEqual(
-    board.cards.map(item => item.key),
+    board.pool.map(item => item.key),
     ['1'],
   );
+  assert.deepEqual(board.cards, []);
   window.spy();
   assert.deepEqual(started, [billing]);
   rmSync(dir, {recursive: true, force: true});
@@ -1432,9 +1463,9 @@ test('proposed stands in proposing and specified stands in specifying', () => {
     ['3'],
   );
   assert.equal(designing?.[0]?.reason, 'designed');
-  assert.deepEqual(
-    board.cards.map(card => card.key),
-    ['9'],
+  assert.equal(
+    board.cards.some(card => card.key === '9'),
+    false,
   );
   assert.deepEqual(
     board.pool.map(card => card.key),
@@ -1840,7 +1871,11 @@ test('an open watch-list ticket with sdd:cycle, no phase, and no assignee stands
   );
   assert.deepEqual(
     board.cards.map(card => card.key),
-    ['a', 'b', 'c'],
+    ['c'],
+  );
+  assert.equal(
+    board.cards.some(card => card.key === 'a' || card.key === 'b'),
+    false,
   );
   rmSync(dir, {recursive: true, force: true});
 });
@@ -2230,12 +2265,56 @@ test('a pool ticket with a checkout break shows the icon and take does not write
   assert.equal(card.icon, true);
   assert.equal(card.reason, 'каталога нет');
   assert.equal(card.takeDisabled, true);
-  assert.deepEqual(
-    board.cards.map(item => item.key),
-    ['1'],
+  assert.equal(
+    board.cards.some(item => item.key === '1'),
+    false,
   );
   window.take('1');
   assert.deepEqual(assignees, []);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('pending checks hide the icon on a pool ticket with two open pull requests', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openCycles(home, [
+    ticket({
+      key: '1',
+      queue: 'alpha',
+      sddService: 'services/billing',
+      title: 'Split',
+      openPullRequests: 2,
+      checks: 'pending',
+    }),
+  ]);
+  const card = window.board().pool.find(item => item.key === '1');
+  assert.ok(card);
+  assert.equal(card.icon, undefined);
+  assert.equal(card.reason, undefined);
+  assert.equal(card.takeDisabled, true);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a running step hides the icon on a pool ticket with a checkout break', () => {
+  const {dir, home, arcadia} = yard();
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openCycles(
+    home,
+    [
+      ticket({
+        key: '1',
+        queue: 'alpha',
+        sddService: 'services/missing',
+        title: 'Gone',
+      }),
+    ],
+    key => key === '1',
+  );
+  const card = window.board().pool.find(item => item.key === '1');
+  assert.ok(card);
+  assert.equal(card.icon, undefined);
+  assert.equal(card.reason, undefined);
+  assert.equal(card.takeDisabled, true);
   rmSync(dir, {recursive: true, force: true});
 });
 

@@ -711,12 +711,12 @@ function poolCard(
   reading: readonly WindowTicket[],
   ready: boolean,
   live: boolean,
+  hideIcon: boolean,
 ): PoolCard {
   const several = (item.openPullRequests ?? 0) > 1;
   const broken = checkout.reason !== '';
   const card: PoolCard = {key: item.key, title: item.title, take: true};
   if (broken || several) {
-    card.icon = true;
     card.takeDisabled = true;
     const column = (phase && columnOf(phase, item)) || 'implementing';
     const placed = buildCycle(
@@ -726,8 +726,11 @@ function poolCard(
       checkout.checkout,
       checkout.reason,
       reading,
-      false,
+      hideIcon,
     );
+    if (placed.card.icon) {
+      card.icon = true;
+    }
     if (placed.card.reason !== undefined) {
       card.reason = placed.card.reason;
     }
@@ -1103,8 +1106,10 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
         continue;
       }
       const checkout = cardOf(item);
+      const hideIcon = outside.leading?.(item.key) === true || item.checks === 'pending';
       if (!phase) {
-        pool.push(poolCard(item, checkout, null, reading, ready, live));
+        taken.add(item.key);
+        pool.push(poolCard(item, checkout, null, reading, ready, live, hideIcon));
         continue;
       }
       taken.add(item.key);
@@ -1113,7 +1118,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
         continue;
       }
       if (where === 'pool') {
-        pool.push(poolCard(item, checkout, phase, reading, ready, live));
+        pool.push(poolCard(item, checkout, phase, reading, ready, live, hideIcon));
         continue;
       }
       const placed = buildCycle(
@@ -1123,7 +1128,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
         checkout.checkout,
         checkout.reason,
         reading,
-        outside.leading?.(item.key) === true || item.checks === 'pending',
+        hideIcon,
       );
       const list = buckets.get(column) ?? [];
       list.push(placed);

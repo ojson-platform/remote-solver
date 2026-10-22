@@ -212,6 +212,48 @@ test('a gate phase over open items goes back, waits without an ask, and asks onc
   }
 });
 
+test('an unlabeled thread is classified before a held review gate', () => {
+  const decision = decide(
+    issue(1, ['sdd:designing', 'sdd:wait-human']),
+    [],
+    [pull(9, {review: {unanswered: true, rollback: null, layers: []}})],
+    ready,
+  );
+  assert.equal(decision.kind, 'agent');
+  if (decision.kind === 'agent') {
+    assert.equal(decision.action, 'classify-comments');
+  }
+});
+
+test('a classified earlier marker rolls back while the review gate is held', () => {
+  const decision = decide(
+    issue(1, ['sdd:designing', 'sdd:wait-human']),
+    [],
+    [pull(9, {review: {unanswered: false, rollback: 'specifying', layers: ['spec', 'design']}})],
+    ready,
+  );
+  assert.deepEqual(decision, {
+    kind: 'advance',
+    issue: '1',
+    to: 'specifying',
+    reason: 'review thread sent the change back',
+  });
+});
+
+test('a classified marker on the current layer starts its action while the review gate is held', () => {
+  const decision = decide(
+    issue(1, ['sdd:designing', 'sdd:wait-human']),
+    [],
+    [pull(9, {review: {unanswered: false, rollback: 'designing', layers: ['design']}})],
+    ready,
+  );
+  assert.equal(decision.kind, 'agent');
+  if (decision.kind === 'agent') {
+    assert.equal(decision.action, 'improve-design');
+    assert.equal(decision.skill, 'design');
+  }
+});
+
 test('an unlabeled thread is classified before the phase moves', () => {
   const decision = decide(
     issue(1, ['sdd:implementing']),

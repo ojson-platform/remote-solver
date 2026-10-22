@@ -231,28 +231,9 @@ export function decide(
     );
   }
 
-  // A skill stopped for a person, or the machine opened the review gate.
-  if (names.includes('sdd:wait-human')) {
-    const review =
-      phase === 'proposing'
-        ? {artifact: 'proposal', to: 'proposed' as const}
-        : phase === 'specifying'
-          ? {artifact: 'spec', to: 'specified' as const}
-          : phase === 'designing'
-            ? {artifact: 'design', to: 'designed' as const}
-            : null;
-    if (review && !gateBlocker(issue.key, phase, change)) {
-      return reviewGate(issue.key, review.artifact, phase, review.to);
-    }
-    return {
-      kind: 'wait',
-      issue: issue.key,
-      reason: `sdd:wait-human is set on ${phase}. Do the ask on the issue.`,
-    };
-  }
-
   // `out` is not in the map, so it does not move the phase. verifying waits
   // for proof before it follows a marker, unless the checks are already red.
+  // A classified marker moves before a held review gate (ADR-0028).
   if (phase !== 'verifying') {
     const back = feedback.rollback;
     if (back && phaseRank(back) < phaseRank(phase)) {
@@ -287,6 +268,27 @@ export function decide(
       };
     }
     return agent(issue.key, action, phase, String(pr.id), `threads on ${layer}`);
+  }
+
+  // A skill stopped for a person, or the machine opened the review gate.
+  // The gate holds when no classified thread asks for a layer.
+  if (names.includes('sdd:wait-human')) {
+    const review =
+      phase === 'proposing'
+        ? {artifact: 'proposal', to: 'proposed' as const}
+        : phase === 'specifying'
+          ? {artifact: 'spec', to: 'specified' as const}
+          : phase === 'designing'
+            ? {artifact: 'design', to: 'designed' as const}
+            : null;
+    if (review && !gateBlocker(issue.key, phase, change)) {
+      return reviewGate(issue.key, review.artifact, phase, review.to);
+    }
+    return {
+      kind: 'wait',
+      issue: issue.key,
+      reason: `sdd:wait-human is set on ${phase}. Do the ask on the issue.`,
+    };
   }
 
   const auto = (tag: string) => names.includes(tag);

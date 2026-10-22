@@ -545,6 +545,45 @@ spec('marker', () => {
     });
   });
 
+  requirement('A classified marker moves before a held review gate', () => {
+    scenario('An unlabeled thread during a held design review is classified', () => {
+      const decision = decide(
+        issue(1, ['sdd:designing', 'sdd:wait-human']),
+        [],
+        [pull(9, {review: {unanswered: true, rollback: null, layers: []}})],
+        ready,
+      );
+      assert.equal(action(decision), 'classify-comments');
+    });
+    scenario('A spec marker during a held design review moves to specifying', () => {
+      const decision = decide(
+        issue(1, ['sdd:designing', 'sdd:wait-human']),
+        [],
+        [
+          pull(9, {
+            review: {unanswered: false, rollback: 'specifying', layers: ['spec', 'design']},
+          }),
+        ],
+        ready,
+      );
+      assert.deepEqual(decision, {
+        kind: 'advance',
+        issue: '1',
+        to: 'specifying',
+        reason: 'review thread sent the change back',
+      });
+    });
+    scenario('A design marker during a held design review improves the design', () => {
+      const decision = decide(
+        issue(1, ['sdd:designing', 'sdd:wait-human']),
+        [],
+        [pull(9, {review: {unanswered: false, rollback: 'designing', layers: ['design']}})],
+        ready,
+      );
+      assert.equal(action(decision), 'improve-design');
+    });
+  });
+
   requirement('Thread fix closes a thread in one call', () => {
     scenario('Fix refuses before the commit is on the remote branch', async () => {
       const memory = memoryPorts({

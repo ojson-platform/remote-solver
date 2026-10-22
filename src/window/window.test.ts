@@ -2985,3 +2985,578 @@ test('healthy pool cards are ordered by key and have no icon', () => {
   ]);
   rmSync(dir, {recursive: true, force: true});
 });
+
+type ServiceYaml = {
+  schema?: unknown;
+  context?: unknown;
+  rules?: unknown;
+  sdd?: {
+    base?: unknown;
+    'branch-scope'?: unknown;
+    'ignore-comments'?: unknown;
+    extra?: unknown;
+    queues?: {name?: string; description?: unknown}[];
+    hooks?: Record<string, Record<string, unknown>>;
+  };
+};
+
+function writeServiceYaml(checkout: string, body: string): string {
+  const dir = path.join(checkout, 'openspec');
+  mkdirSync(dir, {recursive: true});
+  const file = path.join(dir, 'config.yaml');
+  writeFileSync(file, body.endsWith('\n') ? body : `${body}\n`);
+  return file;
+}
+
+function readServiceYaml(file: string): ServiceYaml {
+  return parse(readFileSync(file, 'utf8')) as ServiceYaml;
+}
+
+function visibleKeys(board: ReturnType<ReturnType<typeof openWindow>['board']>): string[] {
+  return [
+    ...board.cards.map(card => card.key),
+    ...board.pool.map(card => card.key),
+    ...board.columns.flatMap(column => column.cards.map(card => card.key)),
+  ];
+}
+
+test('the service-config group omits a default base and writes main beside schema, context, and rules', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  const file = writeServiceYaml(
+    checkout,
+    [
+      'schema: spec',
+      'context: kept',
+      'rules:',
+      '  - one',
+      'sdd:',
+      '  queues:',
+      '    - name: alpha',
+      '  base: main',
+      '  branch-scope: feature',
+      '',
+    ].join('\n'),
+  );
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.openSettings();
+  assert.equal(window.serviceConfig().file, 'openspec/config.yaml');
+  assert.equal(window.serviceConfig().checkout, checkout);
+  assert.equal(window.serviceConfig().base, 'main');
+  assert.equal(window.serviceConfig().branchScope, 'feature');
+  window.setServiceBase('trunk');
+  window.setServiceBranchScope('sdd');
+  window.saveServiceConfig();
+  const omitted = readServiceYaml(file);
+  assert.equal(omitted.sdd?.base, undefined);
+  assert.equal(omitted.sdd?.['branch-scope'], undefined);
+  assert.equal(omitted.schema, 'spec');
+  assert.equal(omitted.context, 'kept');
+  assert.deepEqual(omitted.rules, ['one']);
+  window.setServiceBase('main');
+  window.setServiceBranchScope('feature');
+  window.saveServiceConfig();
+  const written = readServiceYaml(file);
+  assert.equal(written.sdd?.base, 'main');
+  assert.equal(written.sdd?.['branch-scope'], 'feature');
+  assert.equal(written.schema, 'spec');
+  assert.equal(written.context, 'kept');
+  assert.deepEqual(written.rules, ['one']);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the service-config group keeps an unknown sdd key', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  const file = writeServiceYaml(
+    checkout,
+    ['sdd:', '  queues:', '    - name: alpha', '  extra: stay', ''].join('\n'),
+  );
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.openSettings();
+  window.setServiceBase('main');
+  window.saveServiceConfig();
+  assert.equal(readServiceYaml(file).sdd?.extra, 'stay');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the service-config group saves queue order, omits an empty description, and childQueue returns the first', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  const file = writeServiceYaml(
+    checkout,
+    [
+      'sdd:',
+      '  queues:',
+      '    - name: beta',
+      '      description: kept',
+      '    - name: alpha',
+      '',
+    ].join('\n'),
+  );
+  writeLaunch(home, ['beta'], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'beta', sddService: 'services/billing'})]},
+  );
+  window.openSettings();
+  assert.equal(window.childQueue(), 'beta');
+  window.moveServiceQueue(1, 0);
+  window.setServiceQueue(0, 'alpha', '');
+  window.addServiceQueue();
+  window.setServiceQueue(2, 'alpha', '');
+  assert.equal(window.childQueue(), 'beta');
+  window.saveServiceConfig();
+  assert.equal(window.childQueue(), 'alpha');
+  const queues = readServiceYaml(file).sdd?.queues;
+  assert.deepEqual(queues, [{name: 'alpha'}, {name: 'beta', description: 'kept'}, {name: 'alpha'}]);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the service-config group omits ignore-comments when the last pattern is removed', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  const file = writeServiceYaml(
+    checkout,
+    ['sdd:', '  queues:', '    - name: alpha', '  ignore-comments:', '    - bot', ''].join('\n'),
+  );
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.openSettings();
+  window.addServiceIgnore('reviewer');
+  assert.deepEqual(
+    window.serviceConfig().ignoreComments?.map(item => item.value),
+    ['bot', 'reviewer'],
+  );
+  window.removeServiceIgnore(1);
+  window.removeServiceIgnore(0);
+  window.saveServiceConfig();
+  assert.equal(readServiceYaml(file).sdd?.['ignore-comments'], undefined);
+  assert.deepEqual(readServiceYaml(file).sdd?.queues, [{name: 'alpha'}]);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the service-config group warns when an ignore-comments pattern does not compile', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  const file = writeServiceYaml(
+    checkout,
+    ['sdd:', '  queues:', '    - name: alpha', '  ignore-comments:', '    - bot', ''].join('\n'),
+  );
+  const bytes = readFileSync(file, 'utf8');
+  writeLaunch(home, ['alpha'], {arcadia});
+  let started = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      answers: () => true,
+      startStep: () => {
+        started += 1;
+      },
+      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
+    },
+  );
+  window.chooseAgent('cursor');
+  window.openSettings();
+  window.setServiceIgnore(0, '(');
+  const field = window.serviceConfig().ignoreComments?.[0];
+  assert.equal(field?.value, '(');
+  assert.equal(field?.warning, true);
+  assert.equal(window.serviceConfig().save, false);
+  window.saveServiceConfig();
+  assert.equal(readFileSync(file, 'utf8'), bytes);
+  assert.equal(
+    window.board().pool.some(card => card.key === '1'),
+    true,
+  );
+  window.spy();
+  assert.equal(started, 1);
+  window.closeSettings();
+  assert.equal(readFileSync(file, 'utf8'), bytes);
+  window.openSettings();
+  assert.equal(window.serviceConfig().ignoreComments?.[0]?.value, 'bot');
+  assert.equal(window.serviceConfig().save, true);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the service-config group warns on an empty queue name and on the last queue', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  const file = writeServiceYaml(
+    checkout,
+    ['sdd:', '  queues:', '    - name: alpha', ''].join('\n'),
+  );
+  const bytes = readFileSync(file, 'utf8');
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.openSettings();
+  window.addServiceQueue();
+  const added = window.serviceConfig().queues?.items.at(-1);
+  assert.equal(added?.name, '');
+  assert.equal(added?.warning, true);
+  assert.equal(window.serviceConfig().save, false);
+  window.saveServiceConfig();
+  assert.equal(readFileSync(file, 'utf8'), bytes);
+  window.setServiceQueue(1, 'gamma', '');
+  assert.equal(window.serviceConfig().queues?.items[1]?.warning, undefined);
+  assert.equal(window.serviceConfig().save, true);
+  window.removeServiceQueue(1);
+  window.removeServiceQueue(0);
+  assert.deepEqual(window.serviceConfig().queues, {items: [], warning: true});
+  assert.equal(window.serviceConfig().save, false);
+  window.saveServiceConfig();
+  assert.deepEqual(readServiceYaml(file).sdd?.queues, [{name: 'alpha'}]);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the service-config group warns when YAML has no sdd key', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  const file = writeServiceYaml(
+    checkout,
+    ['schema: spec', 'context: kept', 'rules:', '  - one', ''].join('\n'),
+  );
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.openSettings();
+  assert.deepEqual(window.serviceConfig().queues, {items: [], warning: true});
+  assert.equal(window.serviceConfig().save, false);
+  window.addServiceQueue();
+  window.setServiceQueue(0, 'alpha', '');
+  assert.equal(window.serviceConfig().queues?.warning, undefined);
+  assert.equal(window.serviceConfig().save, true);
+  window.saveServiceConfig();
+  const doc = readServiceYaml(file);
+  assert.deepEqual(doc.sdd?.queues, [{name: 'alpha'}]);
+  assert.equal(doc.schema, 'spec');
+  assert.equal(doc.context, 'kept');
+  assert.deepEqual(doc.rules, ['one']);
+  assert.equal(doc.sdd?.base, undefined);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the service-config group can only remove a non-string ignore-comments value', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  const file = writeServiceYaml(
+    checkout,
+    ['sdd:', '  queues:', '    - name: alpha', '  ignore-comments: 1', ''].join('\n'),
+  );
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.openSettings();
+  const locked = window.serviceConfig().ignoreComments;
+  assert.equal(locked?.length, 1);
+  assert.equal(locked?.[0]?.removeOnly, true);
+  assert.equal(locked?.[0]?.warning, true);
+  assert.equal(window.serviceConfig().save, false);
+  window.setServiceIgnore(0, 'bot');
+  assert.equal(window.serviceConfig().ignoreComments?.[0]?.removeOnly, true);
+  window.removeServiceIgnore(0);
+  assert.equal(window.serviceConfig().save, true);
+  window.saveServiceConfig();
+  assert.equal(readServiceYaml(file).sdd?.['ignore-comments'], undefined);
+  writeFileSync(file, 'sdd:\n  queues:\n    - name: alpha\n  ignore-comments: 1\n');
+  window.closeSettings();
+  window.openSettings();
+  assert.equal(window.serviceConfig().ignoreComments?.[0]?.removeOnly, true);
+  window.removeServiceIgnore(0);
+  window.closeSettings();
+  assert.equal(readServiceYaml(file).sdd?.['ignore-comments'], 1);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the service-config group has no fields when the file does not parse and only that checkout loses its cards', () => {
+  const {dir, home, arcadia} = yard();
+  const billing = path.join(arcadia, 'services', 'billing');
+  const other = path.join(arcadia, 'services', 'other');
+  mkdirSync(billing, {recursive: true});
+  mkdirSync(other, {recursive: true});
+  const file = writeServiceYaml(billing, 'sdd: [\n');
+  const bytes = readFileSync(file, 'utf8');
+  writeServiceConfig(other, ['beta']);
+  writeLaunch(home, ['alpha', 'beta'], {arcadia});
+  writeOverlay(billing, [], 'models:\n  mechanical: ""\n');
+  let leading = true;
+  const steps: string[] = [];
+  const phases: string[] = [];
+  const tickets = [
+    ticket({key: '1', queue: 'alpha', sddService: 'services/billing', assignee: MANAGER}),
+    ticket({key: '2', queue: 'beta', sddService: 'services/other'}),
+  ];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      answers: () => true,
+      login: () => MANAGER,
+      leading: key => key === '1' && leading,
+      startStep: checkout => {
+        steps.push(checkout ?? '');
+      },
+      writePhase: (key, phase) => {
+        phases.push(`${key}:${phase}`);
+      },
+      tickets: () => tickets,
+    },
+  );
+  window.chooseAgent('cursor');
+  const only = openWindow({homePath: home, adapter: 'tracker'}, {tickets: () => [tickets[0]]});
+  only.openSettings();
+  assert.equal(only.serviceConfig().checkout, '');
+  assert.equal(only.serviceConfig().save, false);
+  const texts = window.board().rows.map(row => row.text);
+  const factoryAt = texts.findIndex(
+    text => text.includes(billing) && text.includes('нужна модель'),
+  );
+  const brokenAt = texts.findIndex(
+    text => text.includes(billing) && text.includes('конфиг сервиса не читается'),
+  );
+  assert.ok(factoryAt >= 0);
+  assert.ok(brokenAt > factoryAt);
+  assert.equal(visibleKeys(window.board()).includes('1'), false);
+  assert.equal(visibleKeys(window.board()).includes('2'), true);
+  window.openSettings();
+  assert.equal(window.serviceConfig().checkout, '');
+  window.openCard('1');
+  const group = window.serviceConfig();
+  assert.equal(group.file, 'openspec/config.yaml');
+  assert.equal(group.checkout, billing);
+  assert.equal(group.save, false);
+  assert.equal(group.queues, undefined);
+  assert.equal(group.base, undefined);
+  assert.equal(group.branchScope, undefined);
+  assert.equal(group.ignoreComments, undefined);
+  assert.equal(group.hooks, undefined);
+  window.addServiceQueue();
+  window.saveServiceConfig();
+  assert.equal(readFileSync(file, 'utf8'), bytes);
+  window.spy();
+  assert.deepEqual(steps, [other]);
+  assert.deepEqual(phases, []);
+  leading = false;
+  window.spy();
+  assert.deepEqual(steps, [other, other]);
+  assert.deepEqual(phases, []);
+  writeServiceConfig(billing, ['alpha']);
+  rmSync(path.join(billing, '.aifactory'), {recursive: true, force: true});
+  window.spy();
+  assert.equal(steps.includes(billing), true);
+  assert.equal(visibleKeys(window.board()).includes('1'), true);
+  assert.equal(visibleKeys(window.board()).includes('2'), true);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the service-config group shows no fields when the agent is silent and the file does not parse', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceYaml(checkout, 'sdd: [\n');
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      answers: () => false,
+      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
+    },
+  );
+  window.chooseAgent('cursor');
+  window.openCard('1');
+  window.openSettings();
+  assert.deepEqual(window.board().rows, [{text: 'агент не отвечает'}]);
+  assert.equal(window.board().settingsOpen, true);
+  assert.equal(window.serviceConfig().checkout, checkout);
+  assert.equal(window.serviceConfig().save, false);
+  assert.equal(window.serviceConfig().queues, undefined);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the service-config group creates a missing file from the queue the manager adds', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  const file = path.join(checkout, 'openspec', 'config.yaml');
+  writeLaunch(home, ['alpha'], {arcadia});
+  let started = 0;
+  let leading = false;
+  const assignees: string[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      answers: () => true,
+      login: () => MANAGER,
+      leading: () => leading,
+      startStep: () => {
+        started += 1;
+      },
+      writeAssignee: key => {
+        assignees.push(key);
+      },
+      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
+    },
+  );
+  window.chooseAgent('cursor');
+  const card = window.board().pool.find(item => item.key === '1');
+  assert.ok(card);
+  assert.equal(card.reason, 'конфига сервиса нет');
+  assert.notEqual(card.reason, 'каталога нет');
+  assert.equal(card.takeDisabled, true);
+  window.take('1');
+  assert.deepEqual(assignees, []);
+  window.spy();
+  assert.equal(started, 0);
+  leading = true;
+  window.spy();
+  assert.equal(started, 0);
+  leading = false;
+  window.spy();
+  assert.equal(started, 0);
+  window.openSettings();
+  assert.equal(window.serviceConfig().file, 'openspec/config.yaml');
+  assert.equal(window.serviceConfig().checkout, checkout);
+  assert.equal(window.serviceConfig().queues, undefined);
+  assert.equal(window.serviceConfig().save, false);
+  window.saveServiceConfig();
+  assert.equal(existsSync(file), false);
+  window.addServiceQueue();
+  assert.equal(window.serviceConfig().save, false);
+  window.setServiceQueue(0, 'alpha', '');
+  window.saveServiceConfig();
+  const doc = readServiceYaml(file);
+  assert.deepEqual(doc.sdd?.queues, [{name: 'alpha'}]);
+  assert.equal(doc.schema, undefined);
+  assert.equal(doc.context, undefined);
+  assert.equal(doc.rules, undefined);
+  window.spy();
+  assert.equal(started, 1);
+  window.take('1');
+  assert.deepEqual(assignees, ['1']);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the service-config group writes one hook string back as a list and leaves a number', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  const file = writeServiceYaml(
+    checkout,
+    [
+      'sdd:',
+      '  queues:',
+      '    - name: alpha',
+      '  hooks:',
+      '    review:',
+      '      before: keep me',
+      '      after: 4',
+      '    other:',
+      '      before:',
+      '        - one',
+      '        - two',
+      '',
+    ].join('\n'),
+  );
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.openSettings();
+  assert.deepEqual(window.serviceConfig().hooks, [
+    {action: 'review', point: 'before', values: ['keep me']},
+    {action: 'other', point: 'before', values: ['one', 'two']},
+  ]);
+  window.saveServiceConfig();
+  const hooks = readServiceYaml(file).sdd?.hooks;
+  assert.deepEqual(hooks?.review?.before, ['keep me']);
+  assert.equal(hooks?.review?.after, 4);
+  assert.deepEqual(hooks?.other?.before, ['one', 'two']);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the service-config group discards an unsaved queue edit and the spy reads the disk queues', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  const file = path.join(checkout, 'openspec', 'config.yaml');
+  writeLaunch(home, ['alpha'], {arcadia});
+  let started = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      answers: () => true,
+      startStep: () => {
+        started += 1;
+      },
+      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
+    },
+  );
+  window.chooseAgent('cursor');
+  window.openSettings();
+  window.setServiceQueue(0, 'gamma', 'draft');
+  assert.equal(window.serviceConfig().queues?.items[0]?.name, 'gamma');
+  assert.equal(window.childQueue(), 'alpha');
+  window.spy();
+  assert.equal(started, 1);
+  assert.deepEqual(readServiceYaml(file).sdd?.queues, [{name: 'alpha'}]);
+  window.closeSettings();
+  assert.deepEqual(readServiceYaml(file).sdd?.queues, [{name: 'alpha'}]);
+  window.openSettings();
+  assert.equal(window.serviceConfig().queues?.items[0]?.name, 'alpha');
+  assert.equal(window.serviceConfig().queues?.items[0]?.description, '');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the service-config group shows the disk copy when the file changed before save', () => {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  const file = writeServiceYaml(
+    checkout,
+    ['sdd:', '  queues:', '    - name: alpha', ''].join('\n'),
+  );
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.openSettings();
+  assert.equal(window.serviceConfig().queues?.items[0]?.name, 'alpha');
+  writeFileSync(file, 'sdd:\n  queues:\n    - name: beta\n  base: main\n');
+  window.setServiceBase('trunk');
+  window.saveServiceConfig();
+  const doc = readServiceYaml(file);
+  assert.equal(doc.sdd?.queues?.[0]?.name, 'beta');
+  assert.equal(doc.sdd?.base, 'main');
+  assert.equal(window.serviceConfig().queues?.items[0]?.name, 'beta');
+  assert.equal(window.serviceConfig().base, 'main');
+  assert.equal(window.serviceConfig().save, true);
+  rmSync(dir, {recursive: true, force: true});
+});

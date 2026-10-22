@@ -138,6 +138,36 @@ export type OverlayGroup = {
   watch: string[];
 };
 
+export type ServiceQueueField = {
+  name: string;
+  description: string;
+  warning?: true;
+};
+
+export type ServiceIgnoreField = {
+  value: string;
+  warning?: true;
+  removeOnly?: true;
+};
+
+export type ServiceHookField = {
+  action: string;
+  point: string;
+  values: string[];
+};
+
+/** The service-config group. It shows `openspec/config.yaml` of the chosen checkout. */
+export type ServiceConfigGroup = {
+  file: 'openspec/config.yaml';
+  checkout: string;
+  save: boolean;
+  queues?: {items: ServiceQueueField[]; warning?: true};
+  base?: string;
+  branchScope?: string;
+  ignoreComments?: ServiceIgnoreField[];
+  hooks?: ServiceHookField[];
+};
+
 export type CardState = {
   key: string;
   reason: string;
@@ -204,6 +234,7 @@ export type BoardState = {
 const CATALOG_MISSING = 'каталога нет';
 const SERVICE_UNNAMED = 'не назван сервис';
 const CONFIG_MISSING = 'конфига сервиса нет';
+const CONFIG_UNREADABLE = 'конфиг сервиса не читается';
 const QUEUE_MISSING = 'очереди нет в конфиге сервиса';
 
 function isDoc(value: unknown): value is Doc {
@@ -309,6 +340,256 @@ function queueNames(checkout: string): string[] | undefined {
     }
   }
   return names;
+}
+
+function serviceFile(checkout: string): string {
+  return path.join(checkout, 'openspec', 'config.yaml');
+}
+
+type ServiceRead =
+  {kind: 'missing'} | {kind: 'broken'; text: string} | {kind: 'doc'; text: string; doc: Doc};
+
+function readServiceFile(checkout: string): ServiceRead {
+  const file = serviceFile(checkout);
+  if (!existsSync(file)) {
+    return {kind: 'missing'};
+  }
+  let text: string;
+  try {
+    text = readFileSync(file, 'utf8');
+  } catch {
+    return {kind: 'broken', text: ''};
+  }
+  try {
+    const raw = parse(text);
+    if (!isDoc(raw)) {
+      return {kind: 'broken', text};
+    }
+    return {kind: 'doc', text, doc: raw};
+  } catch {
+    return {kind: 'broken', text};
+  }
+}
+
+function serviceBroken(checkout: string): boolean {
+  return readServiceFile(checkout).kind === 'broken';
+}
+
+type ServiceQueueDraft = {name: string; description: string};
+
+type ServiceIgnoreDraft = {value: string; removeOnly?: true};
+
+type ServiceDraft = {
+  queues: ServiceQueueDraft[];
+  base: string;
+  branchScope: string;
+  ignore: ServiceIgnoreDraft[];
+  hooks: ServiceHookField[];
+};
+
+function queueDraft(value: unknown): ServiceQueueDraft[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map(item => {
+    if (typeof item === 'string') {
+      return {name: item, description: ''};
+    }
+    if (!isDoc(item)) {
+      return {name: '', description: ''};
+    }
+    return {
+      name: typeof item.name === 'string' ? item.name : '',
+      description: typeof item.description === 'string' ? item.description : '',
+    };
+  });
+}
+
+function ignoreText(value: unknown): string {
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  if (value === null) {
+    return 'null';
+  }
+  try {
+    return stringify(value).trim();
+  } catch {
+    return '';
+  }
+}
+
+function ignoreDraft(value: unknown): ServiceIgnoreDraft[] {
+  if (value === undefined) {
+    return [];
+  }
+  if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
+    return value.map(item => ({value: item}));
+  }
+  return [{value: ignoreText(value), removeOnly: true}];
+}
+
+function hooksFrom(sdd: Doc): ServiceHookField[] {
+  if (!isDoc(sdd.hooks)) {
+    return [];
+  }
+  const hooks: ServiceHookField[] = [];
+  for (const [action, points] of Object.entries(sdd.hooks)) {
+    if (!isDoc(points)) {
+      continue;
+    }
+    for (const [point, value] of Object.entries(points)) {
+      if (typeof value === 'string') {
+        hooks.push({action, point, values: [value]});
+      } else if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
+        hooks.push({action, point, values: [...value]});
+      }
+    }
+  }
+  return hooks;
+}
+
+function textField(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value !== '' ? value : fallback;
+}
+
+function draftFrom(doc: Doc): ServiceDraft {
+  const sdd = isDoc(doc.sdd) ? doc.sdd : {};
+  return {
+    queues: queueDraft(sdd.queues),
+    base: textField(sdd.base, 'trunk'),
+    branchScope: textField(sdd['branch-scope'], 'sdd'),
+    ignore: ignoreDraft(sdd['ignore-comments']),
+    hooks: hooksFrom(sdd),
+  };
+}
+
+function blankDraft(): ServiceDraft {
+  return {queues: [], base: 'trunk', branchScope: 'sdd', ignore: [], hooks: []};
+}
+
+/** Same flags as `compileIgnore`: a pattern that throws is not saved. */
+function patternCompiles(pattern: string): boolean {
+  try {
+    new RegExp(pattern, 'i');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function queueFields(queues: readonly ServiceQueueDraft[]): {
+  items: ServiceQueueField[];
+  warning?: true;
+} {
+  const items = queues.map(queue => {
+    const field: ServiceQueueField = {name: queue.name, description: queue.description};
+    if (queue.name === '') {
+      field.warning = true;
+    }
+    return field;
+  });
+  if (items.length === 0) {
+    return {items, warning: true};
+  }
+  return {items};
+}
+
+function ignoreFields(ignore: readonly ServiceIgnoreDraft[]): ServiceIgnoreField[] {
+  return ignore.map(item => {
+    const field: ServiceIgnoreField = {value: item.value};
+    if (item.removeOnly) {
+      field.removeOnly = true;
+      field.warning = true;
+      return field;
+    }
+    if (!patternCompiles(item.value)) {
+      field.warning = true;
+    }
+    return field;
+  });
+}
+
+function groupOf(checkout: string, draft: ServiceDraft): ServiceConfigGroup {
+  const queues = queueFields(draft.queues);
+  const ignoreComments = ignoreFields(draft.ignore);
+  const warned =
+    queues.warning === true ||
+    queues.items.some(item => item.warning === true) ||
+    ignoreComments.some(item => item.warning === true);
+  return {
+    file: 'openspec/config.yaml',
+    checkout,
+    save: !warned,
+    queues,
+    base: draft.base,
+    branchScope: draft.branchScope,
+    ignoreComments,
+    hooks: draft.hooks,
+  };
+}
+
+function emptyService(checkout: string): ServiceConfigGroup {
+  return {file: 'openspec/config.yaml', checkout, save: false};
+}
+
+function normalizeHooks(hooks: unknown): unknown {
+  if (!isDoc(hooks)) {
+    return hooks;
+  }
+  const next: Doc = {};
+  for (const [action, points] of Object.entries(hooks)) {
+    if (!isDoc(points)) {
+      next[action] = points;
+      continue;
+    }
+    const copy: Doc = {};
+    for (const [point, value] of Object.entries(points)) {
+      if (typeof value === 'string') {
+        copy[point] = [value];
+      } else if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
+        copy[point] = [...value];
+      } else {
+        copy[point] = value;
+      }
+    }
+    next[action] = copy;
+  }
+  return next;
+}
+
+function writtenService(doc: Doc | null, draft: ServiceDraft): Doc {
+  const next: Doc = {...(doc ?? {})};
+  const sdd: Doc = {...(isDoc(next.sdd) ? next.sdd : {})};
+  sdd.queues = draft.queues.map(queue => {
+    const item: Doc = {name: queue.name};
+    if (queue.description !== '') {
+      item.description = queue.description;
+    }
+    return item;
+  });
+  if (draft.base === 'trunk') {
+    delete sdd.base;
+  } else {
+    sdd.base = draft.base;
+  }
+  if (draft.branchScope === 'sdd') {
+    delete sdd['branch-scope'];
+  } else {
+    sdd['branch-scope'] = draft.branchScope;
+  }
+  if (!draft.ignore.some(item => item.removeOnly)) {
+    if (draft.ignore.length === 0) {
+      delete sdd['ignore-comments'];
+    } else {
+      sdd['ignore-comments'] = draft.ignore.map(item => item.value);
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(sdd, 'hooks')) {
+    sdd.hooks = normalizeHooks(sdd.hooks);
+  }
+  next.sdd = sdd;
+  return next;
 }
 
 function serviceDirs(repoRoot: string): string[] {
@@ -855,6 +1136,10 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
   let chosenCheckout = '';
   let overlayBaseline: string | null = null;
   let overlayDoc: Doc = {};
+  let serviceBaseline: string | null = null;
+  let serviceDoc: Doc | null = null;
+  let serviceDraft: ServiceDraft | null = null;
+  let serviceDirty = false;
 
   function adopt(text: string | null): void {
     baseline = text;
@@ -985,6 +1270,9 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
         out.push({
           text: `${checkout} · модель не запускается · ${rejected.mode} · ${rejected.id}`,
         });
+      }
+      if (serviceBroken(checkout)) {
+        out.push({text: `${checkout} · ${CONFIG_UNREADABLE}`});
       }
     }
     return out;
@@ -1274,6 +1562,11 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       if (!onWatch(item, watch)) {
         continue;
       }
+      const home = gathered(item);
+      if (home && serviceBroken(home)) {
+        taken.add(item.key);
+        continue;
+      }
       const phase = phaseOf([...item.labels]);
       const where = slotOf(item, phase, manager);
       if (where === 'cards') {
@@ -1357,10 +1650,82 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     };
   }
 
+  function loadService(checkout: string): void {
+    serviceDirty = false;
+    const read = readServiceFile(checkout);
+    if (read.kind === 'broken') {
+      serviceBaseline = read.text;
+      serviceDoc = null;
+      serviceDraft = null;
+      return;
+    }
+    if (read.kind === 'missing') {
+      serviceBaseline = null;
+      serviceDoc = null;
+      serviceDraft = null;
+      return;
+    }
+    serviceBaseline = read.text;
+    serviceDoc = read.doc;
+    serviceDraft = draftFrom(read.doc);
+  }
+
+  function serviceConfig(): ServiceConfigGroup {
+    if (chosenCheckout === '') {
+      return emptyService('');
+    }
+    const live = readServiceFile(chosenCheckout);
+    if (live.kind === 'broken') {
+      serviceDirty = false;
+      serviceBaseline = live.text;
+      serviceDoc = null;
+      serviceDraft = null;
+      return emptyService(chosenCheckout);
+    }
+    if (serviceDirty && serviceDraft) {
+      return groupOf(chosenCheckout, serviceDraft);
+    }
+    if (live.kind === 'missing') {
+      serviceBaseline = null;
+      serviceDoc = null;
+      serviceDraft = null;
+      return emptyService(chosenCheckout);
+    }
+    serviceBaseline = live.text;
+    serviceDoc = live.doc;
+    serviceDraft = draftFrom(live.doc);
+    return groupOf(chosenCheckout, serviceDraft);
+  }
+
+  function editable(): ServiceDraft | null {
+    if (chosenCheckout === '' || readServiceFile(chosenCheckout).kind === 'broken') {
+      return null;
+    }
+    if (serviceDraft) {
+      serviceDirty = true;
+      return serviceDraft;
+    }
+    const live = readServiceFile(chosenCheckout);
+    if (live.kind === 'missing') {
+      serviceBaseline = null;
+      serviceDoc = null;
+      serviceDraft = blankDraft();
+    } else if (live.kind === 'doc') {
+      serviceBaseline = live.text;
+      serviceDoc = live.doc;
+      serviceDraft = draftFrom(live.doc);
+    } else {
+      return null;
+    }
+    serviceDirty = true;
+    return serviceDraft;
+  }
+
   function rememberOverlay(checkout: string): void {
     chosenCheckout = checkout;
     overlayBaseline = textOf(overlayFile(checkout));
     overlayDoc = parseDoc(overlayBaseline);
+    loadService(checkout);
   }
 
   function emptyOverlay(): OverlayGroup {
@@ -1451,12 +1816,17 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
         return;
       }
       const checkouts = gatheredCheckouts();
-      if (checkouts.length === 1) {
-        rememberOverlay(checkouts[0]);
+      if (checkouts.length !== 1 || serviceBroken(checkouts[0])) {
+        return;
       }
+      rememberOverlay(checkouts[0]);
     },
     closeSettings() {
       settingsOpen = false;
+      serviceDirty = false;
+      if (chosenCheckout !== '') {
+        loadService(chosenCheckout);
+      }
     },
     openCard(key: string) {
       const item = sortedTickets().find(ticket => ticket.key === key);
@@ -1474,6 +1844,118 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
         return;
       }
       rememberOverlay(checkout);
+    },
+    serviceConfig,
+    childQueue() {
+      if (chosenCheckout === '') {
+        return '';
+      }
+      return queueNames(chosenCheckout)?.[0] ?? '';
+    },
+    setServiceBase(value: string) {
+      const draft = editable();
+      if (!draft) {
+        return;
+      }
+      draft.base = value === '' ? 'trunk' : value;
+    },
+    setServiceBranchScope(value: string) {
+      const draft = editable();
+      if (!draft) {
+        return;
+      }
+      draft.branchScope = value === '' ? 'sdd' : value;
+    },
+    addServiceQueue() {
+      const draft = editable();
+      if (!draft) {
+        return;
+      }
+      draft.queues.push({name: '', description: ''});
+    },
+    setServiceQueue(index: number, name: string, description: string) {
+      const draft = editable();
+      const queue = draft?.queues[index];
+      if (!draft || !queue) {
+        return;
+      }
+      queue.name = name;
+      queue.description = description;
+    },
+    removeServiceQueue(index: number) {
+      const draft = editable();
+      if (!draft || index < 0 || index >= draft.queues.length) {
+        return;
+      }
+      draft.queues.splice(index, 1);
+    },
+    moveServiceQueue(from: number, to: number) {
+      const draft = editable();
+      if (!draft || from === to) {
+        return;
+      }
+      if (from < 0 || to < 0 || from >= draft.queues.length || to >= draft.queues.length) {
+        return;
+      }
+      const [item] = draft.queues.splice(from, 1);
+      if (!item) {
+        return;
+      }
+      draft.queues.splice(to, 0, item);
+    },
+    addServiceIgnore(value: string) {
+      const draft = editable();
+      if (!draft || draft.ignore.some(item => item.removeOnly)) {
+        return;
+      }
+      draft.ignore.push({value});
+    },
+    setServiceIgnore(index: number, value: string) {
+      const draft = editable();
+      if (!draft || draft.ignore.some(item => item.removeOnly)) {
+        return;
+      }
+      if (!draft.ignore[index]) {
+        return;
+      }
+      draft.ignore[index] = {value};
+    },
+    removeServiceIgnore(index: number) {
+      const draft = editable();
+      if (!draft || index < 0 || index >= draft.ignore.length) {
+        return;
+      }
+      draft.ignore.splice(index, 1);
+    },
+    saveServiceConfig() {
+      if (chosenCheckout === '' || !serviceDraft) {
+        return;
+      }
+      const live = readServiceFile(chosenCheckout);
+      if (live.kind === 'broken') {
+        serviceDirty = false;
+        serviceBaseline = live.text;
+        serviceDoc = null;
+        serviceDraft = null;
+        return;
+      }
+      if (!groupOf(chosenCheckout, serviceDraft).save) {
+        return;
+      }
+      const disk = live.kind === 'missing' ? null : live.text;
+      if (disk !== serviceBaseline) {
+        loadService(chosenCheckout);
+        return;
+      }
+      const next = writtenService(serviceDoc, serviceDraft);
+      const file = serviceFile(chosenCheckout);
+      mkdirSync(path.dirname(file), {recursive: true});
+      const text = stringify(next);
+      writeFileSync(file, text);
+      serviceBaseline = text;
+      serviceDoc = next;
+      serviceDraft = draftFrom(next);
+      serviceDirty = false;
     },
     chooseOverlayAgent(agentId: string) {
       if (chosenCheckout === '' || offered.length === 0 || !offered.includes(agentId)) {
@@ -1645,7 +2127,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       const manager = outside.login?.();
       const reading = sortedTickets();
       for (const card of view.cards) {
-        if (card.reason !== '' || !card.checkout) {
+        if (card.reason !== '' || !card.checkout || serviceBroken(card.checkout)) {
           continue;
         }
         const item = reading.find(ticket => ticket.key === card.key);
@@ -1680,6 +2162,10 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
           continue;
         }
         if (item.assignee !== manager) {
+          continue;
+        }
+        const located = gathered(item);
+        if (located && serviceBroken(located)) {
           continue;
         }
         const checkout = view.cards.find(entry => entry.key === item.key);

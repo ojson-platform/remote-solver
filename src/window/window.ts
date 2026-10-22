@@ -1,24 +1,24 @@
 import type {BoardState, Launch, SkillMode, WindowOutside} from './types.ts';
 
-import {phaseOf} from '../machine/phase.ts';
-
-import {lay, slotOf} from './board.ts';
+import {lay} from './board.ts';
 import {openCheckout, unreadableRow} from './checkout.ts';
 import {
   FACTORY_AGENTS,
   agentRows,
+  catalogRejections,
   gapRows,
   mergeFactory,
   modelRow,
   openHome,
   openOverlay,
   readOverlayDoc,
-  rejectedSlots,
+  slotsFilled,
   takeBlock,
   type Factory,
 } from './factory.ts';
 import {openServiceGroup} from './service-group.ts';
 import {blocksFor} from './sidebar.ts';
+import {runSpy} from './spy.ts';
 
 export type {
   AdapterKind,
@@ -76,15 +76,12 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
   }
 
   function rejectedOf(factory: Factory): {mode: SkillMode; id: string}[] {
-    if (!outside.catalog || factory.agent === '') {
-      return [];
-    }
-    return rejectedSlots(factory, outside.catalog(factory.agent));
+    return catalogRejections(factory, outside.catalog);
   }
 
   function canStart(located: string | undefined): boolean {
     const factory = factoryFor(located);
-    return factory.mechanical !== '' && factory.judgment !== '' && rejectedOf(factory).length === 0;
+    return slotsFilled(factory, rejectedOf(factory));
   }
 
   function checkoutRows(): {text: string}[] {
@@ -162,75 +159,23 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
   }
 
   function spy(): void {
-    if (!answers()) {
-      return;
-    }
-    if (!outside.tickets) {
-      if (!home.modelsReady()) {
-        return;
-      }
-      const homeFactory = mergeFactory(home.doc(), null);
-      outside.startStep?.(undefined, {
-        mechanical: homeFactory.mechanical,
-        judgment: homeFactory.judgment,
-      });
-      return;
-    }
-    const view = checkout.settle();
-    const manager = outside.login?.();
-    const reading = checkout.sorted();
-    for (const card of view.cards) {
-      if (card.reason !== '' || !card.checkout || checkout.serviceBroken(card.checkout)) {
-        continue;
-      }
-      const item = reading.find(ticket => ticket.key === card.key);
-      if (!item) {
-        continue;
-      }
-      const phase = phaseOf([...item.labels]);
-      const where = slotOf(item, phase, manager);
-      if (where !== 'cards' && where !== 'pool' && where !== 'hide') {
-        continue;
-      }
-      if (outside.leading?.(item.key) === true) {
-        continue;
-      }
-      const factory = factoryFor(card.checkout);
-      if (!canStart(card.checkout)) {
-        continue;
-      }
-      outside.startStep?.(card.checkout, {
-        mechanical: factory.mechanical,
-        judgment: factory.judgment,
-      });
-    }
-    if (manager === undefined) {
-      return;
-    }
-    for (const item of reading) {
-      if (!checkout.onWatch(item, view.watch) || item.open === false) {
-        continue;
-      }
-      if (item.labels.includes('sdd:cancelled') || phaseOf([...item.labels]) !== null) {
-        continue;
-      }
-      if (item.assignee !== manager) {
-        continue;
-      }
-      const located = checkout.gathered(item);
-      if (located && checkout.serviceBroken(located)) {
-        continue;
-      }
-      const card = view.cards.find(entry => entry.key === item.key);
-      const stopped =
-        (item.openPullRequests ?? 0) > 1 ||
-        (card?.reason ?? '') !== '' ||
-        !canStart(card?.checkout);
-      if (stopped) {
-        continue;
-      }
-      outside.writePhase?.(item.key, 'proposing');
-    }
+    runSpy({
+      answers: answers(),
+      modelsReady: home.modelsReady(),
+      homeFactory: mergeFactory(home.doc(), null),
+      hasTickets: outside.tickets !== undefined,
+      settle: () => checkout.settle(),
+      reading: () => checkout.sorted(),
+      onWatch: (item, watch) => checkout.onWatch(item, watch),
+      gathered: item => checkout.gathered(item),
+      serviceBroken: located => checkout.serviceBroken(located),
+      canStart,
+      factoryFor,
+      login: () => outside.login?.(),
+      leading: key => outside.leading?.(key) === true,
+      startStep: outside.startStep,
+      writePhase: outside.writePhase,
+    });
   }
 
   return {

@@ -257,6 +257,22 @@ export function rejectedSlots(
   return out;
 }
 
+/** Catalog ids that are not the recorded id. No catalog and no agent reject nothing. */
+export function catalogRejections(
+  factory: Factory,
+  catalog: ((agentId: string) => {mechanical: string; judgment: string}) | undefined,
+): {mode: SkillMode; id: string}[] {
+  if (!catalog || factory.agent === '') {
+    return [];
+  }
+  return rejectedSlots(factory, catalog(factory.agent));
+}
+
+/** Both slots are filled and the catalog rejected none of them. */
+export function slotsFilled(factory: Factory, rejected: readonly unknown[]): boolean {
+  return factory.mechanical !== '' && factory.judgment !== '' && rejected.length === 0;
+}
+
 export function takeBlock(
   factory: Factory,
   rejected: boolean,

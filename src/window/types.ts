@@ -41,7 +41,7 @@ export type WindowTicket = {
   /** Absent when the field is missing. An empty string is a present value. */
   sddService?: string;
   assignee?: string;
-  /** Absent when the adapter did not say. Closed is `false`. */
+  /** Absent when the port did not say. Closed is `false`. */
   open?: boolean;
   /** The merge is still ahead. The window does not discover this from a host. */
   mergeAhead?: boolean;
@@ -74,7 +74,7 @@ export type WindowOutside = {
   writePhase?: (key: string, phase: string) => void;
   /** A step the window's spy would start, in the gathered checkout. The models are the merged pair from that call. */
   startStep?: (checkout?: string, models?: {mechanical: string; judgment: string}) => void;
-  /** Open tickets this adapter can see. The window filters them by the watch list. */
+  /** Open tickets this port can see. The window filters them by the watch list. */
   tickets?: () => readonly WindowTicket[];
   /** Login of this process. Not a Tracker or GitHub call. */
   login?: () => string;

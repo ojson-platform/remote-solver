@@ -199,19 +199,22 @@ export function mergeFactory(home: Doc, overlay: Doc | null): Factory {
   return factory;
 }
 
-export function modelRow(doc: Doc): {text: string}[] {
-  const mechanical = slot(doc.models, 'mechanical');
-  const judgment = slot(doc.models, 'judgment');
+function missingModel(mechanical: string, judgment: string): string | undefined {
   if (mechanical === '' && judgment === '') {
-    return [{text: 'нужны модели mechanical и judgment'}];
+    return 'нужны модели mechanical и judgment';
   }
   if (mechanical === '') {
-    return [{text: 'нужна модель mechanical'}];
+    return 'нужна модель mechanical';
   }
   if (judgment === '') {
-    return [{text: 'нужна модель judgment'}];
+    return 'нужна модель judgment';
   }
-  return [];
+  return undefined;
+}
+
+export function modelRow(doc: Doc): {text: string}[] {
+  const text = missingModel(slot(doc.models, 'mechanical'), slot(doc.models, 'judgment'));
+  return text === undefined ? [] : [{text}];
 }
 
 export function agentRows(recorded: boolean, live: boolean): {text: string}[] | undefined {
@@ -230,12 +233,9 @@ export function gapRows(
   slots: readonly {mode: SkillMode; id: string}[],
 ): {text: string}[] {
   const out: {text: string}[] = [];
-  if (factory.mechanical === '' && factory.judgment === '') {
-    out.push({text: `${checkout} · нужны модели mechanical и judgment`});
-  } else if (factory.mechanical === '') {
-    out.push({text: `${checkout} · нужна модель mechanical`});
-  } else if (factory.judgment === '') {
-    out.push({text: `${checkout} · нужна модель judgment`});
+  const missing = missingModel(factory.mechanical, factory.judgment);
+  if (missing !== undefined) {
+    out.push({text: `${checkout} · ${missing}`});
   }
   for (const rejected of slots) {
     out.push({

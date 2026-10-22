@@ -34,7 +34,7 @@ export function labelHint(from: string, to: string): string {
 }
 
 /** A focus record starts with `sdd:focus`. Other machine comments keep the spy mark. */
-function postedIssue(body: string): string {
+function commentBody(body: string): string {
   return isFocusRecord(body) ? body : markRobot(body);
 }
 
@@ -358,7 +358,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       await run(['issue', 'edit', key, '--repo', repoSlug(), '--body', body]);
     },
     async comment(key, body) {
-      await run(['issue', 'comment', key, '--repo', repoSlug(), '--body', postedIssue(body)]);
+      await run(['issue', 'comment', key, '--repo', repoSlug(), '--body', commentBody(body)]);
     },
     async comments(key) {
       return JSON.parse(
@@ -726,7 +726,7 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
     },
     async comment(key, body) {
       calls.push('comment');
-      const posted = postedIssue(body);
+      const posted = commentBody(body);
       calls.push(`body:${posted}`);
       const list = issueComments.get(key) ?? [];
       list.push({body: posted});

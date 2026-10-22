@@ -3,11 +3,14 @@ import path from 'node:path';
 
 import {stringify} from 'yaml';
 
+import {ACTION_SKILL} from '../machine/route.ts';
+
 import {queueNames, readServiceFile, serviceFile} from './checkout.ts';
 import {
   isDoc,
   type Doc,
   type ServiceConfigGroup,
+  type ServiceHookChoice,
   type ServiceHookField,
   type ServiceIgnoreField,
   type ServiceQueueField,
@@ -67,6 +70,21 @@ function ignoreDraft(value: unknown): ServiceIgnoreDraft[] {
   return [{value: ignoreText(value), removeOnly: true}];
 }
 
+function blank(value: string): boolean {
+  return value.trim() === '';
+}
+
+/** A string or a list of strings. Anything else has no field. Spaces are not an entry. */
+function stringValues(value: unknown): string[] | undefined {
+  if (typeof value === 'string') {
+    return blank(value) ? [] : [value];
+  }
+  if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
+    return value.filter(item => !blank(item));
+  }
+  return undefined;
+}
+
 function hooksFrom(sdd: Doc): ServiceHookField[] {
   if (!isDoc(sdd.hooks)) {
     return [];
@@ -77,14 +95,55 @@ function hooksFrom(sdd: Doc): ServiceHookField[] {
       continue;
     }
     for (const [point, value] of Object.entries(points)) {
-      if (typeof value === 'string') {
-        hooks.push({action, point, values: [value]});
-      } else if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
-        hooks.push({action, point, values: [...value]});
+      const values = stringValues(value);
+      if (!values || values.length === 0) {
+        continue;
       }
+      hooks.push({action, point, values});
     }
   }
   return hooks;
+}
+
+const HOOK_POINTS = ['before', 'after'] as const;
+
+function hookId(action: string, point: string): string {
+  return `${action}\0${point}`;
+}
+
+/** Points already shown, plus a non-string value that still occupies the key. */
+function takenIds(draft: ServiceDraft, doc: Doc | null): Set<string> {
+  const taken = new Set(draft.hooks.map(item => hookId(item.action, item.point)));
+  const sdd = doc && isDoc(doc.sdd) ? doc.sdd : undefined;
+  const hooks = sdd && isDoc(sdd.hooks) ? sdd.hooks : undefined;
+  if (!hooks) {
+    return taken;
+  }
+  for (const [action, points] of Object.entries(hooks)) {
+    if (!isDoc(points)) {
+      continue;
+    }
+    for (const [point, value] of Object.entries(points)) {
+      if (stringValues(value) === undefined) {
+        taken.add(hookId(action, point));
+      }
+    }
+  }
+  return taken;
+}
+
+/** Free points of the actions the agent decision prints. An action with none is absent. */
+function hookChoices(draft: ServiceDraft, doc: Doc | null): ServiceHookChoice[] {
+  const taken = takenIds(draft, doc);
+  const choices: ServiceHookChoice[] = [];
+  for (const action of Object.keys(ACTION_SKILL)) {
+    for (const point of HOOK_POINTS) {
+      if (!taken.has(hookId(action, point))) {
+        choices.push({action, point});
+      }
+    }
+  }
+  return choices;
 }
 
 function textField(value: unknown, fallback: string): string {
@@ -148,7 +207,7 @@ function ignoreFields(ignore: readonly ServiceIgnoreDraft[]): ServiceIgnoreField
   });
 }
 
-function groupOf(checkout: string, draft: ServiceDraft): ServiceConfigGroup {
+function groupOf(checkout: string, draft: ServiceDraft, doc: Doc | null): ServiceConfigGroup {
   const queues = queueFields(draft.queues);
   const ignoreComments = ignoreFields(draft.ignore);
   const warned =
@@ -164,6 +223,7 @@ function groupOf(checkout: string, draft: ServiceDraft): ServiceConfigGroup {
     branchScope: draft.branchScope,
     ignoreComments,
     hooks: draft.hooks,
+    hookChoices: hookChoices(draft, doc),
   };
 }
 
@@ -171,29 +231,51 @@ function emptyService(checkout: string): ServiceConfigGroup {
   return {file: 'openspec/config.yaml', checkout, save: false};
 }
 
-function normalizeHooks(hooks: unknown): unknown {
-  if (!isDoc(hooks)) {
-    return hooks;
-  }
+/** Draft lists replace string points. A non-string stays. An empty list does not write the point. */
+function applyHooks(original: unknown, draft: readonly ServiceHookField[]): unknown {
   const next: Doc = {};
-  for (const [action, points] of Object.entries(hooks)) {
-    if (!isDoc(points)) {
-      next[action] = points;
-      continue;
-    }
-    const copy: Doc = {};
-    for (const [point, value] of Object.entries(points)) {
-      if (typeof value === 'string') {
-        copy[point] = [value];
-      } else if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
-        copy[point] = [...value];
-      } else {
-        copy[point] = value;
+  const seen = new Set<string>();
+  if (isDoc(original)) {
+    for (const [action, points] of Object.entries(original)) {
+      if (!isDoc(points)) {
+        next[action] = points;
+        continue;
+      }
+      const copy: Doc = {};
+      for (const [point, value] of Object.entries(points)) {
+        seen.add(hookId(action, point));
+        if (stringValues(value) === undefined) {
+          copy[point] = value;
+          continue;
+        }
+        const field = draft.find(item => item.action === action && item.point === point);
+        const values = field?.values.filter(item => !blank(item)) ?? [];
+        if (values.length > 0) {
+          copy[point] = values;
+        }
+      }
+      if (Object.keys(copy).length > 0) {
+        next[action] = copy;
       }
     }
-    next[action] = copy;
   }
-  return next;
+  for (const field of draft) {
+    if (seen.has(hookId(field.action, field.point))) {
+      continue;
+    }
+    const current = next[field.action];
+    if (current !== undefined && !isDoc(current)) {
+      continue;
+    }
+    const values = field.values.filter(item => !blank(item));
+    if (values.length === 0) {
+      continue;
+    }
+    const points: Doc = isDoc(current) ? {...current} : {};
+    points[field.point] = values;
+    next[field.action] = points;
+  }
+  return Object.keys(next).length > 0 ? next : undefined;
 }
 
 function writtenService(doc: Doc | null, draft: ServiceDraft): Doc {
@@ -223,8 +305,11 @@ function writtenService(doc: Doc | null, draft: ServiceDraft): Doc {
       sdd['ignore-comments'] = draft.ignore.map(item => item.value);
     }
   }
-  if (Object.prototype.hasOwnProperty.call(sdd, 'hooks')) {
-    sdd.hooks = normalizeHooks(sdd.hooks);
+  const hooks = applyHooks(sdd.hooks, draft.hooks);
+  if (hooks === undefined) {
+    delete sdd.hooks;
+  } else {
+    sdd.hooks = hooks;
   }
   next.sdd = sdd;
   return next;
@@ -275,7 +360,7 @@ export function openServiceGroup() {
       return emptyService(checkout);
     }
     if (serviceDirty && serviceDraft) {
-      return groupOf(checkout, serviceDraft);
+      return groupOf(checkout, serviceDraft, serviceDoc);
     }
     if (live.kind === 'missing') {
       serviceBaseline = null;
@@ -286,7 +371,7 @@ export function openServiceGroup() {
     serviceBaseline = live.text;
     serviceDoc = live.doc;
     serviceDraft = draftFrom(live.doc);
-    return groupOf(checkout, serviceDraft);
+    return groupOf(checkout, serviceDraft, serviceDoc);
   }
 
   function editable(): ServiceDraft | null {
@@ -416,7 +501,7 @@ export function openServiceGroup() {
       serviceDraft = null;
       return;
     }
-    if (!groupOf(checkout, serviceDraft).save) {
+    if (!groupOf(checkout, serviceDraft, serviceDoc).save) {
       return;
     }
     const disk = live.kind === 'missing' ? null : live.text;
@@ -433,6 +518,40 @@ export function openServiceGroup() {
     serviceDoc = next;
     serviceDraft = draftFrom(next);
     serviceDirty = false;
+  }
+
+  function chooseHook(action: string, point: string, first: string): void {
+    if (blank(first)) {
+      return;
+    }
+    const draft = editable();
+    if (!draft) {
+      return;
+    }
+    const allowed = hookChoices(draft, serviceDoc).some(
+      item => item.action === action && item.point === point,
+    );
+    if (!allowed) {
+      return;
+    }
+    draft.hooks.push({action, point, values: [first]});
+  }
+
+  function setHook(action: string, point: string, values: readonly string[]): void {
+    const draft = editable();
+    if (!draft) {
+      return;
+    }
+    const index = draft.hooks.findIndex(item => item.action === action && item.point === point);
+    if (index < 0) {
+      return;
+    }
+    const next = values.filter(item => !blank(item));
+    if (next.length === 0) {
+      draft.hooks.splice(index, 1);
+      return;
+    }
+    draft.hooks[index] = {action, point, values: next};
   }
 
   function childQueue(): string {
@@ -455,6 +574,8 @@ export function openServiceGroup() {
     addIgnore,
     setIgnore,
     removeIgnore,
+    chooseHook,
+    setHook,
     save,
     childQueue,
   };

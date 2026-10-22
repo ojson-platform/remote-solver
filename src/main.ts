@@ -45,6 +45,7 @@ export async function driveIssue(box: Machine, key: string): Promise<number> {
     }
     console.log(`\n#${key} ${decision.phase} → ${decision.action} (${decision.skill})`);
     const before = await runMarks(key, box);
+    const record = await box.tracker.issue(key);
     const outcome = await runtime.run({
       skill: decision.skill,
       action: decision.action,
@@ -52,6 +53,7 @@ export async function driveIssue(box: Machine, key: string): Promise<number> {
       phase: decision.phase,
       pull: decision.pr,
       mode: modeOfSkill(path.join(solverRoot(), 'skills/sdd-flow/steps'), decision.skill),
+      sddHooks: record.sddHooks,
     });
     if (outcome.sessionId) {
       console.log(`#${key} session ${outcome.sessionId}`);
@@ -61,7 +63,8 @@ export async function driveIssue(box: Machine, key: string): Promise<number> {
         `#${key} tokens in ${outcome.usage.inputTokens} out ${outcome.usage.outputTokens}`,
       );
     }
-    const signal = outcome.signal ?? observedSignal(outcome.commits, before, await runMarks(key, box));
+    const signal =
+      outcome.signal ?? observedSignal(outcome.commits, before, await runMarks(key, box));
     await endStep(key, {...outcome, signal}, box);
     if (outcome.commits === 0) {
       console.error(

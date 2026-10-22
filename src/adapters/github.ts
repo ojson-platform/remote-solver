@@ -557,6 +557,8 @@ export type MemoryIssue = {
   assignee?: string;
   /** Directory of the service. Empty or absent means the chat's directory. */
   service?: string;
+  /** Cycle hook field. The adapter does not create it. */
+  sddHooks?: unknown;
 };
 
 export type MemorySeed = {
@@ -599,6 +601,7 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
       labels: [...issue.labels],
       assignee: issue.assignee ?? seed.user ?? 'robot',
       service: issue.service ?? '',
+      ...(issue.sddHooks !== undefined ? {sddHooks: issue.sddHooks} : {}),
       parent: issue.parent ?? links.parent,
       dependsOn: issue.dependsOn ?? links.dependsOn,
     };

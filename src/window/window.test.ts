@@ -7,9 +7,10 @@ import {test} from 'vitest';
 import {parse} from 'yaml';
 
 import {memoryPorts} from '../adapters/github.ts';
-import type {FileSource} from '../machine/port.ts';
-import {loadCycle} from '../machine/snapshot.ts';
 import {changeDir} from '../machine/naming.ts';
+import type {FileSource} from '../machine/port.ts';
+import {ACTION_SKILL} from '../machine/route.ts';
+import {loadCycle} from '../machine/snapshot.ts';
 import {openWindow, type WindowTicket} from './window.ts';
 
 function scratch(): {dir: string; home: string} {
@@ -4419,12 +4420,75 @@ test('the service-config group shows no fields when the agent is silent and the 
   rmSync(dir, {recursive: true, force: true});
 });
 
-test('the service-config group writes one hook string back as a list and leaves a number', () => {
+function openHookGroup(body: string, over: Partial<WindowTicket> = {}) {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
   mkdirSync(checkout, {recursive: true});
-  const file = writeServiceYaml(
-    checkout,
+  const file = writeServiceYaml(checkout, body);
+  writeLaunch(home, ['alpha'], {arcadia});
+  const item = cycle('1', 'implementing', over);
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {login: () => MANAGER, tickets: () => [item]},
+  );
+  window.openCard('1');
+  return {dir, file, window, item};
+}
+
+const queues = ['sdd:', '  queues:', '    - name: alpha', ''].join('\n');
+
+function proveABlankStringDoesNotCreateAPoint(): void {
+  const {dir, file, window} = openHookGroup(queues);
+  const choices = window.serviceConfig().hookChoices ?? [];
+  assert.deepEqual([...new Set(choices.map(item => item.action))], Object.keys(ACTION_SKILL));
+  assert.deepEqual(
+    choices.filter(item => item.action === 'archive').map(item => item.point),
+    ['before', 'after'],
+  );
+  window.chooseServiceHook('archive', 'before', '');
+  window.chooseServiceHook('archive', 'before', '   ');
+  window.chooseServiceHook('custom', 'before', 'no');
+  window.chooseServiceHook('archive', 'during', 'no');
+  window.saveServiceConfig();
+  assert.equal(readServiceYaml(file).sdd?.hooks, undefined);
+  assert.equal(
+    window
+      .serviceConfig()
+      .hookChoices?.some(item => item.action === 'archive' && item.point === 'before'),
+    true,
+  );
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheLastStringRemovesThePoint(): void {
+  const {dir, file, window} = openHookGroup(
+    [
+      'sdd:',
+      '  queues:',
+      '    - name: alpha',
+      '  hooks:',
+      '    archive:',
+      '      before:',
+      '        - only',
+      '      after:',
+      '        - stay',
+      '',
+    ].join('\n'),
+  );
+  assert.equal(
+    window.serviceConfig().hookChoices?.some(item => item.action === 'archive'),
+    false,
+  );
+  window.setServiceHook('archive', 'before', []);
+  window.saveServiceConfig();
+  const hooks = readServiceYaml(file).sdd?.hooks;
+  assert.equal(hooks?.archive?.before, undefined);
+  assert.deepEqual(hooks?.archive?.after, ['stay']);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveASingleStringIsWrittenBackAsAList(): void {
+  const {dir, file, window} = openHookGroup(
     [
       'sdd:',
       '  queues:',
@@ -4440,12 +4504,6 @@ test('the service-config group writes one hook string back as a list and leaves 
       '',
     ].join('\n'),
   );
-  writeLaunch(home, ['alpha'], {arcadia});
-  const window = openWindow(
-    {homePath: home, adapter: 'tracker'},
-    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
-  );
-  window.openSettings();
   assert.deepEqual(window.serviceConfig().hooks, [
     {action: 'review', point: 'before', values: ['keep me']},
     {action: 'other', point: 'before', values: ['one', 'two']},
@@ -4455,6 +4513,129 @@ test('the service-config group writes one hook string back as a list and leaves 
   assert.deepEqual(hooks?.review?.before, ['keep me']);
   assert.equal(hooks?.review?.after, 4);
   assert.deepEqual(hooks?.other?.before, ['one', 'two']);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheWindowDoesNotWriteTheField(): void {
+  const {dir, window, item} = openHookGroup(queues, {
+    sddHooks: {archive: {before: 'keep the cycle'}},
+  });
+  window.chooseServiceHook('archive', 'before', 'service line');
+  window.saveServiceConfig();
+  assert.deepEqual(item.sddHooks, {archive: {before: 'keep the cycle'}});
+  assert.deepEqual(window.sidebar(), [
+    {
+      kind: 'hook',
+      points: [{action: 'archive', point: 'before', paragraph: 'keep the cycle'}],
+    },
+  ]);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+test('a free point is written as a list and a later string skips the choice', () => {
+  const {dir, file, window} = openHookGroup(queues);
+  window.chooseServiceHook('archive', 'before', 'first\nstill');
+  window.saveServiceConfig();
+  assert.deepEqual(readServiceYaml(file).sdd?.hooks?.archive?.before, ['first\nstill']);
+  assert.equal(
+    window
+      .serviceConfig()
+      .hookChoices?.some(item => item.action === 'archive' && item.point === 'before'),
+    false,
+  );
+  window.setServiceHook('archive', 'before', ['first\nstill', 'second']);
+  window.chooseServiceHook('archive', 'before', 'not through the choice');
+  window.saveServiceConfig();
+  assert.deepEqual(readServiceYaml(file).sdd?.hooks?.archive?.before, ['first\nstill', 'second']);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('an action leaves the free list when both points are taken', () => {
+  const {dir, file, window} = openHookGroup(
+    [
+      'sdd:',
+      '  queues:',
+      '    - name: alpha',
+      '  hooks:',
+      '    archive:',
+      '      before:',
+      '        - kept',
+      '',
+    ].join('\n'),
+  );
+  assert.deepEqual(
+    window
+      .serviceConfig()
+      .hookChoices?.filter(item => item.action === 'archive')
+      .map(item => item.point),
+    ['after'],
+  );
+  window.chooseServiceHook('archive', 'after', 'tail');
+  assert.equal(
+    window.serviceConfig().hookChoices?.some(item => item.action === 'archive'),
+    false,
+  );
+  assert.equal(
+    window.serviceConfig().hookChoices?.some(item => item.action === 'create-proposal'),
+    true,
+  );
+  window.saveServiceConfig();
+  const hooks = readServiceYaml(file).sdd?.hooks;
+  assert.deepEqual(hooks?.archive?.before, ['kept']);
+  assert.deepEqual(hooks?.archive?.after, ['tail']);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('an unknown point is edited and is not offered', () => {
+  const {dir, file, window} = openHookGroup(
+    [
+      'sdd:',
+      '  queues:',
+      '    - name: alpha',
+      '  hooks:',
+      '    custom:',
+      '      during:',
+      '        - old',
+      '      before: 4',
+      '',
+    ].join('\n'),
+  );
+  assert.deepEqual(window.serviceConfig().hooks, [
+    {action: 'custom', point: 'during', values: ['old']},
+  ]);
+  assert.equal(
+    window
+      .serviceConfig()
+      .hookChoices?.some(item => item.action === 'custom' || item.point === 'during'),
+    false,
+  );
+  window.setServiceHook('custom', 'during', ['new']);
+  window.chooseServiceHook('custom', 'before', 'no');
+  window.setServiceHook('custom', 'before', ['no']);
+  window.saveServiceConfig();
+  const hooks = readServiceYaml(file).sdd?.hooks;
+  assert.deepEqual(hooks?.custom?.during, ['new']);
+  assert.equal(hooks?.custom?.before, 4);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('spaces stay out of a hook list and the manager can reorder it', () => {
+  const {dir, file, window} = openHookGroup(
+    [
+      'sdd:',
+      '  queues:',
+      '    - name: alpha',
+      '  hooks:',
+      '    archive:',
+      '      before:',
+      '        - one',
+      '        - two',
+      '',
+    ].join('\n'),
+  );
+  window.setServiceHook('archive', 'before', ['two', '   ', '', 'one']);
+  window.saveServiceConfig();
+  assert.deepEqual(readServiceYaml(file).sdd?.hooks?.archive?.before, ['two', 'one']);
   rmSync(dir, {recursive: true, force: true});
 });
 
@@ -4684,6 +4865,28 @@ spec('focus', () => {
   requirement('A gap is one pointer and a why line', () => {
     scenario('A review place opens the port URL', async () => {
       await proveAReviewPlaceOpensThePortUrl();
+    });
+  });
+});
+
+spec('hook', () => {
+  requirement('A service hook is a list of strings at sdd.hooks', () => {
+    scenario('A blank string does not create a point', () => {
+      proveABlankStringDoesNotCreateAPoint();
+    });
+    scenario('The last string removes the point', () => {
+      proveTheLastStringRemovesThePoint();
+    });
+    scenario('A single string is written back as a list', () => {
+      proveASingleStringIsWrittenBackAsAList();
+    });
+    scenario('A non-string hook value is left in place', () => {
+      proveASingleStringIsWrittenBackAsAList();
+    });
+  });
+  requirement('The cycle keeps one sddHooks map', () => {
+    scenario('The window does not write the field', () => {
+      proveTheWindowDoesNotWriteTheField();
     });
   });
 });

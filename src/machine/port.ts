@@ -22,6 +22,11 @@ export type IssueRecord = {
    * Empty when the chat's directory is the service.
    */
   service?: string;
+  /**
+   * Cycle hook field the adapter already returned.
+   * Absent when the adapter did not. The machine does not create the field.
+   */
+  sddHooks?: unknown;
   parent?: IssueKey;
   dependsOn: IssueKey[];
 };
@@ -160,6 +165,8 @@ export type SkillRun = {
   pull: string;
   mode: SkillMode;
   resumeSession?: string;
+  /** Cycle hook field. The machine does not create it. */
+  sddHooks?: unknown;
 };
 
 /** What one skill run changed. Zero commits leaves the issue idle. */

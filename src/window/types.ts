@@ -153,6 +153,9 @@ export type ServiceHookField = {
   values: string[];
 };
 
+/** One free point of an action the agent decision prints. */
+export type ServiceHookChoice = {action: string; point: string};
+
 /** The service-config group. It shows `openspec/config.yaml` of the chosen checkout. */
 export type ServiceConfigGroup = {
   file: 'openspec/config.yaml';
@@ -163,6 +166,8 @@ export type ServiceConfigGroup = {
   branchScope?: string;
   ignoreComments?: ServiceIgnoreField[];
   hooks?: ServiceHookField[];
+  /** Free points. An action is absent when both of its points are taken. */
+  hookChoices?: ServiceHookChoice[];
 };
 
 export type CardState = {

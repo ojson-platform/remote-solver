@@ -33,6 +33,7 @@ export type {
   PhaseRow,
   PoolCard,
   ServiceConfigGroup,
+  ServiceHookChoice,
   ServiceHookField,
   ServiceIgnoreField,
   ServiceQueueField,
@@ -229,6 +230,10 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     addServiceIgnore: (value: string) => service.addIgnore(value),
     setServiceIgnore: (index: number, value: string) => service.setIgnore(index, value),
     removeServiceIgnore: (index: number) => service.removeIgnore(index),
+    chooseServiceHook: (action: string, point: string, first: string) =>
+      service.chooseHook(action, point, first),
+    setServiceHook: (action: string, point: string, values: readonly string[]) =>
+      service.setHook(action, point, values),
     saveServiceConfig: () => service.save(),
     chooseOverlayAgent: (agentId: string) => overlaySession.chooseAgent(agentId),
     clearOverlayAgent: () => overlaySession.clearAgent(),

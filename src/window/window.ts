@@ -1332,6 +1332,11 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
         if (item.assignee !== manager) {
           continue;
         }
+        const checkout = view.cards.find(entry => entry.key === item.key);
+        const stopped = (item.openPullRequests ?? 0) > 1 || (checkout?.reason ?? '') !== '';
+        if (stopped) {
+          continue;
+        }
         outside.writePhase?.(item.key, 'proposing');
       }
     },

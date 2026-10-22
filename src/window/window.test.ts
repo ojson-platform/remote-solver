@@ -2074,6 +2074,124 @@ test('a phaseless ticket assigned to this login stays in the pool when a model s
   rmSync(dir, {recursive: true, force: true});
 });
 
+test('two open pull requests keep an assigned ticket in the pool and spy does not set proposing', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const tickets = [
+    ticket({
+      key: '1',
+      queue: 'alpha',
+      sddService: 'services/billing',
+      assignee: MANAGER,
+      title: 'Split',
+      openPullRequests: 2,
+      labels: ['sdd:cycle'],
+    }),
+  ];
+  const phases: {key: string; phase: string}[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => tickets,
+      writePhase: (key, phase) => {
+        phases.push({key, phase});
+        const found = tickets.find(item => item.key === key);
+        if (found && !found.labels.includes(`sdd:${phase}`)) {
+          found.labels = [...found.labels, `sdd:${phase}`];
+        }
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  window.spy();
+  assert.deepEqual(phases, []);
+  const card = window.board().pool.find(item => item.key === '1');
+  assert.ok(card);
+  assert.equal(card.reason, 'несколько pull request');
+  assert.equal(columnCards(window.board(), 'proposing')?.length, 0);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a missing checkout keeps an assigned ticket in the pool and spy does not set proposing', () => {
+  const {dir, home, arcadia} = yard();
+  writeLaunch(home, ['alpha'], {arcadia});
+  const tickets = [
+    ticket({
+      key: '1',
+      queue: 'alpha',
+      sddService: 'services/missing',
+      assignee: MANAGER,
+      title: 'Gone',
+      labels: ['sdd:cycle'],
+    }),
+  ];
+  const phases: {key: string; phase: string}[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => tickets,
+      writePhase: (key, phase) => {
+        phases.push({key, phase});
+        const found = tickets.find(item => item.key === key);
+        if (found && !found.labels.includes(`sdd:${phase}`)) {
+          found.labels = [...found.labels, `sdd:${phase}`];
+        }
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  window.spy();
+  assert.deepEqual(phases, []);
+  const card = window.board().pool.find(item => item.key === '1');
+  assert.ok(card);
+  assert.equal(card.reason, 'каталога нет');
+  assert.equal(columnCards(window.board(), 'proposing')?.length, 0);
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('one open pull request lets spy set proposing for an assigned ticket', () => {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const tickets = [
+    ticket({
+      key: '1',
+      queue: 'alpha',
+      sddService: 'services/billing',
+      assignee: MANAGER,
+      title: 'One',
+      openPullRequests: 1,
+      labels: ['sdd:cycle'],
+    }),
+  ];
+  const phases: {key: string; phase: string}[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => tickets,
+      writePhase: (key, phase) => {
+        phases.push({key, phase});
+        const found = tickets.find(item => item.key === key);
+        if (found && !found.labels.includes(`sdd:${phase}`)) {
+          found.labels = [...found.labels, `sdd:${phase}`];
+        }
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  window.spy();
+  assert.deepEqual(phases, [{key: '1', phase: 'proposing'}]);
+  const board = window.board();
+  assert.deepEqual(board.pool, []);
+  assert.deepEqual(
+    columnCards(board, 'proposing')?.map(card => card.key),
+    ['1'],
+  );
+  rmSync(dir, {recursive: true, force: true});
+});
+
 test('take on a phaseless ticket sets the assignee and spy then sets proposing', () => {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);

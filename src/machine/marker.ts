@@ -43,6 +43,17 @@ export function markRobot(body: string): string {
   return body.startsWith('🤖') ? body : `${ROBOT_MARK}${body}`;
 }
 
+/** First line of an issue comment, without the robot mark. */
+export function unmarkedLine(body: string): string {
+  const first = (body.split('\n', 1)[0] ?? '').trim();
+  return first.startsWith(ROBOT_MARK) ? first.slice(ROBOT_MARK.length).trim() : first;
+}
+
+/** A focus record. The robot mark on the first line does not change that. */
+export function isFocusRecord(body: string): boolean {
+  return unmarkedLine(body) === 'sdd:focus';
+}
+
 /** Any marker token, well-formed or not, or the robot mark. Text a reviewer remark must not carry. */
 export function mentionsGrammar(body: string): boolean {
   return body.includes('🤖') || TOKENS.some(token => body.includes(token));

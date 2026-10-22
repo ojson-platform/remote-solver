@@ -2,7 +2,7 @@ import type {FileSource, Review, Tracker, Vcs} from './port.ts';
 
 import path from 'node:path';
 
-import {ROBOT_MARK} from './marker.ts';
+import {isFocusRecord, unmarkedLine} from './marker.ts';
 import {changeDir} from './naming.ts';
 import {markerOf} from './review.ts';
 
@@ -23,7 +23,10 @@ export type ReviewPlace = {file: string; line: number; causes: readonly string[]
 
 type LayerName = 'Change' | 'Plan' | 'Specify' | 'Design' | 'Tasks' | 'Code';
 
-const ORDER: readonly LayerName[] = ['Change', 'Plan', 'Specify', 'Design', 'Tasks', 'Code'];
+/** Layer names the focus record writes, in record order. */
+export const FOCUS_LAYERS = ['Change', 'Plan', 'Specify', 'Design', 'Tasks', 'Code'] as const;
+
+const ORDER: readonly LayerName[] = FOCUS_LAYERS;
 
 const MIRROR: Record<string, Exclude<LayerName, 'Change'>> = {
   proposal: 'Plan',
@@ -57,19 +60,10 @@ function signalOf(outcome: {commits: number; signal?: Signal | null}): Signal | 
   return null;
 }
 
-function bareFocus(line: string): string {
-  const trimmed = line.trim();
-  return trimmed.startsWith(ROBOT_MARK) ? trimmed.slice(ROBOT_MARK.length).trim() : trimmed;
-}
-
-function isFocus(body: string): boolean {
-  return bareFocus(body.split('\n', 1)[0] ?? '') === 'sdd:focus';
-}
-
 function canonical(body: string): string {
   const text = body.replace(/\s+$/, '');
   const split = text.indexOf('\n');
-  const first = bareFocus(split === -1 ? text : text.slice(0, split));
+  const first = unmarkedLine(split === -1 ? text : text.slice(0, split));
   const rest = split === -1 ? '' : text.slice(split + 1).replace(/\s+$/, '');
   return rest === '' ? first : `${first}\n${rest}`;
 }
@@ -77,7 +71,7 @@ function canonical(body: string): string {
 function latestFocus(comments: readonly FocusComment[]): string | undefined {
   let body: string | undefined;
   for (const comment of comments) {
-    if (comment.manager || !isFocus(comment.body)) {
+    if (comment.manager || !isFocusRecord(comment.body)) {
       continue;
     }
     body = comment.body;

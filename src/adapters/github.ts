@@ -14,7 +14,7 @@ import type {
 import {execFileSync, spawn} from 'node:child_process';
 
 import {authorIgnored} from '../machine/ignore.ts';
-import {markRobot} from '../machine/marker.ts';
+import {isFocusRecord, markRobot} from '../machine/marker.ts';
 import {pullTitlePrefix} from '../machine/naming.ts';
 import {spokeByRobot} from '../machine/review.ts';
 
@@ -33,8 +33,7 @@ export function labelHint(from: string, to: string): string {
 
 /** A focus record starts with `sdd:focus`. Other machine comments keep the spy mark. */
 function postedIssue(body: string): string {
-  const first = (body.split('\n', 1)[0] ?? '').trim();
-  return first === 'sdd:focus' ? body : markRobot(body);
+  return isFocusRecord(body) ? body : markRobot(body);
 }
 
 export type Repo = {owner: string; name: string; slug: string};

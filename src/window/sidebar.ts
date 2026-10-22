@@ -1,7 +1,8 @@
+import {isFocusRecord} from '../machine/marker.ts';
 import {phaseOf} from '../machine/phase.ts';
 
 import {decisionCount, questionCount, reasonParts, slotOf} from './board.ts';
-import {focusPlaque, isFocusComment} from './focus.ts';
+import {focusPlaque} from './focus.ts';
 import {
   isDoc,
   type CardState,
@@ -17,7 +18,7 @@ function askBody(comments: readonly WindowComment[] | undefined): string | undef
   const list = comments ?? [];
   for (let index = list.length - 1; index >= 0; index -= 1) {
     const comment = list[index];
-    if (!comment || isFocusComment(comment.body)) {
+    if (!comment || isFocusRecord(comment.body)) {
       continue;
     }
     return comment.body;

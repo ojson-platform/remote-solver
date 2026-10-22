@@ -1,21 +1,13 @@
 import type {WindowComment} from './types.ts';
 
-import {ROBOT_MARK} from '../machine/marker.ts';
-
-const LAYERS = ['Change', 'Plan', 'Specify', 'Design', 'Tasks', 'Code'] as const;
-
-/** The latest comment whose first line is `sdd:focus`. A manager comment is not one. */
-export function isFocusComment(body: string): boolean {
-  const first = (body.split('\n', 1)[0] ?? '').trim();
-  const bare = first.startsWith(ROBOT_MARK) ? first.slice(ROBOT_MARK.length).trim() : first;
-  return bare === 'sdd:focus';
-}
+import {FOCUS_LAYERS} from '../machine/focus.ts';
+import {isFocusRecord} from '../machine/marker.ts';
 
 /** Body after the marker of the latest focus comment. */
 export function focusPlaque(comments: readonly WindowComment[] | undefined): string | undefined {
   let body: string | undefined;
   for (const comment of comments ?? []) {
-    if (comment.manager || !isFocusComment(comment.body)) {
+    if (comment.manager || !isFocusRecord(comment.body)) {
       continue;
     }
     body = comment.body.split('\n').slice(1).join('\n');
@@ -31,7 +23,7 @@ function layerLines(body: string): {name: string; rest: string}[] {
       continue;
     }
     const token = trimmed.split(/\s+/)[0] ?? '';
-    if (!(LAYERS as readonly string[]).includes(token)) {
+    if (!(FOCUS_LAYERS as readonly string[]).includes(token)) {
       continue;
     }
     lines.push({name: token, rest: trimmed.slice(token.length).trim()});

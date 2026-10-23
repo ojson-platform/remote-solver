@@ -49,7 +49,11 @@ export type WindowTicket = {
   parent?: string;
   dependsOn?: readonly string[];
   openPullRequests?: number;
+  /** The single open pull request has a non-empty diff. The window does not read git. */
+  diff?: boolean;
   comments?: readonly WindowComment[];
+  /** Issue description. The spine reads the mirror between `sdd:begin` and `sdd:end`. */
+  body?: string;
   /**
    * Cycle hook field the port already returned.
    * A map of action to point, an ordered list of `{action, point, value}`, or another value.
@@ -82,8 +86,11 @@ export type WindowOutside = {
   leading?: (key: string) => boolean;
   /** Write `sddService`. The next read sees it. */
   writeService?: (key: string, service: string) => void;
-  /** Labels a `ticket-fields` role adds. The window calls this port. */
-  editLabels?: (key: string, add: readonly string[]) => void;
+  /**
+   * Labels the window adds or removes.
+   * A role adds. A gate button adds or removes one auto label.
+   */
+  editLabels?: (key: string, add: readonly string[], remove?: readonly string[]) => void;
   /**
    * Replace `sddHooks` with the role text.
    * The window does not POST the organization field.
@@ -103,7 +110,7 @@ export type WindowOutside = {
 
 /** Threads and the last conversation comment the review port already returned. */
 export type WindowReview = {
-  threads: readonly {marker?: string | null; lines: readonly string[]}[];
+  threads: readonly {marker?: string | null; file?: string; lines: readonly string[]}[];
   conversation?: {last?: {marker?: string | null; body: string} | null} | null;
 };
 
@@ -212,14 +219,28 @@ export type CardState = {
   queue: string;
 };
 
-/** A pool card. `take` is the same gesture as dragging the card onto the board. */
+/** A pool card. `take` is the same gesture as dragging the tile onto a station. */
 export type PoolCard = {
   key: string;
   title: string;
   take: true;
   takeDisabled?: true;
+  /** This ticket's break silences Take: a checkout break or several pull requests. */
+  alarm?: true;
   icon?: true;
   reason?: string;
+  /** Station of a phase that already exists. A phaseless ticket has none. */
+  station?: ColumnName;
+  phaseRow?: PhaseRow;
+  layers?: string;
+  /** Ask text while `sdd:wait-human` is present. */
+  ask?: string;
+  /** Unanswered thread or conversation text. */
+  unanswered?: string;
+  /** Doors on stations other than the plaque. Absent when none exist. */
+  doors?: Partial<Record<ColumnName, StationDoor>>;
+  /** Future gates whose auto label is already set. Absent when every gate is on. */
+  gateOff?: Partial<Record<GateStation, true>>;
   /** Gathered checkout copied from the checkout card. */
   checkout?: string;
   /** Tracker port field, or the GitHub label `queueOf` found. */
@@ -240,16 +261,54 @@ export const COLUMN_NAMES = [
 
 export type ColumnName = (typeof COLUMN_NAMES)[number];
 
+export const GATE_STATIONS = ['proposing', 'specifying', 'designing', 'accepting'] as const;
+
+export type GateStation = (typeof GATE_STATIONS)[number];
+
+/** The one label a gate button writes. The window does not write the phase. */
+export const GATE_LABEL: Record<GateStation, string> = {
+  proposing: 'sdd:auto-plan',
+  specifying: 'sdd:auto-spec',
+  designing: 'sdd:auto-design',
+  accepting: 'sdd:auto-merge',
+};
+
+export function isGateStation(name: string): name is GateStation {
+  return (GATE_STATIONS as readonly string[]).includes(name);
+}
+
 export type PhaseRow = number | {done: number; open: number} | 'green' | 'red' | 'pending';
 
-/** A column card. `icon` is present or absent: one mark, no letters. */
+export type DoorKind = 'plan' | 'spec' | 'design' | 'tasks' | 'code' | 'check';
+
+/** A circle on a station that is not the plaque. `specs` is set only when several capabilities exist. */
+export type StationDoor = {
+  kind: DoorKind;
+  file?: string;
+  specs?: readonly {id: string; file: string}[];
+  /** A `note` or `out` marker names this layer. */
+  dot?: true;
+  /** The check state is red. */
+  bad?: true;
+};
+
+/** A cycle on a station. `occasion` stays when the mark is hidden. */
 export type CycleCard = {
   key: string;
   title: string;
   icon?: true;
+  /** An icon occasion, even when the mark is hidden. */
+  occasion?: true;
   reason?: string;
   phaseRow?: PhaseRow;
   layers?: string;
+  /** Ask text while `sdd:wait-human` is present. */
+  ask?: string;
+  /** Unanswered thread or conversation text. */
+  unanswered?: string;
+  doors?: Partial<Record<ColumnName, StationDoor>>;
+  /** Future gates whose auto label is already set. Absent when every gate is on. */
+  gateOff?: Partial<Record<GateStation, true>>;
 };
 
 export type BoardState = {

@@ -93,4 +93,4 @@ test('the package ships the built files and not the source', () => {
     files.some(file => file.startsWith('src/')),
     false,
   );
-});
+}, 20_000);

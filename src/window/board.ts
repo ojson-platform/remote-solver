@@ -1,18 +1,24 @@
-import {existsSync, readFileSync} from 'node:fs';
+import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 
 import {HEADINGS} from '../machine/change.ts';
+import {isFocusRecord} from '../machine/marker.ts';
 import {changeDir} from '../machine/naming.ts';
 import {GATE_CLOSES, GATE_PHASES, phaseOf, type Phase} from '../machine/phase.ts';
 
 import {focusLayers} from './focus.ts';
 import {
   COLUMN_NAMES,
+  GATE_LABEL,
+  GATE_STATIONS,
   type CardState,
   type ColumnName,
   type CycleCard,
+  type GateStation,
   type PhaseRow,
   type PoolCard,
+  type StationDoor,
+  type WindowReview,
   type WindowTicket,
 } from './types.ts';
 
@@ -265,6 +271,224 @@ export function reasonParts(
   return parts;
 }
 
+function walkFiles(dir: string): string[] {
+  if (!existsSync(dir)) {
+    return [];
+  }
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, {withFileTypes: true})) {
+    const abs = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...walkFiles(abs));
+    } else if (entry.isFile()) {
+      out.push(abs);
+    }
+  }
+  return out;
+}
+
+function specFiles(checkout: string, key: string): {id: string; file: string}[] {
+  const specsDir = path.join(checkout, changeDir(key), 'specs');
+  const found: {id: string; file: string}[] = [];
+  for (const abs of walkFiles(specsDir)) {
+    if (!abs.endsWith(`${path.sep}spec.md`)) {
+      continue;
+    }
+    const rel = path.relative(specsDir, abs);
+    const id = path.dirname(rel);
+    if (id === '.') {
+      continue;
+    }
+    found.push({id, file: path.join(changeDir(key), 'specs', rel)});
+  }
+  found.sort((left, right) => left.id.localeCompare(right.id));
+  return found;
+}
+
+function stationOfFile(file: string): ColumnName | null {
+  const base = path.basename(file);
+  if (base === 'proposal.md') {
+    return 'proposing';
+  }
+  if (base === 'spec.md' || file.includes(`${path.sep}specs${path.sep}`)) {
+    return 'specifying';
+  }
+  if (base === 'design.md') {
+    return 'designing';
+  }
+  if (base === 'tasks.md') {
+    return 'tasking';
+  }
+  if (file !== '') {
+    return 'implementing';
+  }
+  return null;
+}
+
+function markedStations(
+  threads: readonly {marker?: string | null; file?: string}[] | undefined,
+): Set<ColumnName> {
+  const found = new Set<ColumnName>();
+  for (const thread of threads ?? []) {
+    if (thread.marker !== 'note' && thread.marker !== 'out') {
+      continue;
+    }
+    const station = thread.file ? stationOfFile(thread.file) : null;
+    if (station) {
+      found.add(station);
+    }
+  }
+  return found;
+}
+
+function changeFile(checkout: string, key: string, name: string): string | undefined {
+  const rel = path.join(changeDir(key), name);
+  return existsSync(path.join(checkout, rel)) ? rel : undefined;
+}
+
+/** Doors on every station except the plaque. The current station stays the plaque. */
+function stationDoors(
+  item: WindowTicket,
+  column: ColumnName,
+  checkout: string | undefined,
+  parts: readonly string[],
+  marked: ReadonlySet<ColumnName>,
+): Partial<Record<ColumnName, StationDoor>> | undefined {
+  const doors: Partial<Record<ColumnName, StationDoor>> = {};
+  const put = (name: ColumnName, door: StationDoor) => {
+    if (name === column) {
+      return;
+    }
+    if (marked.has(name)) {
+      door.dot = true;
+    }
+    doors[name] = door;
+  };
+  if (checkout) {
+    const proposal = changeFile(checkout, item.key, 'proposal.md');
+    if (proposal) {
+      put('proposing', {kind: 'plan', file: proposal});
+    }
+    const specs = specFiles(checkout, item.key);
+    if (specs.length === 1) {
+      put('specifying', {kind: 'spec', file: specs[0]?.file});
+    } else if (specs.length > 1) {
+      put('specifying', {kind: 'spec', specs});
+    }
+    const design = changeFile(checkout, item.key, 'design.md');
+    if (design) {
+      put('designing', {kind: 'design', file: design});
+    }
+    const tasks = changeFile(checkout, item.key, 'tasks.md');
+    if (tasks) {
+      put('tasking', {kind: 'tasks', file: tasks});
+    }
+  }
+  if (item.openPullRequests === 1 && item.diff === true) {
+    put('implementing', {kind: 'code'});
+  }
+  if (item.checks === 'green' || item.checks === 'red' || item.checks === 'pending') {
+    put('verifying', {kind: 'check', ...(item.checks === 'red' ? {bad: true as const} : {})});
+  }
+  if (item.open !== false && parts.some(part => part.includes('мерж'))) {
+    put('accepting', {kind: 'check'});
+  }
+  return Object.keys(doors).length > 0 ? doors : undefined;
+}
+
+function gateOffOf(labels: readonly string[]): CycleCard['gateOff'] {
+  const off: Partial<Record<GateStation, true>> = {};
+  for (const name of GATE_STATIONS) {
+    if (labels.includes(GATE_LABEL[name])) {
+      off[name] = true;
+    }
+  }
+  return Object.keys(off).length > 0 ? off : undefined;
+}
+
+function withGates(card: PoolCard, labels: readonly string[]): PoolCard {
+  const off = gateOffOf(labels);
+  if (off) {
+    card.gateOff = off;
+  }
+  return card;
+}
+
+function askText(item: WindowTicket): string | undefined {
+  if (!item.labels.includes('sdd:wait-human')) {
+    return undefined;
+  }
+  const list = item.comments ?? [];
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const comment = list[index];
+    if (!comment || isFocusRecord(comment.body)) {
+      continue;
+    }
+    return comment.body;
+  }
+  return undefined;
+}
+
+function unansweredText(review: WindowReview | undefined): string | undefined {
+  if (!review) {
+    return undefined;
+  }
+  const thread = review.threads.find(item => !item.marker);
+  if (thread && thread.lines.length > 0) {
+    return thread.lines.join('\n');
+  }
+  const last = review.conversation?.last;
+  if (last && !last.marker && last.body !== '') {
+    return last.body;
+  }
+  return undefined;
+}
+
+function phaseText(row: PhaseRow): string {
+  if (typeof row === 'number') {
+    return String(row);
+  }
+  if (typeof row === 'string') {
+    return row;
+  }
+  return `${row.done} сделано · ${row.open} открыто`;
+}
+
+/** Top and bottom of a plaque. The window reads these lines; it does not write them. */
+export function plaqueLines(input: {
+  ask?: string;
+  gaps?: string;
+  unanswered?: string;
+  station?: ColumnName;
+  phaseRow?: PhaseRow;
+  reason?: string;
+}): {top?: string; bottom?: string} {
+  const phase = input.phaseRow === undefined ? undefined : phaseText(input.phaseRow);
+  const check =
+    (input.station === 'verifying' || input.station === 'accepting') &&
+    (input.phaseRow === 'red' || input.phaseRow === 'green' || input.phaseRow === 'pending')
+      ? input.phaseRow
+      : undefined;
+  let top: string | undefined;
+  if (input.ask !== undefined) {
+    top = 'ask';
+  } else if (input.gaps) {
+    top = input.gaps;
+  } else if (input.unanswered) {
+    top = 'ревью';
+  } else if (check) {
+    top = check;
+  }
+  const candidates = [
+    top === 'ask' ? input.ask : undefined,
+    phase,
+    input.reason,
+    top === 'ревью' ? input.unanswered : undefined,
+  ];
+  const bottom = candidates.find(line => line !== undefined && line !== '' && line !== top);
+  return {top, bottom};
+}
+
 function buildCycle(
   item: WindowTicket,
   phase: Phase,
@@ -273,6 +497,7 @@ function buildCycle(
   breakReason: string,
   reading: readonly WindowTicket[],
   hideIcon: boolean,
+  review: WindowReview | undefined,
 ): Placed {
   const questions = openCount(checkout, item.key, 'proposal.md', HEADINGS.openQuestions);
   const decisions = openCount(checkout, item.key, 'design.md', HEADINGS.openDecisions);
@@ -280,6 +505,9 @@ function buildCycle(
   const parts = reasonParts(item, phase, breakReason, reading, questions, decisions);
   const occasion = parts.length > 0;
   const card: CycleCard = {key: item.key, title: item.title};
+  if (occasion) {
+    card.occasion = true;
+  }
   if (occasion && !hideIcon) {
     card.icon = true;
   }
@@ -293,6 +521,22 @@ function buildCycle(
   if (layers) {
     card.layers = layers;
   }
+  const ask = askText(item);
+  if (ask !== undefined) {
+    card.ask = ask;
+  }
+  const unanswered = unansweredText(review);
+  if (unanswered !== undefined) {
+    card.unanswered = unanswered;
+  }
+  const doors = stationDoors(item, column, checkout, parts, markedStations(review?.threads));
+  if (doors) {
+    card.doors = doors;
+  }
+  const gateOff = gateOffOf(item.labels);
+  if (gateOff) {
+    card.gateOff = gateOff;
+  }
   return {card, occasion};
 }
 
@@ -305,6 +549,7 @@ function poolCard(
   block: {emptyModel: boolean; rejected: boolean},
   live: boolean,
   hideIcon: boolean,
+  review: WindowReview | undefined,
 ): PoolCard {
   const several = (item.openPullRequests ?? 0) > 1;
   const broken = checkout.reason !== '';
@@ -318,17 +563,22 @@ function poolCard(
   if (checkout.checkout) {
     card.checkout = checkout.checkout;
   }
+  const station = phase ? columnOf(phase, item) : null;
+  if (station) {
+    card.station = station;
+  }
   if (broken || several) {
     card.takeDisabled = true;
-    const column = (phase && columnOf(phase, item)) || 'implementing';
+    card.alarm = true;
     const placed = buildCycle(
       item,
       phase ?? 'implementing',
-      column,
+      station ?? 'implementing',
       checkout.checkout,
       checkout.reason,
       reading,
       hideIcon,
+      review,
     );
     if (placed.card.icon) {
       card.icon = true;
@@ -336,12 +586,63 @@ function poolCard(
     if (placed.card.reason !== undefined) {
       card.reason = placed.card.reason;
     }
-    return card;
+    if (station && placed.card.phaseRow !== undefined) {
+      card.phaseRow = placed.card.phaseRow;
+    }
+    if (station && placed.card.layers) {
+      card.layers = placed.card.layers;
+    }
+    if (station && placed.card.ask) {
+      card.ask = placed.card.ask;
+    }
+    if (station && placed.card.unanswered) {
+      card.unanswered = placed.card.unanswered;
+    }
+    if (station && placed.card.doors) {
+      card.doors = placed.card.doors;
+    }
+    if (station && placed.card.gateOff) {
+      card.gateOff = placed.card.gateOff;
+    }
+    return withGates(card, item.labels);
+  }
+  if (station && phase) {
+    const placed = buildCycle(
+      item,
+      phase,
+      station,
+      checkout.checkout,
+      '',
+      reading,
+      hideIcon,
+      review,
+    );
+    if (placed.card.phaseRow !== undefined) {
+      card.phaseRow = placed.card.phaseRow;
+    }
+    if (placed.card.reason !== undefined) {
+      card.reason = placed.card.reason;
+    }
+    if (placed.card.layers) {
+      card.layers = placed.card.layers;
+    }
+    if (placed.card.ask) {
+      card.ask = placed.card.ask;
+    }
+    if (placed.card.unanswered) {
+      card.unanswered = placed.card.unanswered;
+    }
+    if (placed.card.doors) {
+      card.doors = placed.card.doors;
+    }
+    if (placed.card.gateOff) {
+      card.gateOff = placed.card.gateOff;
+    }
   }
   if (!live || block.rejected || (phase === null && block.emptyModel)) {
     card.takeDisabled = true;
   }
-  return card;
+  return withGates(card, item.labels);
 }
 
 export function lay(input: {
@@ -355,6 +656,7 @@ export function lay(input: {
   cardOf: (item: WindowTicket) => CardState;
   leading: (key: string) => boolean;
   takeBlock: (checkout: string | undefined) => {emptyModel: boolean; rejected: boolean};
+  review?: (key: string) => WindowReview | undefined;
 }): {
   taken: Set<string>;
   pool: PoolCard[];
@@ -386,10 +688,20 @@ export function lay(input: {
     }
     const checkout = input.cardOf(item);
     const hideIcon = input.leading(item.key) || item.checks === 'pending';
+    const review = input.review?.(item.key);
     if (!phase) {
       taken.add(item.key);
       pool.push(
-        poolCard(item, checkout, null, reading, input.takeBlock(checkout.checkout), live, hideIcon),
+        poolCard(
+          item,
+          checkout,
+          null,
+          reading,
+          input.takeBlock(checkout.checkout),
+          live,
+          hideIcon,
+          review,
+        ),
       );
       continue;
     }
@@ -408,6 +720,7 @@ export function lay(input: {
           input.takeBlock(checkout.checkout),
           live,
           hideIcon,
+          review,
         ),
       );
       continue;
@@ -420,6 +733,7 @@ export function lay(input: {
       checkout.reason,
       reading,
       hideIcon,
+      review,
     );
     const list = buckets.get(column) ?? [];
     list.push(placed);

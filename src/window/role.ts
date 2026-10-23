@@ -206,7 +206,7 @@ export function runRole(input: {
   editLabels: (add: readonly string[]) => void;
   writeHooks: (text: string) => void;
   commentPull: (body: string) => void;
-}): {popup: string} | undefined {
+}): {popup: string} | {status: string} | undefined {
   if (input.role.outcome === 'ticket-fields') {
     const labels = input.role.labels ?? [];
     if (labels.length > 0) {
@@ -215,13 +215,14 @@ export function runRole(input: {
     if (readsAsPointMap(input.role.text)) {
       input.writeHooks(input.role.text);
     }
-    return undefined;
+    return {status: input.role.name};
   }
   if (input.role.outcome === 'pull-comment') {
     if (input.openPullRequests === 1) {
       input.commentPull(input.role.text);
+      return undefined;
     }
-    return undefined;
+    return {status: 'комментарий не записан'};
   }
   if (input.role.outcome === 'html') {
     return {popup: input.role.text};

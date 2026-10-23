@@ -1,11 +1,15 @@
 import type {
   BoardState,
+  GateStation,
   Launch,
   RoleOutcome,
   RoleRecord,
   SkillMode,
   WindowOutside,
 } from './types.ts';
+
+import {existsSync, mkdirSync, writeFileSync} from 'node:fs';
+import path from 'node:path';
 
 import {lay} from './board.ts';
 import {openCheckout, unreadableRow} from './checkout.ts';
@@ -23,11 +27,13 @@ import {
   takeBlock,
   type Factory,
 } from './factory.ts';
-import {focusNamesPlace} from './focus.ts';
+import {focusNamesPlace, focusPlaque} from './focus.ts';
 import {openRoleEditor, runRole, shelfOf} from './role.ts';
 import {openServiceGroup} from './service-group.ts';
 import {blocksFor} from './sidebar.ts';
+import {buildSpine} from './spine.ts';
 import {runSpy} from './spy.ts';
+import {COLUMN_NAMES, GATE_LABEL, GATE_STATIONS, isGateStation} from './types.ts';
 
 export type {
   AdapterKind,
@@ -131,6 +137,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       serviceBroken: located => checkout.serviceBroken(located),
       cardOf: item => checkout.cardOf(item),
       leading: key => outside.leading?.(key) === true,
+      review: key => outside.review?.(key),
       takeBlock: located => {
         const factory = factoryFor(located);
         return takeBlock(factory, rejectedOf(factory).length > 0);
@@ -194,6 +201,19 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     });
   }
 
+  function gateAllowed(key: string, station: string, side: boolean): station is GateStation {
+    if (!isGateStation(station)) {
+      return false;
+    }
+    const cycles = placed(checkout.settle().watch);
+    const column = cycles.columns.find(item => item.cards.some(card => card.key === key));
+    const plaque = column?.name ?? cycles.pool.find(card => card.key === key)?.station;
+    if (!plaque || side) {
+      return true;
+    }
+    return COLUMN_NAMES.indexOf(station) > COLUMN_NAMES.indexOf(plaque);
+  }
+
   return {
     board,
     shelf: () => shelfOf(roles.list()),
@@ -213,7 +233,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       if (!item) {
         return undefined;
       }
-      return runRole({
+      const result = runRole({
         role,
         openPullRequests: item.openPullRequests ?? 0,
         checkout: checkout.gathered(item),
@@ -227,9 +247,57 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
           outside.commentPull?.(key, body);
         },
       });
+      if (!result) {
+        return undefined;
+      }
+      if ('popup' in result) {
+        return {popup: result.popup};
+      }
+      if (role.outcome === 'ticket-fields') {
+        return {status: `${role.name} ${key}`};
+      }
+      return {status: result.status};
     },
     overlay: () => overlaySession.view(home.doc()),
     sidebar,
+    spine() {
+      if (openKey === '') {
+        return undefined;
+      }
+      const item = checkout.sorted().find(ticket => ticket.key === openKey);
+      if (!item) {
+        return undefined;
+      }
+      const cycles = placed(checkout.settle().watch);
+      const column = cycles.columns.find(entry => entry.cards.some(card => card.key === item.key));
+      const station = column?.name ?? cycles.pool.find(card => card.key === item.key)?.station;
+      const gateOff: Partial<Record<GateStation, true>> = {};
+      for (const name of GATE_STATIONS) {
+        if (item.labels.includes(GATE_LABEL[name])) {
+          gateOff[name] = true;
+        }
+      }
+      return buildSpine({
+        key: item.key,
+        checkout: checkout.gathered(item),
+        station,
+        focusBody: focusPlaque(item.comments),
+        issueBody: item.body,
+        checks: item.checks,
+        diff: item.diff === true,
+        pull: (item.openPullRequests ?? 0) === 1,
+        gateOff,
+      });
+    },
+    answer(key: string, question: string, reply: string) {
+      const item = checkout.sorted().find(ticket => ticket.key === key);
+      if (!item || (item.openPullRequests ?? 0) !== 1 || !outside.commentPull) {
+        return 'комментарий не записан';
+      }
+      const line = question.trim();
+      outside.commentPull(key, line === '' ? reply : `- [ ] ${line}\n\n${reply}`);
+      return 'Комментарий записан в ревью.';
+    },
     openSettings() {
       settingsOpen = true;
       if (overlaySession.checkout() !== '') {
@@ -245,17 +313,34 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       settingsOpen = false;
       service.discard();
     },
-    openCard(key: string) {
+    closeCard() {
+      openKey = '';
+    },
+    checkouts() {
+      return checkout.gatheredCheckouts();
+    },
+    openCard(key: string): boolean {
+      if (!checkout.sorted().some(ticket => ticket.key === key)) {
+        return false;
+      }
+      const state = board();
       const item = checkout.sorted().find(ticket => ticket.key === key);
       if (!item) {
-        return;
+        return false;
       }
       const located = checkout.gathered(item);
-      if (!located || !checkout.gatheredCheckouts().includes(located)) {
-        return;
+      const gatheredOk = located !== undefined && checkout.gatheredCheckouts().includes(located);
+      const onBoard =
+        state.pool.some(card => card.key === key) ||
+        state.columns.some(column => column.cards.some(card => card.key === key));
+      if (!onBoard && !gatheredOk) {
+        return false;
       }
-      remember(located);
+      if (gatheredOk && located !== undefined) {
+        remember(located);
+      }
       openKey = key;
+      return true;
     },
     chooseCheckout(next: string) {
       if (!checkout.gatheredCheckouts().includes(next)) {
@@ -305,20 +390,70 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       }
       return outside.reviewPlace?.({file, line});
     },
-    take(key?: string) {
-      if (!key || !answers()) {
+    doorPlace(file: string): string | undefined {
+      const url = outside.reviewPlace?.({file, line: 1});
+      return url ? url : undefined;
+    },
+    plantQueue(key: string, name: string): boolean {
+      const queue = name.trim();
+      if (queue === '' || queue.includes('\n') || queue.includes('\r')) {
+        return false;
+      }
+      const item = checkout.sorted().find(ticket => ticket.key === key);
+      if (!item) {
+        return false;
+      }
+      const card = checkout.cardOf(item);
+      if (card.reason !== 'конфига сервиса нет' || !card.checkout) {
+        return false;
+      }
+      const file = path.join(card.checkout, 'openspec', 'config.yaml');
+      if (existsSync(file)) {
+        return false;
+      }
+      mkdirSync(path.dirname(file), {recursive: true});
+      writeFileSync(file, `sdd:\n  queues:\n    - name: ${JSON.stringify(queue)}\n`);
+      return true;
+    },
+    lastGate(key: string, station: string, side?: boolean): boolean {
+      if (!gateAllowed(key, station, side === true)) {
+        return false;
+      }
+      const item = checkout.sorted().find(ticket => ticket.key === key);
+      if (!item || item.labels.includes(GATE_LABEL[station])) {
+        return false;
+      }
+      return GATE_STATIONS.every(
+        name => name === station || item.labels.includes(GATE_LABEL[name]),
+      );
+    },
+    gateMark(key: string, station: string, side?: boolean): void {
+      if (!gateAllowed(key, station, side === true)) {
         return;
+      }
+      const item = checkout.sorted().find(ticket => ticket.key === key);
+      if (!item) {
+        return;
+      }
+      const label = GATE_LABEL[station];
+      const present = item.labels.includes(label);
+      outside.editLabels?.(key, present ? [] : [label], present ? [label] : []);
+    },
+    take(key?: string): boolean {
+      if (!key || !answers()) {
+        return false;
       }
       const view = checkout.settle();
       const card = placed(view.watch).pool.find(item => item.key === key);
       if (!card || card.takeDisabled) {
-        return;
+        return false;
       }
       const login = outside.login?.();
-      if (login === undefined) {
-        return;
+      if (login === undefined || outside.writeAssignee === undefined) {
+        return false;
       }
-      outside.writeAssignee?.(key, login);
+      outside.writeAssignee(key, login);
+      return true;
     },
     spy,
   };

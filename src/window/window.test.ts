@@ -2703,7 +2703,15 @@ function proveHealthyPoolCardsAreOrderedByKeyAndHaveNoIcon97(): void {
   const place = {queue: 'alpha', choices: ['services/billing'], checkout};
   assert.deepEqual(window.board().pool, [
     {key: 'a', title: 'First', take: true, ...place},
-    {key: 'b', title: 'Gate', take: true, ...place},
+    {
+      key: 'b',
+      title: 'Gate',
+      take: true,
+      station: 'proposing',
+      phaseRow: 0,
+      reason: 'proposed',
+      ...place,
+    },
     {key: 'c', title: 'Third', take: true, ...place},
   ]);
   rmSync(dir, {recursive: true, force: true});
@@ -5385,7 +5393,7 @@ function proveZeroPullRequestsSetNoIcon(): void {
   window.addRole({name: 'Note', outcome: 'pull-comment', text: 'ship it'});
   const before = columnCards(window.board(), 'implementing')?.[0];
   assert.equal(before?.icon, undefined);
-  assert.equal(window.drag('Note', '1'), undefined);
+  assert.deepEqual(window.drag('Note', '1'), {status: 'комментарий не записан'});
   const after = columnCards(window.board(), 'implementing')?.[0];
   assert.equal(after?.icon, undefined);
   assert.deepEqual(comments, []);
@@ -5463,7 +5471,7 @@ function proveSeveralPullRequestsWriteNothing(): void {
   );
   window.addRole({name: 'Note', outcome: 'pull-comment', text: 'ship it'});
   assert.equal(columnCards(window.board(), 'implementing')?.[0]?.icon, true);
-  assert.equal(window.drag('Note', '1'), undefined);
+  assert.deepEqual(window.drag('Note', '1'), {status: 'комментарий не записан'});
   assert.deepEqual(comments, []);
   rmSync(dir, {recursive: true, force: true});
 }
@@ -5527,6 +5535,44 @@ function proveTheLastDragWritesItsOwnText(): void {
   ]);
   rmSync(dir, {recursive: true, force: true});
 }
+
+test('checkouts includes a cycle that stands only in a column', () => {
+  const {dir, home, arcadia} = yard();
+  try {
+    prepare(arcadia, home);
+    const other = path.join(arcadia, 'services', 'other');
+    writeServiceConfig(other, ['alpha']);
+    const window = openWindow(
+      {homePath: home, adapter: 'tracker'},
+      {
+        login: () => MANAGER,
+        tickets: () => [
+          ticket({
+            key: '1',
+            queue: 'alpha',
+            sddService: 'services/billing',
+            title: 'Pool',
+          }),
+          cycle('2', 'implementing', {sddService: 'services/other', title: 'Column'}),
+        ],
+      },
+    );
+    const board = window.board();
+    assert.equal(
+      board.pool.some(card => card.key === '2'),
+      false,
+    );
+    assert.equal(
+      board.pool.some(card => card.checkout?.endsWith(path.join('services', 'other'))),
+      false,
+    );
+    const listed = window.checkouts();
+    assert.ok(listed.some(item => item.endsWith(path.join('services', 'billing'))));
+    assert.ok(listed.some(item => item.endsWith(path.join('services', 'other'))));
+  } finally {
+    rmSync(dir, {recursive: true, force: true});
+  }
+});
 
 spec('role', () => {
   requirement("The shelf lists this manager's roles", () => {

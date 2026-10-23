@@ -6,3 +6,9 @@ context: |
   A scenario is WHEN and THEN, observed from the issue, the pull request, or an sdd verb.
   A change directory is openspec/changes/issue-<key>/.
   Delta specs use the sections ADDED, MODIFIED, REMOVED, and RENAMED Requirements.
+
+sdd:
+  base: master
+  queues:
+    - name: remote-solver
+      description: Cycles in this repository

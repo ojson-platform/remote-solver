@@ -3569,8 +3569,8 @@ function proveEachGroupNamesItsFile137(): void {
 }
 
 spec('board', () => {
-  requirement('The board is a pool and seven columns', () => {
-    scenario('An empty column stays', () => {
+  requirement('The board is a column of keys and seven stations', () => {
+    scenario('An empty station stays the same width', () => {
       proveAnEmptySpecifyingColumnStaysAndTheWindowWritesNoPhase46();
     });
     scenario('The window adds no phase control', () => {
@@ -3644,17 +3644,14 @@ spec('board', () => {
       proveOneOpenPullRequestLetsTakeWriteTheAssignee80();
     });
   });
-  requirement(
-    'A column card shows the key, the title, the icon, the reason, the phase row, and gaps',
-    () => {
-      scenario('A column card shows a gap layer', () => {
-        proveAFocusGapShowsSpecifyAndHidesASolidPlan56();
-      });
-      scenario('A solid focus adds no layer line', () => {
-        proveEveryRecordedLayerSolidHasNoLayerLine57();
-      });
-    },
-  );
+  requirement('A plaque shows the top and the bottom in order', () => {
+    scenario('A focus gap is the top when there is no ask', () => {
+      proveAFocusGapShowsSpecifyAndHidesASolidPlan56();
+    });
+    scenario('A solid focus adds no gap line', () => {
+      proveEveryRecordedLayerSolidHasNoLayerLine57();
+    });
+  });
   requirement('The phase row is read from the cycle', () => {
     scenario('Proposing shows the open-question count', () => {
       proveProposingShowsTwoOpenQuestionsUnderTheHeading51();
@@ -3929,7 +3926,7 @@ spec('settings', () => {
 });
 
 spec('sidebar', () => {
-  requirement('The sidebar shows only the blocks the cycle has', () => {
+  requirement('The open row shows only the blocks the cycle has', () => {
     scenario('A cycle with only focus shows focus', () => {
       proveAnOpenCycleWhoseOnlySidebarBlockIsFocusShowsThatBlock113();
     });
@@ -3938,7 +3935,7 @@ spec('sidebar', () => {
     });
   });
   requirement("The icon reason block is the card's line", () => {
-    scenario('The sidebar shows the hidden tail', () => {
+    scenario('The open row shows the hidden tail', () => {
       proveAQuestionOnlyCardHidesTheLineAndTheSidebarStillShowsIt116();
     });
     scenario('No icon means no reason block', () => {
@@ -5575,7 +5572,7 @@ test('checkouts includes a cycle that stands only in a column', () => {
 });
 
 spec('role', () => {
-  requirement("The shelf lists this manager's roles", () => {
+  requirement("Verbs list this manager's roles", () => {
     scenario('The shelf shows the outcome before the drag', () => {
       proveTheShelfShowsTheOutcomeBeforeTheDrag();
     });
@@ -5588,7 +5585,7 @@ spec('role', () => {
       proveTicketFieldsStoresTheLabels();
     });
   });
-  requirement('The window runs one drag and does not keep the role', () => {
+  requirement('The window runs one press and does not keep the role', () => {
     scenario('A drag does not move the phase', () => {
       proveADragDoesNotMoveThePhase();
     });

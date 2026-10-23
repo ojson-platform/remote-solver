@@ -51,7 +51,7 @@ The open ticket SHALL open a sidebar over the board, from the right, and SHALL N
 
 ### Requirement: The icon reason block is the card's line
 
-The icon reason block SHALL be the same one line as on the plaque, and the open row SHALL show that line in full. When the row has no reason, the block SHALL be absent.
+The icon reason block SHALL show the row's reason line in full. When the plaque moves a question or decision count onto the phase row and drops that line, the open row SHALL still show the count. When the row has no reason, the block SHALL be absent.
 
 #### Scenario: The open row shows the hidden tail
 

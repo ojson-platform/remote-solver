@@ -1189,6 +1189,7 @@ const style = `
     cursor: pointer;
   }
   .spine .mark { background: rgba(230, 179, 90, 0.16); border-radius: 6px; padding: 6px 8px; }
+  .spine .scene { white-space: pre-wrap; }
   .spine .mark b, .spine .scene b { font-weight: 500; margin-right: 6px; }
   .spine .reply { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
   .spine .reply textarea {

@@ -197,8 +197,14 @@ function questionsOf(proposal: string): SpineQuestion[] {
 }
 
 function markerValue(chunk: string, marker: 'WHEN' | 'THEN'): string {
-  const match = new RegExp(`\\*\\*${marker}\\*\\*\\s*(.*)`).exec(chunk);
-  return match?.[1]?.trim() ?? '';
+  const found: string[] = [];
+  for (const match of chunk.matchAll(new RegExp(`\\*\\*${marker}\\*\\*\\s*(.*)`, 'g'))) {
+    const value = match[1]?.trim() ?? '';
+    if (value !== '') {
+      found.push(value);
+    }
+  }
+  return found.join('\n');
 }
 
 function requirementsOf(text: string, baseline: string): SpineRequirement[] {
@@ -231,7 +237,7 @@ function requirementsOf(text: string, baseline: string): SpineRequirement[] {
           then: markerValue(chunk, 'THEN'),
         });
       }
-      out.push({kind, title, prose: paragraph(body), added, scenarios});
+      out.push({kind, title, prose: body.replace(/\s+/g, ' ').trim(), added, scenarios});
     }
   }
   return out;

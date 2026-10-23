@@ -52,10 +52,14 @@ test('a modified sentence is marked and a task names its capability', () => {
       '',
       'Кейс читается по идентификатору. Проверка отсутствующего кейса не находит его.',
       '',
+      'Второе предложение требования остаётся в тексте.',
+      '',
       '#### Scenario: Проверка отсутствующего кейса не находит его',
       '',
       '- **WHEN** проверяют кейс, которого нет',
+      '- **WHEN** справочники не полны',
       '- **THEN** проверка его не находит',
+      '- **THEN** список проблем не пуст',
       '',
     ].join('\n'),
   );
@@ -66,7 +70,19 @@ test('a modified sentence is marked and a task names its capability', () => {
   const spine = buildSpine({key: '1', checkout, station: 'tasking'});
   const requirement = spine.capabilities[0]?.requirements[0];
   assert.equal(requirement?.kind, 'MODIFIED');
-  assert.deepEqual(requirement?.added, ['Проверка отсутствующего кейса не находит его.']);
+  assert.equal(
+    requirement?.prose.includes('Второе предложение требования остаётся в тексте.'),
+    true,
+  );
+  assert.equal(
+    requirement?.scenarios[0]?.when,
+    'проверяют кейс, которого нет\nсправочники не полны',
+  );
+  assert.equal(requirement?.scenarios[0]?.then, 'проверка его не находит\nсписок проблем не пуст');
+  assert.deepEqual(requirement?.added, [
+    'Проверка отсутствующего кейса не находит его.',
+    'Второе предложение требования остаётся в тексте.',
+  ]);
   assert.equal(spine.tasks[0]?.scenarios[0]?.capability, 'case-read');
   assert.equal(spine.open, 'Tasks');
   rmSync(dir, {recursive: true, force: true});

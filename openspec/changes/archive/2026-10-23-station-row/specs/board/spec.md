@@ -266,15 +266,15 @@ The door SHALL be a circle with the artifact icon: `plan`, `spec`, `design`, `ta
 
 ### Requirement: A break opens one repair field
 
-A row SHALL show at most one repair field. That field SHALL be the first checkout break the window can write, or one model or agent hole on a board row. The settings sheet SHALL NOT open for it. After the write the row SHALL be read again and the field SHALL go. The next break SHALL show its own field. Ask, a gate, the merge, children, and blockers SHALL NOT be a repair.
+A row SHALL show at most one repair field, and that field SHALL be the first checkout break the window can write. The settings sheet SHALL NOT open for it. After the write the row SHALL be read again and the field SHALL go. The next break SHALL show its own field. Ask, a gate, the merge, children, and blockers SHALL NOT be a repair. A model or agent hole SHALL be a board row that names the slot. It SHALL NOT be a field on that row, SHALL NOT be a ticket popup, and SHALL NOT open the settings sheet. Play on the affected tickets SHALL stay disabled.
 
 The window SHALL write:
 
 - **Не назван сервис.** A service choice, including an empty string as the repository root on GitHub. The write is `sddService`.
 - **Конфига сервиса нет.** One queue name, and the window creates the file. The write is `openspec/config.yaml`. Hooks, ignore, and branch scope SHALL NOT be in this field.
-- **Нужна модель.** Only the empty slots of the named checkout, on the board row. The write is the home or the layer, immediately.
-- **Модель не запускается.** One slot and the rejected id, on the board row.
-- **Фабрике нужен агент.** An agent choice on the board row. The home is written and settings SHALL NOT open themselves. The visible row stays `фабрике ещё нужен агент`.
+- **Нужна модель.** The board row names the empty slot.
+- **Модель не запускается.** The board row names the slot and the rejected id.
+- **Фабрике нужен агент.** The board row stays `фабрике ещё нужен агент`.
 
 The window SHALL show the path or the reason and SHALL NOT draw a field for: **Каталога нет**, **Очереди нет в конфиге сервиса**, **Конфиг не читается**, and **Несколько pull request**. It SHALL NOT create a catalog, SHALL NOT append a queue, SHALL NOT write a broken edit, and SHALL NOT close a pull request. A checkout field SHALL live in the exclamation popup. A healthy closed row SHALL NOT show that sign. A model or agent hole SHALL stay a board row, with play left disabled, and SHALL NOT be a ticket popup.
 

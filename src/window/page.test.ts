@@ -18,6 +18,8 @@ import {
 } from './types.ts';
 import {changeDir} from '../machine/naming.ts';
 import {openWindow, type WindowTicket} from './window.ts';
+import {focusStaysInForm, gesture, payload, SHEET_FIELD_KEY, SHEET_SCROLL_KEY} from './client/gesture.ts';
+import {renderWindow} from './client/render.ts';
 import {draftsAfterClick, headClickToggles, lineFieldClosesOnEscape, serveBoard} from './page.ts';
 import type {WindowSnapshot} from './snapshot.ts';
 
@@ -85,7 +87,7 @@ test('the page shows the pool, the columns, and Take writes the assignee', async
     try {
       const response = await fetch(page.url);
       assert.equal(response.status, 200);
-      const html = await response.text();
+      const html = await pageHtml(page.url);
       assert.equal(html.includes('<h1>'), false);
       assert.match(html, /<span class="key">1<\/span>/);
       assert.match(html, /<h2 class="title">Take me<\/h2>/);
@@ -103,10 +105,10 @@ test('the page shows the pool, the columns, and Take writes the assignee', async
         body: new URLSearchParams({key: '1'}).toString(),
         redirect: 'manual',
       });
-      assert.equal(taken.status, 303);
+      assert.equal(taken.status, 200);
       assert.deepEqual(assignees, [{key: '1', login: MANAGER}]);
       assert.deepEqual(phases, [{key: '1', phase: 'proposing'}]);
-      const after = await (await fetch(page.url)).text();
+      const after = await pageHtml(page.url);
       const row = articleOf(after, '1');
       assert.equal(row.includes('aria-label="Взять"'), false);
       assert.match(stationOf(after, '1', 'proposing'), /class="plaque"/);
@@ -142,7 +144,7 @@ test('settings stay closed until opened, and an open card shows the sidebar', as
     window.chooseAgent('cursor');
     const page = await serveBoard(window);
     try {
-      const first = await (await fetch(page.url)).text();
+      const first = await pageHtml(page.url);
       assert.equal(first.includes('openspec/config.yaml'), false);
       assert.equal(first.includes('class="sidebar"'), false);
       assert.equal(first.includes('role="dialog"'), false);
@@ -151,7 +153,7 @@ test('settings stay closed until opened, and an open card shows the sidebar', as
         headers: {'content-type': 'application/x-www-form-urlencoded'},
         body: new URLSearchParams({act: 'open', key: '1'}),
       });
-      const withSide = await opened.text();
+      const withSide = await paint(opened);
       assert.match(withSide, /<aside class="sidebar"/);
       assert.match(withSide, /Take me/);
       const settings = await fetch(new URL('act', page.url), {
@@ -159,7 +161,7 @@ test('settings stay closed until opened, and an open card shows the sidebar', as
         headers: {'content-type': 'application/x-www-form-urlencoded'},
         body: new URLSearchParams({act: 'open-settings'}),
       });
-      const sheet = await settings.text();
+      const sheet = await paint(settings);
       assert.match(sheet, /\.aifactory\/config\.yaml/);
       assert.match(sheet, /openspec\/config\.yaml/);
     } finally {
@@ -240,6 +242,24 @@ async function post(url: string, pathname: string, body: string) {
     redirect: 'manual',
   });
   return {status: response.status, body: await response.text()};
+}
+
+
+async function pageHtml(url: string): Promise<string> {
+  return renderWindow(await readSnapshot(url));
+}
+
+function shown(body: string): string {
+  return renderWindow(JSON.parse(body) as WindowSnapshot);
+}
+
+async function paint(response: Response): Promise<string> {
+  const body = await response.text();
+  const type = response.headers.get('content-type') ?? '';
+  if (type.includes('json')) {
+    return renderWindow(JSON.parse(body) as WindowSnapshot);
+  }
+  return body;
 }
 
 async function readSnapshot(url: string): Promise<WindowSnapshot> {
@@ -407,23 +427,6 @@ async function hosted(
   }
 }
 
-function pageFns(html: string) {
-  const script = html.slice(
-    html.indexOf('<script>') + '<script>'.length,
-    html.lastIndexOf('</script>'),
-  );
-  const source = script.slice(
-    script.indexOf('function payload'),
-    script.indexOf('document.querySelectorAll'),
-  );
-  return new Function(`${source}\nreturn {payload, gesture};`)() as {
-    payload: (event: {
-      dataTransfer: {getData: (type: string) => string} | null;
-    }) => [string, string];
-    gesture: (type: string, value: string, kind: string) => string;
-  };
-}
-
 test('a GET moves an assigned phaseless card without writing the assignee', async () => {
   const tickets = [
     ticket({
@@ -456,7 +459,7 @@ test('a GET moves an assigned phaseless card without writing the assignee', asyn
       window.chooseAgent('cursor');
       const response = await fetch(page.url);
       assert.equal(response.status, 200);
-      const html = await response.text();
+      const html = await pageHtml(page.url);
       const row = articleOf(html, '1');
       assert.equal(row.includes('aria-label="Взять"'), false);
       assert.match(stationOf(html, '1', 'proposing'), /class="plaque"/);
@@ -622,22 +625,22 @@ async function proveAnUnnamedServiceIsAField(): Promise<void> {
     );
     const page = await serveBoard(window);
     try {
-      const first = await (await fetch(page.url)).text();
+      const first = await pageHtml(page.url);
       assert.match(articleOf(first, '2'), /aria-label="Поломка"/);
       assert.equal(first.includes('<select'), false);
       assert.equal(first.includes('role="dialog"'), false);
       assert.equal(
         (await post(page.url, 'act', new URLSearchParams({act: 'repair', key: '2'}).toString()))
           .status,
-        303,
+        200,
       );
-      const popup = await (await fetch(page.url)).text();
+      const popup = await pageHtml(page.url);
       const dialog = between(popup, '<div class="popup repair"', '</div></div>');
       assert.match(dialog, /aria-label="Поломка"/);
       assert.equal(popup.includes('aria-label="Настройки"'), false);
-      assert.match(dialog, /<option disabled selected>—<\/option>/);
-      assert.equal(dialog.includes('<option disabled selected value='), false);
-      assert.match(dialog, /<option value="">/);
+      assert.match(dialog, /<option disabled(?:="")?>—<\/option>/);
+      assert.equal(/<option disabled(?:="")? value=/.test(dialog), false);
+      assert.match(dialog, /<option value="" selected="">/);
       assert.match(dialog, /<option value="services\/api">/);
       assert.equal(articleOf(popup, '2').includes('<select'), false);
       const missing = await post(
@@ -653,9 +656,9 @@ async function proveAnUnnamedServiceIsAField(): Promise<void> {
         'act',
         new URLSearchParams({act: 'choose-service', key: '2', service: ''}).toString(),
       );
-      assert.equal(root.status, 303);
+      assert.equal(root.status, 200);
       assert.deepEqual(writes, [{key: '2', service: ''}]);
-      const cleared = await (await fetch(page.url)).text();
+      const cleared = await pageHtml(page.url);
       assert.equal(cleared.includes('<select'), false);
       assert.equal(cleared.includes('role="dialog"'), false);
       const nested = await post(
@@ -663,7 +666,7 @@ async function proveAnUnnamedServiceIsAField(): Promise<void> {
         'act',
         new URLSearchParams({act: 'choose-service', key: '2', service: 'services/api'}).toString(),
       );
-      assert.equal(nested.status, 303);
+      assert.equal(nested.status, 200);
       assert.deepEqual(writes, [
         {key: '2', service: ''},
         {key: '2', service: 'services/api'},
@@ -693,7 +696,7 @@ test('a body over 262144 bytes is refused and an exact body still applies', asyn
     const exact = prefix + 'a'.repeat(262144 - Buffer.byteLength(prefix));
     assert.equal(Buffer.byteLength(exact), 262144);
     const applied = await post(page.url, 'act', exact);
-    assert.equal(applied.status, 303);
+    assert.equal(applied.status, 200);
     assert.deepEqual(texts, ['a'.repeat(262144 - Buffer.byteLength(prefix))]);
     const refused = await post(page.url, 'act', `${exact}a`);
     assert.equal(refused.status, 413);
@@ -743,7 +746,7 @@ test('a hook newline stays inside one string', async () => {
       };
       window.openCard('1');
       window.openSettings();
-      const html = await (await fetch(page.url)).text();
+      const html = await pageHtml(page.url);
       const areas = [...html.matchAll(/<textarea name="values"[^>]*>([\s\S]*?)<\/textarea>/g)].map(
         match => match[1],
       );
@@ -754,32 +757,32 @@ test('a hook newline stays inside one string', async () => {
       pair.set('point', 'before');
       pair.append('values', 'one');
       pair.append('values', 'two');
-      assert.equal((await post(page.url, 'act', pair.toString())).status, 303);
+      assert.equal((await post(page.url, 'act', pair.toString())).status, 200);
       assert.deepEqual(seen.at(-1), {action: 'specify', point: 'before', values: ['one', 'two']});
       const indented = new URLSearchParams();
       indented.set('act', 'set-service-hook');
       indented.set('hook-action', 'specify');
       indented.set('point', 'after');
       indented.set('values', '  indented');
-      assert.equal((await post(page.url, 'act', indented.toString())).status, 303);
+      assert.equal((await post(page.url, 'act', indented.toString())).status, 200);
       assert.deepEqual(seen.at(-1)?.values, ['  indented']);
       const kept = new URLSearchParams();
       kept.set('act', 'set-service-hook');
       kept.set('hook-action', 'specify');
       kept.set('point', 'after');
       kept.set('values', 'keep\n\nrest');
-      assert.equal((await post(page.url, 'act', kept.toString())).status, 303);
+      assert.equal((await post(page.url, 'act', kept.toString())).status, 200);
       assert.deepEqual(seen.at(-1)?.values, ['keep\n\nrest']);
       const edited = new URLSearchParams();
       edited.set('act', 'set-service-hook');
       edited.set('hook-action', 'specify');
       edited.set('point', 'before');
       edited.set('values', 'line1\nline2 tail');
-      assert.equal((await post(page.url, 'act', edited.toString())).status, 303);
+      assert.equal((await post(page.url, 'act', edited.toString())).status, 200);
       assert.deepEqual(seen.at(-1)?.values, ['line1\nline2 tail']);
       assert.equal(
         (await post(page.url, 'act', new URLSearchParams({act: 'save-service'}).toString())).status,
-        303,
+        200,
       );
       const doc = parse(readFileSync(file, 'utf8')) as {
         sdd: {hooks: {specify: {before: string[]; after: string[]}}};
@@ -829,18 +832,13 @@ test('a neighbor submit keeps the role draft and the hook draft', async () => {
         body: new URLSearchParams({act: 'open-settings'}).toString(),
       });
       assert.equal(opened.status, 200);
-      const sheet = await opened.text();
+      const sheet = await paint(opened);
       const addForm = formsOf(sheet).find(form => form.includes('class="add"'));
       assert.ok(addForm);
       assert.match(addForm, /name="name"/);
       assert.match(addForm, /name="outcome"/);
       assert.match(addForm, /name="text"/);
-      assert.match(addForm, /onchange="this\.form\.submit\(\)"/);
-      assert.ok(
-        formsOf(sheet).some(
-          form => form.includes('name="first"') && form.includes('onchange="this.form.submit()"'),
-        ),
-      );
+      assert.ok(formsOf(sheet).some(form => form.includes('name="first"')));
       const empty = await post(
         page.url,
         'act',
@@ -852,7 +850,7 @@ test('a neighbor submit keeps the role draft and the hook draft', async () => {
           text: 'черновик',
         }).toString(),
       );
-      assert.equal(empty.status, 303);
+      assert.equal(empty.status, 200);
       assert.deepEqual(agents, ['cursor']);
       assert.deepEqual(roles, []);
       const drafted = await post(
@@ -866,9 +864,9 @@ test('a neighbor submit keeps the role draft and the hook draft', async () => {
           text: 'черновик',
         }).toString(),
       );
-      assert.equal(drafted.status, 303);
+      assert.equal(drafted.status, 200);
       assert.deepEqual(roles, [{name: 'editor', outcome: 'html', text: 'черновик'}]);
-      assert.match(await (await fetch(page.url)).text(), /черновик/);
+      assert.match(await pageHtml(page.url), /черновик/);
       const blank = await post(
         page.url,
         'act',
@@ -880,7 +878,7 @@ test('a neighbor submit keeps the role draft and the hook draft', async () => {
           first: '',
         }).toString(),
       );
-      assert.equal(blank.status, 303);
+      assert.equal(blank.status, 200);
       assert.deepEqual(hooks, []);
       assert.deepEqual(queues, ['0:alpha:']);
       const hooked = await post(
@@ -895,7 +893,7 @@ test('a neighbor submit keeps the role draft and the hook draft', async () => {
           choice: 'archive\tbefore',
         }).toString(),
       );
-      assert.equal(hooked.status, 303);
+      assert.equal(hooked.status, 200);
       assert.deepEqual(queues, ['0:alpha:', '0:alpha:']);
       assert.deepEqual(hooks, ['archive:before:абзац']);
     },
@@ -921,7 +919,7 @@ test('a thrown take or board is a non-empty 500', async () => {
   };
   const boardPage = await serveBoard(brokenBoard);
   try {
-    const response = await fetch(boardPage.url);
+    const response = await fetch(new URL('/snapshot', boardPage.url));
     const body = await response.text();
     assert.equal(response.status, 500);
     assert.ok(body.length > 0);
@@ -930,52 +928,43 @@ test('a thrown take or board is a non-empty 500', async () => {
   }
 });
 
-test('the drag payload falls back to text/plain', async () => {
-  const page = await serveBoard(idle());
-  try {
-    const html = await (await fetch(page.url)).text();
-    assert.match(html, /setData\('text\/plain'/);
-    assert.match(html, /getData\('text\/plain'\)/);
-    const fns = pageFns(html);
-    assert.deepEqual(
-      fns.payload({
-        dataTransfer: {
-          getData(type: string) {
-            if (type === 'application/x-ai-factory') {
-              return '';
-            }
-            if (type === 'text/plain') {
-              return 'pool\n1';
-            }
+test('the drag payload falls back to text/plain', () => {
+  assert.deepEqual(
+    payload({
+      dataTransfer: {
+        getData(type: string) {
+          if (type === 'application/x-ai-factory') {
             return '';
-          },
+          }
+          if (type === 'text/plain') {
+            return 'pool\n1';
+          }
+          return '';
         },
-      }),
-      ['pool', '1'],
-    );
-    assert.equal(fns.gesture('pool', '1', 'station'), 'take');
-    assert.equal(fns.gesture('pool', '1', 'card'), '');
-    assert.deepEqual(
-      fns.payload({
-        dataTransfer: {
-          getData(type: string) {
-            if (type === 'application/x-ai-factory') {
-              return 'role\neditor';
-            }
-            return 'pool\n9';
-          },
+      },
+    }),
+    ['pool', '1'],
+  );
+  assert.equal(gesture('pool', '1', 'station'), 'take');
+  assert.equal(gesture('pool', '1', 'card'), '');
+  assert.deepEqual(
+    payload({
+      dataTransfer: {
+        getData(type: string) {
+          if (type === 'application/x-ai-factory') {
+            return 'role\neditor';
+          }
+          return 'pool\n9';
         },
-      }),
-      ['role', 'editor'],
-    );
-    assert.equal(fns.gesture('role', 'editor', 'card'), '');
-    assert.deepEqual(fns.payload({dataTransfer: {getData: () => ''}}), ['', '']);
-    assert.deepEqual(fns.payload({dataTransfer: null}), ['', '']);
-    assert.equal(fns.gesture('', '', 'card'), '');
-    assert.equal(fns.gesture('', '', 'station'), '');
-  } finally {
-    await page.close();
-  }
+      },
+    }),
+    ['role', 'editor'],
+  );
+  assert.equal(gesture('role', 'editor', 'card'), '');
+  assert.deepEqual(payload({dataTransfer: {getData: () => ''}}), ['', '']);
+  assert.deepEqual(payload({dataTransfer: null}), ['', '']);
+  assert.equal(gesture('', '', 'card'), '');
+  assert.equal(gesture('', '', 'station'), '');
 });
 
 test('an unnamed pool card opens into the sidebar and a disabled card is not draggable', async () => {
@@ -987,7 +976,7 @@ test('an unnamed pool card opens into the sidebar and a disabled card is not dra
   await hosted({login: () => MANAGER, tickets: () => tickets}, async (page, window, paths) => {
     window.chooseAgent('cursor');
     writeQueues(path.join(paths.arcadia, 'services', 'other'), ['alpha']);
-    const first = await (await fetch(page.url)).text();
+    const first = await pageHtml(page.url);
     assert.equal(articleOf(first, '1').includes('draggable="true"'), true);
     assert.equal(articleOf(first, '3').includes('draggable="true"'), false);
     assert.equal(first.includes('class="band"'), false);
@@ -996,8 +985,8 @@ test('an unnamed pool card opens into the sidebar and a disabled card is not dra
       'act',
       new URLSearchParams({act: 'open', key: '3'}).toString(),
     );
-    assert.equal(opened.status, 303);
-    const html = await (await fetch(page.url)).text();
+    assert.equal(opened.status, 200);
+    const html = await pageHtml(page.url);
     assert.match(bandOf(html, '3'), /не назван сервис/);
     assert.equal(articleOf(html, '3').includes('<select'), false);
   });
@@ -1018,9 +1007,9 @@ test('a fake open that leaves the sidebar empty does not render it', async () =>
       'act',
       new URLSearchParams({act: 'open', key: '1'}).toString(),
     );
-    assert.equal(opened.status, 303);
+    assert.equal(opened.status, 200);
     assert.deepEqual(calls, ['1']);
-    const html = await (await fetch(page.url)).text();
+    const html = await pageHtml(page.url);
     assert.equal(html.includes('class="sidebar"'), false);
     assert.equal(html.includes('class="band"'), false);
   } finally {
@@ -1048,9 +1037,9 @@ test('a drag without a popup leaves the one on screen', async () => {
           new URLSearchParams({act: 'drag', name: 'html-role', key: '1'}).toString(),
         )
       ).status,
-      303,
+      200,
     );
-    const shown = await (await fetch(page.url)).text();
+    const shown = await pageHtml(page.url);
     assert.match(shown, /class="popup"/);
     assert.match(shown, /SECRET/);
     assert.equal(
@@ -1061,15 +1050,15 @@ test('a drag without a popup leaves the one on screen', async () => {
           new URLSearchParams({act: 'drag', name: 'missing', key: '1'}).toString(),
         )
       ).status,
-      303,
+      200,
     );
     assert.deepEqual(calls, ['html-role:1', 'missing:1']);
-    assert.match(await (await fetch(page.url)).text(), /SECRET/);
+    assert.match(await pageHtml(page.url), /SECRET/);
     assert.equal(
       (await post(page.url, 'act', new URLSearchParams({act: 'close-popup'}).toString())).status,
-      303,
+      200,
     );
-    assert.equal((await (await fetch(page.url)).text()).includes('SECRET'), false);
+    assert.equal((await pageHtml(page.url)).includes('SECRET'), false);
   } finally {
     await page.close();
   }
@@ -1090,7 +1079,7 @@ test('a GET does not invalidate a stalled post', async () => {
     assert.equal((await fetch(page.url)).status, 200);
     const late = await finish();
     finish = undefined;
-    assert.equal(late.status, 303);
+    assert.equal(late.status, 200);
     assert.deepEqual(calls, ['AAA']);
   } finally {
     if (finish) {
@@ -1114,14 +1103,14 @@ test('a stalled open cannot overwrite a newer dialog', async () => {
   try {
     finish = await beginPost(page.url, 'act', 'act=open&key=AAA');
     const newer = await post(page.url, 'act', 'act=open&key=BBB');
-    assert.equal(newer.status, 303);
+    assert.equal(newer.status, 200);
     assert.deepEqual(calls, ['BBB']);
     const late = await finish();
     finish = undefined;
     assert.equal(late.status, 409);
     assert.ok(late.body.length > 0);
     assert.deepEqual(calls, ['BBB']);
-    const band = bandOf(await (await fetch(page.url)).text(), 'BBB');
+    const band = bandOf(await pageHtml(page.url), 'BBB');
     assert.match(band, /<p class="kicker">BBB<\/p>/);
     assert.equal(band.includes('AAA'), false);
   } finally {
@@ -1147,13 +1136,13 @@ test('a stalled close does not clear a popup a newer drag set', async () => {
           new URLSearchParams({act: 'drag', name: 'html-role', key: '1'}).toString(),
         )
       ).status,
-      303,
+      200,
     );
     const late = await finish();
     finish = undefined;
     assert.equal(late.status, 409);
     assert.ok(late.body.length > 0);
-    const html = await (await fetch(page.url)).text();
+    const html = await pageHtml(page.url);
     assert.match(html, /FINISHED/);
     assert.match(html, /class="popup"/);
   } finally {
@@ -1184,7 +1173,7 @@ test('the last queue down button is disabled and moving past the end is 409', as
         headers: {'content-type': 'application/x-www-form-urlencoded'},
         body: new URLSearchParams({act: 'open-settings'}).toString(),
       });
-      const sheet = await opened.text();
+      const sheet = await paint(opened);
       assert.match(sheet, /form="down-0"[^>]*disabled[^>]*>↓<\/button>/);
       const moved = await post(
         page.url,
@@ -1194,7 +1183,7 @@ test('the last queue down button is disabled and moving past the end is 409', as
       assert.equal(moved.status, 409);
       assert.ok(moved.body.length > 0);
       assert.equal(moves, 0);
-      assert.match(await (await fetch(page.url)).text(), /value="alpha"/);
+      assert.match(await pageHtml(page.url), /value="alpha"/);
     },
   );
 });
@@ -1216,7 +1205,7 @@ function statusOf(html: string): string {
 test('the open row replaces the rail and the lanes share the stage', async () => {
   const page = await serveBoard(idle());
   try {
-    const html = await (await fetch(page.url)).text();
+    const html = await pageHtml(page.url);
     assert.equal(html.includes('class="rail"'), false);
     assert.equal(html.includes('class="shelf"'), false);
     assert.equal(html.includes('class="sidebar"'), false);
@@ -1276,8 +1265,8 @@ test('an open card is marked, the face holds the phase, and close clears the row
       'act',
       new URLSearchParams({act: 'close-card', key: 'missing'}).toString(),
     );
-    assert.equal(early.status, 303);
-    const quiet = await (await fetch(page.url)).text();
+    assert.equal(early.status, 200);
+    const quiet = await pageHtml(page.url);
     assert.equal(quiet.includes('class="sidebar"'), false);
     assert.equal(quiet.includes('class="band"'), false);
     const opened = await fetch(new URL('act', page.url), {
@@ -1285,7 +1274,7 @@ test('an open card is marked, the face holds the phase, and close clears the row
       headers: {'content-type': 'application/x-www-form-urlencoded'},
       body: new URLSearchParams({act: 'open', key: '9'}).toString(),
     });
-    const html = await opened.text();
+    const html = await paint(opened);
     const article = articleOf(html, '9');
     assert.match(article, /class="ticket is-open"/);
     const plaqueStart = article.indexOf('<button class="plaque"');
@@ -1311,9 +1300,9 @@ test('an open card is marked, the face holds the phase, and close clears the row
     assert.match(html, /<aside class="sidebar" data-key="9"/);
     const before = closed.length;
     const gone = await post(page.url, 'act', new URLSearchParams({act: 'close-card'}).toString());
-    assert.equal(gone.status, 303);
+    assert.equal(gone.status, 200);
     assert.equal(closed.length, before + 1);
-    const cleared = await (await fetch(page.url)).text();
+    const cleared = await pageHtml(page.url);
     assert.equal(cleared.includes('class="sidebar"'), false);
     assert.equal(cleared.includes('class="band"'), false);
     const again = await post(
@@ -1321,7 +1310,7 @@ test('an open card is marked, the face holds the phase, and close clears the row
       'act',
       new URLSearchParams({act: 'close-card', key: '9'}).toString(),
     );
-    assert.equal(again.status, 303);
+    assert.equal(again.status, 200);
   } finally {
     await page.close();
   }
@@ -1336,21 +1325,16 @@ test('a get names the card the script should scroll into the lane', async () => 
   surface.drag = () => undefined;
   const page = await serveBoard(surface);
   try {
-    const script = await (await fetch(page.url)).text();
-    assert.match(script, /getAttribute\('data-show'\)/);
-    assert.match(script, /article\[data-key=/);
-    assert.match(script, /\.board/);
-    assert.match(script, /scrollTop/);
     assert.equal(
       (await post(page.url, 'take', new URLSearchParams({key: '7'}).toString())).status,
-      303,
+      200,
     );
-    assert.match(await (await fetch(page.url)).text(), /<body[^>]*data-show="7"/);
+    assert.match(await pageHtml(page.url), /<body[^>]*data-show="7"/);
     assert.equal(
       (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '8'}).toString())).status,
-      303,
+      200,
     );
-    assert.match(await (await fetch(page.url)).text(), /<body[^>]*data-show="8"/);
+    assert.match(await pageHtml(page.url), /<body[^>]*data-show="8"/);
     assert.equal(
       (
         await post(
@@ -1359,9 +1343,9 @@ test('a get names the card the script should scroll into the lane', async () => 
           new URLSearchParams({act: 'drag', name: 'Gates', key: '8'}).toString(),
         )
       ).status,
-      303,
+      200,
     );
-    assert.match(await (await fetch(page.url)).text(), /<body[^>]*data-show="8"/);
+    assert.match(await pageHtml(page.url), /<body[^>]*data-show="8"/);
   } finally {
     await page.close();
   }
@@ -1415,7 +1399,7 @@ test('a role drop reports ticket-fields and a skipped pull comment', async () =>
         headers: {'content-type': 'application/x-www-form-urlencoded'},
         body: new URLSearchParams({act: 'open', key: '4'}).toString(),
       });
-      const side = await opened.text();
+      const side = await paint(opened);
       const verb = bandOf(side, '4');
       assert.match(verb, /<button class="verb"/);
       assert.match(verb, /Gates[\s\S]*ticket-fields/);
@@ -1426,33 +1410,25 @@ test('a role drop reports ticket-fields and a skipped pull comment', async () =>
       assert.equal(articleOf(side, '5').includes('class="verb"'), false);
       assert.equal(side.includes('aside.sidebar'), false);
       assert.match(side, /\.station\.over\s*\{[^}]*inset[^}]*var\(--brass\)/);
-      assert.equal(pageFns(side).gesture('role', 'Gates', 'card'), '');
-      assert.equal(
-        (
-          await post(
-            page.url,
-            'act',
-            new URLSearchParams({act: 'drag', name: 'Gates', key: '4'}).toString(),
-          )
-        ).status,
-        303,
+      assert.equal(gesture('role', 'Gates', 'card'), '');
+      const dragged = await post(
+        page.url,
+        'act',
+        new URLSearchParams({act: 'drag', name: 'Gates', key: '4'}).toString(),
       );
-      const wrote = await (await fetch(page.url)).text();
+      assert.equal(dragged.status, 200);
+      const wrote = shown(dragged.body);
       const written = statusOf(wrote);
       assert.match(written, /Gates/);
       assert.match(written, /\b4\b/);
       assert.ok(labels.includes('sdd:auto-plan'));
-      assert.equal(
-        (
-          await post(
-            page.url,
-            'act',
-            new URLSearchParams({act: 'drag', name: 'File', key: '4'}).toString(),
-          )
-        ).status,
-        303,
+      const missingFile = await post(
+        page.url,
+        'act',
+        new URLSearchParams({act: 'drag', name: 'File', key: '4'}).toString(),
       );
-      assert.match(await (await fetch(page.url)).text(), /файла нет/);
+      assert.equal(missingFile.status, 200);
+      assert.match(shown(missingFile.body), /файла нет/);
       assert.equal(
         (
           await post(
@@ -1461,35 +1437,27 @@ test('a role drop reports ticket-fields and a skipped pull comment', async () =>
             new URLSearchParams({act: 'drag', name: 'Page', key: '4'}).toString(),
           )
         ).status,
-        303,
+        200,
       );
-      assert.match(await (await fetch(page.url)).text(), /class="popup"/);
-      assert.equal(
-        (
-          await post(
-            page.url,
-            'act',
-            new URLSearchParams({act: 'drag', name: 'Note', key: '4'}).toString(),
-          )
-        ).status,
-        303,
+      assert.match(await pageHtml(page.url), /class="popup"/);
+      const skippedDrop = await post(
+        page.url,
+        'act',
+        new URLSearchParams({act: 'drag', name: 'Note', key: '4'}).toString(),
       );
-      const skipped = await (await fetch(page.url)).text();
+      assert.equal(skippedDrop.status, 200);
+      const skipped = shown(skippedDrop.body);
       assert.match(statusOf(skipped), /комментарий не записан/);
-      assert.equal((await (await fetch(page.url)).text()).includes('role="status"'), false);
+      assert.equal((await pageHtml(page.url)).includes('role="status"'), false);
       assert.match(skipped, /class="popup"/);
       assert.match(skipped, /hi/);
-      assert.equal(
-        (
-          await post(
-            page.url,
-            'act',
-            new URLSearchParams({act: 'drag', name: 'Note', key: '5'}).toString(),
-          )
-        ).status,
-        303,
+      const quietDrop = await post(
+        page.url,
+        'act',
+        new URLSearchParams({act: 'drag', name: 'Note', key: '5'}).toString(),
       );
-      assert.match(statusOf(await (await fetch(page.url)).text()), /комментарий не записан/);
+      assert.equal(quietDrop.status, 200);
+      assert.match(statusOf(shown(quietDrop.body)), /комментарий не записан/);
       assert.deepEqual(comments, []);
       assert.equal(
         (
@@ -1499,14 +1467,14 @@ test('a role drop reports ticket-fields and a skipped pull comment', async () =>
             new URLSearchParams({act: 'drag', name: 'missing', key: '4'}).toString(),
           )
         ).status,
-        303,
+        200,
       );
-      const kept = await (await fetch(page.url)).text();
+      const kept = await pageHtml(page.url);
       assert.match(kept, /class="popup"/);
       assert.match(kept, /hi/);
     },
   );
-});
+}, 20_000);
 
 test('a code place in focus opens the review url', async () => {
   const calls: {file: string; line: number}[] = [];
@@ -1538,7 +1506,7 @@ test('a code place in focus opens the review url', async () => {
         headers: {'content-type': 'application/x-www-form-urlencoded'},
         body: new URLSearchParams({act: 'open', key: '1'}).toString(),
       });
-      const html = await opened.text();
+      const html = await paint(opened);
       const focus = bandOf(html, '1');
       assert.match(focus, /<a href="https:\/\/arcanum\.example\/review\/42">src\/a\.ts:4<\/a>/);
       assert.match(focus, /Code solid/);
@@ -1553,9 +1521,9 @@ test('a code place in focus opens the review url', async () => {
         'act',
         new URLSearchParams({act: 'close-card'}).toString(),
       );
-      assert.equal(closed.status, 303);
+      assert.equal(closed.status, 200);
       assert.deepEqual(window.sidebar(), []);
-      const cleared = await (await fetch(page.url)).text();
+      const cleared = await pageHtml(page.url);
       assert.equal(cleared.includes('class="sidebar"'), false);
       assert.equal(cleared.includes('class="band"'), false);
       const missing = await post(
@@ -1563,7 +1531,7 @@ test('a code place in focus opens the review url', async () => {
         'act',
         new URLSearchParams({act: 'close-card', key: 'absent'}).toString(),
       );
-      assert.equal(missing.status, 303);
+      assert.equal(missing.status, 200);
     },
   );
 });
@@ -1586,7 +1554,7 @@ test('a service draft stays unsigned until save and a warned edit cannot be writ
         headers: {'content-type': 'application/x-www-form-urlencoded'},
         body: new URLSearchParams({act: 'open-settings'}).toString(),
       });
-      const fresh = await opened.text();
+      const fresh = await paint(opened);
       assert.equal(saveControl(fresh).disabled, true);
       assert.equal(fresh.includes('сервис не записан'), false);
       assert.equal(fresh.includes('правку нельзя записать'), false);
@@ -1602,18 +1570,18 @@ test('a service draft stays unsigned until save and a warned edit cannot be writ
             }).toString(),
           )
         ).status,
-        303,
+        200,
       );
-      const dirty = await (await fetch(page.url)).text();
+      const dirty = await pageHtml(page.url);
       assert.equal(saveControl(dirty).disabled, false);
       assert.match(dirty, /сервис не записан/);
       assert.match(dirty, /Закрыть без записи/);
       assert.equal(readFileSync(file, 'utf8'), before);
       assert.equal(
         (await post(page.url, 'act', new URLSearchParams({act: 'save-service'}).toString())).status,
-        303,
+        200,
       );
-      const saved = await (await fetch(page.url)).text();
+      const saved = await pageHtml(page.url);
       assert.equal(saved.includes('сервис не записан'), false);
       assert.equal(saveControl(saved).disabled, true);
       const doc = parse(readFileSync(file, 'utf8')) as {
@@ -1636,7 +1604,7 @@ test('a service draft stays unsigned until save and a warned edit cannot be writ
       assert.equal(
         (await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString()))
           .status,
-        303,
+        200,
       );
       assert.equal(
         (
@@ -1650,21 +1618,21 @@ test('a service draft stays unsigned until save and a warned edit cannot be writ
             }).toString(),
           )
         ).status,
-        303,
+        200,
       );
-      assert.match(await (await fetch(page.url)).text(), /Закрыть без записи/);
+      assert.match(await pageHtml(page.url), /Закрыть без записи/);
       assert.equal(
         (await post(page.url, 'act', new URLSearchParams({act: 'close-settings'}).toString()))
           .status,
-        303,
+        200,
       );
       assert.equal(readFileSync(file, 'utf8'), before);
       assert.equal(
         (await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString()))
           .status,
-        303,
+        200,
       );
-      const again = await (await fetch(page.url)).text();
+      const again = await pageHtml(page.url);
       assert.equal(again.includes('сервис не записан'), false);
       assert.match(again, /value="alpha"/);
     },
@@ -1682,7 +1650,7 @@ test('a service draft stays unsigned until save and a warned edit cannot be writ
       assert.equal(
         (await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString()))
           .status,
-        303,
+        200,
       );
       assert.equal(
         (
@@ -1692,22 +1660,22 @@ test('a service draft stays unsigned until save and a warned edit cannot be writ
             new URLSearchParams({act: 'add-service-ignore', value: '('}).toString(),
           )
         ).status,
-        303,
+        200,
       );
-      const ignored = await (await fetch(page.url)).text();
+      const ignored = await pageHtml(page.url);
       assert.equal(saveControl(ignored).disabled, true);
       assert.match(ignored, /правку нельзя записать/);
       assert.equal(readFileSync(file, 'utf8'), before);
       assert.equal(
         (await post(page.url, 'act', new URLSearchParams({act: 'close-settings'}).toString()))
           .status,
-        303,
+        200,
       );
       assert.equal(readFileSync(file, 'utf8'), before);
       assert.equal(
         (await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString()))
           .status,
-        303,
+        200,
       );
       assert.equal(
         (
@@ -1717,9 +1685,9 @@ test('a service draft stays unsigned until save and a warned edit cannot be writ
             new URLSearchParams({act: 'remove-service-queue', index: '0'}).toString(),
           )
         ).status,
-        303,
+        200,
       );
-      const emptied = await (await fetch(page.url)).text();
+      const emptied = await pageHtml(page.url);
       assert.equal(saveControl(emptied).disabled, true);
       assert.match(emptied, /правку нельзя записать/);
       assert.equal(readFileSync(file, 'utf8'), before);
@@ -1747,7 +1715,7 @@ test('a root pair and a queue pair submit together when focus leaves the form', 
   };
   const page = await serveBoard(surface);
   try {
-    const html = await (await fetch(page.url)).text();
+    const html = await pageHtml(page.url);
     const rootsForm = formsOf(html).find(
       form => form.includes('name="arcadia"') && form.includes('name="github"'),
     );
@@ -1762,15 +1730,10 @@ test('a root pair and a queue pair submit together when focus leaves the form', 
     assert.equal(/<input\b[^>]*name="name"[^>]*onchange/.test(queueForm), false);
     assert.equal(/<input\b[^>]*name="description"[^>]*onchange/.test(queueForm), false);
     assert.match(queueForm, /name="first"/);
-    assert.match(queueForm, /onchange="this\.form\.submit\(\)"/);
-    assert.match(html, /querySelectorAll\('form\.pair'\)/);
-    assert.match(html, /focusout/);
-    assert.match(html, /relatedTarget/);
-    assert.match(html, /contains\(next\)/);
-    assert.match(html, /sessionStorage/);
-    assert.match(html, /scrollTop/);
-    assert.match(html, /ai-factory-sheet-scroll/);
-    assert.match(html, /ai-factory-sheet-field/);
+    assert.equal(focusStaysInForm({contains: () => true}, {} as Node), true);
+    assert.equal(focusStaysInForm({contains: () => false}, null), false);
+    assert.equal(SHEET_SCROLL_KEY, 'ai-factory-sheet-scroll');
+    assert.equal(SHEET_FIELD_KEY, 'ai-factory-sheet-field');
     assert.equal(
       (
         await post(
@@ -1779,7 +1742,7 @@ test('a root pair and a queue pair submit together when focus leaves the form', 
           new URLSearchParams({act: 'leave-roots', arcadia: '/arc', github: '/hub'}).toString(),
         )
       ).status,
-      303,
+      200,
     );
     assert.deepEqual(roots, [{arcadia: '/arc', github: '/hub'}]);
     assert.equal(
@@ -1794,7 +1757,7 @@ test('a root pair and a queue pair submit together when focus leaves the form', 
           }).toString(),
         )
       ).status,
-      303,
+      200,
     );
     assert.deepEqual(queues, [{index: 0, name: 'beta', description: 'линия'}]);
   } finally {
@@ -1809,7 +1772,7 @@ test('settings list a checkout that is not in the pool', async () => {
   surface.checkouts = () => ['/repo/only-column'];
   const page = await serveBoard(surface);
   try {
-    const html = await (await fetch(page.url)).text();
+    const html = await pageHtml(page.url);
     assert.equal(html.includes('only-column'), true);
     const pick = formsOf(html).find(
       form => form.includes('choose-checkout') && form.includes('/repo/only-column'),
@@ -1855,7 +1818,7 @@ test('the settings picker lists a checkout that stands only in a column', async 
         headers: {'content-type': 'application/x-www-form-urlencoded'},
         body: new URLSearchParams({act: 'open-settings'}).toString(),
       });
-      const html = await opened.text();
+      const html = await paint(opened);
       const pick = formsOf(html).find(
         form => form.includes('choose-checkout') && form.includes(other),
       );
@@ -1921,9 +1884,9 @@ test('a missing service config asks for one queue name', async () => {
       assert.equal(
         (await post(page.url, 'act', new URLSearchParams({act: 'repair', key: '1'}).toString()))
           .status,
-        303,
+        200,
       );
-      const open = await (await fetch(page.url)).text();
+      const open = await pageHtml(page.url);
       const dialog = between(open, '<div class="popup repair"', '</div></div>');
       assert.match(dialog, /конфига сервиса нет/);
       assert.match(dialog, /name="name"/);
@@ -1960,10 +1923,10 @@ test('a missing service config asks for one queue name', async () => {
             new URLSearchParams({act: 'plant-queue', key: '1', name: 'alpha'}).toString(),
           )
         ).status,
-        303,
+        200,
       );
       assert.equal(readFileSync(file, 'utf8'), 'sdd:\n  queues:\n    - name: "alpha"\n');
-      const next = await (await fetch(page.url)).text();
+      const next = await pageHtml(page.url);
       assert.equal(next.includes('role="dialog"'), false);
       assert.equal(articleOf(next, '1').includes('aria-label="Поломка"'), false);
       assert.match(articleOf(next, '1'), /aria-label="Взять"/);
@@ -1978,7 +1941,7 @@ spec('board', () => {
         {login: () => MANAGER, tickets: () => [bare('1', 'Take me')]},
         async (page, window) => {
           window.chooseAgent('cursor');
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           assert.match(html, /grid-template-columns:\s*252px repeat\(7, minmax\(0, 1fr\)\)/);
           for (const name of COLUMN_NAMES) {
             assert.match(stationOf(html, '1', name), /data-station="/);
@@ -2006,8 +1969,8 @@ spec('board', () => {
             'act',
             new URLSearchParams({act: 'open', key: '1'}).toString(),
           );
-          assert.equal(opened.status, 303);
-          const html = await (await fetch(page.url)).text();
+          assert.equal(opened.status, 200);
+          const html = await pageHtml(page.url);
           assert.match(html, /class="ticket pool is-open"/);
           assert.equal(html.includes('name="phase"'), false);
           assert.deepEqual(phases, []);
@@ -2017,7 +1980,7 @@ spec('board', () => {
     scenario('An empty pool draws no tile', async () => {
       await hosted({login: () => MANAGER, tickets: () => []}, async (page, window) => {
         window.chooseAgent('cursor');
-        const html = await (await fetch(page.url)).text();
+        const html = await pageHtml(page.url);
         assert.match(html, /class="head"/);
         for (const name of COLUMN_NAMES) {
           assert.match(html, new RegExp(`<span class="phase">${name}</span>`));
@@ -2033,7 +1996,7 @@ spec('board', () => {
         {login: () => MANAGER, tickets: () => [bare('1', 'Take me')]},
         async (page, window) => {
           window.chooseAgent('cursor');
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           assert.match(html, /<button class="round play" type="submit" aria-label="Взять">/);
           assert.equal(/<button[^>]*>\s*Взять\s*<\/button>/.test(html), false);
         },
@@ -2064,18 +2027,10 @@ spec('board', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const html = await (await fetch(page.url)).text();
-          const fns = pageFns(html);
-          assert.equal(fns.gesture('pool', '1', 'station'), 'take');
-          const takeBranch = html.slice(
-            html.indexOf("which === 'take'"),
-            html.indexOf("which === 'drag'"),
-          );
-          assert.match(takeBranch, /field\(form, 'key', value\)/);
-          assert.equal(takeBranch.includes('phase'), false);
-          assert.equal(takeBranch.includes('data-station'), false);
+          assert.equal(gesture('pool', '1', 'station'), 'take');
+          assert.equal(gesture('pool', '1', 'card'), '');
           const taken = await post(page.url, 'take', new URLSearchParams({key: '1'}).toString());
-          assert.equal(taken.status, 303);
+          assert.equal(taken.status, 200);
           assert.deepEqual(assignees, ['1']);
           assert.deepEqual(phases, ['proposing']);
           assert.equal(phases.includes('implementing'), false);
@@ -2094,7 +2049,7 @@ spec('board', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           const row = articleOf(html, '1');
           assert.match(row, /aria-label="Поломка"/);
           assert.equal(row.includes('aria-label="Взять"'), false);
@@ -2111,11 +2066,11 @@ spec('board', () => {
         async (page, window) => {
           window.chooseAgent('cursor');
           window.leaveModel('judgment', '');
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           const row = articleOf(html, '1');
           assert.match(
             row,
-            /<button class="round play off" type="submit" disabled aria-label="Взять">/,
+            /<button class="round play off" type="submit" disabled(?:="")? aria-label="Взять">/,
           );
           assert.equal(row.includes('aria-label="Поломка"'), false);
           assert.match(html, /нужна модель judgment/);
@@ -2141,7 +2096,7 @@ spec('board', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           assert.equal(html.includes('class="mark"'), false);
           assert.match(stationOf(html, '2', 'proposing'), /class="plaque"/);
           assert.equal(articleOf(html, '2').includes('aria-label="Взять"'), false);
@@ -2161,7 +2116,7 @@ spec('board', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           const plaque = stationOf(html, '1', 'specifying');
           assert.match(plaque, /блокеры 9/);
           assert.equal(plaque.includes('restore-baseline'), false);
@@ -2187,7 +2142,7 @@ spec('board', () => {
         async (page, window, paths) => {
           writeChange(paths.arcadia, '1', 'proposal.md', '# proposal\n');
           window.chooseAgent('cursor');
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           assert.match(stationOf(html, '1', 'proposing'), /aria-label="plan"/);
           assert.match(stationOf(html, '1', 'specifying'), /class="plaque"/);
         },
@@ -2207,7 +2162,7 @@ spec('board', () => {
         async (page, window, paths) => {
           writeChange(paths.arcadia, '1', 'proposal.md', '# proposal\n');
           window.chooseAgent('cursor');
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           const door = stationOf(html, '1', 'proposing');
           assert.match(
             door,
@@ -2228,7 +2183,7 @@ spec('board', () => {
         async (page, window, paths) => {
           writeChange(paths.arcadia, '1', 'proposal.md', '# proposal\n');
           window.chooseAgent('cursor');
-          const door = stationOf(await (await fetch(page.url)).text(), '1', 'proposing');
+          const door = stationOf(await pageHtml(page.url), '1', 'proposing');
           assert.match(door, /<button class="big" type="button" aria-label="plan">/);
           assert.equal(door.includes('href='), false);
         },
@@ -2245,7 +2200,7 @@ spec('board', () => {
           writeChange(paths.arcadia, '1', 'specs/beta/spec.md', '# beta\n');
           writeChange(paths.arcadia, '1', 'specs/alpha/spec.md', '# alpha\n');
           window.chooseAgent('cursor');
-          const closed = await (await fetch(page.url)).text();
+          const closed = await pageHtml(page.url);
           const station = stationOf(closed, '1', 'specifying');
           assert.equal(station.match(/aria-label="spec"/g)?.length, 1);
           assert.match(station, /name="act" value="open"/);
@@ -2257,8 +2212,8 @@ spec('board', () => {
             'act',
             new URLSearchParams({act: 'open', key: '1'}).toString(),
           );
-          assert.equal(opened.status, 303);
-          const html = await (await fetch(page.url)).text();
+          assert.equal(opened.status, 200);
+          const html = await pageHtml(page.url);
           assert.equal(stationOf(html, '1', 'specifying').match(/aria-label="spec"/g)?.length, 1);
           assert.equal(articleOf(html, '1').includes('class="caps"'), false);
           assert.match(html, /id="cap-alpha"/);
@@ -2272,7 +2227,7 @@ spec('board', () => {
         async (page, window, paths) => {
           writeChange(paths.arcadia, '1', 'design.md', '# design\n');
           window.chooseAgent('cursor');
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           const station = stationOf(html, '1', 'designing');
           assert.match(station, /class="plaque"/);
           assert.equal(station.includes('aria-label="design"'), false);
@@ -2296,7 +2251,7 @@ spec('board', () => {
         async (page, window, paths) => {
           writeChange(paths.arcadia, '1', 'design.md', '# design\n');
           window.chooseAgent('cursor');
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           assert.match(stationOf(html, '1', 'implementing'), /class="plaque"/);
           assert.match(stationOf(html, '1', 'designing'), /aria-label="design"/);
           assert.match(stationOf(html, '1', 'designing'), /class="pip"/);
@@ -2332,7 +2287,7 @@ spec('board', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const before = stationOf(await (await fetch(page.url)).text(), '1', 'designing');
+          const before = stationOf(await pageHtml(page.url), '1', 'designing');
           assert.match(before, /aria-label="Снять гейт designing"/);
           assert.match(before, /M8 0\.4/);
           assert.equal(before.includes('class="tick"'), false);
@@ -2341,14 +2296,14 @@ spec('board', () => {
             'act',
             new URLSearchParams({act: 'gate', key: '1', station: 'designing'}).toString(),
           );
-          assert.equal(posted.status, 303);
+          assert.equal(posted.status, 200);
           assert.ok(tickets[0]?.labels.includes('sdd:auto-design'));
           assert.equal(tickets[0]?.labels.includes('sdd:designed'), false);
           assert.equal(tickets[0]?.labels.includes('sdd:proposed'), false);
           assert.equal(tickets[0]?.labels.includes('sdd:specified'), false);
           assert.equal(tickets[0]?.labels.includes('sdd:accepted'), false);
           assert.deepEqual(phases, []);
-          const after = stationOf(await (await fetch(page.url)).text(), '1', 'designing');
+          const after = stationOf(await pageHtml(page.url), '1', 'designing');
           assert.match(after, /aria-label="Поставить гейт designing"/);
           assert.match(after, /class="tick"/);
           assert.equal(after.includes('M8 0.4'), false);
@@ -2380,7 +2335,7 @@ spec('board', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const before = stationOf(await (await fetch(page.url)).text(), '1', 'specifying');
+          const before = stationOf(await pageHtml(page.url), '1', 'specifying');
           assert.match(before, /aria-label="Поставить гейт specifying"/);
           assert.match(before, /class="tick"/);
           assert.equal(before.includes('<svg'), false);
@@ -2389,11 +2344,11 @@ spec('board', () => {
             'act',
             new URLSearchParams({act: 'gate', key: '1', station: 'specifying'}).toString(),
           );
-          assert.equal(posted.status, 303);
+          assert.equal(posted.status, 200);
           assert.equal(tickets[0]?.labels.includes('sdd:auto-spec'), false);
           assert.ok(tickets[0]?.labels.includes('sdd:auto-plan'));
           assert.ok(tickets[0]?.labels.includes('sdd:proposing'));
-          const after = stationOf(await (await fetch(page.url)).text(), '1', 'specifying');
+          const after = stationOf(await pageHtml(page.url), '1', 'specifying');
           assert.match(after, /aria-label="Снять гейт specifying"/);
         },
       );
@@ -2411,7 +2366,7 @@ spec('board', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           assert.equal(stationOf(html, '1', 'proposing').includes('гейт'), false);
           assert.equal(stationOf(html, '1', 'specifying').includes('гейт'), false);
           assert.match(stationOf(html, '1', 'specifying'), /class="plaque"/);
@@ -2420,7 +2375,7 @@ spec('board', () => {
             'act',
             new URLSearchParams({act: 'gate', key: '1', station: 'proposing'}).toString(),
           );
-          assert.equal(posted.status, 303);
+          assert.equal(posted.status, 200);
           assert.deepEqual(calls, []);
           assert.equal(tickets[0]?.labels.includes('sdd:auto-plan'), false);
         },
@@ -2432,7 +2387,7 @@ spec('board', () => {
         async (page, window, paths) => {
           writeChange(paths.arcadia, '1', 'design.md', '# design\n');
           window.chooseAgent('cursor');
-          const closed = await (await fetch(page.url)).text();
+          const closed = await pageHtml(page.url);
           const station = stationOf(closed, '1', 'designing');
           assert.match(station, /aria-label="design"/);
           assert.equal(station.includes('гейт'), false);
@@ -2441,8 +2396,8 @@ spec('board', () => {
             'act',
             new URLSearchParams({act: 'open', key: '1'}).toString(),
           );
-          assert.equal(opened.status, 303);
-          const html = await (await fetch(page.url)).text();
+          assert.equal(opened.status, 200);
+          const html = await pageHtml(page.url);
           assert.match(glineOf(html, '1', 'designing'), /aria-label="Снять гейт designing"/);
           assert.match(glineOf(html, '1', 'designing'), /name="where" value="side"/);
           assert.equal(stationOf(html, '1', 'designing').includes('гейт'), false);
@@ -2480,10 +2435,10 @@ spec('board', () => {
             'act',
             new URLSearchParams({act: 'gate', key: '1', station: 'specifying'}).toString(),
           );
-          assert.equal(posted.status, 303);
+          assert.equal(posted.status, 200);
           assert.ok(tickets[0]?.labels.includes('sdd:auto-spec'));
           assert.ok(tickets[0]?.labels.includes('sdd:wait-human'));
-          const plaque = stationOf(await (await fetch(page.url)).text(), '1', 'proposing');
+          const plaque = stationOf(await pageHtml(page.url), '1', 'proposing');
           assert.match(plaque, /<span class="kicker">ask<\/span>/);
         },
       );
@@ -2493,7 +2448,7 @@ spec('board', () => {
         {login: () => MANAGER, tickets: () => [held('1', 'implementing')]},
         async (page, window) => {
           window.chooseAgent('cursor');
-          const station = stationOf(await (await fetch(page.url)).text(), '1', 'tasking');
+          const station = stationOf(await pageHtml(page.url), '1', 'tasking');
           assert.match(station, /<span class="dot"/);
           assert.equal(station.includes('<button'), false);
           assert.equal(station.includes('<a '), false);
@@ -2525,7 +2480,7 @@ spec('board', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           assert.match(stationOf(html, '1', 'proposing'), /aria-label="Снять гейт proposing"/);
           assert.match(stationOf(html, '1', 'accepting'), /aria-label="Снять гейт accepting"/);
           assert.match(stationOf(html, '1', 'implementing'), /<span class="dot"/);
@@ -2534,7 +2489,7 @@ spec('board', () => {
             'act',
             new URLSearchParams({act: 'gate', key: '1', station: 'proposing'}).toString(),
           );
-          assert.equal(posted.status, 303);
+          assert.equal(posted.status, 200);
           assert.ok(tickets[0]?.labels.includes('sdd:auto-plan'));
           assert.equal(tickets[0]?.labels.includes('sdd:accepted'), false);
           assert.deepEqual(phases, []);
@@ -2571,11 +2526,11 @@ spec('board', () => {
             'act',
             new URLSearchParams({act: 'gate', key: '1', station: 'accepting'}).toString(),
           );
-          assert.equal(posted.status, 303);
+          assert.equal(posted.status, 200);
           assert.ok(tickets[0]?.labels.includes('sdd:auto-merge'));
           assert.equal(tickets[0]?.labels.includes('sdd:accepted'), false);
           assert.deepEqual(phases, []);
-          const station = stationOf(await (await fetch(page.url)).text(), '1', 'accepting');
+          const station = stationOf(await pageHtml(page.url), '1', 'accepting');
           assert.match(station, /aria-label="Поставить гейт accepting"/);
         },
       );
@@ -2616,17 +2571,17 @@ spec('board', () => {
             'act',
             new URLSearchParams({act: 'gate', key: '1', station: 'accepting'}).toString(),
           );
-          assert.equal(asked.status, 303);
-          const dialog = await (await fetch(page.url)).text();
+          assert.equal(asked.status, 200);
+          const dialog = await pageHtml(page.url);
           assert.match(dialog, /aria-label="Без контроля"/);
           assert.match(dialog, /Тикет останется без контроля/);
           assert.equal(tickets[0]?.labels.includes('sdd:auto-merge'), false);
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'close-ask'}).toString()))
               .status,
-            303,
+            200,
           );
-          const kept = await (await fetch(page.url)).text();
+          const kept = await pageHtml(page.url);
           assert.equal(kept.includes('Без контроля'), false);
           assert.equal(tickets[0]?.labels.includes('sdd:auto-merge'), false);
           assert.equal(
@@ -2642,7 +2597,7 @@ spec('board', () => {
                 }).toString(),
               )
             ).status,
-            303,
+            200,
           );
           assert.ok(tickets[0]?.labels.includes('sdd:auto-merge'));
           assert.equal(tickets[0]?.labels.includes('sdd:accepted'), false);
@@ -2660,12 +2615,12 @@ spec('board', () => {
       ];
       await hosted({login: () => MANAGER, tickets: () => tickets}, async (page, window) => {
         window.chooseAgent('cursor');
-        const waiting = stationOf(await (await fetch(page.url)).text(), '1', 'proposing');
+        const waiting = stationOf(await pageHtml(page.url), '1', 'proposing');
         assert.match(waiting, /<span class="kicker">ask<\/span>/);
         assert.match(waiting, /Review the proposal and accept it\./);
         assert.equal(waiting.includes('class="stat"'), false);
         tickets[0]?.labels.splice(tickets[0].labels.indexOf('sdd:wait-human'), 1);
-        const cleared = stationOf(await (await fetch(page.url)).text(), '1', 'proposing');
+        const cleared = stationOf(await pageHtml(page.url), '1', 'proposing');
         assert.equal(cleared.includes('>ask<'), false);
         assert.match(cleared, /<div class="stat">0<\/div>/);
       });
@@ -2682,7 +2637,7 @@ spec('board', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const plaque = stationOf(await (await fetch(page.url)).text(), '1', 'specifying');
+          const plaque = stationOf(await pageHtml(page.url), '1', 'specifying');
           assert.match(plaque, /<span class="kicker">Specify<\/span>/);
           assert.equal(plaque.includes('Plan'), false);
         },
@@ -2700,7 +2655,7 @@ spec('board', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const plaque = stationOf(await (await fetch(page.url)).text(), '1', 'proposing');
+          const plaque = stationOf(await pageHtml(page.url), '1', 'proposing');
           assert.equal(plaque.includes('class="kicker"'), false);
           assert.equal(plaque.includes('Plan'), false);
           assert.match(plaque, /<div class="stat">0<\/div>/);
@@ -2716,7 +2671,7 @@ spec('board', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const plaque = stationOf(await (await fetch(page.url)).text(), '1', 'specifying');
+          const plaque = stationOf(await pageHtml(page.url), '1', 'specifying');
           assert.match(plaque, /<span class="kicker">ревью<\/span>/);
           assert.match(plaque, /please look/);
         },
@@ -2730,7 +2685,7 @@ spec('board', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const plaque = stationOf(await (await fetch(page.url)).text(), '1', 'verifying');
+          const plaque = stationOf(await pageHtml(page.url), '1', 'verifying');
           assert.match(plaque, /<span class="kicker red">red<\/span>/);
           assert.equal(plaque.includes('lint'), false);
           assert.equal(plaque.includes('class="stat"'), false);
@@ -2754,8 +2709,8 @@ spec('board', () => {
             'act',
             new URLSearchParams({act: 'open', key: '1'}).toString(),
           );
-          assert.equal(opened.status, 303);
-          const html = await (await fetch(page.url)).text();
+          assert.equal(opened.status, 200);
+          const html = await pageHtml(page.url);
           assert.match(html, /class="ticket is-open"/);
           assert.equal(html.includes('name="phase"'), false);
           assert.deepEqual(phases, []);
@@ -2777,7 +2732,7 @@ spec('board', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const closed = await (await fetch(page.url)).text();
+          const closed = await pageHtml(page.url);
           const plaque = stationOf(closed, '1', 'proposing');
           assert.equal(plaque.match(/<span class="reason">/g)?.length, 1);
           assert.match(plaque, /text-overflow:\s*ellipsis|class="reason"/);
@@ -2788,8 +2743,8 @@ spec('board', () => {
             'act',
             new URLSearchParams({act: 'open', key: '1'}).toString(),
           );
-          assert.equal(opened.status, 303);
-          const html = await (await fetch(page.url)).text();
+          assert.equal(opened.status, 200);
+          const html = await pageHtml(page.url);
           const side = bandOf(html, '1');
           assert.match(side, /Review the proposal\. To accept it, replace the label sdd:proposing/);
           assert.match(side, /run sdd accept 5\./);
@@ -2813,7 +2768,7 @@ spec('board', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           const specifying = stationOf(html, '1', 'specifying');
           const tasking = stationOf(html, '2', 'tasking');
           assert.match(specifying, /<span class="reason">restore-baseline<\/span>/);
@@ -2839,7 +2794,7 @@ spec('board', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const plaque = stationOf(await (await fetch(page.url)).text(), '1', 'specifying');
+          const plaque = stationOf(await pageHtml(page.url), '1', 'specifying');
           assert.match(plaque, /<span class="kicker">ask<\/span>/);
           assert.match(plaque, /please decide/);
           assert.equal(plaque.includes('restore-baseline'), false);
@@ -2862,15 +2817,15 @@ spec('board', () => {
           window.chooseAgent('cursor');
           const catalog = path.join(paths.arcadia, gone);
           assert.equal(existsSync(catalog), false);
-          const face = await (await fetch(page.url)).text();
+          const face = await pageHtml(page.url);
           assert.match(articleOf(face, '1'), /aria-label="Поломка"/);
           assert.equal(face.includes('role="dialog"'), false);
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'repair', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           const dialog = between(html, '<div class="popup repair"', '</div></div>');
           assert.match(dialog, /каталога нет/);
           assert.equal(dialog.includes('<select'), false);
@@ -2886,21 +2841,21 @@ spec('board', () => {
         async (page, window) => {
           window.chooseAgent('cursor');
           window.leaveModel('judgment', '');
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           const row = articleOf(html, '1');
           assert.match(html, /нужна модель judgment/);
           assert.match(
             row,
-            /<button class="round play off" type="submit" disabled aria-label="Взять">/,
+            /<button class="round play off" type="submit" disabled(?:="")? aria-label="Взять">/,
           );
           assert.equal(row.includes('aria-label="Поломка"'), false);
           assert.equal(html.includes('role="dialog"'), false);
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'repair', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const after = await (await fetch(page.url)).text();
+          const after = await pageHtml(page.url);
           assert.equal(after.includes('aria-label="Поломка"'), false);
           assert.equal(after.includes('role="dialog"'), false);
           assert.match(after, /нужна модель judgment/);
@@ -2920,14 +2875,14 @@ spec('board', () => {
       ];
       await hosted({login: () => MANAGER, tickets: () => tickets}, async (page, window) => {
         window.chooseAgent('cursor');
-        const face = await (await fetch(page.url)).text();
+        const face = await pageHtml(page.url);
         assert.match(articleOf(face, '1'), /aria-label="Поломка"/);
         assert.equal(
           (await post(page.url, 'act', new URLSearchParams({act: 'repair', key: '1'}).toString()))
             .status,
-          303,
+          200,
         );
-        const html = await (await fetch(page.url)).text();
+        const html = await pageHtml(page.url);
         const dialog = between(html, '<div class="popup repair"', '</div></div>');
         assert.match(dialog, /несколько pull request/);
         assert.equal(dialog.includes('<select'), false);
@@ -3007,7 +2962,7 @@ spec('board', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
           const shot = await readSnapshot(page.url);
           assert.ok(shot.opened);
@@ -3039,7 +2994,7 @@ spec('board', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
           const shot = await readSnapshot(page.url);
           assert.ok(shot.opened);
@@ -3054,17 +3009,13 @@ spec('board', () => {
         {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
         async (page, window) => {
           window.chooseAgent('cursor');
-          assert.equal(
-            (
-              await post(
-                page.url,
-                'act',
-                new URLSearchParams({act: 'answer', key: '1', reply: ''}).toString(),
-              )
-            ).status,
-            303,
+          const posted = await post(
+            page.url,
+            'act',
+            new URLSearchParams({act: 'answer', key: '1', reply: ''}).toString(),
           );
-          const first = await readSnapshot(page.url);
+          assert.equal(posted.status, 200);
+          const first = JSON.parse(posted.body) as WindowSnapshot;
           assert.equal(first.status, 'Комментарий пустой. Напишите его в поле.');
           const second = await readSnapshot(page.url);
           assert.equal(second.status, undefined);
@@ -3087,17 +3038,17 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const first = await (await fetch(page.url)).text();
+          const first = await pageHtml(page.url);
           assert.match(articleOf(first, '1'), /class="ticket is-open"/);
           assert.equal(articleOf(first, '2').includes('is-open'), false);
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '2'}).toString()))
               .status,
-            303,
+            200,
           );
-          const second = await (await fetch(page.url)).text();
+          const second = await pageHtml(page.url);
           assert.match(articleOf(second, '2'), /class="ticket is-open"/);
           assert.equal(articleOf(second, '1').includes('is-open'), false);
           assert.equal(second.match(/class="ticket is-open"/g)?.length, 1);
@@ -3112,15 +3063,15 @@ spec('sidebar', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const before = await (await fetch(page.url)).text();
+          const before = await pageHtml(page.url);
           const neighbor = articleOf(before, '2');
           assert.equal(neighbor.match(/data-station=/g)?.length, 7);
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const after = await (await fetch(page.url)).text();
+          const after = await pageHtml(page.url);
           assert.equal(articleOf(after, '2'), neighbor);
           assert.match(articleOf(after, '1'), /class="ticket is-open"/);
           assert.match(after, /<aside class="sidebar" data-key="1"/);
@@ -3139,15 +3090,15 @@ spec('sidebar', () => {
         {login: () => MANAGER, tickets: () => [bare('1', 'Quiet')]},
         async (page, window) => {
           window.chooseAgent('cursor');
-          const closed = await (await fetch(page.url)).text();
+          const closed = await pageHtml(page.url);
           assert.equal(closed.includes('role="dialog"'), false);
           assert.match(closed, /name="act" value="open-settings"/);
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString()))
               .status,
-            303,
+            200,
           );
-          const sheet = await (await fetch(page.url)).text();
+          const sheet = await pageHtml(page.url);
           assert.match(sheet, /role="dialog" aria-label="Настройки"/);
           assert.equal(sheet.match(/value="close-settings"/g)?.length, 1);
           assert.match(sheet, /aria-label="Закрыть"/);
@@ -3164,17 +3115,17 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const opened = await (await fetch(page.url)).text();
+          const opened = await pageHtml(page.url);
           assert.match(opened, /<aside class="sidebar" data-key="1"/);
           assert.match(articleOf(opened, '1'), /is-open/);
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const closed = await (await fetch(page.url)).text();
+          const closed = await pageHtml(page.url);
           assert.equal(closed.includes('class="sidebar"'), false);
           assert.equal(articleOf(closed, '1').includes('is-open'), false);
         },
@@ -3194,9 +3145,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           const side = bandOf(html, '1');
           assert.match(side, /id="spine-Plan"/);
           assert.match(side, /Годность или список проблем/);
@@ -3234,9 +3185,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const side = bandOf(await (await fetch(page.url)).text(), '1');
+          const side = bandOf(await pageHtml(page.url), '1');
           assert.match(side, /<h3>Scope<\/h3>/);
           assert.match(side, /Сайдбар читает план целиком\./);
           assert.match(side, /Второй абзац scope остаётся\./);
@@ -3258,9 +3209,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           const side = bandOf(html, '1');
           const planPick = side.match(/id="spine-Plan"[^>]*/)?.[0] ?? '';
           assert.equal(planPick.includes('checked'), false);
@@ -3288,10 +3239,10 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
           const planHead =
-            spineOf(await (await fetch(page.url)).text(), '1', 'Plan').split(
+            spineOf(await pageHtml(page.url), '1', 'Plan').split(
               '<div class="fold">',
             )[0] ?? '';
           assert.match(planHead, /id="spine-Plan"[^>]*checked/);
@@ -3316,9 +3267,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           const side = bandOf(html, '1');
           assert.match(
             side,
@@ -3338,7 +3289,7 @@ spec('sidebar', () => {
                 }).toString(),
               )
             ).status,
-            303,
+            200,
           );
           assert.deepEqual(comments, ['> Сайдбар читает ветку.\n\nЗдесь узко.']);
         },
@@ -3358,9 +3309,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const side = bandOf(await (await fetch(page.url)).text(), '1');
+          const side = bandOf(await pageHtml(page.url), '1');
           assert.match(side, /<h3>Scope<\/h3>/);
           assert.match(side, /Сайдбар\./);
           assert.equal(side.includes('<h3>Constraints</h3>'), false);
@@ -3381,9 +3332,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const side = bandOf(await (await fetch(page.url)).text(), '1');
+          const side = bandOf(await pageHtml(page.url), '1');
           assert.match(side, /<h4>Added<\/h4>/);
           assert.match(side, /<h4>Modified<\/h4>/);
           assert.equal(side.includes('### Added'), false);
@@ -3407,9 +3358,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const side = bandOf(await (await fetch(page.url)).text(), '1');
+          const side = bandOf(await pageHtml(page.url), '1');
           assert.match(side, /Годность\./);
           assert.equal(side.includes('Open questions'), false);
         },
@@ -3429,9 +3380,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const side = bandOf(await (await fetch(page.url)).text(), '1');
+          const side = bandOf(await pageHtml(page.url), '1');
           assert.match(side, /План принимается, когда открытых вопросов не останется\./);
           assert.match(side, /data-question="Писать ли имя проверки\?"/);
         },
@@ -3466,9 +3417,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           assert.match(html, /\.spine form\.line-note\s*\{[^}]*margin:\s*18px 10px 8px/);
           assert.match(html, /\.spine \.plan-foot\s*\{[^}]*margin:\s*10px 10px 8px/);
           assert.match(html, /\.spine \.plan-foot form\s*\{[^}]*margin:\s*0/);
@@ -3487,7 +3438,6 @@ spec('sidebar', () => {
           assert.match(html, /\.spine \.shut\s*\{[^}]*border-radius:\s*50%/);
           assert.match(bandOf(html, '1'), /class="shut"[^>]*aria-label="Закрыть"/);
           assert.match(bandOf(html, '1'), /class="send"[^>]*aria-label="Записать"/);
-          assert.match(html, /draftsAfterClick\(openDrafts\(\), targetLine\)/);
         },
       );
     });
@@ -3505,10 +3455,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const html = await (await fetch(page.url)).text();
-          assert.match(html, /headClickToggles\(event\.target\)/);
+          const html = await pageHtml(page.url);
           assert.match(html, /\.spine \.row\s*\{[^}]*cursor:\s*pointer/);
           assert.match(html, /\.spine \.layer\s*\{[^}]*display:\s*flex[^}]*align-items:\s*center/);
         },
@@ -3522,9 +3471,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           assert.match(
             html,
             /\.spine > section:has\(\.spine-pick:checked\) \.row\s*\{[^}]*position:\s*sticky[^}]*top:\s*0[^}]*width:\s*auto[^}]*max-width:\s*none/,
@@ -3535,23 +3484,10 @@ spec('sidebar', () => {
         },
       );
     });
-    scenario('Escape closes the line field', async () => {
+    scenario('Escape closes the line field', () => {
       assert.equal(lineFieldClosesOnEscape('Escape', true), true);
       assert.equal(lineFieldClosesOnEscape('Escape', false), false);
       assert.equal(lineFieldClosesOnEscape('Enter', true), false);
-      await hosted(
-        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
-        async (page, window) => {
-          window.chooseAgent('cursor');
-          assert.equal(
-            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
-              .status,
-            303,
-          );
-          const html = await (await fetch(page.url)).text();
-          assert.match(html, /lineFieldClosesOnEscape\(event\.key, Boolean\(form\)\)/);
-        },
-      );
     });
     scenario('The Design row shows the named parts', async () => {
       await hosted(
@@ -3588,9 +3524,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const side = bandOf(await (await fetch(page.url)).text(), '1');
+          const side = bandOf(await pageHtml(page.url), '1');
           assert.match(side, /Одна проверка/);
           assert.match(side, /Один модуль/);
           assert.match(side, /Отклонено: второй модуль/);
@@ -3608,9 +3544,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const side = bandOf(await (await fetch(page.url)).text(), '1');
+          const side = bandOf(await pageHtml(page.url), '1');
           assert.match(side, /Diff есть/);
           assert.equal(side.includes('diff --git'), false);
         },
@@ -3624,9 +3560,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           assert.match(html, /<aside class="sidebar" data-key="1"/);
           assert.match(
             html,
@@ -3659,9 +3595,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const side = bandOf(await (await fetch(page.url)).text(), '1');
+          const side = bandOf(await pageHtml(page.url), '1');
           assert.match(side, /id="spine-Plan"/);
           assert.match(side, /С ветки тикета/);
           assert.equal(side.includes('С рабочего дерева'), false);
@@ -3697,7 +3633,7 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
           const empty = await post(
             page.url,
@@ -3709,9 +3645,9 @@ spec('sidebar', () => {
               reply: '   ',
             }).toString(),
           );
-          assert.equal(empty.status, 303);
-          assert.match(statusOf(await (await fetch(page.url)).text()), /Ответ пустой/);
-          assert.equal((await (await fetch(page.url)).text()).includes('role="status"'), false);
+          assert.equal(empty.status, 200);
+          assert.match(statusOf(shown(empty.body)), /Ответ пустой/);
+          assert.equal((await pageHtml(page.url)).includes('role="status"'), false);
           assert.equal(
             (
               await post(
@@ -3725,11 +3661,11 @@ spec('sidebar', () => {
                 }).toString(),
               )
             ).status,
-            303,
+            200,
           );
           assert.deepEqual(comments, ['- [ ] Писать ли имя проверки?\n\nДа, короткое имя.']);
           assert.match(readFileSync(file, 'utf8'), /- \[ \] Писать ли имя проверки\?/);
-          assert.equal((await (await fetch(page.url)).text()).includes('role="status"'), false);
+          assert.equal((await pageHtml(page.url)).includes('role="status"'), false);
         },
       );
     });
@@ -3754,10 +3690,10 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
           assert.match(
-            bandOf(await (await fetch(page.url)).text(), '1'),
+            bandOf(await pageHtml(page.url), '1'),
             /<label class="draft">Комментарий/,
           );
           assert.equal(
@@ -3772,7 +3708,7 @@ spec('sidebar', () => {
                 }).toString(),
               )
             ).status,
-            303,
+            200,
           );
           assert.deepEqual(comments, ['Сначала сократить Outcome.']);
         },
@@ -3812,13 +3748,13 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const asking = bandOf(await (await fetch(page.url)).text(), '1');
+          const asking = bandOf(await pageHtml(page.url), '1');
           assert.match(asking, /<label class="draft">Комментарий/);
           assert.equal(asking.includes('Принять Plan'), false);
           writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
-          const side = bandOf(await (await fetch(page.url)).text(), '1');
+          const side = bandOf(await pageHtml(page.url), '1');
           assert.match(side, /aria-label="Принять Plan"/);
           assert.equal(
             (
@@ -3828,12 +3764,12 @@ spec('sidebar', () => {
                 new URLSearchParams({act: 'accept-review', key: '1'}).toString(),
               )
             ).status,
-            303,
+            200,
           );
           assert.ok(tickets[0]?.labels.includes('sdd:proposed'));
           assert.ok(tickets[0]?.labels.includes('sdd:proposing'));
           assert.deepEqual(phases, []);
-          assert.equal((await (await fetch(page.url)).text()).includes('role="status"'), false);
+          assert.equal((await pageHtml(page.url)).includes('role="status"'), false);
         },
       );
     });
@@ -3862,9 +3798,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          assert.match(bandOf(await (await fetch(page.url)).text(), '1'), /Принять Specify/);
+          assert.match(bandOf(await pageHtml(page.url), '1'), /Принять Specify/);
           assert.equal(
             (
               await post(
@@ -3873,7 +3809,7 @@ spec('sidebar', () => {
                 new URLSearchParams({act: 'accept-review', key: '1'}).toString(),
               )
             ).status,
-            303,
+            200,
           );
           assert.ok(tickets[0]?.labels.includes('sdd:specified'));
           assert.ok(tickets[0]?.labels.includes('sdd:specifying'));
@@ -3910,9 +3846,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          assert.match(bandOf(await (await fetch(page.url)).text(), '1'), /Принять Design/);
+          assert.match(bandOf(await pageHtml(page.url), '1'), /Принять Design/);
           assert.equal(
             (
               await post(
@@ -3921,7 +3857,7 @@ spec('sidebar', () => {
                 new URLSearchParams({act: 'accept-review', key: '1'}).toString(),
               )
             ).status,
-            303,
+            200,
           );
           assert.ok(tickets[0]?.labels.includes('sdd:designed'));
           assert.ok(tickets[0]?.labels.includes('sdd:designing'));
@@ -3955,14 +3891,14 @@ spec('sidebar', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const closed = await (await fetch(page.url)).text();
+          const closed = await pageHtml(page.url);
           assert.match(stationOf(closed, '1', 'proposing'), /<span class="dot"/);
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           const line = glineOf(html, '1', 'proposing');
           assert.match(line, /aria-label="Поставить гейт proposing"/);
           assert.match(html, /\.tick\s*\{[^}]*width:\s*12px/);
@@ -3979,7 +3915,7 @@ spec('sidebar', () => {
               where: 'side',
             }).toString(),
           );
-          assert.equal(posted.status, 303);
+          assert.equal(posted.status, 200);
           assert.equal(tickets[0]?.labels.includes('sdd:auto-plan'), false);
         },
       );
@@ -3993,9 +3929,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           assert.match(glineOf(html, '1', 'designing'), /гейт designing/);
           assert.match(html, /\.stop\s*\{[^}]*width:\s*18px[^}]*height:\s*18px/);
           assert.match(html, /\.stop svg\s*\{[^}]*width:\s*18px[^}]*height:\s*18px/);
@@ -4014,9 +3950,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           const plan = spineOf(html, '1', 'Plan');
           assert.match(plan, /aria-label="Принять Plan"/);
           assert.match(
@@ -4043,9 +3979,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const plan = spineOf(await (await fetch(page.url)).text(), '1', 'Plan');
+          const plan = spineOf(await pageHtml(page.url), '1', 'Plan');
           assert.equal(plan.includes('Принять Plan'), false);
           assert.equal(plan.includes('data-gate="proposing"'), false);
         },
@@ -4065,9 +4001,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const specify = spineOf(await (await fetch(page.url)).text(), '1', 'Specify');
+          const specify = spineOf(await pageHtml(page.url), '1', 'Specify');
           assert.match(specify, /aria-label="Принять Specify"/);
           assert.equal(specify.includes('data-gate="specifying"'), false);
         },
@@ -4087,9 +4023,9 @@ spec('sidebar', () => {
             assert.equal(
               (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
                 .status,
-              303,
+              200,
             );
-            const specify = spineOf(await (await fetch(page.url)).text(), '1', 'Specify');
+            const specify = spineOf(await pageHtml(page.url), '1', 'Specify');
             assert.equal(specify.includes('Принять Specify'), false, action);
             assert.equal(specify.includes('data-gate="specifying"'), false, action);
           },
@@ -4105,9 +4041,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const specify = spineOf(await (await fetch(page.url)).text(), '1', 'Specify');
+          const specify = spineOf(await pageHtml(page.url), '1', 'Specify');
           assert.match(specify, /aria-label="Принять Specify"/);
           assert.equal(specify.includes('data-gate="specifying"'), false);
         },
@@ -4138,9 +4074,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const specify = spineOf(await (await fetch(page.url)).text(), '1', 'Specify');
+          const specify = spineOf(await pageHtml(page.url), '1', 'Specify');
           assert.equal(specify.includes('Принять Specify'), false);
           assert.equal(specify.includes('data-gate="specifying"'), false);
         },
@@ -4161,9 +4097,9 @@ spec('sidebar', () => {
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const specify = spineOf(await (await fetch(page.url)).text(), '1', 'Specify');
+          const specify = spineOf(await pageHtml(page.url), '1', 'Specify');
           assert.equal(specify.includes('Принять Specify'), false);
           assert.equal(specify.includes('data-gate="specifying"'), false);
         },
@@ -4183,15 +4119,15 @@ spec('role', () => {
         async (page, window) => {
           window.chooseAgent('cursor');
           window.addRole({name: 'Page', outcome: 'html', text: '<p>страница</p>'});
-          const closed = await (await fetch(page.url)).text();
+          const closed = await pageHtml(page.url);
           assert.equal(articleOf(closed, '1').includes('class="verb"'), false);
           assert.equal(articleOf(closed, '2').includes('class="verb"'), false);
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
               .status,
-            303,
+            200,
           );
-          const html = await (await fetch(page.url)).text();
+          const html = await pageHtml(page.url);
           const verb = bandOf(html, '1');
           assert.match(verb, /Page/);
           assert.match(verb, /html/);

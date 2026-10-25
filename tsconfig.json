@@ -1,8 +1,10 @@
 {
   "extends": "@ojson/infra/tsconfig/base",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    "lib": ["ES2020", "ES2021", "ES2022", "DOM"],
+    "jsx": "react-jsx"
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["**/*.spec.ts", "**/*.test.ts"]
 }

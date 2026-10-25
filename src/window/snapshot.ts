@@ -2,9 +2,13 @@ import type {
   BoardState,
   ColumnName,
   GateStation,
+  OverlayGroup,
   PhaseRow,
+  RoleOutcome,
+  ServiceConfigGroup,
   SettingsState,
   SidebarBlock,
+  StationDoor,
 } from './types.ts';
 
 import {specsReady} from '../machine/change.ts';
@@ -18,9 +22,19 @@ import {
   type Spine,
   type SpineLayer,
 } from './spine.ts';
+import {COLUMN_NAMES} from './types.ts';
 
 /** A spine row offers acceptance, keeps its gate, or leaves that place empty. */
 export type LayerAct = 'accept' | 'gate' | 'none';
+
+export type SnapshotDoor = {
+  kind: StationDoor['kind'];
+  bad?: true;
+  dot?: true;
+  /** Several specs: the door opens the cycle instead of one file. */
+  many?: true;
+  href?: string;
+};
 
 export type SnapshotRow = {
   key: string;
@@ -30,6 +44,14 @@ export type SnapshotRow = {
   /** Action token while a worker is on a turn for this cycle. */
   action?: string;
   plaque: {top?: string; bottom?: string};
+  phaseRow?: PhaseRow;
+  reason?: string;
+  takeDisabled?: true;
+  alarm?: true;
+  choices: string[];
+  occasion?: true;
+  doors?: Partial<Record<ColumnName, SnapshotDoor>>;
+  gateOff?: Partial<Record<GateStation, true>>;
 };
 
 export type WindowSnapshot = {
@@ -41,29 +63,57 @@ export type WindowSnapshot = {
   spy: string;
   /** Error the page shows once between the header and the board. */
   status?: string;
+  /** Row the last gesture should bring into view. */
+  show?: string;
   settings: SettingsState;
+  overlay: OverlayGroup;
+  serviceConfig: ServiceConfigGroup;
+  checkouts: string[];
+  serviceDirty: boolean;
+  /** Chosen service per cycle, for the repair field. */
+  service: Record<string, string>;
+  banners: {text: string}[];
+  roles: {name: string; outcome: RoleOutcome}[];
+  /** `file:line` review URLs for focus and Code lines. */
+  reviewPlaces: Record<string, string>;
+  popup?: string;
+  repair?: string;
+  ask?: {key: string; station: string; side: boolean};
   rows: SnapshotRow[];
   opened?: {
     key: string;
     title: string;
     spine: Spine;
     layers: {layer: SpineLayer; act: LayerAct}[];
+    blocks: SidebarBlock[];
   };
 };
 
 type SnapshotSurface = {
   board(): BoardState;
   settings(): SettingsState;
+  overlay(): OverlayGroup;
+  serviceConfig(): ServiceConfigGroup;
+  checkouts(): string[];
+  shelf(): {name: string; outcome: RoleOutcome}[];
   spyNote(): string;
   turn(key: string): string | undefined;
   sidebar(): SidebarBlock[];
   spine(): Spine | undefined;
+  doorPlace(file: string): string | undefined;
+  openReviewPlace(file: string, line: number): string | undefined;
 };
 
 type SnapshotView = {
   generation: number;
   opened: string;
   status?: string;
+  show?: string;
+  popup?: string;
+  repair?: string;
+  ask?: {key: string; station: string; side: boolean};
+  service: Record<string, string>;
+  serviceDirty: boolean;
 };
 
 type Fact = {
@@ -78,6 +128,10 @@ type Fact = {
   unanswered?: string;
   gateOff?: Partial<Record<GateStation, true>>;
   occasion?: true;
+  doors?: Partial<Record<ColumnName, StationDoor>>;
+  takeDisabled?: true;
+  alarm?: true;
+  choices: string[];
 };
 
 /** Spec turns hide Specify acceptance until this cycle's turn ends. */
@@ -141,6 +195,8 @@ function facts(board: BoardState): Fact[] {
       unanswered: card.unanswered,
       gateOff: card.gateOff,
       occasion: card.occasion,
+      doors: card.doors,
+      choices: [],
     })),
   );
   taken.sort((left, right) => {
@@ -161,18 +217,59 @@ function facts(board: BoardState): Fact[] {
     ask: card.ask,
     unanswered: card.unanswered,
     gateOff: card.gateOff,
+    doors: card.doors,
+    takeDisabled: card.takeDisabled,
+    alarm: card.alarm,
+    choices: card.choices,
   }));
   return [...taken, ...pool];
 }
 
-function publish(row: Fact, action: string | undefined): SnapshotRow {
+function publishedDoors(
+  doors: Fact['doors'],
+  place: (file: string) => string | undefined,
+): SnapshotRow['doors'] {
+  if (!doors) {
+    return undefined;
+  }
+  const out: NonNullable<SnapshotRow['doors']> = {};
+  for (const name of COLUMN_NAMES) {
+    const door = doors[name];
+    if (!door) {
+      continue;
+    }
+    const href = door.file === undefined ? undefined : place(door.file);
+    out[name] = {
+      kind: door.kind,
+      ...(door.bad === true ? {bad: true} : {}),
+      ...(door.dot === true ? {dot: true} : {}),
+      ...(door.specs !== undefined && door.specs.length > 1 ? {many: true} : {}),
+      ...(href !== undefined && href !== '' ? {href} : {}),
+    };
+  }
+  return out;
+}
+
+function publish(
+  row: Fact,
+  action: string | undefined,
+  place: (file: string) => string | undefined,
+): SnapshotRow {
   const shown = action === '' ? undefined : action;
   return {
     key: row.key,
     title: row.title,
     pool: row.pool,
+    choices: row.choices,
     ...(row.station !== undefined ? {station: row.station} : {}),
     ...(shown !== undefined ? {action: shown} : {}),
+    ...(row.phaseRow !== undefined ? {phaseRow: row.phaseRow} : {}),
+    ...(row.reason !== undefined ? {reason: row.reason} : {}),
+    ...(row.takeDisabled === true ? {takeDisabled: true} : {}),
+    ...(row.alarm === true ? {alarm: true} : {}),
+    ...(row.occasion === true ? {occasion: true} : {}),
+    ...(row.gateOff !== undefined ? {gateOff: row.gateOff} : {}),
+    ...(row.doors !== undefined ? {doors: publishedDoors(row.doors, place)} : {}),
     plaque: plaqueLines({
       ask: row.ask,
       gaps: row.layers,
@@ -183,6 +280,29 @@ function publish(row: Fact, action: string | undefined): SnapshotRow {
       action: shown,
     }),
   };
+}
+
+function rememberPlaces(text: string, place: (file: string, line: number) => string | undefined, into: Record<string, string>): void {
+  for (const line of text.split('\n')) {
+    const matched = /^(\s*)Code(\s+)(\S.*)$/.exec(line);
+    const rest = matched?.[3];
+    if (rest === undefined || rest.trim() === 'solid') {
+      continue;
+    }
+    for (const gap of rest.split(';')) {
+      const core = gap.trim();
+      const found = /^(\S+):(\d+)$/.exec(core);
+      if (!found?.[1] || found[2] === undefined) {
+        continue;
+      }
+      const key = `${found[1]}:${found[2]}`;
+      if (Object.hasOwn(into, key)) {
+        continue;
+      }
+      const url = place(found[1], Number(found[2]));
+      into[key] = url ?? '';
+    }
+  }
 }
 
 function openCycle(
@@ -212,6 +332,7 @@ function openCycle(
     title: row.title,
     spine: model,
     layers: SPINE_LAYERS.map(layer => ({layer, act: layerAct(layer, model, action)})),
+    blocks: surface.sidebar(),
   };
 }
 
@@ -220,13 +341,32 @@ export function snapshot(surface: SnapshotSurface, view: SnapshotView): WindowSn
   const board = surface.board();
   const drawn = facts(board);
   const opened = openCycle(surface, view, drawn);
+  const reviewPlaces: Record<string, string> = {};
+  if (opened) {
+    rememberPlaces(opened.spine.rest.join('\n'), surface.openReviewPlace, reviewPlaces);
+    for (const line of opened.spine.lines) {
+      rememberPlaces(line.raw, surface.openReviewPlace, reviewPlaces);
+    }
+  }
   return {
     generation: view.generation,
     lamp: board.stepsStart,
     spy: surface.spyNote(),
     settings: surface.settings(),
-    rows: drawn.map(row => publish(row, surface.turn(row.key))),
+    overlay: surface.overlay(),
+    serviceConfig: surface.serviceConfig(),
+    checkouts: surface.checkouts(),
+    serviceDirty: view.serviceDirty,
+    service: view.service,
+    banners: board.rows,
+    roles: surface.shelf(),
+    reviewPlaces,
+    rows: drawn.map(row => publish(row, surface.turn(row.key), file => surface.doorPlace(file))),
     ...(view.status !== undefined ? {status: view.status} : {}),
+    ...(view.show !== undefined && view.show !== '' ? {show: view.show} : {}),
+    ...(view.popup !== undefined ? {popup: view.popup} : {}),
+    ...(view.repair !== undefined ? {repair: view.repair} : {}),
+    ...(view.ask !== undefined ? {ask: view.ask} : {}),
     ...(opened !== undefined ? {opened} : {}),
   };
 }

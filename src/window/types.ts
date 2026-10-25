@@ -141,6 +141,9 @@ export type ModelField = {value: string; needsValue: boolean};
 
 export const ROLE_OUTCOMES = ['ticket-fields', 'pull-comment', 'html', 'cycle-file'] as const;
 
+/** Agents the factory can run. The browser list and the home file share this. */
+export const FACTORY_AGENTS = ['cursor', 'codex', 'claude-code', 'opencode'] as const;
+
 export type RoleOutcome = (typeof ROLE_OUTCOMES)[number];
 
 /** One record in this manager's collection. `labels` belong to `ticket-fields`. */

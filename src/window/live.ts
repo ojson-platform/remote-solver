@@ -1,5 +1,5 @@
 import type {Machine} from '../adapters/compose.ts';
-import type {Conversation, IssueRecord, Pull, ThreadRecord} from '../machine/port.ts';
+import type {Conversation, IssueRecord, Pull, ThreadRecord, ThreadTarget} from '../machine/port.ts';
 
 import {existsSync, mkdirSync, readFileSync} from 'node:fs';
 import {homedir} from 'node:os';
@@ -131,6 +131,7 @@ export type LiveReview = {
   comments(pull: string): Promise<Conversation[]>;
   range(pull: string): Promise<{head: string; base: string | null}>;
   speak(pull: string, body: string): Promise<void>;
+  openThread(pull: string, target: ThreadTarget): Promise<void>;
 };
 
 export type LiveVcs = {
@@ -357,6 +358,31 @@ export function openLiveBoard(options: LiveBoardOptions) {
           return;
         }
         forget(review.speak(pull, body));
+      },
+      async threadPull(key, body, place) {
+        const pull = pullByKey.get(key);
+        if (!pull) {
+          throw new Error('pull is missing');
+        }
+        const range = await review.range(pull);
+        if (range.head === '') {
+          throw new Error('head is missing');
+        }
+        await review.openThread(pull, {
+          commit: range.head,
+          path: place.path,
+          line: place.line,
+          body,
+          plain: true,
+          side: place.side,
+        });
+      },
+      async speakPull(key, body) {
+        const pull = pullByKey.get(key);
+        if (!pull) {
+          throw new Error('pull is missing');
+        }
+        await review.speak(pull, body);
       },
       review: key => reviews.get(key),
       reviewPlace: place => pullPage(place.file, place.line),

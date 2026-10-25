@@ -5656,3 +5656,217 @@ test('a write that does not fit leaves the previous value', () => {
 test('the last drag writes its own text', () => {
   proveTheLastDragWritesItsOwnText();
 });
+
+type ThreadPlace = {path: string; line: number; side: 'right' | 'left'};
+
+function hostedAnswer(openPullRequests: number) {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const comments: {key: string; body: string}[] = [];
+  const threads: {key: string; body: string; place: ThreadPlace}[] = [];
+  const spoken: {key: string; body: string}[] = [];
+  const hosts: {
+    commentPull: (key: string, body: string) => void;
+    threadPull: (key: string, body: string, place: ThreadPlace) => Promise<void>;
+    speakPull: (key: string, body: string) => Promise<void>;
+  } = {
+    commentPull(key, body) {
+      comments.push({key, body});
+    },
+    async threadPull(key, body, place) {
+      threads.push({key, body, place});
+    },
+    async speakPull(key, body) {
+      spoken.push({key, body});
+    },
+  };
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => [cycle('1', 'implementing', {openPullRequests})],
+      commentPull: (key, body) => {
+        hosts.commentPull(key, body);
+      },
+      threadPull: (key, body, place) => hosts.threadPull(key, body, place),
+      speakPull: (key, body) => hosts.speakPull(key, body),
+    },
+  );
+  return {dir, window, comments, threads, spoken, hosts};
+}
+
+test('one open pull request with a path and a line opens a thread', async () => {
+  const hosted = hostedAnswer(1);
+  try {
+    const status = await hosted.window.answer(
+      '1',
+      '',
+      'ответ',
+      'строка',
+      'src/a.ts',
+      '12',
+      'right',
+    );
+    assert.equal(status, undefined);
+    assert.deepEqual(hosted.threads, [
+      {key: '1', body: 'ответ', place: {path: 'src/a.ts', line: 12, side: 'right'}},
+    ]);
+    assert.deepEqual(hosted.comments, []);
+    assert.deepEqual(hosted.spoken, []);
+  } finally {
+    rmSync(hosted.dir, {recursive: true, force: true});
+  }
+});
+
+test('an empty side on a live anchor is the right side', async () => {
+  const hosted = hostedAnswer(1);
+  try {
+    await hosted.window.answer('1', '', 'ответ', 'строка', 'src/a.ts', '12', '');
+    assert.deepEqual(hosted.threads, [
+      {key: '1', body: 'ответ', place: {path: 'src/a.ts', line: 12, side: 'right'}},
+    ]);
+  } finally {
+    rmSync(hosted.dir, {recursive: true, force: true});
+  }
+});
+
+test('a left side stays on the left', async () => {
+  const hosted = hostedAnswer(1);
+  try {
+    await hosted.window.answer('1', '', 'ответ', 'строка', 'src/a.ts', '12', 'left');
+    assert.deepEqual(hosted.threads, [
+      {key: '1', body: 'ответ', place: {path: 'src/a.ts', line: 12, side: 'left'}},
+    ]);
+  } finally {
+    rmSync(hosted.dir, {recursive: true, force: true});
+  }
+});
+
+test('a refused thread falls back to a quoted conversation comment', async () => {
+  const hosted = hostedAnswer(1);
+  hosted.hosts.threadPull = async () => {
+    throw new Error('host refused the thread');
+  };
+  try {
+    const status = await hosted.window.answer('1', '', 'ответ', 'строка', 'src/a.ts', '4', 'right');
+    assert.equal(status, undefined);
+    assert.equal(String(status).includes('host refused the thread'), false);
+    assert.deepEqual(hosted.spoken, [{key: '1', body: '> строка\n\nответ'}]);
+    assert.deepEqual(hosted.comments, []);
+  } finally {
+    rmSync(hosted.dir, {recursive: true, force: true});
+  }
+});
+
+test('a refused thread and a refused quote are not written', async () => {
+  const hosted = hostedAnswer(1);
+  hosted.hosts.threadPull = async () => {
+    throw new Error('host refused the thread');
+  };
+  hosted.hosts.speakPull = async () => {
+    throw new Error('host refused the quote');
+  };
+  try {
+    const status = await hosted.window.answer('1', '', 'ответ', 'строка', 'src/a.ts', '4', 'right');
+    assert.equal(status, 'комментарий не записан');
+    assert.equal(status.includes('host refused'), false);
+  } finally {
+    rmSync(hosted.dir, {recursive: true, force: true});
+  }
+});
+
+test('a missing path quotes the line through the conversation', async () => {
+  const hosted = hostedAnswer(1);
+  try {
+    const status = await hosted.window.answer('1', '', 'ответ', 'строка');
+    assert.equal(status, undefined);
+    assert.deepEqual(hosted.comments, [{key: '1', body: '> строка\n\nответ'}]);
+    assert.deepEqual(hosted.threads, []);
+    assert.deepEqual(hosted.spoken, []);
+  } finally {
+    rmSync(hosted.dir, {recursive: true, force: true});
+  }
+});
+
+test('a path without a whole line number quotes the line', async () => {
+  const hosted = hostedAnswer(1);
+  try {
+    const status = await hosted.window.answer(
+      '1',
+      '',
+      'ответ',
+      'строка',
+      'src/a.ts',
+      '4.2',
+      'right',
+    );
+    assert.equal(status, undefined);
+    assert.deepEqual(hosted.comments, [{key: '1', body: '> строка\n\nответ'}]);
+    assert.deepEqual(hosted.threads, []);
+  } finally {
+    rmSync(hosted.dir, {recursive: true, force: true});
+  }
+});
+
+test('a question ignores the anchor and posts a checklist comment', async () => {
+  const hosted = hostedAnswer(1);
+  try {
+    const status = await hosted.window.answer(
+      '1',
+      'вопрос',
+      'ответ',
+      'строка',
+      'src/a.ts',
+      '12',
+      'right',
+    );
+    assert.equal(status, undefined);
+    assert.deepEqual(hosted.comments, [{key: '1', body: '- [ ] вопрос\n\nответ'}]);
+    assert.deepEqual(hosted.threads, []);
+    assert.deepEqual(hosted.spoken, []);
+  } finally {
+    rmSync(hosted.dir, {recursive: true, force: true});
+  }
+});
+
+test('an empty reply names the empty field and calls no host', async () => {
+  const hosted = hostedAnswer(1);
+  try {
+    assert.equal(
+      await hosted.window.answer('1', '', '   ', 'строка', 'src/a.ts', '12', 'right'),
+      'Комментарий пустой. Напишите его в поле.',
+    );
+    assert.equal(
+      await hosted.window.answer('1', 'вопрос', '', 'строка', 'src/a.ts', '12', 'right'),
+      'Ответ пустой. Напишите его в поле.',
+    );
+    assert.deepEqual(hosted.comments, []);
+    assert.deepEqual(hosted.threads, []);
+    assert.deepEqual(hosted.spoken, []);
+  } finally {
+    rmSync(hosted.dir, {recursive: true, force: true});
+  }
+});
+
+test('zero or two open pull requests write nothing', async () => {
+  for (const count of [0, 2]) {
+    const hosted = hostedAnswer(count);
+    try {
+      const status = await hosted.window.answer(
+        '1',
+        '',
+        'ответ',
+        'строка',
+        'src/a.ts',
+        '12',
+        'right',
+      );
+      assert.equal(status, 'комментарий не записан');
+      assert.deepEqual(hosted.comments, []);
+      assert.deepEqual(hosted.threads, []);
+      assert.deepEqual(hosted.spoken, []);
+    } finally {
+      rmSync(hosted.dir, {recursive: true, force: true});
+    }
+  }
+});

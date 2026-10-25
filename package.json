@@ -9,6 +9,8 @@
   },
   "files": [
     "bin/remote-solver.mjs",
+    "bin/client.js",
+    "bin/face.css",
     "prompts",
     "skills/sdd-init",
     "skills/sdd-flow/SKILL.md",

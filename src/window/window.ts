@@ -180,7 +180,6 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       gathered: ticket => checkout.gathered(ticket),
       serviceBroken: located => checkout.serviceBroken(located),
       cardOf: ticket => checkout.cardOf(ticket),
-      leading: key => outside.leading?.(key) === true,
     });
   }
 
@@ -220,6 +219,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
   return {
     board,
     spyNote: () => outside.spyNote?.() ?? '',
+    turn: key => outside.turn?.(key),
     shelf: () => shelfOf(roles.list()),
     settings: () => home.settings(settingsOpen),
     addRole: (role: RoleRecord) => roles.add(role),
@@ -305,7 +305,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       const body =
         asked !== '' ? `- [ ] ${asked}\n\n${reply}` : line !== '' ? `> ${line}\n\n${reply}` : reply;
       outside.commentPull(key, body);
-      return 'Комментарий записан в ревью.';
+      return undefined;
     },
     acceptReview(key: string) {
       const item = checkout.sorted().find(ticket => ticket.key === key);
@@ -315,7 +315,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
         return 'Принять не удалось.';
       }
       outside.editLabels(key, [`sdd:${gate}`]);
-      return 'Принято.';
+      return undefined;
     },
     openSettings() {
       settingsOpen = true;

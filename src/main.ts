@@ -29,11 +29,17 @@ function flag(argv: string[], name: string, fallback: number): number {
 }
 
 export async function runIssue(box: Machine, key: string): Promise<number> {
-  return driveIssue(box, key);
+  return (await driveIssue(box, key)).code;
 }
 
-/** One issue, up to 40 steps. */
-export async function driveIssue(box: Machine, key: string): Promise<number> {
+export type DriveResult = {code: number; idle?: string};
+
+/** One issue, up to 40 steps. The idle mark is the turn that made no commit. */
+export async function driveIssue(
+  box: Machine,
+  key: string,
+  watch?: SpyWatch,
+): Promise<DriveResult> {
   const runtime = box.runtime;
   if (!runtime) {
     throw new Error('runtime is not configured');
@@ -41,9 +47,11 @@ export async function driveIssue(box: Machine, key: string): Promise<number> {
   for (let step = 1; step <= 40; step += 1) {
     const decision = await turn(box, key);
     if (decision.kind !== 'agent') {
+      watch?.onTurn?.(key, undefined);
       console.log(`#${key} ${decision.kind}: ${decision.reason}`);
-      return 0;
+      return {code: 0};
     }
+    watch?.onTurn?.(key, {issue: key, phase: decision.phase, action: decision.action});
     console.log(`\n#${key} ${decision.phase} → ${decision.action} (${decision.skill})`);
     const before = await runMarks(key, box);
     const record = await box.tracker.issue(key);
@@ -73,18 +81,23 @@ export async function driveIssue(box: Machine, key: string): Promise<number> {
       console.error(
         `Stopped: ${decision.action} made no commit, so the next poll would repeat it.`,
       );
-      return 2;
+      return {code: 2, idle: signature(decision)};
     }
   }
   console.error(`Stopped #${key} after 40 steps.`);
-  return 3;
+  return {code: 3};
 }
+
+/** The agent turn the page names. Absent when no worker is inside a turn. */
+export type RunningTurn = {issue: string; phase: string; action: string};
 
 export type SpyWatch = {
   /** Issues whose agent is running after this change. */
   onRunning?: (keys: readonly string[]) => void;
   /** One line the spy just logged. */
   onReport?: (line: string) => void;
+  /** Sets one issue's turn, or clears it when the worker has left that turn. */
+  onTurn?: (issue: string, turn: RunningTurn | undefined) => void;
   /** A poll finished. The board refreshes its tickets from here. */
   onCycle?: () => void;
   /** Stops the loop at the next wait. */
@@ -100,7 +113,6 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
   const parallel = flag(argv, '--parallel', 2);
   const intervalMs = flag(argv, '--interval', 20) * 1000;
   let state: State = {running: [], idle: {}, reported: {}};
-  const sigs = new Map<string, string>();
   let wake: (() => void) | null = null;
   let woke = false;
 
@@ -109,8 +121,9 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
   };
 
   const finish = (issue: string, code: number, sig: string) => {
-    state = exited(state, issue, code, sigs.get(issue) ?? sig);
+    state = exited(state, issue, code, sig);
     publish();
+    watch?.onTurn?.(issue, undefined);
     say(watch, `#${issue} worker exited ${code}`);
     watch?.onCycle?.();
     if (wake) {
@@ -150,12 +163,16 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
       }
       for (const decision of turned.start) {
         say(watch, `#${decision.issue} start ${decision.phase} → ${decision.action}`);
+        watch?.onTurn?.(decision.issue, {
+          issue: decision.issue,
+          phase: decision.phase,
+          action: decision.action,
+        });
         const sig = signature(decision);
         state = {...state, running: [...state.running, decision.issue]};
-        sigs.set(decision.issue, sig);
         publish();
-        void driveIssue(box, decision.issue).then(
-          code => finish(decision.issue, code, sig),
+        void driveIssue(box, decision.issue, watch).then(
+          result => finish(decision.issue, result.code, result.idle ?? sig),
           error => {
             console.error(error instanceof Error ? error.message : String(error));
             finish(decision.issue, 1, sig);

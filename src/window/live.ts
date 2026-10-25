@@ -10,7 +10,7 @@ import {parse} from 'yaml';
 import {markerName, parseMarker} from '../machine/marker.ts';
 import {phaseOf} from '../machine/phase.ts';
 import {modelFor, type SkillMode} from '../machine/skill.ts';
-import {runSpy, type SpyWatch} from '../main.ts';
+import {runSpy, type RunningTurn} from '../main.ts';
 
 import {FACTORY_AGENTS, mergeFactory, readOverlayDoc} from './factory.ts';
 import {serveBoard} from './page.ts';
@@ -19,6 +19,27 @@ import {openWindow} from './window.ts';
 
 /** How often the served page reads the tracker again. */
 export const REFRESH_MS = 15_000;
+
+/** The header line for the turns that are running. Empty when none are. */
+export function turnsLine(turns: readonly RunningTurn[]): string {
+  return [...turns]
+    .sort((left, right) => left.issue.localeCompare(right.issue))
+    .map(turn => `#${turn.issue} ${turn.phase} → ${turn.action}`)
+    .join(' · ');
+}
+
+/** Remember one issue's turn. Clearing an issue leaves every other turn in place. */
+export function applyTurn(
+  turns: Map<string, RunningTurn>,
+  issue: string,
+  turn: RunningTurn | undefined,
+): void {
+  if (turn === undefined) {
+    turns.delete(issue);
+    return;
+  }
+  turns.set(issue, turn);
+}
 
 /** Home file when `remote-solver board` does not name one. */
 export function defaultHomePath(): string {
@@ -54,21 +75,26 @@ export function watchSpy(
   box: Machine,
   sink: {
     running: Set<string>;
-    setNote: (line: string) => void;
+    setNote?: (line: string) => void;
+    /** One issue's turn, or none when that worker has left it. */
+    setTurn?: (issue: string, turn: RunningTurn | undefined) => void;
     refresh: () => Promise<void>;
   },
   signal?: AbortSignal,
 ): Promise<void> {
-  const watch: SpyWatch = {
+  const watch = {
     signal,
-    onRunning(keys) {
+    onRunning(keys: readonly string[]) {
       sink.running.clear();
       for (const key of keys) {
         sink.running.add(key);
       }
     },
-    onReport(line) {
-      sink.setNote(line);
+    onReport(line: string) {
+      sink.setNote?.(line);
+    },
+    onTurn(issue: string, turn: RunningTurn | undefined) {
+      sink.setTurn?.(issue, turn);
     },
     onCycle() {
       forget(sink.refresh());
@@ -112,6 +138,8 @@ export type LiveBoardOptions = {
   leading?: (key: string) => boolean;
   /** Latest spy line drawn in the page header. */
   spyNote?: () => string;
+  /** Action token while a worker is on a turn for this key. */
+  turn?: (key: string) => string | undefined;
 };
 
 function forget(work: Promise<unknown>): void {
@@ -291,6 +319,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
       login: () => loginName,
       leading: options.leading,
       spyNote: options.spyNote,
+      turn: options.turn,
       writeAssignee(key, login) {
         bump();
         patch(key, ticket => ({...ticket, assignee: login}));

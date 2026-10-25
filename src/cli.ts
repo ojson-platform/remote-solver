@@ -4,9 +4,16 @@ import {solverRoot, type Machine} from './adapters/compose.ts';
 import {repo} from './adapters/github.ts';
 import {openMachine} from './adapters/load.ts';
 import {agentRuntime, type AgentRuntimeConfig} from './adapters/runtime.ts';
-import {runIssue, runSpy} from './main.ts';
+import {runIssue, runSpy, type RunningTurn} from './main.ts';
 import {runReview} from './reviewer/run.ts';
-import {boardModel, defaultHomePath, serveLiveBoard, watchSpy} from './window/live.ts';
+import {
+  boardModel,
+  defaultHomePath,
+  serveLiveBoard,
+  applyTurn,
+  turnsLine,
+  watchSpy,
+} from './window/live.ts';
 
 const usage = `Usage:
   remote-solver spy [--parallel N] [--interval S]
@@ -112,7 +119,7 @@ async function runBoard(home: string | undefined): Promise<void> {
     runtime: built => launcherRuntime(built, mode => boardModel(homePath, root, mode)),
   });
   const running = new Set<string>();
-  let note = '';
+  const turns = new Map<string, RunningTurn>();
   const page = await serveLiveBoard({
     homePath,
     repo: repo().slug,
@@ -121,13 +128,14 @@ async function runBoard(home: string | undefined): Promise<void> {
     vcs: box.vcs,
     checkout: root,
     leading: key => running.has(key),
-    spyNote: () => note,
+    spyNote: () => turnsLine([...turns.values()]),
+    turn: key => turns.get(key)?.action,
   });
   console.log(page.url);
   void watchSpy(box, {
     running,
-    setNote: line => {
-      note = line;
+    setTurn(issue, turn) {
+      applyTurn(turns, issue, turn);
     },
     refresh: () => page.refresh(),
   }).catch(error => {

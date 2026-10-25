@@ -90,6 +90,8 @@ export type WindowOutside = {
   leading?: (key: string) => boolean;
   /** The spy's latest line. Empty when the spy has not spoken. */
   spyNote?: () => string;
+  /** Action token while a worker is on a turn for this key. */
+  turn?: (key: string) => string | undefined;
   /** Write `sddService`. The next read sees it. */
   writeService?: (key: string, service: string) => void;
   /**

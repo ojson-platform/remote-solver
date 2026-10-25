@@ -197,6 +197,11 @@ The window SHALL record an icon occasion for a gate, an ask, an open question, a
 - **WHEN** an agent is leading a step and the cycle has an ask
 - **THEN** the plaque keeps its text and shows no occasion mark
 
+#### Scenario: A running step keeps the reason line
+
+- **WHEN** an agent is leading a step on a specifying cycle whose reason names a blocker
+- **THEN** the plaque shows that reason and shows no occasion mark
+
 ### Requirement: The icon reason is one line
 
 The icon reason SHALL be one line, the same line the sidebar shows in full. It SHALL start with at most one checkout break, in this order: `каталога нет`, otherwise `не назван сервис`, otherwise `конфига сервиса нет`, otherwise `очереди нет в конфиге сервиса`. The rest SHALL follow through `·`, and only the parts the cycle has, in this order: the gate name `proposed`, `specified`, `designed`, or `accepted`; Ask; `вопросы N` for open questions; `решения N` for open decisions; `мерж`; `дети` and the Child keys in key order; `блокеры` and the Blocker keys in key order; `несколько pull request`. The window SHALL gather children from the same reading: records that carry `sdd:cycle` and whose `parent` is this card's key. It SHALL gather blockers from `dependsOn` on this record and find them in the same reading. It SHALL NOT parse the issue body. When the only occasion is questions, or only decisions, and the phase row already shows that number, the card SHALL NOT show the reason line. The sidebar reason block SHALL remain.
@@ -304,8 +309,9 @@ The bottom is the first line below that is present and does not repeat the top:
 2. The phase row, when the phase has one.
 3. The reason line, when it does not repeat the top. Children and blockers stay words on that line.
 4. The unanswered text, when the top is `ревью`.
+5. The worker's action, when the top and the other bottom lines are empty.
 
-While an agent leads a step, or the cycle waits on checks, the plaque SHALL keep its text and SHALL NOT add an occasion mark. The row order SHALL keep that occasion.
+The action SHALL NOT replace a line that is already there and SHALL NOT be an occasion mark. While an agent leads a step, or the cycle waits on checks, the plaque SHALL keep its text and SHALL NOT add an occasion mark. The row order SHALL keep that occasion.
 
 #### Scenario: Ask is the top while the cycle waits
 
@@ -341,6 +347,16 @@ While an agent leads a step, or the cycle waits on checks, the plaque SHALL keep
 
 - **WHEN** the ask text is longer than the closed plaque
 - **THEN** the closed plaque shows one line and the open row shows the whole ask
+
+#### Scenario: A running turn fills an empty plaque
+
+- **WHEN** a specifying cycle and a tasking cycle have no ask, no phase row, and no reason, and workers are on `restore-baseline` and `create-tasks`
+- **THEN** each plaque bottom is that action and neither plaque shows an occasion mark
+
+#### Scenario: A running turn does not replace plaque text
+
+- **WHEN** a specifying cycle has an ask and a worker is on `restore-baseline`
+- **THEN** the plaque top is `ask`, the bottom is the ask text, and the action is not on the plaque
 
 ### Requirement: A future gate sets or clears one auto label
 
@@ -473,7 +489,7 @@ The window SHALL show the path or the reason and SHALL NOT draw a field for: **�
 
 ### Requirement: The board command serves this repository
 
-`remote-solver board` SHALL serve the window for the GitHub repository of the working directory, print its URL, and run the machine spy in that same process. The home file SHALL be `~/.aifactory/config.yaml` when the command does not name one. When that file is missing, the watch list SHALL be that repository's `owner/repo`. Open issues that carry `sdd:cycle` SHALL be the cycles. The working directory SHALL be the gathered checkout for that repository, and an empty service SHALL mean that directory. Another repository on the watch list SHALL stay under the GitHub root. Take SHALL assign the process login. The window's spy SHALL add `sdd:proposing` for a phaseless cycle this manager holds. The machine spy SHALL start an agent for a cycle it would start from `remote-solver spy`. While that agent runs, the window SHALL treat the step as leading. The page SHALL show the spy's latest line. While the page stays open it SHALL read the tracker again about every 15 seconds. When the home agent is cursor, a step SHALL use that mode's model from the merged factory config. Any other home agent, and an empty agent, SHALL keep the built-in model for that mode.
+`remote-solver board` SHALL serve the window for the GitHub repository of the working directory, print its URL, and run the machine spy in that same process. The home file SHALL be `~/.aifactory/config.yaml` when the command does not name one. When that file is missing, the watch list SHALL be that repository's `owner/repo`. Open issues that carry `sdd:cycle` SHALL be the cycles. The working directory SHALL be the gathered checkout for that repository, and an empty service SHALL mean that directory. Another repository on the watch list SHALL stay under the GitHub root. Take SHALL assign the process login. The window's spy SHALL add `sdd:proposing` for a phaseless cycle this manager holds. The machine spy SHALL start an agent for a cycle it would start from `remote-solver spy`. While that agent runs, the window SHALL treat the step as leading. While a worker is on a turn, the page SHALL show that issue, its phase, and its action, as `#<issue> <phase> → <action>`. A later turn of the same worker SHALL replace that line. When the worker leaves the turn, that line SHALL go, and another worker's line SHALL stay. While the page stays open it SHALL read the tracker again about every 15 seconds. When the home agent is cursor, a step SHALL use that mode's model from the merged factory config. Any other home agent, and an empty agent, SHALL keep the built-in model for that mode.
 
 #### Scenario: The home file is the factory file when the command names none
 
@@ -513,7 +529,17 @@ The window SHALL show the path or the reason and SHALL NOT draw a field for: **�
 #### Scenario: The spy starts an agent for a proposing cycle
 
 - **WHEN** this manager holds a proposing cycle with no proposal and the board's spy polls
-- **THEN** an agent run starts for that issue while the window treats the step as leading, and the spy line names the run
+- **THEN** an agent run starts for that issue while the window treats the step as leading, and the spy line is `#6 proposing → create-proposal`
+
+#### Scenario: The spy line follows the next turn and then goes
+
+- **WHEN** one worker runs `create-proposal` and the next turn of that worker is `restore-baseline`
+- **THEN** the spy line becomes `#6 specifying → restore-baseline` and is absent after the worker exits
+
+#### Scenario: Another worker's line stays
+
+- **WHEN** two workers are on a turn and one of them leaves
+- **THEN** the page still shows the other worker's line
 
 #### Scenario: The page shows the spy line
 

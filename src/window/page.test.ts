@@ -347,6 +347,7 @@ function idle() {
     closeCard: () => {},
     checkouts: () => [] as string[],
     spyNote: () => '',
+    turn: () => undefined,
     openReviewPlace: () => undefined as string | undefined,
     doorPlace: () => undefined as string | undefined,
     gateMark: () => {},
@@ -1467,6 +1468,7 @@ test('a role drop reports ticket-fields and a skipped pull comment', async () =>
       );
       const skipped = await (await fetch(page.url)).text();
       assert.match(statusOf(skipped), /комментарий не записан/);
+      assert.equal((await (await fetch(page.url)).text()).includes('role="status"'), false);
       assert.match(skipped, /class="popup"/);
       assert.match(skipped, /hi/);
       assert.equal(
@@ -1876,6 +1878,22 @@ function writeChange(arcadia: string, key: string, name: string, body: string): 
   writeFileSync(file, body);
 }
 
+function deltaRequirement(): string {
+  return [
+    '## ADDED Requirements',
+    '',
+    '### Requirement: Rows show the section',
+    '',
+    'The row shows the whole section.',
+    '',
+    '#### Scenario: The row shows the section',
+    '',
+    '- **WHEN** the section is long',
+    '- **THEN** the row shows it',
+    '',
+  ].join('\n');
+}
+
 function git(root: string, args: string[]): void {
   execFileSync('git', args, {cwd: root, stdio: 'ignore'});
 }
@@ -2119,6 +2137,33 @@ spec('board', () => {
           assert.equal(html.includes('class="mark"'), false);
           assert.match(stationOf(html, '2', 'proposing'), /class="plaque"/);
           assert.equal(articleOf(html, '2').includes('aria-label="Взять"'), false);
+        },
+      );
+    });
+    scenario('A running step keeps the reason line', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'specifying', {dependsOn: ['9']}),
+            ticket({key: '9', title: 'blocker', labels: ['note']}),
+          ],
+          leading: () => true,
+          turn: () => 'restore-baseline',
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await (await fetch(page.url)).text();
+          const plaque = stationOf(html, '1', 'specifying');
+          assert.match(plaque, /блокеры 9/);
+          assert.equal(plaque.includes('restore-baseline'), false);
+          assert.equal(plaque.includes('class="mark"'), false);
+          const card = window
+            .board()
+            .columns.find(column => column.name === 'specifying')
+            ?.cards.find(item => item.key === '1');
+          assert.equal(card?.icon, undefined);
+          assert.equal(card?.reason, 'блокеры 9');
         },
       );
     });
@@ -2740,6 +2785,56 @@ spec('board', () => {
           const side = bandOf(html, '1');
           assert.match(side, /Review the proposal\. To accept it, replace the label sdd:proposing/);
           assert.match(side, /run sdd accept 5\./);
+        },
+      );
+    });
+    scenario('A running turn fills an empty plaque', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying'), held('2', 'tasking')],
+          turn: key => {
+            if (key === '1') {
+              return 'restore-baseline';
+            }
+            if (key === '2') {
+              return 'create-tasks';
+            }
+            return undefined;
+          },
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await (await fetch(page.url)).text();
+          const specifying = stationOf(html, '1', 'specifying');
+          const tasking = stationOf(html, '2', 'tasking');
+          assert.match(specifying, /<span class="reason">restore-baseline<\/span>/);
+          assert.equal(specifying.includes('class="kicker"'), false);
+          assert.equal(specifying.includes('class="mark"'), false);
+          assert.match(tasking, /<span class="reason">create-tasks<\/span>/);
+          assert.equal(tasking.includes('class="kicker"'), false);
+          assert.equal(tasking.includes('class="mark"'), false);
+        },
+      );
+    });
+    scenario('A running turn does not replace plaque text', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'specifying', {
+              labels: ['sdd:cycle', 'sdd:specifying', 'sdd:wait-human'],
+              comments: [{body: 'please decide'}],
+            }),
+          ],
+          turn: () => 'restore-baseline',
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const plaque = stationOf(await (await fetch(page.url)).text(), '1', 'specifying');
+          assert.match(plaque, /<span class="kicker">ask<\/span>/);
+          assert.match(plaque, /please decide/);
+          assert.equal(plaque.includes('restore-baseline'), false);
         },
       );
     });
@@ -3475,6 +3570,7 @@ spec('sidebar', () => {
           );
           assert.equal(empty.status, 303);
           assert.match(statusOf(await (await fetch(page.url)).text()), /Ответ пустой/);
+          assert.equal((await (await fetch(page.url)).text()).includes('role="status"'), false);
           assert.equal(
             (
               await post(
@@ -3492,10 +3588,7 @@ spec('sidebar', () => {
           );
           assert.deepEqual(comments, ['- [ ] Писать ли имя проверки?\n\nДа, короткое имя.']);
           assert.match(readFileSync(file, 'utf8'), /- \[ \] Писать ли имя проверки\?/);
-          assert.match(
-            statusOf(await (await fetch(page.url)).text()),
-            /Комментарий записан в ревью/,
-          );
+          assert.equal((await (await fetch(page.url)).text()).includes('role="status"'), false);
         },
       );
     });
@@ -3599,7 +3692,7 @@ spec('sidebar', () => {
           assert.ok(tickets[0]?.labels.includes('sdd:proposed'));
           assert.ok(tickets[0]?.labels.includes('sdd:proposing'));
           assert.deepEqual(phases, []);
-          assert.match(statusOf(await (await fetch(page.url)).text()), /Принято/);
+          assert.equal((await (await fetch(page.url)).text()).includes('role="status"'), false);
         },
       );
     });
@@ -3622,7 +3715,8 @@ spec('sidebar', () => {
             }
           },
         },
-        async (page, window) => {
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'specs/section-text/spec.md', deltaRequirement());
           window.chooseAgent('cursor');
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
@@ -3813,6 +3907,39 @@ spec('sidebar', () => {
           const plan = spineOf(await (await fetch(page.url)).text(), '1', 'Plan');
           assert.equal(plan.includes('Принять Plan'), false);
           assert.equal(plan.includes('data-gate="proposing"'), false);
+        },
+      );
+    });
+    scenario("A missing delta leaves the current gate's place empty", async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying', {openPullRequests: 1})]},
+        async (page, window, paths) => {
+          const baseline = path.join(
+            paths.arcadia,
+            'services',
+            'billing',
+            'openspec',
+            'specs',
+            'section-text',
+            'spec.md',
+          );
+          mkdirSync(path.dirname(baseline), {recursive: true});
+          writeFileSync(baseline, deltaRequirement());
+          writeChange(
+            paths.arcadia,
+            '1',
+            'specs/section-text/spec.md',
+            '## Purpose\n\nNo requirement yet.\n',
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const specify = spineOf(await (await fetch(page.url)).text(), '1', 'Specify');
+          assert.equal(specify.includes('Принять Specify'), false);
+          assert.equal(specify.includes('data-gate="specifying"'), false);
         },
       );
     });

@@ -430,6 +430,40 @@
   .spine button.line:hover,
   .spine button.line.is-on { background: rgba(230, 179, 90, 0.1); }
   .spine .gap { display: block; height: 6px; }
+  .spine .cap summary { white-space: nowrap; }
+  .spine .badge { margin-left: 8px; color: var(--muted); font-weight: 500; white-space: nowrap; }
+  .spine .diff-row {
+    display: grid;
+    grid-template-columns: 2.6em 2.6em minmax(0, 1fr);
+    column-gap: 8px;
+    align-items: start;
+    padding: 0 4px;
+    border-radius: 4px;
+  }
+  .spine .diff-row.add { background: color-mix(in srgb, var(--green) 16%, transparent); }
+  .spine .diff-row.del { background: color-mix(in srgb, var(--red) 16%, transparent); }
+  .spine .diff-row .num {
+    color: var(--muted);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .spine .diff-row .bit { border-radius: 2px; }
+  .spine .diff-row.add .bit { background: color-mix(in srgb, var(--green) 48%, transparent); }
+  .spine .diff-row.del .bit { background: color-mix(in srgb, var(--red) 48%, transparent); }
+  .spine .diff-row button.line { width: 100%; margin: 0; }
+  .spine button.fold-bar {
+    display: block;
+    width: calc(100% + 32px);
+    margin: 0 -16px;
+    padding: 4px 16px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--muted);
+    text-align: left;
+    cursor: pointer;
+  }
   .spine form.line-note { position: relative; margin: 18px 10px 8px; }
   .spine .draft { position: relative; display: block; }
   .spine form.line-note textarea,

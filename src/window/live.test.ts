@@ -14,6 +14,7 @@ import {
   applyTurn,
   boardModel,
   defaultHomePath,
+  noteTurn,
   openLiveBoard,
   REFRESH_MS,
   serveLiveBoard,
@@ -22,6 +23,7 @@ import {
   type LiveReview,
   type LiveTracker,
 } from './live.ts';
+import type {WindowSnapshot} from './snapshot.ts';
 import {openWindow, type WindowTicket} from './window.ts';
 
 const MANAGER = 'ada';
@@ -169,6 +171,13 @@ async function post(url: string, pathname: string, body: string): Promise<number
     redirect: 'manual',
   });
   return response.status;
+}
+
+async function readSnapshot(url: string): Promise<WindowSnapshot> {
+  const response = await fetch(new URL('/snapshot', url));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), 'application/json; charset=utf-8');
+  return response.json() as Promise<WindowSnapshot>;
 }
 
 function yard(): {
@@ -566,6 +575,79 @@ spec('board', () => {
         assert.equal(boardModel(home, checkout, 'mechanical'), modelFor('mechanical'));
       } finally {
         rmSync(dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('The snapshot is JSON beside the page', async () => {
+      const staged = yard();
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        const html = await fetch(page.url);
+        assert.equal(html.status, 200);
+        assert.match(html.headers.get('content-type') ?? '', /^text\/html/);
+        assert.match(await html.text(), /<!doctype html>/);
+        const shot = await readSnapshot(page.url);
+        assert.equal(shot.generation, 0);
+        assert.equal(typeof shot.lamp, 'boolean');
+        assert.equal(shot.spy, '');
+        assert.ok(shot.rows.some(row => row.key === '6'));
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('The snapshot generation moves', async () => {
+      const staged = yard();
+      const turns = new Map<string, RunningTurn>();
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+        spyNote: () => turnsLine([...turns.values()]),
+        turn: key => turns.get(key)?.action,
+      });
+      try {
+        const read = () => readSnapshot(page.url);
+        assert.equal((await read()).generation, 0);
+        assert.equal((await read()).spy, '');
+        const html = await fetch(page.url);
+        assert.match(await html.text(), /<!doctype html>/);
+        assert.equal((await read()).generation, 0);
+        assert.equal(await post(page.url, '/act', 'act=not-a-gesture'), 400);
+        assert.equal((await read()).generation, 0);
+        const turn = {issue: '6', phase: 'specifying', action: 'restore-baseline'};
+        noteTurn(turns, '6', turn, () => {
+          page.note();
+        });
+        const named = await read();
+        assert.equal(named.generation, 1);
+        assert.equal(named.spy, '#6 specifying → restore-baseline');
+        noteTurn(turns, '6', {...turn}, () => {
+          page.note();
+        });
+        assert.equal((await read()).generation, 1);
+        assert.equal(await post(page.url, '/act', 'act=open&key=6'), 303);
+        assert.equal((await read()).generation, 2);
+        await page.refresh();
+        assert.equal((await read()).generation, 3);
+        noteTurn(turns, '6', undefined, () => {
+          page.note();
+        });
+        const gone = await read();
+        assert.equal(gone.generation, 4);
+        assert.equal(gone.spy, '');
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
       }
     });
   });

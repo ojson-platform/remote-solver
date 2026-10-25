@@ -41,6 +41,20 @@ export function applyTurn(
   turns.set(issue, turn);
 }
 
+/** Remember a turn and tell the page when the header line changed. */
+export function noteTurn(
+  turns: Map<string, RunningTurn>,
+  issue: string,
+  turn: RunningTurn | undefined,
+  note: () => void,
+): void {
+  const before = turnsLine([...turns.values()]);
+  applyTurn(turns, issue, turn);
+  if (turnsLine([...turns.values()]) !== before) {
+    note();
+  }
+}
+
 /** Home file when `remote-solver board` does not name one. */
 export function defaultHomePath(): string {
   return path.join(homedir(), '.aifactory', 'config.yaml');
@@ -261,7 +275,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
     }
   }
 
-  async function refresh(): Promise<void> {
+  async function refresh(): Promise<boolean> {
     const gen = generation;
     const issues = await tracker.listOpen();
     const login = await tracker.login().catch(error => {
@@ -278,7 +292,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
       tickets.push(await oneTicket(issue, nextPulls, nextReviews));
     }
     if (gen !== generation) {
-      return;
+      return false;
     }
     cache = tickets;
     pullByKey = nextPulls;
@@ -286,6 +300,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
     if (login) {
       loginName = login;
     }
+    return true;
   }
 
   function pullPage(file: string, line: number): string {
@@ -361,17 +376,27 @@ export async function serveLiveBoard(options: LiveBoardOptions): Promise<{
   url: string;
   refresh(): Promise<void>;
   close(): Promise<void>;
+  note(): void;
 }> {
   const live = openLiveBoard(options);
   await live.refresh();
   const page = await serveBoard(live.window);
+  const refresh = async () => {
+    const wrote = await live.refresh();
+    if (wrote) {
+      page.note();
+    }
+  };
   const timer = setInterval(() => {
-    forget(live.refresh());
+    forget(refresh());
   }, REFRESH_MS);
   timer.unref();
   return {
     url: page.url,
-    refresh: () => live.refresh(),
+    refresh,
+    note: () => {
+      page.note();
+    },
     close: async () => {
       clearInterval(timer);
       await page.close();

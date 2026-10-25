@@ -491,6 +491,8 @@ The window SHALL show the path or the reason and SHALL NOT draw a field for: **Ð
 
 `remote-solver board` SHALL serve the window for the GitHub repository of the working directory, print its URL, and run the machine spy in that same process. The home file SHALL be `~/.aifactory/config.yaml` when the command does not name one. When that file is missing, the watch list SHALL be that repository's `owner/repo`. Open issues that carry `sdd:cycle` SHALL be the cycles. The working directory SHALL be the gathered checkout for that repository, and an empty service SHALL mean that directory. Another repository on the watch list SHALL stay under the GitHub root. Take SHALL assign the process login. The window's spy SHALL add `sdd:proposing` for a phaseless cycle this manager holds. The machine spy SHALL start an agent for a cycle it would start from `remote-solver spy`. While that agent runs, the window SHALL treat the step as leading. While a worker is on a turn, the page SHALL show that issue, its phase, and its action, as `#<issue> <phase> â†’ <action>`. A later turn of the same worker SHALL replace that line. When the worker leaves the turn, that line SHALL go, and another worker's line SHALL stay. While the page stays open it SHALL read the tracker again about every 15 seconds. When the home agent is cursor, a step SHALL use that mode's model from the merged factory config. Any other home agent, and an empty agent, SHALL keep the built-in model for that mode.
 
+`GET /snapshot` SHALL return a JSON snapshot of the header, the rows, and the open cycle's spine. `GET /` SHALL remain the HTML page. The snapshot generation SHALL start at 0 and SHALL grow when the turn changes, when a tracker read commits, and when a gesture is written. Reading the page, a refused gesture, and setting the same turn again SHALL NOT grow it. The snapshot's spy line SHALL be the current turn line, and that cycle's row SHALL carry the turn's action. When a plaque has no top line and no other bottom line, the snapshot's bottom line SHALL be the worker's action. When the open cycle is specifying, one pull request is open, and the change has no delta requirement, the snapshot's Specify layer SHALL offer neither acceptance nor the specifying gate. An error the page would show between the header and the board SHALL be in the snapshot that is sent next, and SHALL be absent from the snapshot after that.
+
 #### Scenario: The home file is the factory file when the command names none
 
 - **WHEN** the command does not name a home file
@@ -560,3 +562,33 @@ The window SHALL show the path or the reason and SHALL NOT draw a field for: **Ð
 
 - **WHEN** the home agent is not cursor and the mechanical model is set
 - **THEN** a mechanical step uses the built-in mechanical model
+
+#### Scenario: The snapshot is JSON beside the page
+
+- **WHEN** the board is served
+- **THEN** `GET /snapshot` returns the snapshot as JSON and `GET /` returns the HTML page
+
+#### Scenario: The snapshot names the current turn
+
+- **WHEN** a worker is on `restore-baseline` for issue 6 while specifying
+- **THEN** the snapshot's spy line is `#6 specifying â†’ restore-baseline` and that row's action is `restore-baseline`
+
+#### Scenario: The snapshot shows the action on an empty plaque
+
+- **WHEN** specifying has no ask, phase row, or reason and the worker's action is `restore-baseline`, and tasking likewise has `create-tasks`
+- **THEN** each snapshot plaque has no top line and its bottom line is that action
+
+#### Scenario: The snapshot hides Specify acceptance without a delta
+
+- **WHEN** the open cycle is specifying, one pull request is open, and the change has no delta requirement
+- **THEN** the snapshot's Specify layer offers neither acceptance nor the specifying gate
+
+#### Scenario: The snapshot shows an error once
+
+- **WHEN** a comment is empty and the snapshot is read
+- **THEN** that snapshot contains the error and the next snapshot does not
+
+#### Scenario: The snapshot generation moves
+
+- **WHEN** a gesture is written, the tracker is read again, or the turn changes
+- **THEN** the generation is higher, and a refused gesture, reading the page, and setting the same turn again leave it unchanged

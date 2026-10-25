@@ -1,11 +1,11 @@
 # Window
 
-What the window draws. Shared words — cycle, phase, gate, layer — stay in the root glossary. The page is one document; these names are the controls it is allowed to use.
+What the window draws. Shared words — cycle, phase, gate, layer — stay in the root glossary. The page is one document. These names are the controls it draws. A control with another shape is named here.
 
 ## Language
 
 **Face**:
-The window's drawn surface: one set of colours and four shapes. A new control uses one of those shapes.
+The window's drawn surface: one set of colours and the shapes named below.
 _Avoid_: Theme, skin, component library
 
 **Card**:

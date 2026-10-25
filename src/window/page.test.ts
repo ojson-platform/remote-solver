@@ -1153,6 +1153,52 @@ test('a stalled close does not clear a popup a newer drag set', async () => {
   }
 });
 
+test('a stalled answer cannot overwrite a newer act', async () => {
+  let release: ((status: string | undefined) => void) | undefined;
+  let started = false;
+  const surface = idle();
+  surface.answer = () =>
+    new Promise(resolve => {
+      started = true;
+      release = resolve;
+    });
+  surface.drag = () => ({status: 'НОВОЕ'});
+  const page = await serveBoard(surface);
+  const pending = post(
+    page.url,
+    'act',
+    new URLSearchParams({act: 'answer', key: 'AAA', reply: 'ответ'}).toString(),
+  );
+  try {
+    while (!started) {
+      await delay(5);
+    }
+    const newer = await post(
+      page.url,
+      'act',
+      new URLSearchParams({act: 'drag', name: 'Note', key: 'BBB'}).toString(),
+    );
+    assert.equal(newer.status, 200);
+    const published = JSON.parse(newer.body) as WindowSnapshot;
+    assert.equal(published.status, 'НОВОЕ');
+    assert.equal(published.show, 'BBB');
+    const kept = await readSnapshot(page.url);
+    assert.equal(kept.generation, published.generation);
+    assert.equal(kept.show, 'BBB');
+    const finish = release;
+    release = undefined;
+    finish?.('СТАРОЕ');
+    const late = await pending;
+    assert.equal(late.status, 409);
+    assert.equal(late.body, 'устарело');
+    assert.deepEqual(await readSnapshot(page.url), kept);
+  } finally {
+    release?.('СТАРОЕ');
+    await pending.catch(() => undefined);
+    await page.close();
+  }
+});
+
 test('the last queue down button is disabled and moving past the end is 409', async () => {
   let moves = 0;
   await hosted(

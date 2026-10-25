@@ -1,3 +1,5 @@
+import type {SpecEntry} from './spec-diff.ts';
+
 import assert from 'node:assert/strict';
 import {mkdtempSync, mkdirSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -6,6 +8,24 @@ import {test} from 'vitest';
 
 import {changeDir} from '../machine/naming.ts';
 import {buildSpine, layerForStation, linesFromFocus, linesFromIssue} from './spine.ts';
+
+function hasPhrase(entries: readonly SpecEntry[] | undefined, phrase: string): boolean {
+  if (!entries) {
+    return false;
+  }
+  for (const entry of entries) {
+    if (entry.kind === 'gap') {
+      if (entry.hidden.some(row => row.text.includes(phrase))) {
+        return true;
+      }
+      continue;
+    }
+    if (entry.text.includes(phrase)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 test('the issue mirror fills a layer the focus comment does not name', () => {
   const issue = [
@@ -68,22 +88,80 @@ test('a modified sentence is marked and a task names its capability', () => {
     '- [x] `missing-case` — «Проверка отсутствующего кейса не находит его»\n',
   );
   const spine = buildSpine({key: '1', checkout, station: 'tasking'});
-  const requirement = spine.capabilities[0]?.requirements[0];
-  assert.equal(requirement?.kind, 'MODIFIED');
-  assert.equal(
-    requirement?.prose.includes('Второе предложение требования остаётся в тексте.'),
-    true,
-  );
-  assert.equal(
-    requirement?.scenarios[0]?.when,
-    'проверяют кейс, которого нет\nсправочники не полны',
-  );
-  assert.equal(requirement?.scenarios[0]?.then, 'проверка его не находит\nсписок проблем не пуст');
-  assert.deepEqual(requirement?.added, [
-    'Проверка отсутствующего кейса не находит его.',
-    'Второе предложение требования остаётся в тексте.',
-  ]);
+  const capability = spine.capabilities[0];
+  assert.equal(capability?.badge, 'changed');
+  assert.equal(hasPhrase(capability?.rows, 'Проверка отсутствующего кейса не находит его.'), true);
+  assert.equal('added' in (capability ?? {}), false);
   assert.equal(spine.tasks[0]?.scenarios[0]?.capability, 'case-read');
   assert.equal(spine.open, 'Tasks');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('an outcome line carries its file number and a blank line keeps one', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'spine-'));
+  const checkout = path.join(dir, 'service');
+  const proposal = [
+    '# Change',
+    '',
+    '## Outcome',
+    '',
+    'Вызывающий узнаёт итог.',
+    '',
+    'Второй абзац после пустой строки.',
+    '',
+  ].join('\n');
+  const file = path.join(checkout, changeDir('1'), 'proposal.md');
+  mkdirSync(path.dirname(file), {recursive: true});
+  writeFileSync(file, proposal);
+  const spine = buildSpine({key: '1', checkout});
+  const outcome = spine.proposal.sections.find(section => section.heading === 'Outcome');
+  assert.ok(outcome);
+  const second = 'Второй абзац после пустой строки.';
+  const fileLine = proposal.split('\n').indexOf(second) + 1;
+  const found = outcome.lines.find(line => line.text === second);
+  assert.ok(found);
+  assert.equal(found.line, fileLine);
+  const drawn = outcome.lines.filter(line => line.text.trim() !== '');
+  assert.notEqual(found.line, drawn.indexOf(found) + 1);
+  const blank = outcome.lines.find(line => line.line === fileLine - 1);
+  assert.ok(blank);
+  assert.equal(blank.text, '');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('a removed scenario does not name the capability', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'spine-'));
+  const checkout = path.join(dir, 'service');
+  const change = path.join(checkout, changeDir('1'));
+  mkdirSync(path.join(change, 'specs', 'case-read'), {recursive: true});
+  mkdirSync(path.join(checkout, 'openspec', 'specs', 'case-read'), {recursive: true});
+  writeFileSync(
+    path.join(checkout, 'openspec', 'specs', 'case-read', 'spec.md'),
+    '### Requirement: Чтение\n\nКейс читается.\n\n#### Scenario: Удалённый сценарий\n',
+  );
+  writeFileSync(
+    path.join(change, 'specs', 'case-read', 'spec.md'),
+    [
+      '## REMOVED Requirements',
+      '',
+      '### Requirement: Чтение',
+      '',
+      '#### Scenario: Удалённый сценарий',
+      '',
+      '## ADDED Requirements',
+      '',
+      '### Requirement: Запись',
+      '',
+      '#### Scenario: Новый сценарий',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
+    path.join(change, 'tasks.md'),
+    ['- [ ] `gone` — «Удалённый сценарий»', '- [ ] `kept` — «Новый сценарий»', ''].join('\n'),
+  );
+  const spine = buildSpine({key: '1', checkout, station: 'tasking'});
+  assert.equal(spine.tasks.find(task => task.id === 'gone')?.scenarios[0]?.capability, '');
+  assert.equal(spine.tasks.find(task => task.id === 'kept')?.scenarios[0]?.capability, 'case-read');
   rmSync(dir, {recursive: true, force: true});
 });

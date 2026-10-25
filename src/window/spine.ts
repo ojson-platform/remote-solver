@@ -1,9 +1,11 @@
+import type {SpecBadge, SpecEntry} from './spec-diff.ts';
 import type {GateStation} from './types.ts';
 
 import {missingBaselineIds, namedCapabilities} from '../machine/change.ts';
 import {changeDir} from '../machine/naming.ts';
 
 import {changeFiles, changeRel, listedSpecs} from './change-files.ts';
+import {specDiff} from './spec-diff.ts';
 
 export const SPINE_LAYERS = [
   'Change',
@@ -24,17 +26,9 @@ export type SpineLine = {
   text: string;
 };
 
-export type SpineScenario = {name: string; when: string; then: string};
+export type SpineSourceLine = {text: string; line: number};
 
-export type SpineRequirement = {
-  kind: string;
-  title: string;
-  prose: string;
-  added: string[];
-  scenarios: SpineScenario[];
-};
-
-export type SpineCapability = {id: string; requirements: SpineRequirement[]};
+export type SpineCapability = {id: string; badge?: SpecBadge; rows: SpecEntry[]};
 
 export type SpineTask = {
   id: string;
@@ -44,7 +38,7 @@ export type SpineTask = {
 
 export type SpineQuestion = {text: string; open: boolean};
 
-export type SpineSection = {heading: string; lines: string[]};
+export type SpineSection = {heading: string; lines: SpineSourceLine[]};
 
 export type Spine = {
   open: SpineLayer;
@@ -117,27 +111,39 @@ function oneLine(text: string): string {
 }
 
 function sectionsOf(text: string): SpineSection[] {
+  const source = text.split('\n');
   const out: SpineSection[] = [];
-  for (const part of text.split(/^## /m).slice(1)) {
-    const breakAt = part.indexOf('\n');
-    const heading = (breakAt === -1 ? part : part.slice(0, breakAt)).trim();
-    const raw = breakAt === -1 ? '' : part.slice(breakAt + 1).replace(/\n+$/, '');
-    const lines = raw.split('\n');
+  let heading: string | undefined;
+  let body: SpineSourceLine[] = [];
+  const flush = (): void => {
+    if (heading === undefined) {
+      return;
+    }
     let start = 0;
-    while (start < lines.length && lines[start]?.trim() === '') {
+    while (start < body.length && body[start]?.text.trim() === '') {
       start += 1;
     }
-    out.push({heading, lines: lines.slice(start)});
+    let end = body.length;
+    while (end > start && body[end - 1]?.text.trim() === '') {
+      end -= 1;
+    }
+    out.push({heading, lines: body.slice(start, end)});
+  };
+  for (let index = 0; index < source.length; index += 1) {
+    const raw = source[index] ?? '';
+    if (raw.startsWith('## ')) {
+      flush();
+      heading = raw.slice(3).trim();
+      body = [];
+      continue;
+    }
+    if (heading === undefined) {
+      continue;
+    }
+    body.push({text: raw, line: index + 1});
   }
+  flush();
   return out;
-}
-
-function sentences(text: string): string[] {
-  return text
-    .replace(/\s+/g, ' ')
-    .split(/(?<=\.)\s+/)
-    .map(item => item.trim())
-    .filter(item => item.endsWith('.') && item.length > 12);
 }
 
 /** Layer lines in a focus body. A line that names no layer stays in `rest`. */
@@ -244,51 +250,25 @@ function questionsOf(proposal: string): SpineQuestion[] {
   return out;
 }
 
-function markerValue(chunk: string, marker: 'WHEN' | 'THEN'): string {
-  const found: string[] = [];
-  for (const match of chunk.matchAll(new RegExp(`\\*\\*${marker}\\*\\*\\s*(.*)`, 'g'))) {
-    const value = match[1]?.trim() ?? '';
-    if (value !== '') {
-      found.push(value);
-    }
-  }
-  return found.join('\n');
-}
-
-function requirementsOf(text: string, baseline: string): SpineRequirement[] {
-  const out: SpineRequirement[] = [];
-  for (const part of text.split(/^## /m).slice(1)) {
-    const kind = part.startsWith('ADDED')
-      ? 'ADDED'
-      : part.startsWith('MODIFIED')
-        ? 'MODIFIED'
-        : part.startsWith('REMOVED')
-          ? 'REMOVED'
-          : '';
-    if (kind === '') {
+function scenarioNames(delta: string): string[] {
+  const names: string[] = [];
+  let take = false;
+  for (const line of delta.split('\n')) {
+    if (line.startsWith('## ')) {
+      const title = line.slice(3);
+      take = title.startsWith('ADDED') || title.startsWith('MODIFIED');
       continue;
     }
-    for (const req of part.split(/^### Requirement: /m).slice(1)) {
-      const title = req.split('\n')[0]?.trim() ?? '';
-      const chunks = req.split(/^#### Scenario: /m);
-      const body = chunks[0]?.split('\n').slice(1).join('\n').trim() ?? '';
-      const known = baseline.replace(/\s+/g, ' ');
-      const added =
-        kind === 'MODIFIED' && known.trim() !== ''
-          ? sentences(body).filter(item => !known.includes(item))
-          : [];
-      const scenarios: SpineScenario[] = [];
-      for (const chunk of chunks.slice(1)) {
-        scenarios.push({
-          name: chunk.split('\n')[0]?.trim() ?? '',
-          when: markerValue(chunk, 'WHEN'),
-          then: markerValue(chunk, 'THEN'),
-        });
-      }
-      out.push({kind, title, prose: body.replace(/\s+/g, ' ').trim(), added, scenarios});
+    if (!take || !line.startsWith('#### Scenario: ')) {
+      continue;
     }
+    const name = line.slice('#### Scenario: '.length).trim();
+    if (name === '') {
+      continue;
+    }
+    names.push(name);
   }
-  return out;
+  return names;
 }
 
 function tasksOf(text: string, owner: Map<string, string>): SpineTask[] {
@@ -338,15 +318,13 @@ export function buildSpine(input: {
   const owner = new Map<string, string>();
   for (const spec of listedSpecs(files, input.key)) {
     const baseline = files.read(`openspec/specs/${spec.id}/spec.md`);
-    const requirements = requirementsOf(files.read(spec.rel), baseline);
-    for (const requirement of requirements) {
-      for (const scenario of requirement.scenarios) {
-        if (!owner.has(scenario.name)) {
-          owner.set(scenario.name, spec.id);
-        }
+    const delta = files.read(spec.rel);
+    for (const name of scenarioNames(delta)) {
+      if (!owner.has(name)) {
+        owner.set(name, spec.id);
       }
     }
-    capabilities.push({id: spec.id, requirements});
+    capabilities.push({id: spec.id, ...specDiff(baseline, delta, spec.rel)});
   }
   return {
     open: layerForStation(input.station),

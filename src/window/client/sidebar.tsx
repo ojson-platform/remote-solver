@@ -1,6 +1,6 @@
 import type {ReactNode} from 'react';
 
-import type {Spine, SpineLayer} from '../spine.ts';
+import type {Spine, SpineLayer, SpineSourceLine} from '../spine.ts';
 import type {GateStation, SidebarBlock} from '../types.ts';
 import type {SnapshotRow, WindowSnapshot} from '../snapshot.ts';
 
@@ -207,17 +207,17 @@ function lineTemplate(keyName: string): ReactNode {
   );
 }
 
-function partsOf(lines: readonly string[]): {heading: string; lines: string[]}[] {
-  const parts: {heading: string; lines: string[]}[] = [{heading: '', lines: []}];
+function partsOf(lines: readonly SpineSourceLine[]): {heading: string; lines: SpineSourceLine[]}[] {
+  const parts: {heading: string; lines: SpineSourceLine[]}[] = [{heading: '', lines: []}];
   for (const line of lines) {
-    const sub = /^###\s+(.+)$/.exec(line.trim());
+    const sub = /^###\s+(.+)$/.exec(line.text.trim());
     if (sub?.[1]) {
       parts.push({heading: sub[1], lines: []});
       continue;
     }
     parts.at(-1)?.lines.push(line);
   }
-  return parts.filter(part => part.lines.some(item => item.trim() !== ''));
+  return parts.filter(part => part.lines.some(item => item.text.trim() !== ''));
 }
 
 function PlanLines({
@@ -227,7 +227,7 @@ function PlanLines({
   drafts,
   keyName,
 }: {
-  lines: readonly string[];
+  lines: readonly SpineSourceLine[];
   pull: boolean;
   questions: Spine['proposal']['questions'];
   drafts: readonly LineDraft[];
@@ -236,7 +236,7 @@ function PlanLines({
   let gap = false;
   const out: ReactNode[] = [];
   lines.forEach((line, index) => {
-    if (line.trim() === '') {
+    if (line.text.trim() === '') {
       if (!gap) {
         out.push(<span className="gap" key={`gap-${index}`} />);
       }
@@ -244,26 +244,26 @@ function PlanLines({
       return;
     }
     gap = false;
-    const trimmed = line.trim();
+    const trimmed = line.text.trim();
     const question = pull ? questions.find(item => item.open && trimmed === `- [ ] ${item.text}`) : undefined;
     if (!pull) {
       out.push(
         <p className="line" key={index}>
-          {line.trimEnd()}
+          {line.text.trimEnd()}
         </p>,
       );
       return;
     }
-    const draft = drafts.find(item => item.line === line.trimEnd());
+    const draft = drafts.find(item => item.line === line.text.trimEnd());
     out.push(
       <span key={index}>
         <button
           type="button"
           className={draft ? 'line is-on' : 'line'}
-          data-line={line.trimEnd()}
+          data-line={line.text.trimEnd()}
           data-question={question?.text}
         >
-          {line.trimEnd()}
+          {line.text.trimEnd()}
         </button>
         {draft ? (
           <LineNote keyName={keyName} line={draft.line} question={draft.question} text={draft.text} />
@@ -286,7 +286,7 @@ function PlanDocument({
   const body = model.proposal.sections.map(section => {
     const lines = section.lines;
     if (section.heading === 'Open questions') {
-      if (!lines.some(line => line.trim() !== '')) {
+      if (!lines.some(line => line.text.trim() !== '')) {
         return null;
       }
       const hold = model.proposal.questions.some(question => question.open) ? (
@@ -514,33 +514,6 @@ export function Sidebar({
             {model.capabilities.map((item, index) => (
               <details className="cap" id={`cap-${item.id}`} open={index === 0} key={item.id}>
                 <summary>{item.id}</summary>
-                {item.requirements.map(req => (
-                  <div key={req.title}>
-                    <p className="crumb">{req.kind}</p>
-                    <h3>{req.title}</h3>
-                    {req.prose === '' ? null : <p>{req.prose}</p>}
-                    {req.added.map(added => (
-                      <p className="mark" key={added}>
-                        <b>добавлено</b> {added}
-                      </p>
-                    ))}
-                    {req.scenarios.map(scene => (
-                      <div key={scene.name}>
-                        <p className="scene-name">{scene.name}</p>
-                        {scene.when === '' ? null : (
-                          <p className="scene">
-                            <b>WHEN</b> {scene.when}
-                          </p>
-                        )}
-                        {scene.then === '' ? null : (
-                          <p className="scene">
-                            <b>THEN</b> {scene.then}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ))}
               </details>
             ))}
             {reviewFold(model, row.key, 'specified', model.capabilities.length > 0)}

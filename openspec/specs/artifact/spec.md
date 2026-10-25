@@ -8,7 +8,7 @@ Each writing phase owns one change file. The cycle returns to the phase that sti
 
 ### Requirement: A writing phase publishes its own file
 
-`proposing` owns the proposal, `specifying` the delta, `designing` the design, and `tasking` the tasks. While that file is missing, or no pull request is open, the machine SHALL run the skill that writes and publishes it, and SHALL NOT open the review gate.
+`proposing` owns the proposal, `specifying` the delta, `designing` the design, and `tasking` the tasks. While that file is missing, or no pull request is open, the machine SHALL run the skill that writes and publishes it, and SHALL NOT open the review gate. For specifying, the delta is present when a delta file exists, or when the proposal names no capability. A capability is a line under `### Added` or `### Modified` in `## Capabilities`. A baseline spec under `openspec/specs/` does not make the delta present. When the delta is present that way and no pull request is open, the machine SHALL run the specify skill to publish the change, and the reason SHALL be `publish the change to the pull request`.
 
 #### Scenario: Proposing without a proposal writes one
 
@@ -20,9 +20,24 @@ Each writing phase owns one change file. The cycle returns to the phase that sti
 - **WHEN** the phase is `proposing`, the proposal exists, and no pull request is open
 - **THEN** the machine runs the plan skill to publish it
 
+#### Scenario: Specifying with a named capability writes the delta
+
+- **WHEN** the phase is `specifying`, the proposal names a capability, the change has no delta file, and one pull request is open
+- **THEN** the machine runs the specify skill and does not open the review gate
+
+#### Scenario: Specifying with no named capability opens the review
+
+- **WHEN** the phase is `specifying`, the proposal names no capability, the change has no delta file, and one pull request is open
+- **THEN** the machine opens the spec review gate
+
+#### Scenario: Specifying with no named capability and no pull request publishes
+
+- **WHEN** the phase is `specifying`, the proposal names no capability, and no pull request is open
+- **THEN** the machine runs the specify skill with the reason `publish the change to the pull request` and does not open the review gate
+
 ### Requirement: A missing earlier file returns one phase
 
-`specifying` SHALL return to `proposing` when the proposal is missing. `designing` SHALL return to `specifying` when the delta is missing. `tasking` SHALL return to `designing` when the design is missing. `implementing` SHALL return to `tasking` when the tasks are missing. Each check looks only at that one file.
+`specifying` SHALL return to `proposing` when the proposal is missing. `designing` SHALL return to `specifying` when a named capability has no delta file. When the proposal names no capability, `designing` SHALL NOT return to `specifying` for a missing delta file. `tasking` SHALL return to `designing` when the design is missing. `implementing` SHALL return to `tasking` when the tasks are missing. Each check looks only at the previous phase's file. Specifying is ready without a delta file when the proposal names no capability.
 
 #### Scenario: Specifying without a proposal returns to proposing
 
@@ -33,6 +48,16 @@ Each writing phase owns one change file. The cycle returns to the phase that sti
 
 - **WHEN** the phase is `designing` and the delta exists
 - **THEN** the machine does not move the issue to `proposing` because the proposal is absent
+
+#### Scenario: Designing without a delta returns to specifying
+
+- **WHEN** the phase is `designing`, the proposal names a capability, and the change has no delta file
+- **THEN** the machine moves the issue to `specifying`
+
+#### Scenario: Designing with no named capability stays without a delta
+
+- **WHEN** the phase is `designing`, the proposal names no capability, the design exists, one pull request is open, and the change has no delta file
+- **THEN** the machine does not move the issue to `specifying` and opens the design review gate
 
 ### Requirement: Open items hold only their own file
 

@@ -438,11 +438,17 @@ export function headClickToggles(target: {closest: (selector: string) => unknown
 }
 
 /** The current writing phase offers acceptance where its gate stood. Other rows keep the gate. */
-function rowControl(layer: SpineLayer, model: Spine, gate: string, key: string): string {
+function rowControl(
+  layer: SpineLayer,
+  model: Spine,
+  gate: string,
+  key: string,
+  action?: string,
+): string {
   const review = reviewGateForLayer(layer);
   const here = model.station !== undefined && layerForStation(model.station) === layer;
   if (here && review) {
-    if (model.pull && model.reviewGate === review && reviewReady(model, review)) {
+    if (model.pull && model.reviewGate === review && reviewReady(model, review, action)) {
       return acceptForm(key, layer);
     }
     return '';
@@ -457,6 +463,7 @@ function spineHead(
   gate: string,
   key: string,
   excerpt = '',
+  action?: string,
 ): string {
   const checked = model.open === layer ? ' checked' : '';
   const here =
@@ -469,7 +476,7 @@ function spineHead(
     text === '' && preview === ''
       ? ''
       : `<label class="rest" for="spine-${layer}">${text}${preview}</label>`;
-  const control = rowControl(layer, model, gate, key);
+  const control = rowControl(layer, model, gate, key, action);
   const acts = control === '' ? '' : `<div class="acts">${control}</div>`;
   return `<section><input class="spine-pick" type="checkbox" id="spine-${layer}" value="${layer}"${checked}><div class="row"><div class="lead"><label class="layer" for="spine-${layer}"><span class="name">${layer}${here}</span></label>${acts}</div>${rest}</div>`;
 }
@@ -630,6 +637,7 @@ function spineHtml(
   place: (file: string, line: number) => string | undefined,
   codeExtra: string,
   unanswered: boolean,
+  action?: string,
 ): string {
   const gate = (layer: SpineLayer, station: GateStation) =>
     layer === 'Plan' || layer === 'Specify' || layer === 'Design' || layer === 'Accept'
@@ -643,7 +651,7 @@ function spineHtml(
   const specifyInner = `${model.capabilities
     .map((item, index) => capabilityHtml(item, index === 0))
     .join('')}${reviewFold(row.key, model, 'specified', model.capabilities.length > 0)}`;
-  const specify = `${spineHead('Specify', model, spineSentence(model, 'Specify', place), gate('Specify', 'specifying'), row.key)}${spineTail(specifyInner)}`;
+  const specify = `${spineHead('Specify', model, spineSentence(model, 'Specify', place), gate('Specify', 'specifying'), row.key, '', action)}${spineTail(specifyInner)}`;
   const designBody = model.design.present
     ? `${model.design.boundary === '' ? '' : `<h3>Verification boundary</h3><p>${escape(model.design.boundary)}</p>`}${model.design.approach === '' ? '' : `<h3>Approach</h3><p>${escape(model.design.approach)}</p>`}${model.design.rejected.map(line => `<p>${escape(line)}</p>`).join('')}${model.design.decisions === '' ? '' : `<h3>Open decisions</h3><p>${escape(model.design.decisions)}</p>`}`
     : '';
@@ -805,6 +813,7 @@ function drawer(
   roles: readonly {name: string; outcome: RoleOutcome}[],
   place: (file: string, line: number) => string | undefined,
   model: Spine,
+  action?: string,
 ): string {
   const top = blocks
     .filter(block => block.kind === 'reason' || block.kind === 'ask')
@@ -820,6 +829,7 @@ function drawer(
     place,
     codeExtra,
     blocks.some(block => block.kind === 'unanswered'),
+    action,
   );
   return `<aside class="sidebar" data-key="${escape(row.key)}"><header><div><p class="kicker">${escape(row.key)}</p><p class="full">${escape(row.title)}</p></div>${dismiss('close-card', 'Закрыть')}</header><div class="side-scroll">${top}${verbs(row, roles)}${spine}</div></aside>`;
 }
@@ -1818,7 +1828,9 @@ function boardDocument(surface: Surface, view: PageView): string {
       focusBody: focus && focus.kind === 'focus' ? focus.body : undefined,
       gateOff: openRow?.gateOff,
     });
-  const drawerHtml = openRow ? drawer(openRow, blocks, roles, place, model) : '';
+  const drawerHtml = openRow
+    ? drawer(openRow, blocks, roles, place, model, surface.turn(openRow.key))
+    : '';
   const ask = view.ask ? askDialog(view.ask) : '';
   const repairRow =
     view.repair === undefined ? undefined : drawn.find(row => row.key === view.repair);

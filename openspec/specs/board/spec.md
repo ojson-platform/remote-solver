@@ -491,7 +491,7 @@ The window SHALL show the path or the reason and SHALL NOT draw a field for: **Ð
 
 `remote-solver board` SHALL serve the window for the GitHub repository of the working directory, print its URL, and run the machine spy in that same process. The home file SHALL be `~/.aifactory/config.yaml` when the command does not name one. When that file is missing, the watch list SHALL be that repository's `owner/repo`. Open issues that carry `sdd:cycle` SHALL be the cycles. The working directory SHALL be the gathered checkout for that repository, and an empty service SHALL mean that directory. Another repository on the watch list SHALL stay under the GitHub root. Take SHALL assign the process login. The window's spy SHALL add `sdd:proposing` for a phaseless cycle this manager holds. The machine spy SHALL start an agent for a cycle it would start from `remote-solver spy`. While that agent runs, the window SHALL treat the step as leading. While a worker is on a turn, the page SHALL show that issue, its phase, and its action, as `#<issue> <phase> â†’ <action>`. A later turn of the same worker SHALL replace that line. When the worker leaves the turn, that line SHALL go, and another worker's line SHALL stay. While the page stays open it SHALL read the tracker again about every 15 seconds. When the home agent is cursor, a step SHALL use that mode's model from the merged factory config. Any other home agent, and an empty agent, SHALL keep the built-in model for that mode.
 
-`GET /snapshot` SHALL return a JSON snapshot of the header, the rows, and the open cycle's spine. `GET /` SHALL remain the HTML page. The snapshot generation SHALL start at 0 and SHALL grow when the turn changes, when a tracker read commits, and when a gesture is written. Reading the page, a refused gesture, and setting the same turn again SHALL NOT grow it. The snapshot's spy line SHALL be the current turn line, and that cycle's row SHALL carry the turn's action. When a plaque has no top line and no other bottom line, the snapshot's bottom line SHALL be the worker's action. When the open cycle is specifying, one pull request is open, and the change has no delta requirement, the snapshot's Specify layer SHALL offer neither acceptance nor the specifying gate. An error the page would show between the header and the board SHALL be in the snapshot that is sent next, and SHALL be absent from the snapshot after that.
+`GET /snapshot` SHALL return a JSON snapshot of the header, the rows, and the open cycle's spine. `GET /` SHALL remain the HTML page. The snapshot generation SHALL start at 0 and SHALL grow when the turn changes, when a tracker read commits, and when a gesture is written. Reading the page, a refused gesture, and setting the same turn again SHALL NOT grow it. The snapshot's spy line SHALL be the current turn line, and that cycle's row SHALL carry the turn's action. When a plaque has no top line and no other bottom line, the snapshot's bottom line SHALL be the worker's action. When the open cycle is specifying and one pull request is open, the snapshot's Specify layer SHALL offer acceptance when the specs are ready, and SHALL offer neither acceptance nor the specifying gate when they are not. The specs are ready when the change has a delta file, or when the proposal names no capability under Added or Modified. A baseline spec SHALL NOT by itself make them ready. A missing baseline for a Modified capability SHALL NOT offer acceptance. While this cycle's action is `restore-baseline`, `create-initial-specs`, or `improve-specs`, the layer SHALL NOT offer acceptance. An error the page would show between the header and the board SHALL be in the snapshot that is sent next, and SHALL be absent from the snapshot after that.
 
 #### Scenario: The home file is the factory file when the command names none
 
@@ -578,9 +578,14 @@ The window SHALL show the path or the reason and SHALL NOT draw a field for: **Ð
 - **WHEN** specifying has no ask, phase row, or reason and the worker's action is `restore-baseline`, and tasking likewise has `create-tasks`
 - **THEN** each snapshot plaque has no top line and its bottom line is that action
 
-#### Scenario: The snapshot hides Specify acceptance without a delta
+#### Scenario: The snapshot offers Specify acceptance for an empty delta
 
-- **WHEN** the open cycle is specifying, one pull request is open, and the change has no delta requirement
+- **WHEN** the open cycle is specifying, one pull request is open, and the change has a delta file with no requirement
+- **THEN** the snapshot's Specify layer offers acceptance
+
+#### Scenario: The snapshot hides Specify acceptance during a spec turn
+
+- **WHEN** the open cycle is specifying, one pull request is open, the change has a delta requirement, and the action is `create-initial-specs`
 - **THEN** the snapshot's Specify layer offers neither acceptance nor the specifying gate
 
 #### Scenario: The snapshot shows an error once

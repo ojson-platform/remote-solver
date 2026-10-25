@@ -24,6 +24,7 @@ function change(over: Partial<ChangeView> = {}): ChangeView {
     openQuestions: 0,
     openDecisions: 0,
     openTasks: 0,
+    capabilities: [],
     missingBaseline: [],
     ...over,
   };
@@ -180,7 +181,12 @@ for (const gate of gates) {
 }
 
 test('a gate phase over a missing artifact goes back and names the file', () => {
-  const decision = decide(issue(1, ['sdd:specified']), [], [pull(9)], change({proposal: true}));
+  const decision = decide(
+    issue(1, ['sdd:specified']),
+    [],
+    [pull(9)],
+    change({proposal: true, capabilities: ['section-text']}),
+  );
   assert.equal(decision.kind, 'advance');
   if (decision.kind === 'advance') {
     assert.equal(decision.to, 'specifying');
@@ -535,6 +541,21 @@ test('the human gate and the auto tag share one writing gate', () => {
     open: 1,
   });
   assert.deepEqual(writingGate('specifying', change()), {artifact: false, open: 0});
+  assert.deepEqual(writingGate('specifying', change({proposal: true})), {artifact: true, open: 0});
+  assert.deepEqual(
+    writingGate('specifying', change({proposal: true, capabilities: ['section-text']})),
+    {
+      artifact: false,
+      open: 0,
+    },
+  );
+  assert.deepEqual(
+    writingGate(
+      'specifying',
+      change({proposal: true, delta: true, capabilities: ['section-text']}),
+    ),
+    {artifact: true, open: 0},
+  );
   assert.deepEqual(writingGate('designing', change({design: true})), {artifact: true, open: 0});
 });
 

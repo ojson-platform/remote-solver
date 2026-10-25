@@ -93,6 +93,7 @@ spec('change', () => {
       assert.equal(view.proposal, true);
       assert.equal(view.openQuestions, 1);
       assert.deepEqual(view.missingBaseline, ['cache-first']);
+      assert.deepEqual(view.capabilities, ['cache-first']);
       rmSync(root, {recursive: true, force: true});
     });
   });
@@ -130,6 +131,17 @@ test('change text prefers the active directory and otherwise reads the archive',
   );
 });
 
+test('names capabilities under Added and Modified', () => {
+  const files: FileSource = {
+    exists: rel => rel.endsWith('proposal.md'),
+    read: () => '## Capabilities\n### Added\n- fresh one\n### Modified\n- cache-first keep\n',
+    list: () => [],
+  };
+  const view = readChange('1', files);
+  assert.deepEqual(view.capabilities, ['fresh', 'cache-first']);
+  assert.deepEqual(view.missingBaseline, ['cache-first']);
+});
+
 test('reads a change from a file source that is not git', () => {
   const files: FileSource = {
     exists: rel => rel === 'openspec/changes/issue-LAVKA-3/proposal.md',
@@ -151,6 +163,7 @@ test('context.md § Artifacts states every heading the machine and the implement
   assert.ok(artifacts, 'context.md has § Artifacts');
   const read = [
     `## ${HEADINGS.capabilities}`,
+    `### ${HEADINGS.added}`,
     `### ${HEADINGS.modified}`,
     `## ${HEADINGS.openQuestions}`,
     `## ${HEADINGS.openDecisions}`,

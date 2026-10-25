@@ -7,6 +7,8 @@ import type {
   SidebarBlock,
 } from './types.ts';
 
+import {specsReady} from '../machine/change.ts';
+
 import {plaqueLines} from './board.ts';
 import {
   buildSpine,
@@ -78,8 +80,15 @@ type Fact = {
   occasion?: true;
 };
 
+/** Spec turns hide Specify acceptance until this cycle's turn ends. */
+const SPEC_TURNS = new Set(['restore-baseline', 'create-initial-specs', 'improve-specs']);
+
 /** Whether the current review gate's artifact is ready to accept. */
-export function reviewReady(model: Spine, gate: NonNullable<Spine['reviewGate']>): boolean {
+export function reviewReady(
+  model: Spine,
+  gate: NonNullable<Spine['reviewGate']>,
+  action?: string,
+): boolean {
   if (gate === 'proposed') {
     return model.proposal.present && !model.proposal.questions.some(question => question.open);
   }
@@ -89,14 +98,24 @@ export function reviewReady(model: Spine, gate: NonNullable<Spine['reviewGate']>
       !model.design.decisions.split('\n').some(line => line.trimStart().startsWith('- [ ]'))
     );
   }
-  return model.capabilities.some(item => item.requirements.length > 0);
+  if (action !== undefined && SPEC_TURNS.has(action)) {
+    return false;
+  }
+  if (model.missingBaseline.length > 0) {
+    return false;
+  }
+  return specsReady({
+    proposal: model.proposal.present,
+    delta: model.capabilities.length > 0,
+    capabilities: model.named,
+  });
 }
 
-function layerAct(layer: SpineLayer, model: Spine): LayerAct {
+function layerAct(layer: SpineLayer, model: Spine, action?: string): LayerAct {
   const review = reviewGateForLayer(layer);
   const here = model.station !== undefined && layerForStation(model.station) === layer;
   if (here && review !== undefined) {
-    if (model.pull && model.reviewGate === review && reviewReady(model, review)) {
+    if (model.pull && model.reviewGate === review && reviewReady(model, review, action)) {
       return 'accept';
     }
     return 'none';
@@ -187,11 +206,12 @@ function openCycle(
       focusBody: focus?.kind === 'focus' ? focus.body : undefined,
       gateOff: row.gateOff,
     });
+  const action = surface.turn(row.key);
   return {
     key: row.key,
     title: row.title,
     spine: model,
-    layers: SPINE_LAYERS.map(layer => ({layer, act: layerAct(layer, model)})),
+    layers: SPINE_LAYERS.map(layer => ({layer, act: layerAct(layer, model, action)})),
   };
 }
 

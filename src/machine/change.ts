@@ -1,7 +1,8 @@
+import type {FileSource} from './port.ts';
+
 import path from 'node:path';
 
 import {archiveDir, changeDir} from './naming.ts';
-import type {FileSource} from './port.ts';
 
 export type ChangeView = {
   proposal: boolean;
@@ -12,12 +13,15 @@ export type ChangeView = {
   openQuestions: number;
   openDecisions: number;
   openTasks: number;
+  /** Ids under Added and Modified. Empty when the proposal names none. */
+  capabilities: string[];
   missingBaseline: string[];
 };
 
 /** Change-file headings the machine reads; `skills/sdd-flow/CONTEXT.md` § Artifacts states them. */
 export const HEADINGS = {
   capabilities: 'Capabilities',
+  added: 'Added',
   modified: 'Modified',
   openQuestions: 'Open questions',
   openDecisions: 'Open decisions',
@@ -62,17 +66,42 @@ export function changeText(key: string, files: FileSource): string | null {
   return text.length > 0 ? text.join('\n\n') : null;
 }
 
-function modifiedCapabilities(proposal: string): string[] {
+function idsUnder(proposal: string, heading: string): string[] {
   const body = section(proposal, HEADINGS.capabilities);
-  const subsection = new RegExp(`### ${HEADINGS.modified}\\s*([\\s\\S]*?)(?:\\n### |\\s*$)`);
-  const modified = subsection.exec(body);
-  if (!modified) {
+  const subsection = new RegExp(`### ${heading}\\s*([\\s\\S]*?)(?:\\n### |\\s*$)`);
+  const found = subsection.exec(body);
+  if (!found?.[1]) {
     return [];
   }
-  return modified[1]
+  return found[1]
     .split('\n')
     .map(line => line.match(/^-\s+(\S+)/)?.[1])
     .filter((id): id is string => Boolean(id));
+}
+
+/** Added and Modified ids, in that order, without duplicates. */
+export function namedCapabilities(proposal: string): string[] {
+  return [
+    ...new Set([...idsUnder(proposal, HEADINGS.added), ...idsUnder(proposal, HEADINGS.modified)]),
+  ];
+}
+
+function modifiedCapabilities(proposal: string): string[] {
+  return idsUnder(proposal, HEADINGS.modified);
+}
+
+/** Modified ids whose `openspec/specs/<id>/spec.md` is absent. */
+export function missingBaselineIds(proposal: string, exists: (rel: string) => boolean): string[] {
+  return modifiedCapabilities(proposal).filter(
+    id => !exists(path.join('openspec', 'specs', id, 'spec.md')),
+  );
+}
+
+/** A delta file, or a proposal that names no capability, is enough to leave specifying. */
+export function specsReady(
+  change: Pick<ChangeView, 'proposal' | 'delta' | 'capabilities'>,
+): boolean {
+  return change.delta || (change.proposal && change.capabilities.length === 0);
 }
 
 export function readChange(key: string, files: FileSource): ChangeView {
@@ -82,9 +111,7 @@ export function readChange(key: string, files: FileSource): ChangeView {
   const tasksPath = path.join(dir, 'tasks.md');
   const docs = new Set(changeDocuments(dir, files));
   const proposal = files.read(proposalPath);
-  const missing = modifiedCapabilities(proposal).filter(
-    id => !files.exists(path.join('openspec', 'specs', id, 'spec.md')),
-  );
+  const missing = missingBaselineIds(proposal, rel => files.exists(rel));
   return {
     proposal: docs.has(proposalPath),
     delta: [...docs].some(rel => rel.endsWith('spec.md')),
@@ -97,6 +124,7 @@ export function readChange(key: string, files: FileSource): ChangeView {
       .read(tasksPath)
       .split('\n')
       .filter(line => line.trimStart().startsWith('- [ ]')).length,
+    capabilities: namedCapabilities(proposal),
     missingBaseline: missing,
   };
 }

@@ -1,11 +1,12 @@
-import {existsSync, readdirSync, readFileSync} from 'node:fs';
+import type {FileSource} from '../machine/port.ts';
+
 import path from 'node:path';
 
 import {HEADINGS} from '../machine/change.ts';
 import {isFocusRecord} from '../machine/marker.ts';
-import {changeDir} from '../machine/naming.ts';
 import {GATE_CLOSES, GATE_PHASES, phaseOf, type Phase} from '../machine/phase.ts';
 
+import {changeFiles, changeRel, listedSpecs} from './change-files.ts';
 import {focusLayers} from './focus.ts';
 import {
   COLUMN_NAMES,
@@ -110,24 +111,13 @@ function unchecked(text: string, heading: string): number {
     .filter(line => line.trimStart().startsWith('- [ ]')).length;
 }
 
-function readChangeText(checkout: string | undefined, key: string, name: string): string {
-  if (!checkout) {
-    return '';
-  }
-  const file = path.join(checkout, changeDir(key), name);
-  if (!existsSync(file)) {
-    return '';
-  }
-  return readFileSync(file, 'utf8');
-}
-
 function openCount(
   checkout: string | undefined,
   key: string,
   name: string,
   heading: string,
 ): number {
-  return unchecked(readChangeText(checkout, key, name), heading);
+  return unchecked(changeFiles(checkout, key).read(changeRel(key, name)), heading);
 }
 
 export function questionCount(checkout: string | undefined, key: string): number {
@@ -138,20 +128,14 @@ export function decisionCount(checkout: string | undefined, key: string): number
   return openCount(checkout, key, 'design.md', HEADINGS.openDecisions);
 }
 
-function taskRow(
-  checkout: string | undefined,
-  key: string,
-): {done: number; open: number} | undefined {
-  if (!checkout) {
-    return undefined;
-  }
-  const file = path.join(checkout, changeDir(key), 'tasks.md');
-  if (!existsSync(file)) {
+function taskRow(files: FileSource, key: string): {done: number; open: number} | undefined {
+  const rel = changeRel(key, 'tasks.md');
+  if (!files.exists(rel)) {
     return undefined;
   }
   let done = 0;
   let open = 0;
-  for (const line of readFileSync(file, 'utf8').split('\n')) {
+  for (const line of files.read(rel).split('\n')) {
     const trimmed = line.trimStart();
     if (trimmed.startsWith('- [x]')) {
       done += 1;
@@ -165,7 +149,7 @@ function taskRow(
 function phaseRowOf(
   column: ColumnName,
   item: WindowTicket,
-  checkout: string | undefined,
+  files: FileSource,
   questions: number,
   decisions: number,
 ): PhaseRow | undefined {
@@ -176,7 +160,7 @@ function phaseRowOf(
     return decisions;
   }
   if (column === 'implementing') {
-    return taskRow(checkout, item.key);
+    return taskRow(files, item.key);
   }
   if (
     (column === 'verifying' || column === 'accepting') &&
@@ -271,40 +255,6 @@ export function reasonParts(
   return parts;
 }
 
-function walkFiles(dir: string): string[] {
-  if (!existsSync(dir)) {
-    return [];
-  }
-  const out: string[] = [];
-  for (const entry of readdirSync(dir, {withFileTypes: true})) {
-    const abs = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      out.push(...walkFiles(abs));
-    } else if (entry.isFile()) {
-      out.push(abs);
-    }
-  }
-  return out;
-}
-
-function specFiles(checkout: string, key: string): {id: string; file: string}[] {
-  const specsDir = path.join(checkout, changeDir(key), 'specs');
-  const found: {id: string; file: string}[] = [];
-  for (const abs of walkFiles(specsDir)) {
-    if (!abs.endsWith(`${path.sep}spec.md`)) {
-      continue;
-    }
-    const rel = path.relative(specsDir, abs);
-    const id = path.dirname(rel);
-    if (id === '.') {
-      continue;
-    }
-    found.push({id, file: path.join(changeDir(key), 'specs', rel)});
-  }
-  found.sort((left, right) => left.id.localeCompare(right.id));
-  return found;
-}
-
 function stationOfFile(file: string): ColumnName | null {
   const base = path.basename(file);
   if (base === 'proposal.md') {
@@ -341,16 +291,16 @@ function markedStations(
   return found;
 }
 
-function changeFile(checkout: string, key: string, name: string): string | undefined {
-  const rel = path.join(changeDir(key), name);
-  return existsSync(path.join(checkout, rel)) ? rel : undefined;
+function presentFile(files: FileSource, key: string, name: string): string | undefined {
+  const rel = changeRel(key, name);
+  return files.exists(rel) ? rel : undefined;
 }
 
 /** Doors on every station except the plaque. The current station stays the plaque. */
 function stationDoors(
   item: WindowTicket,
   column: ColumnName,
-  checkout: string | undefined,
+  files: FileSource,
   parts: readonly string[],
   marked: ReadonlySet<ColumnName>,
 ): Partial<Record<ColumnName, StationDoor>> | undefined {
@@ -364,25 +314,23 @@ function stationDoors(
     }
     doors[name] = door;
   };
-  if (checkout) {
-    const proposal = changeFile(checkout, item.key, 'proposal.md');
-    if (proposal) {
-      put('proposing', {kind: 'plan', file: proposal});
-    }
-    const specs = specFiles(checkout, item.key);
-    if (specs.length === 1) {
-      put('specifying', {kind: 'spec', file: specs[0]?.file});
-    } else if (specs.length > 1) {
-      put('specifying', {kind: 'spec', specs});
-    }
-    const design = changeFile(checkout, item.key, 'design.md');
-    if (design) {
-      put('designing', {kind: 'design', file: design});
-    }
-    const tasks = changeFile(checkout, item.key, 'tasks.md');
-    if (tasks) {
-      put('tasking', {kind: 'tasks', file: tasks});
-    }
+  const proposal = presentFile(files, item.key, 'proposal.md');
+  if (proposal) {
+    put('proposing', {kind: 'plan', file: proposal});
+  }
+  const specs = listedSpecs(files, item.key).map(spec => ({id: spec.id, file: spec.rel}));
+  if (specs.length === 1) {
+    put('specifying', {kind: 'spec', file: specs[0]?.file});
+  } else if (specs.length > 1) {
+    put('specifying', {kind: 'spec', specs});
+  }
+  const design = presentFile(files, item.key, 'design.md');
+  if (design) {
+    put('designing', {kind: 'design', file: design});
+  }
+  const tasks = presentFile(files, item.key, 'tasks.md');
+  if (tasks) {
+    put('tasking', {kind: 'tasks', file: tasks});
   }
   if (item.openPullRequests === 1 && item.diff === true) {
     put('implementing', {kind: 'code'});
@@ -499,9 +447,10 @@ function buildCycle(
   hideIcon: boolean,
   review: WindowReview | undefined,
 ): Placed {
-  const questions = openCount(checkout, item.key, 'proposal.md', HEADINGS.openQuestions);
-  const decisions = openCount(checkout, item.key, 'design.md', HEADINGS.openDecisions);
-  const phaseRow = phaseRowOf(column, item, checkout, questions, decisions);
+  const files = changeFiles(checkout, item.key);
+  const questions = unchecked(files.read(changeRel(item.key, 'proposal.md')), HEADINGS.openQuestions);
+  const decisions = unchecked(files.read(changeRel(item.key, 'design.md')), HEADINGS.openDecisions);
+  const phaseRow = phaseRowOf(column, item, files, questions, decisions);
   const parts = reasonParts(item, phase, breakReason, reading, questions, decisions);
   const occasion = parts.length > 0;
   const card: CycleCard = {key: item.key, title: item.title};
@@ -529,7 +478,7 @@ function buildCycle(
   if (unanswered !== undefined) {
     card.unanswered = unanswered;
   }
-  const doors = stationDoors(item, column, checkout, parts, markedStations(review?.threads));
+  const doors = stationDoors(item, column, files, parts, markedStations(review?.threads));
   if (doors) {
     card.doors = doors;
   }

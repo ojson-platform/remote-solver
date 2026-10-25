@@ -1,8 +1,15 @@
 import {createServer, type IncomingMessage, type ServerResponse} from 'node:http';
 
 import {plaqueLines} from './board.ts';
+import {crossButton, fieldClose, hairline, pill, rootCss, sendMark} from './face.ts';
 import {FACTORY_AGENTS} from './factory.ts';
-import {buildSpine, layerForStation, type Spine, type SpineLayer} from './spine.ts';
+import {
+  buildSpine,
+  layerForStation,
+  reviewGateForLayer,
+  type Spine,
+  type SpineLayer,
+} from './spine.ts';
 import {
   COLUMN_NAMES,
   type BoardState,
@@ -29,7 +36,8 @@ type Surface = {
   spy: () => void;
   sidebar: () => SidebarBlock[];
   spine: () => Spine | undefined;
-  answer: (key: string, question: string, reply: string) => string | undefined;
+  answer: (key: string, question: string, reply: string, line?: string) => string | undefined;
+  acceptReview: (key: string) => string | undefined;
   shelf: () => {name: string; outcome: RoleOutcome}[];
   settings: () => SettingsState;
   overlay: () => OverlayGroup;
@@ -52,6 +60,7 @@ type Surface = {
   drag: (name: string, key: string) => {popup?: string; status?: string} | undefined;
   closeCard: () => void;
   checkouts: () => string[];
+  spyNote: () => string;
   openReviewPlace: (file: string, line: number) => string | undefined;
   doorPlace: (file: string) => string | undefined;
   gateMark: (key: string, station: string, side?: boolean) => void;
@@ -348,11 +357,24 @@ function aheadOfPlaque(row: Drawn, name: ColumnName): boolean {
   return COLUMN_NAMES.indexOf(name) > COLUMN_NAMES.indexOf(row.station);
 }
 
-const CROSS =
-  '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.2 4.2 11.8 11.8 M11.8 4.2 4.2 11.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+/** Drafts left open after a click on `target`. Text stays. An empty draft closes, including a second click on its own line. */
+export function draftsAfterClick(
+  open: readonly {line: string; text: string}[],
+  target: string,
+): {line: string; text: string}[] {
+  const current = open.find(item => item.line === target);
+  if (current?.text.trim() === '') {
+    return open.filter(item => item.line !== target && item.text.trim() !== '');
+  }
+  const kept = open.filter(item => item.line === target || item.text.trim() !== '');
+  if (current) {
+    return kept;
+  }
+  return [...open.filter(item => item.text.trim() !== ''), {line: target, text: ''}];
+}
 
 function dismiss(act: string, label: string): string {
-  return `<form method="post" action="/act">${hidden('act', act)}<button class="x" type="submit" aria-label="${escape(label)}">${CROSS}</button></form>`;
+  return `<form method="post" action="/act">${hidden('act', act)}${crossButton(escape(label))}</form>`;
 }
 
 function gateControl(row: Drawn, name: GateStation, side: boolean): string {
@@ -393,34 +415,185 @@ function spineSentence(
     .join('<br>');
 }
 
-function spineHead(layer: SpineLayer, model: Spine, sentence: string, gate: string): string {
+function reviewReady(model: Spine, gate: NonNullable<Spine['reviewGate']>): boolean {
+  if (gate === 'proposed') {
+    return model.proposal.present && !model.proposal.questions.some(question => question.open);
+  }
+  if (gate === 'designed') {
+    return (
+      model.design.present &&
+      !model.design.decisions.split('\n').some(line => line.trimStart().startsWith('- [ ]'))
+    );
+  }
+  return true;
+}
+
+/** Escape closes the line field when the caret is inside it. */
+export function lineFieldClosesOnEscape(key: string, insideField: boolean): boolean {
+  return key === 'Escape' && insideField;
+}
+
+/** A row-head click toggles the row when it misses the name and the gate or acceptance control. */
+export function headClickToggles(target: {closest: (selector: string) => unknown} | null): boolean {
+  if (!target?.closest) {
+    return false;
+  }
+  return !target.closest('.acts') && !target.closest('label');
+}
+
+/** The current writing phase offers acceptance where its gate stood. Other rows keep the gate. */
+function rowControl(layer: SpineLayer, model: Spine, gate: string, key: string): string {
+  const review = reviewGateForLayer(layer);
+  const here = model.station !== undefined && layerForStation(model.station) === layer;
+  if (here && review) {
+    if (model.pull && model.reviewGate === review && reviewReady(model, review)) {
+      return acceptForm(key, layer);
+    }
+    return '';
+  }
+  return gate;
+}
+
+function spineHead(
+  layer: SpineLayer,
+  model: Spine,
+  sentence: string,
+  gate: string,
+  key: string,
+  excerpt = '',
+): string {
   const checked = model.open === layer ? ' checked' : '';
   const here =
     model.station && layerForStation(model.station) === layer
       ? ` <span class="here">${escape(model.station)}</span>`
       : '';
   const text = sentence === '' ? '' : `<span class="sentence">${sentence}</span>`;
-  return `<section><input class="spine-pick" type="checkbox" id="spine-${layer}" value="${layer}"${checked}><div class="row"><label class="layer" for="spine-${layer}"><span class="name">${layer}${here}</span>${text}</label>${gate}</div>`;
+  const preview = excerpt === '' ? '' : `<span class="excerpt">${escape(excerpt)}</span>`;
+  const rest =
+    text === '' && preview === ''
+      ? ''
+      : `<label class="rest" for="spine-${layer}">${text}${preview}</label>`;
+  const control = rowControl(layer, model, gate, key);
+  const acts = control === '' ? '' : `<div class="acts">${control}</div>`;
+  return `<section><input class="spine-pick" type="checkbox" id="spine-${layer}" value="${layer}"${checked}><div class="row"><div class="lead"><label class="layer" for="spine-${layer}"><span class="name">${layer}${here}</span></label>${acts}</div>${rest}</div>`;
 }
 
 function spineTail(inner: string): string {
   return `<div class="fold">${inner}</div></section>`;
 }
 
-function questionForms(key: string, questions: Spine['proposal']['questions']): string {
-  if (questions.length === 0) {
-    return '<p class="quiet">Открытых строк нет.</p>';
+function remarkForm(key: string): string {
+  return `<form class="note" method="post" action="/act">${hidden('act', 'answer')}${hidden('key', key)}<label class="draft">Комментарий<textarea name="reply" rows="2" placeholder="Замечание ко всему документу"></textarea>${sendMark()}</label></form>`;
+}
+
+function acceptForm(key: string, name: string): string {
+  return `<form class="accept" method="post" action="/act">${hidden('act', 'accept-review')}${hidden('key', key)}${pill('Принять', ` aria-label="Принять ${name}"`)}</form>`;
+}
+
+function reviewFold(
+  key: string,
+  model: Spine,
+  gate: NonNullable<Spine['reviewGate']>,
+  shown: boolean,
+): string {
+  if (!model.pull) {
+    return '';
   }
-  return questions
-    .map(question => {
-      const mark = question.open ? '- [ ]' : '- [x]';
-      const line = `<p class="fileline">${escape(`${mark} ${question.text}`)}</p>`;
-      if (!question.open) {
-        return line;
+  const comment = shown || model.reviewGate === gate ? remarkForm(key) : '';
+  if (comment === '') {
+    return '';
+  }
+  return `<div class="plan-foot">${comment}</div>`;
+}
+
+function lineTemplate(key: string): string {
+  return `<template class="line-note-template"><form class="line-note" method="post" action="/act">${hidden('act', 'answer')}${hidden('key', key)}${hidden('line', '')}${hidden('question', '')}<div class="draft"><textarea name="reply" rows="2" placeholder="Комментарий к этой строке" aria-label="Комментарий к строке"></textarea>${sendMark()}</div>${fieldClose()}</form></template>`;
+}
+
+function planLine(line: string, pull: boolean, questions: Spine['proposal']['questions']): string {
+  const trimmed = line.trim();
+  const text = escape(line.trimEnd());
+  if (!pull) {
+    return `<p class="line">${text}</p>`;
+  }
+  const question = questions.find(item => item.open && trimmed === `- [ ] ${item.text}`);
+  const asked = question ? ` data-question="${escape(question.text)}"` : '';
+  return `<button type="button" class="line" data-line="${escape(line.trimEnd())}"${asked}>${text}</button>`;
+}
+
+function planLines(
+  lines: readonly string[],
+  pull: boolean,
+  questions: Spine['proposal']['questions'],
+): string {
+  let gap = false;
+  const out: string[] = [];
+  for (const line of lines) {
+    if (line.trim() === '') {
+      if (!gap) {
+        out.push('<span class="gap"></span>');
       }
-      return `${line}<form class="reply" method="post" action="/act">${hidden('act', 'answer')}${hidden('key', key)}${hidden('question', question.text)}<label>Ответ<textarea name="reply" rows="3"></textarea></label><button class="cmd" type="submit">Ответить</button></form>`;
+      gap = true;
+      continue;
+    }
+    gap = false;
+    out.push(planLine(line, pull, questions));
+  }
+  return out.join('');
+}
+
+function filled(lines: readonly string[]): boolean {
+  return lines.some(line => line.trim() !== '');
+}
+
+function partsOf(lines: readonly string[]): {heading: string; lines: string[]}[] {
+  const parts: {heading: string; lines: string[]}[] = [{heading: '', lines: []}];
+  for (const line of lines) {
+    const sub = /^###\s+(.+)$/.exec(line.trim());
+    if (sub?.[1]) {
+      parts.push({heading: sub[1], lines: []});
+      continue;
+    }
+    parts.at(-1)?.lines.push(line);
+  }
+  return parts.filter(part => filled(part.lines));
+}
+
+function proseBlock(section: Spine['proposal']['sections'][number], model: Spine): string {
+  const parts = partsOf(section.lines);
+  if (parts.length === 0) {
+    return '';
+  }
+  const inner = parts
+    .map(part => {
+      const head = part.heading === '' ? '' : `<h4>${escape(part.heading)}</h4>`;
+      return `${head}${planLines(part.lines, model.pull, model.proposal.questions)}`;
     })
     .join('');
+  return `<section class="plan-section"><h3>${escape(section.heading)}</h3>${inner}</section>`;
+}
+
+function questionsBlock(section: Spine['proposal']['sections'][number], model: Spine): string {
+  if (!filled(section.lines)) {
+    return '';
+  }
+  const open = model.proposal.questions.some(question => question.open);
+  const hold = open
+    ? '<p class="hold">План принимается, когда открытых вопросов не останется.</p>'
+    : '';
+  return `<section class="plan-section questions"><h3>${escape(section.heading)}</h3>${hold}${planLines(section.lines, model.pull, model.proposal.questions)}</section>`;
+}
+
+function planDocument(key: string, model: Spine): string {
+  const body = model.proposal.sections
+    .map(section =>
+      section.heading === 'Open questions'
+        ? questionsBlock(section, model)
+        : proseBlock(section, model),
+    )
+    .join('');
+  const template = model.pull ? lineTemplate(key) : '';
+  return `<div class="doc">${body}</div>${template}`;
 }
 
 function capabilityHtml(item: Spine['capabilities'][number], open: boolean): string {
@@ -466,20 +639,21 @@ function spineHtml(
     layer === 'Plan' || layer === 'Specify' || layer === 'Design' || layer === 'Accept'
       ? gateControl(row, station, true)
       : '';
-  const change = `${spineHead('Change', model, spineSentence(model, 'Change', place), '')}${spineTail(`<p>Двери читают ${escape(model.readPath)}.</p>`)}`;
-  const planInner = model.proposal.present
-    ? `${model.proposal.problem === '' ? '' : `<h3>Problem</h3><p>${escape(model.proposal.problem)}</p>`}${model.proposal.outcome === '' ? '' : `<h3>Outcome</h3><p>${escape(model.proposal.outcome)}</p>`}<h3>Open questions</h3>${questionForms(row.key, model.proposal.questions)}`
-    : '';
-  const plan = `${spineHead('Plan', model, spineSentence(model, 'Plan', place), gate('Plan', 'proposing'))}${spineTail(planInner)}`;
-  const specifyInner = model.capabilities
+  const change = `${spineHead('Change', model, spineSentence(model, 'Change', place), '', row.key)}${spineTail(`<p>Двери читают ${escape(model.readPath)}.</p>`)}`;
+  const planBody = model.proposal.present ? planDocument(row.key, model) : '';
+  const planInner = `${planBody}${reviewFold(row.key, model, 'proposed', model.proposal.present)}`;
+  const planSentence = model.proposal.excerpt === '' ? spineSentence(model, 'Plan', place) : '';
+  const plan = `${spineHead('Plan', model, planSentence, gate('Plan', 'proposing'), row.key, model.proposal.excerpt)}${spineTail(planInner)}`;
+  const specifyInner = `${model.capabilities
     .map((item, index) => capabilityHtml(item, index === 0))
-    .join('');
-  const specify = `${spineHead('Specify', model, spineSentence(model, 'Specify', place), gate('Specify', 'specifying'))}${spineTail(specifyInner)}`;
-  const designInner = model.design.present
+    .join('')}${reviewFold(row.key, model, 'specified', model.capabilities.length > 0)}`;
+  const specify = `${spineHead('Specify', model, spineSentence(model, 'Specify', place), gate('Specify', 'specifying'), row.key)}${spineTail(specifyInner)}`;
+  const designBody = model.design.present
     ? `${model.design.boundary === '' ? '' : `<h3>Verification boundary</h3><p>${escape(model.design.boundary)}</p>`}${model.design.approach === '' ? '' : `<h3>Approach</h3><p>${escape(model.design.approach)}</p>`}${model.design.rejected.map(line => `<p>${escape(line)}</p>`).join('')}${model.design.decisions === '' ? '' : `<h3>Open decisions</h3><p>${escape(model.design.decisions)}</p>`}`
     : '';
-  const design = `${spineHead('Design', model, spineSentence(model, 'Design', place), gate('Design', 'designing'))}${spineTail(designInner)}`;
-  const tasks = `${spineHead('Tasks', model, spineSentence(model, 'Tasks', place), '')}${spineTail(model.tasks.map(task => taskHtml(task)).join(''))}`;
+  const designInner = `${designBody}${reviewFold(row.key, model, 'designed', model.design.present)}`;
+  const design = `${spineHead('Design', model, spineSentence(model, 'Design', place), gate('Design', 'designing'), row.key)}${spineTail(designInner)}`;
+  const tasks = `${spineHead('Tasks', model, spineSentence(model, 'Tasks', place), '', row.key)}${spineTail(model.tasks.map(task => taskHtml(task)).join(''))}`;
   const tone =
     model.checks === 'проверки красные'
       ? ' class="wait"'
@@ -493,11 +667,11 @@ function spineHtml(
     model.pull && !unanswered ? '<p>Открытых тредов нет.</p>' : '',
     codeExtra,
   ].join('');
-  const code = `${spineHead('Code', model, spineSentence(model, 'Code', place), '')}${spineTail(codeBits)}`;
+  const code = `${spineHead('Code', model, spineSentence(model, 'Code', place), '', row.key)}${spineTail(codeBits)}`;
   const acceptNote = model.accept.startsWith('На приёмке машина')
     ? 'Метка sdd:auto-merge стоит. Машина мержит сама, когда проверки зелёные.'
     : 'Метки sdd:auto-merge нет. Машина мержит только с этой меткой.';
-  const accept = `${spineHead('Accept', model, escape(model.accept), gate('Accept', 'accepting'))}${spineTail(`<p>${escape(acceptNote)}</p>`)}`;
+  const accept = `${spineHead('Accept', model, escape(model.accept), gate('Accept', 'accepting'), row.key)}${spineTail(`<p>${escape(acceptNote)}</p>`)}`;
   return `<div class="spine">${change}${plan}${specify}${design}${tasks}${code}${accept}</div>`;
 }
 
@@ -646,12 +820,12 @@ function drawer(
     codeExtra,
     blocks.some(block => block.kind === 'unanswered'),
   );
-  return `<aside class="sidebar" data-key="${escape(row.key)}"><header><div><p class="kicker">${escape(row.key)}</p><p class="full">${escape(row.title)}</p></div>${dismiss('close-card', 'Закрыть')}</header>${top}${verbs(row, roles)}${spine}</aside>`;
+  return `<aside class="sidebar" data-key="${escape(row.key)}"><header><div><p class="kicker">${escape(row.key)}</p><p class="full">${escape(row.title)}</p></div>${dismiss('close-card', 'Закрыть')}</header><div class="side-scroll">${top}${verbs(row, roles)}${spine}</div></aside>`;
 }
 
 function askDialog(ask: {key: string; station: string; side: boolean}): string {
   const where = ask.side ? hidden('where', 'side') : '';
-  const yes = `<form method="post" action="/act">${hidden('act', 'gate')}${hidden('key', ask.key)}${hidden('station', ask.station)}${hidden('sure', '1')}${where}<button class="cmd" type="submit">Снять</button></form>`;
+  const yes = `<form method="post" action="/act">${hidden('act', 'gate')}${hidden('key', ask.key)}${hidden('station', ask.station)}${hidden('sure', '1')}${where}${pill('Снять')}</form>`;
   return `<div class="veil popup-veil"><div class="popup ask" role="dialog" aria-label="Без контроля"><header><h2>Без контроля</h2>${dismiss('close-ask', 'Закрыть')}</header><p>Снять последний гейт? Тикет останется без контроля.</p>${yes}</div></div>`;
 }
 
@@ -660,7 +834,7 @@ function repairField(row: Drawn, service: string | undefined): string {
     return `<form class="choice" method="post" action="/act">${hidden('act', 'choose-service')}${hidden('key', row.key)}<label>сервис</label><select name="service" onchange="this.form.submit()">${serviceOptions(row.choices, service)}</select></form>`;
   }
   if (row.reason === 'конфига сервиса нет') {
-    return `<form method="post" action="/act">${hidden('act', 'plant-queue')}${hidden('key', row.key)}<label>очередь</label><input name="name"><button class="cmd" type="submit">Создать</button></form>`;
+    return `<form method="post" action="/act">${hidden('act', 'plant-queue')}${hidden('key', row.key)}<label>очередь</label><input name="name">${pill('Создать')}</form>`;
   }
   return '';
 }
@@ -721,11 +895,11 @@ function roleEditor(settings: SettingsState): string {
         `<form method="post" action="/act">${hidden('act', 'choose-role-outcome')}${hidden('name', role.name)}<label>исход</label><select name="outcome" onchange="this.form.submit()">${options(ROLE_OUTCOMES, role.outcome)}</select></form>`,
         `<form method="post" action="/act">${hidden('act', 'set-role-text')}${hidden('name', role.name)}<label>текст</label><textarea name="text" onchange="this.form.submit()">${escape(role.text)}</textarea></form>`,
         labels,
-        `<form method="post" action="/act">${hidden('act', 'remove-role')}${hidden('name', role.name)}<button class="quiet" type="submit">Удалить</button></form>`,
+        `<form method="post" action="/act">${hidden('act', 'remove-role')}${hidden('name', role.name)}${hairline('Удалить')}</form>`,
       ].join('')}</div>`;
     })
     .join('');
-  const add = `<form class="add" method="post" action="/act">${hidden('act', 'choose-agent')}<label>агент</label><select name="agent" onchange="this.form.submit()">${options(FACTORY_AGENTS, settings.agent)}</select><label>новая роль</label><input name="name" placeholder="имя"><select name="outcome">${options(ROLE_OUTCOMES, 'html')}</select><textarea name="text" placeholder="текст"></textarea><button class="cmd" type="submit">Добавить</button></form>`;
+  const add = `<form class="add" method="post" action="/act">${hidden('act', 'choose-agent')}<label>агент</label><select name="agent" onchange="this.form.submit()">${options(FACTORY_AGENTS, settings.agent)}</select><label>новая роль</label><input name="name" placeholder="имя"><select name="outcome">${options(ROLE_OUTCOMES, 'html')}</select><textarea name="text" placeholder="текст"></textarea>${pill('Добавить')}</form>`;
   return `<div class="roles"><h3>Роли</h3>${rows}${add}</div>`;
 }
 
@@ -747,7 +921,7 @@ function overlayBlock(group: OverlayGroup, checkouts: readonly string[]): string
     const picks = checkouts
       .map(
         checkout =>
-          `<form method="post" action="/act">${hidden('act', 'choose-checkout')}${hidden('checkout', checkout)}<button class="quiet" type="submit">${escape(checkout)}</button></form>`,
+          `<form method="post" action="/act">${hidden('act', 'choose-checkout')}${hidden('checkout', checkout)}${hairline(escape(checkout))}</form>`,
       )
       .join('');
     return `<section class="group"><h3>${escape(group.file)}</h3><p class="empty">Чекаут ещё не выбран.</p>${picks}</section>`;
@@ -794,7 +968,7 @@ function serviceBlock(group: ServiceConfigGroup, dirty: boolean): string {
     .map((item, index) => {
       const locked = item.removeOnly ? ' readonly' : '';
       const warn = item.warning ? ' warn' : '';
-      return `<div class="row${warn}"><form method="post" action="/act">${hidden('act', 'set-service-ignore')}${hidden('index', String(index))}<input name="value" value="${escape(item.value)}"${locked} onchange="this.form.submit()"></form><form method="post" action="/act">${hidden('act', 'remove-service-ignore')}${hidden('index', String(index))}<button class="quiet" type="submit">×</button></form></div>`;
+      return `<div class="row${warn}"><form method="post" action="/act">${hidden('act', 'set-service-ignore')}${hidden('index', String(index))}<input name="value" value="${escape(item.value)}"${locked} onchange="this.form.submit()"></form><form method="post" action="/act">${hidden('act', 'remove-service-ignore')}${hidden('index', String(index))}${hairline('×')}</form></div>`;
     })
     .join('');
   const hooks = (group.hooks ?? [])
@@ -817,9 +991,9 @@ function serviceBlock(group: ServiceConfigGroup, dirty: boolean): string {
   const addHook =
     choices === ''
       ? ''
-      : `<select name="choice">${choices}</select><input name="first" placeholder="первый абзац" onchange="this.form.submit()"><button class="quiet" type="submit">Добавить хук</button>`;
+      : `<select name="choice">${choices}</select><input name="first" placeholder="первый абзац" onchange="this.form.submit()">${hairline('Добавить хук')}`;
   const canSave = dirty && group.save && !serviceUnwritable(group);
-  return `<section class="group">${head}<h4>очереди</h4>${queues(addHook)}<form method="post" action="/act">${hidden('act', 'add-service-queue')}<button class="quiet" type="submit">Очередь</button></form><form method="post" action="/act">${hidden('act', 'set-service-base')}<label>base</label><input name="value" value="${escape(group.base ?? '')}" onchange="this.form.submit()"></form><form method="post" action="/act">${hidden('act', 'set-service-branch')}<label>branch scope</label><input name="value" value="${escape(group.branchScope ?? '')}" onchange="this.form.submit()"></form><h4>ignore-comments</h4>${ignore}<form method="post" action="/act">${hidden('act', 'add-service-ignore')}<input name="value" placeholder="строка"><button class="quiet" type="submit">Добавить</button></form><h4>хуки</h4>${hooks}${serviceNotes(group, dirty)}<form method="post" action="/act">${hidden('act', 'save-service')}<button class="cmd" type="submit"${canSave ? '' : ' disabled'}>Записать сервис</button></form></section>`;
+  return `<section class="group">${head}<h4>очереди</h4>${queues(addHook)}<form method="post" action="/act">${hidden('act', 'add-service-queue')}${hairline('Очередь')}</form><form method="post" action="/act">${hidden('act', 'set-service-base')}<label>base</label><input name="value" value="${escape(group.base ?? '')}" onchange="this.form.submit()"></form><form method="post" action="/act">${hidden('act', 'set-service-branch')}<label>branch scope</label><input name="value" value="${escape(group.branchScope ?? '')}" onchange="this.form.submit()"></form><h4>ignore-comments</h4>${ignore}<form method="post" action="/act">${hidden('act', 'add-service-ignore')}<input name="value" placeholder="строка">${hairline('Добавить')}</form><h4>хуки</h4>${hooks}${serviceNotes(group, dirty)}<form method="post" action="/act">${hidden('act', 'save-service')}${pill('Записать сервис', canSave ? '' : ' disabled')}</form></section>`;
 }
 
 function queueEditor(
@@ -839,7 +1013,7 @@ function queueEditor(
       .map((item, index) => {
         const warn = item.warning ? ' warn' : '';
         const last = index === items.length - 1;
-        return `<div class="row${warn}"><input name="name" value="${escape(item.name)}"><input name="description" value="${escape(item.description)}"><button class="quiet" type="submit" form="up-${index}"${index === 0 ? ' disabled' : ''}>↑</button><button class="quiet" type="submit" form="down-${index}"${last ? ' disabled' : ''}>↓</button><button class="quiet" type="submit" form="remove-${index}">×</button></div>`;
+        return `<div class="row${warn}"><input name="name" value="${escape(item.name)}"><input name="description" value="${escape(item.description)}">${hairline('↑', ` form="up-${index}"${index === 0 ? ' disabled' : ''}`)}${hairline('↓', ` form="down-${index}"${last ? ' disabled' : ''}`)}${hairline('×', ` form="remove-${index}"`)}</div>`;
       })
       .join('');
     return `${shells}<form class="queue-edit pair" method="post" action="/act">${hidden('act', 'set-service-queue')}${rows}${addHook}</form>`;
@@ -875,19 +1049,7 @@ function banners(rows: readonly {text: string}[]): string {
 }
 
 const style = `
-  :root {
-    color-scheme: dark;
-    --bg: #0e0d0b;
-    --bg-2: #171512;
-    --bg-3: #221f1b;
-    --line: rgba(244, 240, 230, 0.1);
-    --ink: #f4f0e6;
-    --muted: #a3988a;
-    --brass: #e6b35a;
-    --ink-brass: #1c1408;
-    --green: #8fce7a;
-    --red: #ef7a68;
-  }
+${rootCss}
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body {
@@ -919,6 +1081,16 @@ const style = `
   }
   .lamp { margin: 0; color: var(--muted); font-size: 12px; }
   .lamp.on { color: var(--green); }
+  .spy {
+    margin: 0;
+    flex: 1;
+    min-width: 0;
+    color: var(--muted);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .top form { margin-left: auto; }
   .cmd, .quiet {
     border: 0;
@@ -926,6 +1098,11 @@ const style = `
     padding: 8px 14px;
   }
   .cmd { background: var(--brass); color: var(--ink-brass); font-weight: 650; }
+  .spine form.accept .cmd {
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 12px;
+  }
   .cmd:hover { background: #f0cb86; }
   .quiet { background: transparent; color: var(--ink); border: 1px solid var(--line); }
   .banners { display: flex; flex-direction: column; gap: 6px; padding: 10px 18px 0; }
@@ -1040,8 +1217,8 @@ const style = `
     border-radius: 50%;
     box-shadow: inset 0 0 0 1.5px rgba(244, 240, 230, 0.42);
   }
-  .stop { width: 22px; height: 22px; display: grid; place-items: center; }
-  .stop svg { width: 22px; height: 22px; display: block; }
+  .stop { width: 18px; height: 18px; display: grid; place-items: center; }
+  .stop svg { width: 18px; height: 18px; display: block; }
   .big {
     width: 32px;
     height: 32px;
@@ -1101,21 +1278,36 @@ const style = `
     right: 0;
     bottom: 0;
     z-index: 4;
-    width: min(380px, 92vw);
-    overflow: auto;
-    padding: 16px 16px 28px;
+    width: min(560px, 92vw);
+    overflow: hidden;
+    padding: 0;
     background: #171512;
     box-shadow: -20px 0 48px rgba(0, 0, 0, 0.5);
     display: flex;
     flex-direction: column;
-    gap: 12px;
     animation: drawer 160ms ease;
   }
   @keyframes drawer {
     from { transform: translateX(100%); }
     to { transform: translateX(0); }
   }
-  .sidebar header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .sidebar header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex: none;
+    padding: 16px 16px 12px;
+  }
+  .side-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 0 16px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
   .sidebar .block { margin-top: 0; }
   .x {
     width: 28px;
@@ -1163,17 +1355,77 @@ const style = `
     clip: rect(0, 0, 0, 0);
     border: 0;
   }
-  .spine .row { display: flex; gap: 8px; align-items: flex-start; width: 100%; }
-  .spine .row form { flex: 0 0 auto; }
-  .spine .layer { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; cursor: pointer; }
+  .spine .row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    cursor: pointer;
+  }
+  .spine .lead {
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .spine .layer {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+  }
+  .spine .rest {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
+    cursor: pointer;
+  }
+  .spine .acts { flex: 0 0 auto; display: flex; align-items: center; }
+  .spine .acts form { margin: 0; }
+  .spine > section:has(.spine-pick:checked) { padding-top: 0; }
+  .spine > section:has(.spine-pick:checked) .row {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    width: auto;
+    max-width: none;
+    margin: 0 -16px;
+    padding: 8px 16px;
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--line);
+  }
   .spine .name { font-weight: 500; }
   .spine .sentence { white-space: pre-wrap; overflow-wrap: break-word; }
+  .spine .excerpt {
+    min-width: 0;
+    max-width: 100%;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .spine > section:has(.spine-pick:checked) .excerpt { display: none; }
   .spine .here, .spine .ok { color: var(--green); }
   .spine .wait { color: var(--red); }
   .spine .fold { display: none; flex-direction: column; gap: 8px; padding-top: 8px; }
   .spine > section:has(.spine-pick:checked) .fold { display: flex; }
   .spine .quiet, .spine .crumb { color: var(--muted); }
-  .spine h3 { margin: 0; font-size: 13px; font-weight: 500; }
+  .spine h3 { margin: 0 0 4px; font-size: 13px; font-weight: 500; }
+  .spine h4 { margin: 10px 0 2px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; }
+  .spine .hold { margin: 0 0 6px; color: var(--brass); font-size: 12px; }
   .spine .cap, .spine .task { border-top: 1px solid var(--line); padding-top: 8px; }
   .spine summary { cursor: pointer; font: 600 12px/1.2 ui-monospace, "SF Mono", Menlo, monospace; }
   .spine .jump {
@@ -1191,16 +1443,87 @@ const style = `
   .spine .mark { background: rgba(230, 179, 90, 0.16); border-radius: 6px; padding: 6px 8px; }
   .spine .scene { white-space: pre-wrap; }
   .spine .mark b, .spine .scene b { font-weight: 500; margin-right: 6px; }
-  .spine .reply { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-  .spine .reply textarea {
+  .spine .doc { display: flex; flex-direction: column; gap: 18px; }
+  .spine .plan-section { display: flex; flex-direction: column; }
+  .spine .line {
+    display: block;
     width: 100%;
-    border: 1px solid var(--line);
-    border-radius: 8px;
+    margin: 0;
+    padding: 1px 0;
+    border: 0;
+    border-radius: 0;
     background: transparent;
     color: inherit;
-    padding: 8px;
-    font: inherit;
+    text-align: left;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.45;
   }
+  .spine button.line {
+    width: calc(100% + 16px);
+    margin: -4px -8px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .spine button.line:hover,
+  .spine button.line.is-on { background: rgba(230, 179, 90, 0.1); }
+  .spine .gap { display: block; height: 6px; }
+  .spine form.line-note { position: relative; margin: 18px 10px 8px; }
+  .spine .draft { position: relative; display: block; }
+  .spine form.line-note textarea,
+  .spine .plan-foot textarea {
+    display: block;
+    width: 100%;
+    min-height: 68px;
+    margin: 0;
+    padding: 8px 8px 28px;
+    border: 0;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+    box-shadow: inset 0 0 0 1px var(--line);
+    resize: vertical;
+    font-size: 13px;
+  }
+  .spine form.line-note textarea:focus,
+  .spine .plan-foot textarea:focus {
+    outline: none;
+    box-shadow: inset 0 0 0 1px rgba(230, 179, 90, 0.45);
+  }
+  .spine .shut {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--bg-2);
+    color: var(--ink);
+    box-shadow: inset 0 0 0 1px rgba(244, 240, 230, 0.42);
+    display: grid;
+    place-items: center;
+  }
+  .spine .shut svg { width: 12px; height: 12px; display: block; }
+  .spine .send {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--brass);
+    display: grid;
+    place-items: center;
+  }
+  .spine .send svg { width: 14px; height: 14px; display: block; }
+  .spine .plan-foot { margin: 10px 10px 8px; }
+  .spine .plan-foot form { margin: 0; }
+  .spine .plan-foot .draft { margin: 0; font-size: 0; }
   .spine .fileline { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
   .status { margin: 0; padding: 8px 18px 0; color: var(--brass); font-size: 12px; }
   .kicker, .hint, .empty, .path, .note { color: var(--muted); }
@@ -1372,6 +1695,14 @@ const client = `
       });
     });
   });
+  ${headClickToggles.toString()}
+  document.querySelectorAll('.spine .row').forEach(row => {
+    row.addEventListener('click', event => {
+      if (!headClickToggles(event.target)) return;
+      const pick = row.parentElement && row.parentElement.querySelector('.spine-pick');
+      if (pick) pick.click();
+    });
+  });
   document.querySelectorAll('button.jump').forEach(button => {
     button.addEventListener('click', () => {
       const cap = button.getAttribute('data-cap');
@@ -1383,6 +1714,77 @@ const client = `
       const details = cap ? document.getElementById('cap-' + cap) : null;
       if (details) details.open = true;
     });
+  });
+  const noteTemplate = document.querySelector('.line-note-template');
+  const planDoc = document.querySelector('.doc');
+  function draftText(form) {
+    const field = form.querySelector('textarea');
+    return field ? field.value : '';
+  }
+  function closeDraft(form) {
+    const line = form.previousElementSibling;
+    form.remove();
+    if (line && line.classList) line.classList.remove('is-on');
+  }
+  ${draftsAfterClick.toString()}
+  function openDrafts() {
+    return [...planDoc.querySelectorAll('form.line-note')].map(form => {
+      const line = form.previousElementSibling;
+      return {
+        line: line && line.getAttribute ? line.getAttribute('data-line') || '' : '',
+        text: draftText(form),
+      };
+    });
+  }
+  function openLine(button) {
+    const source = noteTemplate.content.querySelector('form.line-note');
+    if (!source) return;
+    const form = source.cloneNode(true);
+    const line = form.querySelector('[name="line"]');
+    const question = form.querySelector('[name="question"]');
+    if (line) line.value = button.getAttribute('data-line') || '';
+    if (question) question.value = button.getAttribute('data-question') || '';
+    const field = form.querySelector('textarea');
+    if (field && button.getAttribute('data-question')) field.placeholder = 'Ответ';
+    button.classList.add('is-on');
+    button.after(form);
+    if (field) field.focus();
+  }
+  if (noteTemplate && planDoc) {
+    planDoc.addEventListener('click', event => {
+      const target = event.target;
+      if (!target || !target.closest) return;
+      const dismiss = target.closest('[data-dismiss-line]');
+      if (dismiss) {
+        const form = dismiss.closest('form.line-note');
+        if (form) closeDraft(form);
+        return;
+      }
+      const button = target.closest('button.line');
+      if (!button || !planDoc.contains(button)) return;
+      const targetLine = button.getAttribute('data-line') || '';
+      const next = draftsAfterClick(openDrafts(), targetLine);
+      const stay = next.some(item => item.line === targetLine && item.text.trim() !== '');
+      planDoc.querySelectorAll('form.line-note').forEach(form => {
+        const line = form.previousElementSibling;
+        const name = line && line.getAttribute ? line.getAttribute('data-line') || '' : '';
+        if (!next.some(item => item.line === name)) closeDraft(form);
+      });
+      if (stay) {
+        const sitting = button.nextElementSibling;
+        const field = sitting && sitting.querySelector ? sitting.querySelector('textarea') : null;
+        if (field) field.focus();
+        return;
+      }
+      if (next.some(item => item.line === targetLine)) openLine(button);
+    });
+  }
+  ${lineFieldClosesOnEscape.toString()}
+  document.addEventListener('keydown', event => {
+    if (!planDoc) return;
+    const active = document.activeElement;
+    const form = active && active.closest ? active.closest('form.line-note') : null;
+    if (lineFieldClosesOnEscape(event.key, Boolean(form))) closeDraft(form);
   });
 `;
 
@@ -1423,11 +1825,13 @@ function boardDocument(surface: Surface, view: PageView): string {
   const lamp = board.stepsStart
     ? '<p class="lamp on">шаги идут</p>'
     : '<p class="lamp">шаги стоят</p>';
-  const gear = `${hidden('act', 'open-settings')}<button class="cmd" type="submit">Настройки</button>`;
+  const note = surface.spyNote();
+  const spy = note === '' ? '' : `<p class="spy">${escape(note)}</p>`;
+  const gear = `${hidden('act', 'open-settings')}${pill('Настройки')}`;
   const status =
     view.status === undefined ? '' : `<p class="status" role="status">${escape(view.status)}</p>`;
   const show = view.show ? ` data-show="${escape(view.show)}"` : '';
-  return `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ai-factory</title><style>${style}</style><body${show}><div class="app"><header class="top"><p class="word">ai-factory</p>${lamp}<form method="post" action="/act">${gear}</form></header>${banners(board.rows)}${status}<div class="stage"><main class="board">${head()}${rows}</main></div></div>${drawerHtml}${sheet}${popup}${repair}${ask}<script>${client}</script></body></html>`;
+  return `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ai-factory</title><style>${style}</style><body${show}><div class="app"><header class="top"><p class="word">ai-factory</p>${lamp}${spy}<form method="post" action="/act">${gear}</form></header>${banners(board.rows)}${status}<div class="stage"><main class="board">${head()}${rows}</main></div></div>${drawerHtml}${sheet}${popup}${repair}${ask}<script>${client}</script></body></html>`;
 }
 
 function roleDraft(surface: Surface, params: URLSearchParams, act: string | null): void {
@@ -1646,10 +2050,30 @@ function apply(surface: Surface, params: URLSearchParams, view: PageView): ActRe
     const key = params.get('key') ?? '';
     const reply = (params.get('reply') ?? '').trim();
     if (reply === '') {
-      view.status = 'Ответ пустой. Напишите его в поле.';
+      const question = (params.get('question') ?? '').trim();
+      view.status =
+        question === ''
+          ? 'Комментарий пустой. Напишите его в поле.'
+          : 'Ответ пустой. Напишите его в поле.';
     } else if (key) {
       view.show = key;
-      const status = surface.answer(key, params.get('question') ?? '', reply);
+      const status = surface.answer(
+        key,
+        params.get('question') ?? '',
+        reply,
+        params.get('line') ?? '',
+      );
+      if (status !== undefined) {
+        view.status = status;
+      }
+    }
+    return finish(surface, params, act, view);
+  }
+  if (act === 'accept-review') {
+    const key = params.get('key') ?? '';
+    if (key) {
+      view.show = key;
+      const status = surface.acceptReview(key);
       if (status !== undefined) {
         view.status = status;
       }

@@ -3599,29 +3599,29 @@ spec('board', () => {
       proveSddCancelledWithAnEarlierPhaseShowsNoCard49();
     });
   });
-  requirement('The pool holds tickets the manager can take', () => {
+  requirement('The pool holds cycles the manager can take', () => {
     scenario('A bare cycle label with no assignee is in the pool', () => {
       proveAnOpenWatchListTicketWithSddCycleNoPhaseAndNoAssigneeStandsInThePool67();
     });
     scenario('An issue without the cycle label is absent', () => {
       proveAnOpenTicketOnTheWatchListWithoutSddCycleIsNotInThePool68();
     });
-    scenario("This manager's ticket enters proposing when a step can start", () => {
+    scenario("This manager's cycle enters proposing when a step can start", () => {
       proveAPhaselessTicketAssignedToThisLoginMovesToProposingAfterSpyWhenModelsAreSet70();
       proveOneOpenPullRequestLetsSpySetProposingForAnAssignedTicket74();
     });
-    scenario("This manager's ticket stays when a step cannot start", () => {
+    scenario("This manager's cycle stays when a step cannot start", () => {
       proveAPhaselessTicketAssignedToThisLoginStaysInThePoolWhenAModelSlotIsEmpty71();
     });
-    scenario('Two pull requests keep an assigned ticket in the pool', () => {
+    scenario('Two pull requests keep an assigned cycle in the pool', () => {
       proveTwoOpenPullRequestsKeepAnAssignedTicketInThePoolAndSpyDoesNotSetProposing72();
     });
-    scenario('A checkout break keeps an assigned ticket in the pool', () => {
+    scenario('A checkout break keeps an assigned cycle in the pool', () => {
       proveAMissingCheckoutKeepsAnAssignedTicketInThePoolAndSpyDoesNotSetProposing73();
     });
   });
   requirement('Take writes this process login', () => {
-    scenario('Take on a phaseless ticket writes the login only', () => {
+    scenario('Take on a phaseless cycle writes the login only', () => {
       proveTakeOnAPhaselessTicketSetsTheAssigneeAndSpyThenSetsProposing75();
     });
     scenario('Take does nothing without a home config', () => {
@@ -3780,7 +3780,7 @@ spec('factory-config', () => {
     scenario('Empty effort does not stop a step', () => {
       proveEmptyEffortAndSpeedAreTheAgentDefaultAndDoNotStopAStep12();
     });
-    scenario('An empty model stops Take on a phaseless ticket', () => {
+    scenario('An empty model stops Take on a phaseless cycle', () => {
       proveAnEmptyMergedMechanicalModelNamesTheCheckoutAndStopsOnlyThatStep93();
     });
   });
@@ -4011,7 +4011,7 @@ spec('watch-list', () => {
     });
   });
   requirement('A Tracker queue is the port field', () => {
-    scenario('The port field selects the ticket', () => {
+    scenario('The port field selects the cycle', () => {
       proveATrackerTicketIsSelectedByThePortQueueAndALabelDoesNotReplaceIt32();
     });
     scenario('A queue missing from the service config blocks Take', () => {
@@ -4055,7 +4055,7 @@ spec('watch-list', () => {
       proveWritingSddServiceKeepsTheQueueBreakWhenTheServiceStillLacksTheQueue41();
     });
   });
-  requirement('A missing catalog keeps the ticket card', () => {
+  requirement('A missing catalog keeps the cycle card', () => {
     scenario('A missing directory leaves the card', () => {
       proveAMissingCatalogKeepsTheCardAndTheChoiceAndDoesNotStartAStep36();
     });

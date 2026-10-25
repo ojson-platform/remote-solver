@@ -1,9 +1,8 @@
 import type {GateStation} from './types.ts';
 
-import {existsSync, readdirSync, readFileSync} from 'node:fs';
-import path from 'node:path';
-
 import {changeDir} from '../machine/naming.ts';
+
+import {changeFiles, changeRel, listedSpecs} from './change-files.ts';
 
 export const SPINE_LAYERS = [
   'Change',
@@ -44,12 +43,20 @@ export type SpineTask = {
 
 export type SpineQuestion = {text: string; open: boolean};
 
+export type SpineSection = {heading: string; lines: string[]};
+
 export type Spine = {
   open: SpineLayer;
   station?: string;
   lines: SpineLine[];
   rest: string[];
-  proposal: {present: boolean; problem: string; outcome: string; questions: SpineQuestion[]};
+  proposal: {
+    present: boolean;
+    /** First line of Outcome. The closed Plan row shows it; the open row hides it. */
+    excerpt: string;
+    sections: SpineSection[];
+    questions: SpineQuestion[];
+  };
   capabilities: SpineCapability[];
   design: {
     present: boolean;
@@ -62,6 +69,8 @@ export type Spine = {
   checks?: string;
   diff: boolean;
   pull: boolean;
+  /** The review gate this plaque can still close. */
+  reviewGate?: ReviewGate;
   readPath: string;
   accept: string;
 };
@@ -72,14 +81,6 @@ type DocLayer = (typeof LAYER_NAMES)[number];
 
 function isDocLayer(value: string): value is DocLayer {
   return (LAYER_NAMES as readonly string[]).includes(value);
-}
-
-function read(file: string): string {
-  try {
-    return readFileSync(file, 'utf8');
-  } catch {
-    return '';
-  }
 }
 
 function section(text: string, heading: string): string {
@@ -100,6 +101,30 @@ function paragraph(text: string): string {
   const end = trimmed.search(/\n\s*\n/);
   const chunk = end === -1 ? trimmed : trimmed.slice(0, end);
   return chunk.replace(/\s+/g, ' ').trim();
+}
+
+function oneLine(text: string): string {
+  const found = text
+    .split('\n')
+    .map(line => line.trim())
+    .find(line => line !== '');
+  return found ? found.replace(/\s+/g, ' ') : '';
+}
+
+function sectionsOf(text: string): SpineSection[] {
+  const out: SpineSection[] = [];
+  for (const part of text.split(/^## /m).slice(1)) {
+    const breakAt = part.indexOf('\n');
+    const heading = (breakAt === -1 ? part : part.slice(0, breakAt)).trim();
+    const raw = breakAt === -1 ? '' : part.slice(breakAt + 1).replace(/\n+$/, '');
+    const lines = raw.split('\n');
+    let start = 0;
+    while (start < lines.length && lines[start]?.trim() === '') {
+      start += 1;
+    }
+    out.push({heading, lines: lines.slice(start)});
+  }
+  return out;
 }
 
 function sentences(text: string): string[] {
@@ -143,6 +168,24 @@ export function linesFromIssue(body: string): SpineLine[] {
   const from = body.lastIndexOf('\n', begin) + 1;
   const slice = body.slice(from, end);
   return linesFromFocus(slice).lines;
+}
+
+export type ReviewGate = 'proposed' | 'specified' | 'designed';
+
+const REVIEW_GATES = [
+  {phase: 'proposing', layer: 'Plan', gate: 'proposed'},
+  {phase: 'specifying', layer: 'Specify', gate: 'specified'},
+  {phase: 'designing', layer: 'Design', gate: 'designed'},
+] as const satisfies readonly {phase: string; layer: SpineLayer; gate: ReviewGate}[];
+
+/** The review label a writing phase can still close. A closed phase has none. */
+export function reviewGateForPhase(phase: string | null | undefined): ReviewGate | undefined {
+  return REVIEW_GATES.find(row => row.phase === phase)?.gate;
+}
+
+/** The review label of a spine layer. Plan, Specify, and Design have one. */
+export function reviewGateForLayer(layer: SpineLayer): ReviewGate | undefined {
+  return REVIEW_GATES.find(row => row.layer === layer)?.gate;
 }
 
 export function layerForStation(station: string | undefined): SpineLayer {
@@ -243,27 +286,6 @@ function requirementsOf(text: string, baseline: string): SpineRequirement[] {
   return out;
 }
 
-function specFiles(dir: string): {id: string; file: string}[] {
-  const out: {id: string; file: string}[] = [];
-  const walk = (current: string, rel: string): void => {
-    if (!existsSync(current)) {
-      return;
-    }
-    for (const entry of readdirSync(current, {withFileTypes: true})) {
-      const next = rel === '' ? entry.name : path.join(rel, entry.name);
-      const abs = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        walk(abs, next);
-      } else if (entry.name === 'spec.md' && rel !== '') {
-        out.push({id: rel.split(path.sep).join('/'), file: abs});
-      }
-    }
-  };
-  walk(dir, '');
-  out.sort((left, right) => left.id.localeCompare(right.id));
-  return out;
-}
-
 function tasksOf(text: string, owner: Map<string, string>): SpineTask[] {
   const out: SpineTask[] = [];
   for (const line of text.split('\n')) {
@@ -288,7 +310,7 @@ function mergeLines(issue: SpineLine[], focus: SpineLine[]): SpineLine[] {
   return [...issue.filter(line => !replaced.has(line.layer)), ...focus];
 }
 
-/** The spine of the open ticket: mirror lines, and the change files when the checkout is here. */
+/** The spine of the open ticket: mirror lines, and the change files on the issue branch. */
 export function buildSpine(input: {
   key: string;
   checkout?: string;
@@ -298,29 +320,28 @@ export function buildSpine(input: {
   checks?: 'green' | 'red' | 'pending' | 'none';
   diff?: boolean;
   pull?: boolean;
+  reviewGate?: Spine['reviewGate'];
   gateOff?: Partial<Record<GateStation, true>>;
 }): Spine {
   const focus = linesFromFocus(input.focusBody ?? '');
   const lines = mergeLines(linesFromIssue(input.issueBody ?? ''), focus.lines);
-  const root = input.checkout ?? '';
-  const proposal = root === '' ? '' : read(path.join(root, changeDir(input.key), 'proposal.md'));
-  const design = root === '' ? '' : read(path.join(root, changeDir(input.key), 'design.md'));
-  const taskText = root === '' ? '' : read(path.join(root, changeDir(input.key), 'tasks.md'));
+  const files = changeFiles(input.checkout, input.key);
+  const proposal = files.read(changeRel(input.key, 'proposal.md'));
+  const design = files.read(changeRel(input.key, 'design.md'));
+  const taskText = files.read(changeRel(input.key, 'tasks.md'));
   const capabilities: SpineCapability[] = [];
   const owner = new Map<string, string>();
-  if (root !== '') {
-    for (const spec of specFiles(path.join(root, changeDir(input.key), 'specs'))) {
-      const baseline = read(path.join(root, 'openspec', 'specs', spec.id, 'spec.md'));
-      const requirements = requirementsOf(read(spec.file), baseline);
-      for (const requirement of requirements) {
-        for (const scenario of requirement.scenarios) {
-          if (!owner.has(scenario.name)) {
-            owner.set(scenario.name, spec.id);
-          }
+  for (const spec of listedSpecs(files, input.key)) {
+    const baseline = files.read(`openspec/specs/${spec.id}/spec.md`);
+    const requirements = requirementsOf(files.read(spec.rel), baseline);
+    for (const requirement of requirements) {
+      for (const scenario of requirement.scenarios) {
+        if (!owner.has(scenario.name)) {
+          owner.set(scenario.name, spec.id);
         }
       }
-      capabilities.push({id: spec.id, requirements});
     }
+    capabilities.push({id: spec.id, requirements});
   }
   return {
     open: layerForStation(input.station),
@@ -329,8 +350,8 @@ export function buildSpine(input: {
     rest: focus.rest.filter(line => !line.includes('sdd:begin') && !line.includes('sdd:end')),
     proposal: {
       present: proposal.trim() !== '',
-      problem: paragraph(section(proposal, 'Problem')),
-      outcome: paragraph(section(proposal, 'Outcome')),
+      excerpt: oneLine(section(proposal, 'Outcome')),
+      sections: sectionsOf(proposal),
       questions: questionsOf(proposal),
     },
     capabilities,
@@ -348,6 +369,7 @@ export function buildSpine(input: {
     checks: checksLine(input.checks),
     diff: input.diff === true,
     pull: input.pull === true,
+    ...(input.reviewGate ? {reviewGate: input.reviewGate} : {}),
     readPath: changeDir(input.key),
     accept: input.gateOff?.accepting
       ? 'На приёмке машина мержит сама.'

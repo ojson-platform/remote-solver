@@ -1,9 +1,9 @@
 import type {FileSource, Link, Vcs} from '../machine/port.ts';
 
 import {execFile, execFileSync} from 'node:child_process';
-import {promisify} from 'node:util';
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
+import {promisify} from 'node:util';
 
 import {branchName} from '../machine/naming.ts';
 
@@ -81,9 +81,7 @@ function issueRef(root: string, key: string, prefix: string): string | null {
   return null;
 }
 
-/** The issue branch only. A file that exists only in the checkout is not the change. */
-export function gitFiles(root: string, key: string, prefix: string): FileSource {
-  const ref = issueRef(root, key, prefix);
+function filesOfRef(root: string, ref: string | null): FileSource {
   return {
     exists(rel) {
       return ref !== null && existsOnRef(root, ref, rel);
@@ -103,6 +101,20 @@ export function gitFiles(root: string, key: string, prefix: string): FileSource 
         .filter(line => line.length > 0);
     },
   };
+}
+
+/** The issue branch only. A file that exists only in the checkout is not the change. */
+export function gitFiles(root: string, key: string, prefix: string): FileSource {
+  return filesOfRef(root, issueRef(root, key, prefix));
+}
+
+/** The issue branch when it exists. Null when neither `<prefix>/<key>` nor `origin/<prefix>/<key>` is present. */
+export function branchFiles(root: string, key: string, prefix: string): FileSource | null {
+  const ref = issueRef(root, key, prefix);
+  if (ref === null) {
+    return null;
+  }
+  return filesOfRef(root, ref);
 }
 
 function existsOnRef(root: string, ref: string, rel: string): boolean {

@@ -13,6 +13,7 @@ import {
   type AdapterKind,
   type CardState,
   type Doc,
+  type RepoCheckout,
   type WindowTicket,
 } from './types.ts';
 
@@ -182,8 +183,10 @@ export function openCheckout(ports: {
   home: () => Doc;
   tickets?: () => readonly WindowTicket[];
   writeService?: (key: string, service: string) => void;
+  /** This process's checkout for one GitHub repository. Wins over the GitHub root. */
+  repoDir?: RepoCheckout;
 }) {
-  const {kind, home, tickets, writeService} = ports;
+  const {kind, home, tickets, writeService, repoDir} = ports;
 
   function sorted(): WindowTicket[] {
     return [...(tickets?.() ?? [])].sort((left, right) =>
@@ -199,6 +202,9 @@ export function openCheckout(ports: {
   }
 
   function repoRootOf(item: WindowTicket): string | undefined {
+    if (repoDir && item.repo === repoDir.repo && repoDir.dir !== '') {
+      return repoDir.dir;
+    }
     const repo = item.repo ?? '';
     if (repo === '' || hasDotDot(repo)) {
       return undefined;

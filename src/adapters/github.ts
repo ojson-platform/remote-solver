@@ -172,6 +172,14 @@ type RawIssue = {
   assignees?: {login: string}[];
 };
 
+/**
+ * Head and base commits of one pull request.
+ * The pull REST record: `gh pr view --json` has no `baseRefOid` on older CLI builds.
+ */
+export function pullRangeArgs(slug: string, pull: string): string[] {
+  return ['api', `repos/${slug}/pulls/${pull}`, '--jq', '{head: .head.sha, base: .base.sha}'];
+}
+
 /** A pull belongs to an issue when its title starts with `#<key>:` or `#<key> `. */
 export function linkedTitle(key: string, title: string): boolean {
   return title.startsWith(pullTitlePrefix(key)) || title.startsWith(`#${key} `);
@@ -578,13 +586,12 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       }
     },
     async range(pull) {
-      const view = JSON.parse(
-        await run(['pr', 'view', pull, '--repo', repoSlug(), '--json', 'headRefOid,baseRefOid']),
-      ) as {
-        headRefOid?: string;
-        baseRefOid?: string;
+      const view = JSON.parse(await run(pullRangeArgs(repoSlug(), pull))) as {
+        head?: string;
+        base?: string | null;
       };
-      return {head: view.headRefOid ?? '', base: view.baseRefOid ?? null};
+      const base = view.base ?? '';
+      return {head: view.head ?? '', base: base === '' ? null : base};
     },
     async resolveThread(thread) {
       const query =

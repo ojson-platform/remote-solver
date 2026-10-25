@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 import {request as httpRequest} from 'node:http';
 import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -17,7 +18,7 @@ import {
 } from './types.ts';
 import {changeDir} from '../machine/naming.ts';
 import {openWindow, type WindowTicket} from './window.ts';
-import {serveBoard} from './page.ts';
+import {draftsAfterClick, headClickToggles, lineFieldClosesOnEscape, serveBoard} from './page.ts';
 
 const MANAGER = 'ada';
 
@@ -202,6 +203,16 @@ function glineOf(html: string, key: string, name: string): string {
   return band.slice(form, band.indexOf('</form>', at) + '</form>'.length);
 }
 
+function spineOf(html: string, key: string, layer: string): string {
+  const band = bandOf(html, key);
+  const marker = `id="spine-${layer}"`;
+  const at = band.indexOf(marker);
+  assert.ok(at >= 0, marker);
+  const start = band.lastIndexOf('<section>', at);
+  const next = band.indexOf('class="spine-pick"', at + marker.length);
+  return band.slice(start, next === -1 ? band.length : band.lastIndexOf('<section>', next));
+}
+
 function stationOf(html: string, key: string, name: string): string {
   const article = articleOf(html, key);
   const marker = `data-station="${name}"`;
@@ -302,6 +313,7 @@ function idle() {
     sidebar: (): SidebarBlock[] => [],
     spine: () => undefined,
     answer: () => undefined,
+    acceptReview: () => undefined,
     shelf: () => [] as {name: string; outcome: RoleRecord['outcome']}[],
     settings: () => settingsState(),
     overlay: () => ({
@@ -334,6 +346,7 @@ function idle() {
     drag: () => undefined as {popup?: string; status?: string} | undefined,
     closeCard: () => {},
     checkouts: () => [] as string[],
+    spyNote: () => '',
     openReviewPlace: () => undefined as string | undefined,
     doorPlace: () => undefined as string | undefined,
     gateMark: () => {},
@@ -1863,6 +1876,10 @@ function writeChange(arcadia: string, key: string, name: string, body: string): 
   writeFileSync(file, body);
 }
 
+function git(root: string, args: string[]): void {
+  execFileSync('git', args, {cwd: root, stdio: 'ignore'});
+}
+
 test('a missing service config asks for one queue name', async () => {
   await hosted(
     {
@@ -2039,7 +2056,7 @@ spec('board', () => {
         },
       );
     });
-    scenario("An exclamation replaces play on this ticket's break", async () => {
+    scenario("An exclamation replaces play on this cycle's break", async () => {
       const assignees: string[] = [];
       await hosted(
         {
@@ -2430,7 +2447,7 @@ spec('board', () => {
         },
       );
     });
-    scenario('A pool ticket sets a gate', async () => {
+    scenario('A pool cycle sets a gate', async () => {
       const tickets = [bare('1', 'Quiet')];
       const phases: string[] = [];
       await hosted(
@@ -2903,7 +2920,7 @@ spec('sidebar', () => {
         },
       );
     });
-    scenario('A second click closes the ticket', async () => {
+    scenario('A second click closes the cycle', async () => {
       await hosted(
         {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
         async (page, window) => {
@@ -2953,6 +2970,465 @@ spec('sidebar', () => {
             window.sidebar().some(block => JSON.stringify(block).includes('Годность')),
             false,
           );
+        },
+      );
+    });
+    scenario('The Plan row shows every section', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'proposal.md',
+            [
+              '## Scope',
+              '',
+              'Сайдбар читает план целиком.',
+              '',
+              'Второй абзац scope остаётся.',
+              '',
+              '## Out of scope',
+              '',
+              'Другие слои.',
+              '',
+            ].join('\n'),
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const side = bandOf(await (await fetch(page.url)).text(), '1');
+          assert.match(side, /<h3>Scope<\/h3>/);
+          assert.match(side, /Сайдбар читает план целиком\./);
+          assert.match(side, /Второй абзац scope остаётся\./);
+          assert.match(side, /<h3>Out of scope<\/h3>/);
+          assert.match(side, /Другие слои\./);
+        },
+      );
+    });
+    scenario('A collapsed Plan row shows one outcome line', async () => {
+      const proposal = '## Outcome\n\nПервая строка исхода.\n\nВторая строка исхода.\n';
+      const focus = {
+        comments: [{body: 'sdd:focus\nPlan: Первая строка исхода.\nSpecify: Границы.\n'}],
+      };
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'verifying', focus)]},
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'proposal.md', proposal);
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const html = await (await fetch(page.url)).text();
+          const side = bandOf(html, '1');
+          const planPick = side.match(/id="spine-Plan"[^>]*/)?.[0] ?? '';
+          assert.equal(planPick.includes('checked'), false);
+          const planHead = spineOf(html, '1', 'Plan').split('<div class="fold">')[0] ?? '';
+          assert.match(planHead, /<span class="excerpt">Первая строка исхода\.<\/span>/);
+          assert.equal(planHead.includes('class="sentence"'), false);
+          assert.equal(planHead.split('Первая строка исхода.').length, 2);
+          const specifyHead = spineOf(html, '1', 'Specify').split('<div class="fold">')[0] ?? '';
+          assert.match(specifyHead, /<span class="sentence">Границы\.<\/span>/);
+          assert.equal(side.includes('<span class="excerpt">Первая строка исхода. Вторая'), false);
+          assert.match(side, /Вторая строка исхода\./);
+          assert.match(html, /\.spine \.row\s*\{[^}]*align-items:\s*stretch[^}]*max-width:\s*100%/);
+          assert.match(html, /\.spine \.excerpt\s*\{[^}]*text-overflow:\s*ellipsis/);
+          assert.match(
+            html,
+            /\.spine > section:has\(\.spine-pick:checked\) \.excerpt\s*\{[^}]*display:\s*none/,
+          );
+        },
+      );
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing', focus)]},
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'proposal.md', proposal);
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const planHead =
+            spineOf(await (await fetch(page.url)).text(), '1', 'Plan').split(
+              '<div class="fold">',
+            )[0] ?? '';
+          assert.match(planHead, /id="spine-Plan"[^>]*checked/);
+          assert.equal(planHead.includes('class="sentence"'), false);
+          assert.match(planHead, /<span class="excerpt">Первая строка исхода\.<\/span>/);
+        },
+      );
+    });
+    scenario('A line comment quotes the line', async () => {
+      const comments: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
+          commentPull: (_key, body) => {
+            comments.push(body);
+          },
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'proposal.md', '## Scope\n\nСайдбар читает ветку.\n');
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const html = await (await fetch(page.url)).text();
+          const side = bandOf(html, '1');
+          assert.match(
+            side,
+            /<button type="button" class="line" data-line="Сайдбар читает ветку\."/,
+          );
+          assert.match(html, /\.spine button\.line:hover/);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                new URLSearchParams({
+                  act: 'answer',
+                  key: '1',
+                  line: 'Сайдбар читает ветку.',
+                  reply: 'Здесь узко.',
+                }).toString(),
+              )
+            ).status,
+            303,
+          );
+          assert.deepEqual(comments, ['> Сайдбар читает ветку.\n\nЗдесь узко.']);
+        },
+      );
+    });
+    scenario('An empty plan section stays out', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'proposal.md',
+            '## Scope\n\nСайдбар.\n\n## Constraints\n\n',
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const side = bandOf(await (await fetch(page.url)).text(), '1');
+          assert.match(side, /<h3>Scope<\/h3>/);
+          assert.match(side, /Сайдбар\./);
+          assert.equal(side.includes('<h3>Constraints</h3>'), false);
+        },
+      );
+    });
+    scenario('Added and Modified are headings', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'proposal.md',
+            '## Capabilities\n\n### Added\n\n- sidebar План целиком.\n\n### Modified\n\n- board Колонки.\n',
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const side = bandOf(await (await fetch(page.url)).text(), '1');
+          assert.match(side, /<h4>Added<\/h4>/);
+          assert.match(side, /<h4>Modified<\/h4>/);
+          assert.equal(side.includes('### Added'), false);
+          assert.equal(side.includes('### Modified'), false);
+          assert.match(side, /sidebar План целиком\./);
+          assert.match(side, /board Колонки\./);
+        },
+      );
+    });
+    scenario('An empty Open questions section stays out', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'proposal.md',
+            '## Outcome\n\nГодность.\n\n## Open questions\n\n',
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const side = bandOf(await (await fetch(page.url)).text(), '1');
+          assert.match(side, /Годность\./);
+          assert.equal(side.includes('Open questions'), false);
+        },
+      );
+    });
+    scenario('An open question holds the plan', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing', {openPullRequests: 1})]},
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'proposal.md',
+            '## Open questions\n\n- [ ] Писать ли имя проверки?\n',
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const side = bandOf(await (await fetch(page.url)).text(), '1');
+          assert.match(side, /План принимается, когда открытых вопросов не останется\./);
+          assert.match(side, /data-question="Писать ли имя проверки\?"/);
+        },
+      );
+    });
+    scenario('A typed line comment stays when another line opens', () => {
+      assert.deepEqual(draftsAfterClick([{line: 'первая', text: 'черновик'}], 'вторая'), [
+        {line: 'первая', text: 'черновик'},
+        {line: 'вторая', text: ''},
+      ]);
+    });
+    scenario('An empty line field closes when another line opens', () => {
+      assert.deepEqual(draftsAfterClick([{line: 'первая', text: '   '}], 'вторая'), [
+        {line: 'вторая', text: ''},
+      ]);
+    });
+    scenario('An empty line field closes when its line is clicked again', () => {
+      assert.deepEqual(draftsAfterClick([{line: 'первая', text: ''}], 'первая'), []);
+      assert.deepEqual(draftsAfterClick([{line: 'первая', text: '  '}], 'первая'), []);
+    });
+    scenario('A typed line comment stays when its line is clicked again', () => {
+      assert.deepEqual(draftsAfterClick([{line: 'первая', text: 'черновик'}], 'первая'), [
+        {line: 'первая', text: 'черновик'},
+      ]);
+    });
+    scenario('A line field uses the pool frame', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing', {openPullRequests: 1})]},
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'proposal.md', '## Scope\n\nСтрока.\n');
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const html = await (await fetch(page.url)).text();
+          assert.match(html, /\.spine form\.line-note\s*\{[^}]*margin:\s*18px 10px 8px/);
+          assert.match(html, /\.spine \.plan-foot\s*\{[^}]*margin:\s*10px 10px 8px/);
+          assert.match(html, /\.spine \.plan-foot form\s*\{[^}]*margin:\s*0/);
+          assert.match(
+            html,
+            /\.spine button\.line\s*\{[^}]*margin:\s*-4px -8px[^}]*padding:\s*4px 8px[^}]*border-radius:\s*8px/,
+          );
+          assert.match(
+            html,
+            /\.spine form\.line-note textarea,\s*\.spine \.plan-foot textarea\s*\{[^}]*padding:\s*8px 8px 28px[^}]*border-radius:\s*8px/,
+          );
+          assert.match(
+            html,
+            /\.spine form\.line-note textarea:focus,\s*\.spine \.plan-foot textarea:focus\s*\{[^}]*rgba\(230, 179, 90, 0\.45\)/,
+          );
+          assert.match(html, /\.spine \.shut\s*\{[^}]*border-radius:\s*50%/);
+          assert.match(bandOf(html, '1'), /class="shut"[^>]*aria-label="Закрыть"/);
+          assert.match(bandOf(html, '1'), /class="send"[^>]*aria-label="Записать"/);
+          assert.match(html, /draftsAfterClick\(openDrafts\(\), targetLine\)/);
+        },
+      );
+    });
+    scenario('The row head toggles outside its control', async () => {
+      const label = {closest: (selector: string) => (selector === 'label' ? label : null)};
+      const acts = {closest: (selector: string) => (selector === '.acts' ? acts : null)};
+      assert.equal(headClickToggles(label), false);
+      assert.equal(headClickToggles(acts), false);
+      assert.equal(headClickToggles({closest: () => null}), true);
+      assert.equal(headClickToggles(null), false);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const html = await (await fetch(page.url)).text();
+          assert.match(html, /headClickToggles\(event\.target\)/);
+          assert.match(html, /\.spine \.row\s*\{[^}]*cursor:\s*pointer/);
+          assert.match(html, /\.spine \.layer\s*\{[^}]*display:\s*flex[^}]*align-items:\s*center/);
+        },
+      );
+    });
+    scenario('The open row head sticks', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const html = await (await fetch(page.url)).text();
+          assert.match(
+            html,
+            /\.spine > section:has\(\.spine-pick:checked\) \.row\s*\{[^}]*position:\s*sticky[^}]*top:\s*0[^}]*width:\s*auto[^}]*max-width:\s*none/,
+          );
+          assert.match(html, /<div class="side-scroll">/);
+          assert.equal(bandOf(html, '1').includes('class="top"'), false);
+          assert.match(html, /\.spine \.lead\s*\{[^}]*padding:\s*0/);
+        },
+      );
+    });
+    scenario('Escape closes the line field', async () => {
+      assert.equal(lineFieldClosesOnEscape('Escape', true), true);
+      assert.equal(lineFieldClosesOnEscape('Escape', false), false);
+      assert.equal(lineFieldClosesOnEscape('Enter', true), false);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const html = await (await fetch(page.url)).text();
+          assert.match(html, /lineFieldClosesOnEscape\(event\.key, Boolean\(form\)\)/);
+        },
+      );
+    });
+    scenario('The Design row shows the named parts', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'designing')]},
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'design.md',
+            [
+              '## Verification boundary',
+              '',
+              'Одна проверка.',
+              '',
+              'Лишнее.',
+              '',
+              '## Approach',
+              '',
+              'Один модуль.',
+              '',
+              '## Notes',
+              '',
+              'Не показывать.',
+              '',
+              'Отклонено: второй модуль.',
+              '',
+              '## Open decisions',
+              '',
+              '- [ ] имя',
+              '',
+            ].join('\n'),
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const side = bandOf(await (await fetch(page.url)).text(), '1');
+          assert.match(side, /Одна проверка/);
+          assert.match(side, /Один модуль/);
+          assert.match(side, /Отклонено: второй модуль/);
+          assert.match(side, /- \[ \] имя/);
+          assert.equal(side.includes('Лишнее'), false);
+          assert.equal(side.includes('Не показывать'), false);
+        },
+      );
+    });
+    scenario('The Code row shows that a diff is present', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'verifying', {diff: true})]},
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const side = bandOf(await (await fetch(page.url)).text(), '1');
+          assert.match(side, /Diff есть/);
+          assert.equal(side.includes('diff --git'), false);
+        },
+      );
+    });
+    scenario('The sidebar is a wide drawer', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const html = await (await fetch(page.url)).text();
+          assert.match(html, /<aside class="sidebar" data-key="1"/);
+          assert.match(
+            html,
+            /\.sidebar\s*\{[^}]*position:\s*fixed[^}]*right:\s*0[^}]*width:\s*min\(560px, 92vw\)/,
+          );
+          assert.match(
+            html,
+            /\.stations\s*\{[^}]*grid-template-columns:\s*252px repeat\(7, minmax\(0, 1fr\)\)/,
+          );
+        },
+      );
+    });
+    scenario('The Plan row reads the issue branch', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+        async (page, window, paths) => {
+          const checkout = path.join(paths.arcadia, 'services', 'billing');
+          git(checkout, ['init', '-b', 'master']);
+          git(checkout, ['config', 'user.email', 'test@example.com']);
+          git(checkout, ['config', 'user.name', 'Test']);
+          git(checkout, ['add', 'openspec']);
+          git(checkout, ['commit', '-m', 'init']);
+          git(checkout, ['checkout', '-b', 'sdd/1']);
+          writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nС ветки тикета.\n');
+          git(checkout, ['add', 'openspec']);
+          git(checkout, ['commit', '-m', 'plan']);
+          git(checkout, ['checkout', 'master']);
+          writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nС рабочего дерева.\n');
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const side = bandOf(await (await fetch(page.url)).text(), '1');
+          assert.match(side, /id="spine-Plan"/);
+          assert.match(side, /С ветки тикета/);
+          assert.equal(side.includes('С рабочего дерева'), false);
         },
       );
     });
@@ -3023,6 +3499,200 @@ spec('sidebar', () => {
         },
       );
     });
+    scenario('A remark on the plan is a review comment', async () => {
+      const comments: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
+          commentPull: (_key, body) => {
+            comments.push(body);
+          },
+        },
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'proposal.md',
+            '## Outcome\n\nГодность.\n\n## Open questions\n',
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          assert.match(
+            bandOf(await (await fetch(page.url)).text(), '1'),
+            /<label class="draft">Комментарий/,
+          );
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                new URLSearchParams({
+                  act: 'answer',
+                  key: '1',
+                  reply: 'Сначала сократить Outcome.',
+                }).toString(),
+              )
+            ).status,
+            303,
+          );
+          assert.deepEqual(comments, ['Сначала сократить Outcome.']);
+        },
+      );
+    });
+    scenario('Accepting the plan adds proposed', async () => {
+      const tickets = [held('1', 'proposing', {openPullRequests: 1})];
+      const phases: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => tickets,
+          writePhase: (_key, phase) => {
+            phases.push(phase);
+          },
+          editLabels: (_key, add, remove) => {
+            const item = tickets[0];
+            if (!item) {
+              return;
+            }
+            item.labels = item.labels.filter(label => !remove?.includes(label));
+            for (const label of add) {
+              if (!item.labels.includes(label)) {
+                item.labels = [...item.labels, label];
+              }
+            }
+          },
+        },
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'proposal.md',
+            '## Open questions\n\n- [ ] Писать ли имя проверки?\n',
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const asking = bandOf(await (await fetch(page.url)).text(), '1');
+          assert.match(asking, /<label class="draft">Комментарий/);
+          assert.equal(asking.includes('Принять Plan'), false);
+          writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+          const side = bandOf(await (await fetch(page.url)).text(), '1');
+          assert.match(side, /aria-label="Принять Plan"/);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                new URLSearchParams({act: 'accept-review', key: '1'}).toString(),
+              )
+            ).status,
+            303,
+          );
+          assert.ok(tickets[0]?.labels.includes('sdd:proposed'));
+          assert.ok(tickets[0]?.labels.includes('sdd:proposing'));
+          assert.deepEqual(phases, []);
+          assert.match(statusOf(await (await fetch(page.url)).text()), /Принято/);
+        },
+      );
+    });
+    scenario('Accepting the spec adds specified', async () => {
+      const tickets = [held('1', 'specifying', {openPullRequests: 1})];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => tickets,
+          editLabels: (_key, add, remove) => {
+            const item = tickets[0];
+            if (!item) {
+              return;
+            }
+            item.labels = item.labels.filter(label => !remove?.includes(label));
+            for (const label of add) {
+              if (!item.labels.includes(label)) {
+                item.labels = [...item.labels, label];
+              }
+            }
+          },
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          assert.match(bandOf(await (await fetch(page.url)).text(), '1'), /Принять Specify/);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                new URLSearchParams({act: 'accept-review', key: '1'}).toString(),
+              )
+            ).status,
+            303,
+          );
+          assert.ok(tickets[0]?.labels.includes('sdd:specified'));
+          assert.ok(tickets[0]?.labels.includes('sdd:specifying'));
+        },
+      );
+    });
+    scenario('Accepting the design adds designed', async () => {
+      const tickets = [held('1', 'designing', {openPullRequests: 1})];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => tickets,
+          editLabels: (_key, add, remove) => {
+            const item = tickets[0];
+            if (!item) {
+              return;
+            }
+            item.labels = item.labels.filter(label => !remove?.includes(label));
+            for (const label of add) {
+              if (!item.labels.includes(label)) {
+                item.labels = [...item.labels, label];
+              }
+            }
+          },
+        },
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'design.md',
+            '## Approach\n\nОдин модуль.\n\n## Open decisions\n',
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          assert.match(bandOf(await (await fetch(page.url)).text(), '1'), /Принять Design/);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                new URLSearchParams({act: 'accept-review', key: '1'}).toString(),
+              )
+            ).status,
+            303,
+          );
+          assert.ok(tickets[0]?.labels.includes('sdd:designed'));
+          assert.ok(tickets[0]?.labels.includes('sdd:designing'));
+        },
+      );
+    });
   });
   requirement('The open row shows three gate lines', () => {
     scenario('A passed gate is controlled from the sidebar', async () => {
@@ -3057,8 +3727,11 @@ spec('sidebar', () => {
               .status,
             303,
           );
-          const line = glineOf(await (await fetch(page.url)).text(), '1', 'proposing');
+          const html = await (await fetch(page.url)).text();
+          const line = glineOf(html, '1', 'proposing');
           assert.match(line, /aria-label="Поставить гейт proposing"/);
+          assert.match(html, /\.tick\s*\{[^}]*width:\s*12px/);
+          assert.match(html, /\.stop\s*\{[^}]*width:\s*18px/);
           assert.equal(line.includes('>Поставить'), false);
           assert.equal(line.includes('>Снять'), false);
           const posted = await post(
@@ -3089,8 +3762,57 @@ spec('sidebar', () => {
           );
           const html = await (await fetch(page.url)).text();
           assert.match(glineOf(html, '1', 'designing'), /гейт designing/);
+          assert.match(html, /\.stop\s*\{[^}]*width:\s*18px[^}]*height:\s*18px/);
+          assert.match(html, /\.stop svg\s*\{[^}]*width:\s*18px[^}]*height:\s*18px/);
           assert.match(stationOf(html, '1', 'designing'), /aria-label="design"/);
           assert.equal(stationOf(html, '1', 'designing').includes('гейт'), false);
+        },
+      );
+    });
+    scenario('The current phase shows acceptance instead of its gate', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing', {openPullRequests: 1})]},
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+          writeChange(paths.arcadia, '1', 'design.md', '# design\n');
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const html = await (await fetch(page.url)).text();
+          const plan = spineOf(html, '1', 'Plan');
+          assert.match(plan, /aria-label="Принять Plan"/);
+          assert.match(
+            html,
+            /\.spine form\.accept \.cmd\s*\{[^}]*border-radius:\s*8px[^}]*padding:\s*4px 10px[^}]*font-size:\s*12px/,
+          );
+          assert.match(html, /\.plaque\s*\{[^}]*border-radius:\s*8px/);
+          assert.equal(plan.includes('data-gate="proposing"'), false);
+          assert.match(glineOf(html, '1', 'designing'), /гейт designing/);
+        },
+      );
+    });
+    scenario("An open question leaves the current gate's place empty", async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing', {openPullRequests: 1})]},
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'proposal.md',
+            '## Open questions\n\n- [ ] Писать ли имя проверки?\n',
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const plan = spineOf(await (await fetch(page.url)).text(), '1', 'Plan');
+          assert.equal(plan.includes('Принять Plan'), false);
+          assert.equal(plan.includes('data-gate="proposing"'), false);
         },
       );
     });

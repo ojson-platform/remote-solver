@@ -13,16 +13,16 @@ The board and the window's spy SHALL read one watch list. The pool and the colum
 #### Scenario: The pool and the columns share the list
 
 - **WHEN** the watch list names one Tracker queue
-- **THEN** the pool and the columns both read tickets of that queue and no other queue
+- **THEN** the pool and the columns both read cycles of that queue and no other queue
 
 #### Scenario: The machine's spy ignores a bare cycle label
 
-- **WHEN** the machine runs without the window, a ticket carries `sdd:cycle`, and the assignee is unset
-- **THEN** the machine's spy does not take that ticket in
+- **WHEN** the machine runs without the window, a cycle carries `sdd:cycle`, and the assignee is unset
+- **THEN** the machine's spy does not take that cycle in
 
 ### Requirement: Each read rebuilds the list from the files
 
-Each read SHALL build the list again from the files, not from the previous union. Names in an overlay `watch` SHALL join the home `watch`. A repeated name SHALL be one name. Removing a name from one file SHALL leave it while another file still has it. A name that remains in no file SHALL leave the list. The process SHALL start from the files and repeat while a newly found overlay adds a name, until names stop being added. A catalog with no overlay file SHALL add nothing. When both lists are empty, the board SHALL have no cards. `sdd.queues` SHALL NOT be part of the union. The order of names SHALL NOT choose a ticket's queue. The first queue in the service config SHALL remain the queue of a new child. The user block SHALL write the home list immediately. The overlay group SHALL write that checkout's list immediately.
+Each read SHALL build the list again from the files, not from the previous union. Names in an overlay `watch` SHALL join the home `watch`. A repeated name SHALL be one name. Removing a name from one file SHALL leave it while another file still has it. A name that remains in no file SHALL leave the list. The process SHALL start from the files and repeat while a newly found overlay adds a name, until names stop being added. A catalog with no overlay file SHALL add nothing. When both lists are empty, the board SHALL have no cards. `sdd.queues` SHALL NOT be part of the union. The order of names SHALL NOT choose a cycle's queue. The first queue in the service config SHALL remain the queue of a new child. The user block SHALL write the home list immediately. The overlay group SHALL write that checkout's list immediately.
 
 #### Scenario: An overlay name joins the home list
 
@@ -46,26 +46,26 @@ Each read SHALL build the list again from the files, not from the previous union
 
 ### Requirement: A Tracker queue is the port field
 
-A Tracker ticket SHALL be in the selection when the queue it lies in is on the watch list. That queue SHALL be one port field. A label of another queue SHALL NOT replace it. The ticket's queue SHALL be in `sdd.queues` of the service named by `sddService`. When it is not, the ticket SHALL stay in the pool, the icon reason SHALL start with `очереди нет в конфиге сервиса`, and «Взять» SHALL look disabled and SHALL NOT write the assignee. The sidebar SHALL show that same line. A cycle with the same break SHALL stay in its column, the card SHALL have the icon, and steps SHALL NOT start. The window SHALL NOT move the queue and SHALL NOT append it to the service config.
+A Tracker cycle SHALL be in the selection when the queue it lies in is on the watch list. That queue SHALL be one port field. A label of another queue SHALL NOT replace it. The cycle's queue SHALL be in `sdd.queues` of the service named by `sddService`. When it is not, the cycle SHALL stay in the pool, the icon reason SHALL start with `очереди нет в конфиге сервиса`, and «Взять» SHALL look disabled and SHALL NOT write the assignee. The sidebar SHALL show that same line. A cycle with the same break SHALL stay in its column, the card SHALL have the icon, and steps SHALL NOT start. The window SHALL NOT move the queue and SHALL NOT append it to the service config.
 
-#### Scenario: The port field selects the ticket
+#### Scenario: The port field selects the cycle
 
-- **WHEN** the ticket's port queue is on the watch list and a label names a different queue
-- **THEN** the board reads the ticket by the port queue
+- **WHEN** the cycle's port queue is on the watch list and a label names a different queue
+- **THEN** the board reads the cycle by the port queue
 
 #### Scenario: A queue missing from the service config blocks Take
 
-- **WHEN** the ticket is on the watch list and its queue is not in that service's `sdd.queues`
+- **WHEN** the cycle is on the watch list and its queue is not in that service's `sdd.queues`
 - **THEN** the card stays, «Взять» does not write the assignee, and the reason starts with `очереди нет в конфиге сервиса`
 
 ### Requirement: A GitHub queue is a label in sdd.queues
 
-A GitHub ticket SHALL be in the selection when its repository `owner/repo` is on the watch list. The repository name SHALL be the watch-list key. The ticket's queue SHALL be the label `queueOf` finds in `sdd.queues`. When several names match, the queue SHALL be the first name in `sdd.queues` that is on the issue. When none match, the card SHALL have the queue break above. `sdd:cycle` SHALL still be required.
+A GitHub cycle SHALL be in the selection when its repository `owner/repo` is on the watch list. The repository name SHALL be the watch-list key. The cycle's queue SHALL be the label `queueOf` finds in `sdd.queues`. When several names match, the queue SHALL be the first name in `sdd.queues` that is on the issue. When none match, the card SHALL have the queue break above. `sdd:cycle` SHALL still be required.
 
 #### Scenario: The first matching queue name wins
 
 - **WHEN** `sdd.queues` lists `alpha` then `beta`, and the issue has both labels
-- **THEN** the ticket's queue is `alpha`
+- **THEN** the cycle's queue is `alpha`
 
 #### Scenario: No matching label is a break
 
@@ -76,7 +76,7 @@ A GitHub ticket SHALL be in the selection when its repository `owner/repo` is on
 
 The checkout SHALL be the directory gathered from `sddService`. A worktree and the launch directory SHALL NOT be that checkout. The step and the overlay SHALL read that gathered checkout. A path with `..`, or a path outside the root, SHALL be the same break as a missing catalog. Both roots SHALL live in the home file. The user block SHALL write them immediately. The overlay SHALL NOT replace them. A Tracker process SHALL read the Arcadia root. A GitHub process SHALL read the GitHub root. An empty value SHALL leave the default, `~/arcadia` or `~/github`.
 
-Tracker SHALL gather `~/arcadia/<sddService>`. GitHub SHALL gather `~/github/<owner>/<repo>/<sddService>`. An empty `sddService` on GitHub SHALL be the repository root. «Взять» SHALL act on that root when the catalog exists and the ticket's queue is in its `sdd.queues`. An empty `sddService` on Tracker SHALL be the same break as a missing field: the Arcadia root SHALL NOT count as a service.
+Tracker SHALL gather `~/arcadia/<sddService>`. GitHub SHALL gather `~/github/<owner>/<repo>/<sddService>`. An empty `sddService` on GitHub SHALL be the repository root. «Взять» SHALL act on that root when the catalog exists and the cycle's queue is in its `sdd.queues`. An empty `sddService` on Tracker SHALL be the same break as a missing field: the Arcadia root SHALL NOT count as a service.
 
 #### Scenario: Tracker gathers under the Arcadia root
 
@@ -90,7 +90,7 @@ Tracker SHALL gather `~/arcadia/<sddService>`. GitHub SHALL gather `~/github/<ow
 
 #### Scenario: GitHub empty sddService is the repository root
 
-- **WHEN** a GitHub ticket has an empty `sddService` and the repository is `acme/billing`
+- **WHEN** a GitHub cycle has an empty `sddService` and the repository is `acme/billing`
 - **THEN** the checkout is `~/github/acme/billing`
 
 #### Scenario: A path outside the root is a missing catalog
@@ -104,27 +104,27 @@ When `sddService` is missing, the card SHALL offer a choice and «Взять» S
 
 #### Scenario: One Tracker service writes itself
 
-- **WHEN** a Tracker ticket has no `sddService` and exactly one read checkout has this queue in `sdd.queues`
+- **WHEN** a Tracker cycle has no `sddService` and exactly one read checkout has this queue in `sdd.queues`
 - **THEN** the window writes that service as `sddService` and rereads the card
 
 #### Scenario: Several Tracker services stay a choice
 
-- **WHEN** a Tracker ticket has no `sddService` and more than one read checkout has this queue in `sdd.queues`
+- **WHEN** a Tracker cycle has no `sddService` and more than one read checkout has this queue in `sdd.queues`
 - **THEN** the card offers those services, the reason starts with `не назван сервис`, and «Взять» does not act
 
 #### Scenario: One GitHub directory writes itself
 
-- **WHEN** a GitHub ticket has no `sddService` and only the repository root has `openspec/config.yaml` with an `sdd` key
+- **WHEN** a GitHub cycle has no `sddService` and only the repository root has `openspec/config.yaml` with an `sdd` key
 - **THEN** the window writes that root as `sddService`
 
 #### Scenario: A queue that is still missing keeps the reason
 
-- **WHEN** the manager writes `sddService` and that service's `sdd.queues` still lacks the ticket's queue
+- **WHEN** the manager writes `sddService` and that service's `sdd.queues` still lacks the cycle's queue
 - **THEN** the reason stays `очереди нет в конфиге сервиса`
 
-### Requirement: A missing catalog keeps the ticket card
+### Requirement: A missing catalog keeps the cycle card
 
-When the gathered path does not exist, the ticket card SHALL remain, the icon reason SHALL be `каталога нет`, «Взять» SHALL NOT act, and the `sddService` choice SHALL remain. This SHALL NOT be the card of an `openspec/config.yaml` that does not parse.
+When the gathered path does not exist, the cycle card SHALL remain, the icon reason SHALL be `каталога нет`, «Взять» SHALL NOT act, and the `sddService` choice SHALL remain. This SHALL NOT be the card of an `openspec/config.yaml` that does not parse.
 
 #### Scenario: A missing directory leaves the card
 

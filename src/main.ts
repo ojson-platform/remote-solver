@@ -17,6 +17,7 @@ import {loadCycle} from './machine/snapshot.ts';
 // From the service repository:
 // One issue: remote-solver issue <key>
 // Spy:       remote-solver spy [--parallel 2] [--interval 20]
+// Board:     remote-solver board [--home PATH]
 
 function flag(argv: string[], name: string, fallback: number): number {
   const index = argv.indexOf(name);
@@ -55,6 +56,7 @@ export async function driveIssue(box: Machine, key: string): Promise<number> {
       mode: modeOfSkill(path.join(solverRoot(), 'skills/sdd-flow/steps'), decision.skill),
       sddHooks: record.sddHooks,
       service: record.service,
+      issue: {title: record.title, body: record.body},
     });
     if (outcome.sessionId) {
       console.log(`#${key} session ${outcome.sessionId}`);
@@ -78,7 +80,23 @@ export async function driveIssue(box: Machine, key: string): Promise<number> {
   return 3;
 }
 
-export async function runSpy(box: Machine, argv: string[]): Promise<void> {
+export type SpyWatch = {
+  /** Issues whose agent is running after this change. */
+  onRunning?: (keys: readonly string[]) => void;
+  /** One line the spy just logged. */
+  onReport?: (line: string) => void;
+  /** A poll finished. The board refreshes its tickets from here. */
+  onCycle?: () => void;
+  /** Stops the loop at the next wait. */
+  signal?: AbortSignal;
+};
+
+function say(watch: SpyWatch | undefined, line: string): void {
+  console.log(line);
+  watch?.onReport?.(line);
+}
+
+export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Promise<void> {
   const parallel = flag(argv, '--parallel', 2);
   const intervalMs = flag(argv, '--interval', 20) * 1000;
   let state: State = {running: [], idle: {}, reported: {}};
@@ -86,9 +104,15 @@ export async function runSpy(box: Machine, argv: string[]): Promise<void> {
   let wake: (() => void) | null = null;
   let woke = false;
 
+  const publish = () => {
+    watch?.onRunning?.([...state.running]);
+  };
+
   const finish = (issue: string, code: number, sig: string) => {
     state = exited(state, issue, code, sigs.get(issue) ?? sig);
-    console.log(`#${issue} worker exited ${code}`);
+    publish();
+    say(watch, `#${issue} worker exited ${code}`);
+    watch?.onCycle?.();
     if (wake) {
       wake();
     } else {
@@ -96,9 +120,12 @@ export async function runSpy(box: Machine, argv: string[]): Promise<void> {
     }
   };
 
-  console.log(`Spy polling every ${intervalMs / 1000}s, parallel ${parallel}.`);
+  say(watch, `Spy polling every ${intervalMs / 1000}s, parallel ${parallel}.`);
 
   for (;;) {
+    if (watch?.signal?.aborted) {
+      return;
+    }
     try {
       const snapshot = await loadCycle(
         box.tracker,
@@ -119,13 +146,14 @@ export async function runSpy(box: Machine, argv: string[]): Promise<void> {
       const turned = tick(state, decisions, parallel);
       state = turned.state;
       for (const line of turned.report) {
-        console.log(line.issue === null ? line.reason : `#${line.issue}: ${line.reason}`);
+        say(watch, line.issue === null ? line.reason : `#${line.issue}: ${line.reason}`);
       }
       for (const decision of turned.start) {
-        console.log(`#${decision.issue} start ${decision.phase} → ${decision.action}`);
+        say(watch, `#${decision.issue} start ${decision.phase} → ${decision.action}`);
         const sig = signature(decision);
         state = {...state, running: [...state.running, decision.issue]};
         sigs.set(decision.issue, sig);
+        publish();
         void driveIssue(box, decision.issue).then(
           code => finish(decision.issue, code, sig),
           error => {
@@ -134,22 +162,26 @@ export async function runSpy(box: Machine, argv: string[]): Promise<void> {
           },
         );
       }
+      watch?.onCycle?.();
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
     }
 
     await new Promise<void>(resolve => {
-      if (woke) {
+      if (watch?.signal?.aborted || woke) {
         woke = false;
         resolve();
         return;
       }
-      const timer = setTimeout(resolve, intervalMs);
-      wake = () => {
+      const timer = setTimeout(done, intervalMs);
+      function done(): void {
         clearTimeout(timer);
+        watch?.signal?.removeEventListener('abort', done);
         wake = null;
         resolve();
-      };
+      }
+      wake = done;
+      watch?.signal?.addEventListener('abort', done);
     });
   }
 }

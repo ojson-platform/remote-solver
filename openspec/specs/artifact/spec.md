@@ -47,3 +47,17 @@ An unchecked item under Open questions SHALL hold `proposing`, including when `a
 
 - **WHEN** `implementing` has a tasks file with an unchecked task
 - **THEN** the machine runs the next task and does not move to `verifying`
+
+### Requirement: The writing prompt carries the issue text
+
+The prompt for a skill run SHALL include the issue title and body. It SHALL say that this text is the whole description, and SHALL tell the run not to search the repository for the issue and not to read the service source to recover it. An empty title SHALL stay empty. An empty body SHALL stay empty, and the prompt SHALL say the issue has no description. Surrounding whitespace SHALL NOT count as a title or a body.
+
+#### Scenario: The prompt includes the issue and forbids a search
+
+- **WHEN** the machine runs a skill for an issue that has a title and a body
+- **THEN** the prompt contains that title, that body, and the instruction not to search the repository or read the service source for the issue
+
+#### Scenario: An empty issue stays empty
+
+- **WHEN** the machine runs a skill for an issue with an empty title and an empty body
+- **THEN** the prompt includes that empty title and that empty body, says the issue has no description, and still tells the run not to search

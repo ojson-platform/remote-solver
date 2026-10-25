@@ -13,7 +13,7 @@ Records why and the scope. Zoom is context, not implementation. The commit and t
 
 ## Steps
 
-1. No `proposal.md` yet: move the issue text into `openspec/changes/issue-<issue>/proposal.md`. Headings: `CONTEXT.md` § Artifacts. An empty description stays a scaffold with its open questions as `- [ ]` items. Ids cut by `CONTEXT.md` § Capability. Several services: what this change needs from each, no contracts. No child issues.
+1. No `proposal.md` yet: move the issue text in this prompt into `openspec/changes/issue-<issue>/proposal.md`. Headings: `CONTEXT.md` § Artifacts. An empty description stays a scaffold with its open questions as `- [ ]` items. Ids cut by `CONTEXT.md` § Capability. Several services: what this change needs from each, no contracts. No child issues.
 2. `proposal.md` already exists: leave it.
 3. A question below the context zoom stays out of the proposal.
 4. `improve-proposal`: Fix thread (`CONTEXT.md`), layer `proposal`.

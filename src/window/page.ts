@@ -102,7 +102,7 @@ type PageView = {
 
 const BODY_LIMIT = 262144;
 
-type ActResult = 'see' | 'unknown' | 'conflict';
+type ActResult = 'see' | 'unknown' | 'conflict' | 'stale';
 
 function namesOf(value: string | null): string[] {
   return (value ?? '')
@@ -203,6 +203,8 @@ async function apply(
   surface: Surface,
   params: URLSearchParams,
   view: PageView,
+  mine: number,
+  epoch: {n: number},
 ): Promise<ActResult> {
   const act = params.get('act');
   if (act === 'repair') {
@@ -381,6 +383,9 @@ async function apply(
         params.get('at') ?? '',
         params.get('side') ?? '',
       );
+      if (mine !== epoch.n) {
+        return 'stale';
+      }
       if (status !== undefined) {
         view.status = status;
       }
@@ -677,7 +682,11 @@ async function handle(
       json(res, liveSnapshot(surface, view));
       return;
     }
-    const result = await apply(surface, params, view);
+    const result = await apply(surface, params, view, mine, epoch);
+    if (result === 'stale') {
+      text(res, 409, 'устарело');
+      return;
+    }
     if (result === 'unknown') {
       text(res, 400, 'неизвестное действие');
       return;

@@ -8,6 +8,7 @@ import {
   linkedTitle,
   linksFrom,
   memoryPorts,
+  pullRangeArgs,
   threadRecord,
   type CheckRollup,
 } from './github.ts';
@@ -70,6 +71,15 @@ test('parent and depends are read from the issue body', () => {
     parent: 'LAVKA-1',
     dependsOn: ['LAVKA-2', '9'],
   });
+});
+
+test('the pull range is the REST head and base commits', () => {
+  assert.deepEqual(pullRangeArgs('acme/billing', '11'), [
+    'api',
+    'repos/acme/billing/pulls/11',
+    '--jq',
+    '{head: .head.sha, base: .base.sha}',
+  ]);
 });
 
 test('a pull title links to an issue only with the key prefix', () => {

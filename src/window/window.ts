@@ -11,6 +11,8 @@ import type {
 import {existsSync, mkdirSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 
+import {phaseOf} from '../machine/phase.ts';
+
 import {lay} from './board.ts';
 import {openCheckout, unreadableRow} from './checkout.ts';
 import {
@@ -31,7 +33,7 @@ import {focusNamesPlace, focusPlaque} from './focus.ts';
 import {openRoleEditor, runRole, shelfOf} from './role.ts';
 import {openServiceGroup} from './service-group.ts';
 import {blocksFor} from './sidebar.ts';
-import {buildSpine} from './spine.ts';
+import {buildSpine, reviewGateForPhase} from './spine.ts';
 import {runSpy} from './spy.ts';
 import {COLUMN_NAMES, GATE_LABEL, GATE_STATIONS, isGateStation} from './types.ts';
 
@@ -77,6 +79,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     home: () => home.disk(),
     tickets: outside.tickets,
     writeService: outside.writeService,
+    repoDir: launch.repoDir,
   });
   let settingsOpen = false;
   let openKey = '';
@@ -216,6 +219,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
 
   return {
     board,
+    spyNote: () => outside.spyNote?.() ?? '',
     shelf: () => shelfOf(roles.list()),
     settings: () => home.settings(settingsOpen),
     addRole: (role: RoleRecord) => roles.add(role),
@@ -271,6 +275,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       const cycles = placed(checkout.settle().watch);
       const column = cycles.columns.find(entry => entry.cards.some(card => card.key === item.key));
       const station = column?.name ?? cycles.pool.find(card => card.key === item.key)?.station;
+      const phase = phaseOf([...item.labels]);
       const gateOff: Partial<Record<GateStation, true>> = {};
       for (const name of GATE_STATIONS) {
         if (item.labels.includes(GATE_LABEL[name])) {
@@ -286,17 +291,31 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
         checks: item.checks,
         diff: item.diff === true,
         pull: (item.openPullRequests ?? 0) === 1,
+        reviewGate: reviewGateForPhase(phase),
         gateOff,
       });
     },
-    answer(key: string, question: string, reply: string) {
+    answer(key: string, question: string, reply: string, source = '') {
       const item = checkout.sorted().find(ticket => ticket.key === key);
       if (!item || (item.openPullRequests ?? 0) !== 1 || !outside.commentPull) {
         return 'комментарий не записан';
       }
-      const line = question.trim();
-      outside.commentPull(key, line === '' ? reply : `- [ ] ${line}\n\n${reply}`);
+      const asked = question.trim();
+      const line = source.trim();
+      const body =
+        asked !== '' ? `- [ ] ${asked}\n\n${reply}` : line !== '' ? `> ${line}\n\n${reply}` : reply;
+      outside.commentPull(key, body);
       return 'Комментарий записан в ревью.';
+    },
+    acceptReview(key: string) {
+      const item = checkout.sorted().find(ticket => ticket.key === key);
+      const phase = item ? phaseOf([...item.labels]) : null;
+      const gate = reviewGateForPhase(phase);
+      if (!item || !gate || (item.openPullRequests ?? 0) !== 1 || !outside.editLabels) {
+        return 'Принять не удалось.';
+      }
+      outside.editLabels(key, [`sdd:${gate}`]);
+      return 'Принято.';
     },
     openSettings() {
       settingsOpen = true;

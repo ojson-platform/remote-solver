@@ -21,6 +21,9 @@ export function stringList(value: unknown): string[] {
 
 export type AdapterKind = 'tracker' | 'github';
 
+/** The working checkout for one GitHub `owner/repo`. It wins over the GitHub root. */
+export type RepoCheckout = {repo: string; dir: string};
+
 export type Launch = {
   /** Path the launch passed. No path means no home file is written. */
   homePath?: string;
@@ -28,6 +31,7 @@ export type Launch = {
   agents?: readonly string[];
   /** One running ai-factory. Not stored in the home file. */
   adapter?: AdapterKind;
+  repoDir?: RepoCheckout;
 };
 
 export type WindowTicket = {
@@ -80,10 +84,12 @@ export type WindowOutside = {
   startStep?: (checkout?: string, models?: {mechanical: string; judgment: string}) => void;
   /** Open tickets this port can see. The window filters them by the watch list. */
   tickets?: () => readonly WindowTicket[];
-  /** Login of this process. Not a Tracker or GitHub call. */
-  login?: () => string;
+  /** Login of this process. Not a Tracker or GitHub call. Absent until the port has it. */
+  login?: () => string | undefined;
   /** True while an agent leads a step for this key. */
   leading?: (key: string) => boolean;
+  /** The spy's latest line. Empty when the spy has not spoken. */
+  spyNote?: () => string;
   /** Write `sddService`. The next read sees it. */
   writeService?: (key: string, service: string) => void;
   /**

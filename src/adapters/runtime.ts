@@ -4,9 +4,11 @@ import type {AgentStreamEvent} from '@ai-hero/sandcastle';
 import {existsSync, mkdirSync, readFileSync, symlinkSync} from 'node:fs';
 import path from 'node:path';
 
+import {cursor} from '@ai-hero/sandcastle';
+
 import {serviceHookDoc, stepPrompt} from '../machine/hook.ts';
 import {branchName} from '../machine/naming.ts';
-import {agentFor} from '../machine/skill.ts';
+import {modelFor, type SkillMode} from '../machine/skill.ts';
 
 import {runAgent} from './agent.ts';
 import {linkCommand as checkoutLinks, packageLinks} from './vcs.ts';
@@ -26,6 +28,8 @@ export type AgentRuntimeConfig = {
   prBase: string;
   /** This package. Its files are linked into the issue worktree. */
   solverRoot: string;
+  /** Model for this step. Absent uses the built-in cursor pair. */
+  modelOf?: (mode: SkillMode) => string;
 };
 
 /** Same path sandcastle uses for a file log: `/` in the branch becomes `-`. */
@@ -101,6 +105,23 @@ async function commitCount(vcs: Vcs, before: string, after: string): Promise<num
   return range.commits.split('\n').filter(line => line.trim()).length;
 }
 
+/** Title and body for the skill prompt. The run already has the issue, so it does not look it up. */
+export function issueText(title: string, body: string): string {
+  const heading = title.trim();
+  const description = body.trim();
+  const lines = [
+    'The issue text follows. It is the whole description. Do not search the repository for this issue, and do not read the service source to recover it.',
+    '',
+    `# ${heading}`,
+    '',
+    description,
+  ];
+  if (description === '') {
+    lines.push('', 'The issue has no description.');
+  }
+  return lines.join('\n');
+}
+
 /** One runtime for every host. The checkout is whatever `vcs` prepares. */
 export function agentRuntime(config: AgentRuntimeConfig): Runtime {
   const checkout = (key: string) =>
@@ -121,7 +142,7 @@ export function agentRuntime(config: AgentRuntimeConfig): Runtime {
       const answer = await runAgent({
         cwd: dir,
         hostCwd: config.root,
-        provider: agentFor(skill.mode),
+        provider: cursor((config.modelOf ?? modelFor)(skill.mode)),
         name: skill.action,
         promptFile: path.join(config.solverRoot, 'prompts', 'sdd.md'),
         promptArgs: {
@@ -132,6 +153,7 @@ export function agentRuntime(config: AgentRuntimeConfig): Runtime {
           SKILL: skill.skill,
           QUEUE: config.queueLabel,
           BASE: config.prBase,
+          ISSUE_TEXT: issueText(skill.issue?.title ?? '', skill.issue?.body ?? ''),
           STEP: stepText
             ? stepPrompt(stepText, skill.action, serviceHookDoc(serviceRoot), skill.sddHooks)
             : '',
@@ -156,7 +178,7 @@ export function agentRuntime(config: AgentRuntimeConfig): Runtime {
       return runAgent({
         cwd: dir,
         hostCwd: config.root,
-        provider: agentFor(request.mode),
+        provider: cursor((config.modelOf ?? modelFor)(request.mode)),
         name: request.name,
         promptFile: request.promptFile,
         promptArgs: request.promptArgs,

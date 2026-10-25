@@ -66,7 +66,7 @@ A `cycle-file` outcome SHALL open a popup from the checkout of the card. It SHAL
 
 ### Requirement: Verbs list this manager's roles
 
-The verbs SHALL be this manager's roles, in the sidebar of the open ticket. A closed row SHALL have no verbs. Another manager SHALL have their own collection. The collection SHALL live with the home config and SHALL NOT belong to the cycle's service. A verb SHALL show the role name and the outcome kind before the manager runs it. The user block of settings SHALL edit the collection immediately: add, rename, choose the outcome, edit the text and the labels, and remove. There SHALL be no wizard.
+The verbs SHALL be this manager's roles, in the sidebar of the open cycle. A closed row SHALL have no verbs. Another manager SHALL have their own collection. The collection SHALL live with the home config and SHALL NOT belong to the cycle's service. A verb SHALL show the role name and the outcome kind before the manager runs it. The user block of settings SHALL edit the collection immediately: add, rename, choose the outcome, edit the text and the labels, and remove. There SHALL be no wizard.
 
 #### Scenario: The shelf shows the outcome before the drag
 
@@ -85,7 +85,7 @@ The verbs SHALL be this manager's roles, in the sidebar of the open ticket. A cl
 
 ### Requirement: The window runs one press and does not keep the role
 
-The manager SHALL run a verb on one ticket or cycle, including from the pool. That SHALL be one run on that cycle. The role SHALL NOT stay on the cycle, and entering a phase SHALL NOT repeat it. `sdd step` and the spy SHALL NOT start a role. The window SHALL run the outcome itself, with no model and no step. An empty factory config, an agent that does not answer, and an empty model SHALL NOT disable the verb. The role SHALL NOT change the phase or the assignee, and SHALL NOT write `openspec/config.yaml`. The reviewer SHALL remain the `accepting` pass on `auto-review`.
+The manager SHALL run a verb on one cycle, including from the pool. That SHALL be one run on that cycle. The role SHALL NOT stay on the cycle, and entering a phase SHALL NOT repeat it. `sdd step` and the spy SHALL NOT start a role. The window SHALL run the outcome itself, with no model and no step. An empty factory config, an agent that does not answer, and an empty model SHALL NOT disable the verb. The role SHALL NOT change the phase or the assignee, and SHALL NOT write `openspec/config.yaml`. The reviewer SHALL remain the `accepting` pass on `auto-review`.
 
 #### Scenario: A drag does not move the phase
 

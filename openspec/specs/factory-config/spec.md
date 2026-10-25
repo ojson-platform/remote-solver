@@ -17,7 +17,7 @@ The home config SHALL be the file whose path the launch passed. No path SHALL me
 
 #### Scenario: The home file has no person field
 
-- **WHEN** the manager takes a ticket
+- **WHEN** the manager takes a cycle
 - **THEN** the home file gains no person field
 
 ### Requirement: The service overlay replaces keys and does not replace roots
@@ -95,16 +95,16 @@ Home and overlay defaults SHALL be: cursor has no effort field and no speed fiel
 
 ### Requirement: Effort and speed are the agent's own fields
 
-The window SHALL show the fields of the chosen agent. Cursor SHALL have no separate effort field and no separate speed field. For an agent that has effort, `effort` SHALL be one of `low`, `medium`, `high`, `xhigh`, and `max`, and the window SHALL show only the words that skill mode's model accepts. For an agent that has speed, `speed` SHALL be `fast`, and a missing key SHALL mean ordinary speed. Codex SHALL have a speed field, and the default SHALL be to omit the key. Claude-code and the OpenCode pair SHALL have no speed field. The OpenCode pair SHALL have no effort field. Empty effort and empty speed SHALL mean the agent's default and SHALL NOT stop the window's spy. An empty model SHALL stop the window spy's steps for that service, and SHALL stop «Взять» on a ticket of that service that has no phase. It SHALL NOT stop «Взять» on a cycle that already has a phase.
+The window SHALL show the fields of the chosen agent. Cursor SHALL have no separate effort field and no separate speed field. For an agent that has effort, `effort` SHALL be one of `low`, `medium`, `high`, `xhigh`, and `max`, and the window SHALL show only the words that skill mode's model accepts. For an agent that has speed, `speed` SHALL be `fast`, and a missing key SHALL mean ordinary speed. Codex SHALL have a speed field, and the default SHALL be to omit the key. Claude-code and the OpenCode pair SHALL have no speed field. The OpenCode pair SHALL have no effort field. Empty effort and empty speed SHALL mean the agent's default and SHALL NOT stop the window's spy. An empty model SHALL stop the window spy's steps for that service, and SHALL stop «Взять» on a cycle of that service that has no phase. It SHALL NOT stop «Взять» on a cycle that already has a phase.
 
 #### Scenario: Empty effort does not stop a step
 
 - **WHEN** codex has an empty effort and both models are set
 - **THEN** the window's spy is not stopped by that empty effort
 
-#### Scenario: An empty model stops Take on a phaseless ticket
+#### Scenario: An empty model stops Take on a phaseless cycle
 
-- **WHEN** the merged `models.mechanical` is empty and the ticket has no phase
+- **WHEN** the merged `models.mechanical` is empty and the cycle has no phase
 - **THEN** «Взять» does not act for that service and the window's spy does not start its step
 
 ### Requirement: An overlay agent does not borrow effort or speed

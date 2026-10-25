@@ -169,6 +169,8 @@ export type SkillRun = {
   service?: string;
   /** Cycle hook field. The machine does not create it. */
   sddHooks?: unknown;
+  /** Title and body already on the issue. The prompt carries them. */
+  issue?: {title: string; body: string};
 };
 
 /** What one skill run changed. Zero commits leaves the issue idle. */

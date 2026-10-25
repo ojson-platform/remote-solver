@@ -63,8 +63,8 @@ When `step` is given `--auto-plan`, `--auto-spec`, or `--auto-design`, it SHALL 
 
 #### Scenario: Auto-plan advances a ready proposal
 
-- **WHEN** the issue is in the cycle on `proposing`, the proposal is published, nothing is open, and `step` is given `--auto-plan`, `--auto-spec`, and `--auto-design`
-- **THEN** the issue carries `sdd:auto-plan`, `sdd:auto-spec`, and `sdd:auto-design`, and has moved to `specifying`
+- **WHEN** the issue is in the cycle on `proposing`, the proposal is published and names no capability, nothing is open, and `step` is given `--auto-plan`, `--auto-spec`, and `--auto-design`
+- **THEN** the issue carries `sdd:auto-plan`, `sdd:auto-spec`, and `sdd:auto-design`, and has moved to `designing`
 
 #### Scenario: A flag outside the cycle writes nothing
 

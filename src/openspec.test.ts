@@ -40,6 +40,7 @@ function change(over: Partial<ChangeView> = {}): ChangeView {
     openQuestions: 0,
     openDecisions: 0,
     openTasks: 0,
+    capabilities: [],
     missingBaseline: [],
     ...over,
   };
@@ -233,6 +234,20 @@ spec('review-gate', () => {
         reason: 'sdd:auto-spec',
       });
     });
+    scenario('Auto-spec advances when no capability is named', () => {
+      const decision = decide(
+        issue(1, ['sdd:specifying', 'sdd:auto-spec']),
+        [],
+        [pull(9)],
+        change({proposal: true}),
+      );
+      assert.deepEqual(decision, {
+        kind: 'advance',
+        issue: '1',
+        to: 'designing',
+        reason: 'sdd:auto-spec',
+      });
+    });
   });
 
   requirement('A person closes the gate on the issue', () => {
@@ -278,7 +293,7 @@ spec('review-gate', () => {
         review,
         files,
         queues: [{name: 'Sandcastle'}],
-        change: {...readChange('5', files), proposal: true},
+        change: {...readChange('5', files), proposal: true, capabilities: ['section-text']},
       };
       await resolveIssue('5', options);
       assert.ok((await tracker.labels('5')).includes('sdd:specifying'));
@@ -287,6 +302,19 @@ spec('review-gate', () => {
       assert.match(notes[0], /specs/);
       await resolveIssue('5', options);
       assert.equal(calls.filter(call => call.startsWith('body:')).length, 1);
+    });
+    scenario('Specified with no named capability moves on', () => {
+      const moved = settle(
+        issue(1, ['sdd:cycle', 'sdd:specified']),
+        [],
+        [pull(9)],
+        change({proposal: true}),
+      );
+      assert.deepEqual(
+        moved.transitions.map(step => step.to),
+        ['designing'],
+      );
+      assert.match(moved.transitions[0]?.comment ?? '', /sdd:accept specifying → designing/);
     });
     scenario('Designed over an open decision goes back, then asks', () => {
       const open = change({proposal: true, delta: true, design: true, openDecisions: 1});
@@ -352,6 +380,35 @@ spec('artifact', () => {
       const decision = decide(issue(1, ['sdd:proposing']), [], [], change({proposal: true}));
       assert.equal(action(decision), 'create-proposal');
     });
+    scenario('Specifying with a named capability writes the delta', () => {
+      const decision = decide(
+        issue(1, ['sdd:specifying']),
+        [],
+        [pull(9)],
+        change({proposal: true, capabilities: ['section-text']}),
+      );
+      assert.equal(action(decision), 'create-initial-specs');
+    });
+    scenario('Specifying with no named capability opens the review', () => {
+      const decision = decide(
+        issue(1, ['sdd:specifying']),
+        [],
+        [pull(9)],
+        change({proposal: true}),
+      );
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.deepEqual(decision.gate, {artifact: 'spec', from: 'specifying', to: 'specified'});
+      }
+    });
+    scenario('Specifying with no named capability and no pull request publishes', () => {
+      const decision = decide(issue(1, ['sdd:specifying']), [], [], change({proposal: true}));
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'create-initial-specs');
+        assert.equal(decision.reason, 'publish the change to the pull request');
+      }
+    });
   });
 
   requirement('A missing earlier file returns one phase', () => {
@@ -367,6 +424,32 @@ spec('artifact', () => {
     scenario('Designing with a delta and no proposal stays', () => {
       const decision = decide(issue(1, ['sdd:designing']), [], [pull(9)], change({delta: true}));
       assert.equal(action(decision), 'create-design');
+    });
+    scenario('Designing without a delta returns to specifying', () => {
+      const decision = decide(
+        issue(1, ['sdd:designing']),
+        [],
+        [pull(9)],
+        change({proposal: true, design: true, capabilities: ['section-text']}),
+      );
+      assert.deepEqual(decision, {
+        kind: 'advance',
+        issue: '1',
+        to: 'specifying',
+        reason: 'delta spec is missing',
+      });
+    });
+    scenario('Designing with no named capability stays without a delta', () => {
+      const decision = decide(
+        issue(1, ['sdd:designing']),
+        [],
+        [pull(9)],
+        change({proposal: true, design: true}),
+      );
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.deepEqual(decision.gate, {artifact: 'design', from: 'designing', to: 'designed'});
+      }
     });
   });
 
@@ -2160,7 +2243,7 @@ spec('step', () => {
       assert.ok((await labels('1')).includes('sdd:auto-plan'));
       assert.ok((await labels('1')).includes('sdd:auto-spec'));
       assert.ok((await labels('1')).includes('sdd:auto-design'));
-      assert.ok((await labels('1')).includes('sdd:specifying'));
+      assert.ok((await labels('1')).includes('sdd:designing'));
     });
     scenario('A flag outside the cycle writes nothing', async () => {
       const {printed, labels} = await runStep(

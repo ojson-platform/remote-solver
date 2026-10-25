@@ -47,6 +47,11 @@ On GitHub the ask SHALL be: review the artifact, replace `sdd:<phase>` with the 
 - **WHEN** `specifying` has a published proposal, a delta, one pull request, and `auto-spec`
 - **THEN** the machine moves the issue to `designing` and does not set `wait-human`
 
+#### Scenario: Auto-spec advances when no capability is named
+
+- **WHEN** `specifying` has a published proposal that names no capability, one pull request, and `auto-spec`
+- **THEN** the machine moves the issue to `designing` and does not set `wait-human`
+
 ### Requirement: A person closes the gate on the issue
 
 A person MAY leave the writing label on and add `proposed`, `specified`, or `designed`. On a ready artifact the machine SHALL move to the next phase, clear `wait-human`, and comment `sdd:accept <from> → <to>`. On a missing artifact or an open item the machine SHALL move the issue back to the writing phase and comment once what is left. The next poll SHALL NOT repeat that comment. When the item is then closed, the machine SHALL post the review ask.
@@ -58,8 +63,13 @@ A person MAY leave the writing label on and add `proposed`, `specified`, or `des
 
 #### Scenario: Specified over a missing delta goes back once
 
-- **WHEN** a person sets `specified` and the change has no delta
+- **WHEN** a person sets `specified`, the proposal names a capability, and the change has no delta
 - **THEN** the machine moves the issue back to `specifying` and comments once which file is missing
+
+#### Scenario: Specified with no named capability moves on
+
+- **WHEN** a person sets `specified` and the proposal names no capability
+- **THEN** the phase becomes `designing` and the issue comment is `sdd:accept specifying → designing`
 
 #### Scenario: Designed over an open decision goes back, then asks
 

@@ -1,9 +1,10 @@
+import type {CheckState, IssueRecord} from './port.ts';
+
 import path from 'node:path';
 
-import {HEADINGS, type ChangeView} from './change.ts';
+import {HEADINGS, specsReady, type ChangeView} from './change.ts';
 import {changeDir} from './naming.ts';
 import {GATE_CLOSES, labelsAfterAdvance, phaseOf, phaseRank, type Phase} from './phase.ts';
-import type {CheckState, IssueRecord} from './port.ts';
 import {emptyReview, layerOfPhase, type ReviewView} from './review.ts';
 import {ACTION_SKILL, LAYER_ACTION, type AgentAction, type Skill} from './route.ts';
 
@@ -52,7 +53,7 @@ export function writingGate(phase: Phase, change: ChangeView): {artifact: boolea
     return {artifact: change.proposal, open: change.openQuestions};
   }
   if (phase === 'specifying') {
-    return {artifact: change.delta, open: 0};
+    return {artifact: specsReady(change), open: 0};
   }
   if (phase === 'designing') {
     return {artifact: change.design, open: change.openDecisions};
@@ -322,15 +323,24 @@ export function decide(
     if (!change.proposal) {
       return {kind: 'advance', issue: issue.key, to: 'proposing', reason: 'proposal.md is missing'};
     }
-    if (!change.delta || !pr) {
+    if (!specsReady(change)) {
       return agent(
         issue.key,
         'create-initial-specs',
         phase,
         pr ? String(pr.id) : '',
+        'write the delta spec and publish it',
+      );
+    }
+    if (!pr) {
+      return agent(
+        issue.key,
+        'create-initial-specs',
+        phase,
+        '',
         change.delta
           ? 'publish the delta spec to the pull request'
-          : 'write the delta spec and publish it',
+          : 'publish the change to the pull request',
       );
     }
     if (auto('sdd:auto-spec')) {
@@ -340,7 +350,7 @@ export function decide(
   }
 
   if (phase === 'designing') {
-    if (!change.delta) {
+    if (!specsReady(change)) {
       return {kind: 'advance', issue: issue.key, to: 'specifying', reason: 'delta spec is missing'};
     }
     if (!change.design || !pr) {

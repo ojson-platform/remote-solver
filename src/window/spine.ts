@@ -1,5 +1,6 @@
 import type {GateStation} from './types.ts';
 
+import {missingBaselineIds, namedCapabilities} from '../machine/change.ts';
 import {changeDir} from '../machine/naming.ts';
 
 import {changeFiles, changeRel, listedSpecs} from './change-files.ts';
@@ -58,6 +59,10 @@ export type Spine = {
     questions: SpineQuestion[];
   };
   capabilities: SpineCapability[];
+  /** Capability ids named under Added and Modified. */
+  named: string[];
+  /** Modified ids whose baseline spec is absent. */
+  missingBaseline: string[];
   design: {
     present: boolean;
     boundary: string;
@@ -355,6 +360,8 @@ export function buildSpine(input: {
       questions: questionsOf(proposal),
     },
     capabilities,
+    named: namedCapabilities(proposal),
+    missingBaseline: missingBaselineIds(proposal, rel => files.exists(rel)),
     design: {
       present: design.trim() !== '',
       boundary: paragraph(section(design, 'Verification boundary')),

@@ -2993,21 +2993,10 @@ spec('board', () => {
         },
       );
     });
-    scenario('The snapshot hides Specify acceptance without a delta', async () => {
+    scenario('The snapshot offers Specify acceptance for an empty delta', async () => {
       await hosted(
         {login: () => MANAGER, tickets: () => [held('1', 'specifying', {openPullRequests: 1})]},
         async (page, window, paths) => {
-          const baseline = path.join(
-            paths.arcadia,
-            'services',
-            'billing',
-            'openspec',
-            'specs',
-            'section-text',
-            'spec.md',
-          );
-          mkdirSync(path.dirname(baseline), {recursive: true});
-          writeFileSync(baseline, deltaRequirement());
           writeChange(
             paths.arcadia,
             '1',
@@ -3032,8 +3021,31 @@ spec('board', () => {
           const plan = shot.opened.layers.find(layer => layer.layer === 'Plan');
           assert.ok(specify);
           assert.ok(plan);
-          assert.equal(specify.act, 'none');
+          assert.equal(specify.act, 'accept');
           assert.equal(plan.act, 'gate');
+        },
+      );
+    });
+    scenario('The snapshot hides Specify acceptance during a spec turn', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1})],
+          turn: () => 'create-initial-specs',
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'specs/section-text/spec.md', deltaRequirement());
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const shot = await readSnapshot(page.url);
+          assert.ok(shot.opened);
+          const specify = shot.opened.layers.find(layer => layer.layer === 'Specify');
+          assert.ok(specify);
+          assert.equal(specify.act, 'none');
         },
       );
     });
@@ -4039,7 +4051,69 @@ spec('sidebar', () => {
         },
       );
     });
-    scenario("A missing delta leaves the current gate's place empty", async () => {
+    scenario('An empty delta offers acceptance', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying', {openPullRequests: 1})]},
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'specs/section-text/spec.md',
+            '## Purpose\n\nNo requirement yet.\n',
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const specify = spineOf(await (await fetch(page.url)).text(), '1', 'Specify');
+          assert.match(specify, /aria-label="Принять Specify"/);
+          assert.equal(specify.includes('data-gate="specifying"'), false);
+        },
+      );
+    });
+    scenario('A spec turn hides acceptance', async () => {
+      for (const action of ['restore-baseline', 'create-initial-specs', 'improve-specs']) {
+        await hosted(
+          {
+            login: () => MANAGER,
+            tickets: () => [held('1', 'specifying', {openPullRequests: 1})],
+            turn: () => action,
+          },
+          async (page, window, paths) => {
+            writeChange(paths.arcadia, '1', 'specs/section-text/spec.md', deltaRequirement());
+            window.chooseAgent('cursor');
+            assert.equal(
+              (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+                .status,
+              303,
+            );
+            const specify = spineOf(await (await fetch(page.url)).text(), '1', 'Specify');
+            assert.equal(specify.includes('Принять Specify'), false, action);
+            assert.equal(specify.includes('data-gate="specifying"'), false, action);
+          },
+        );
+      }
+    });
+    scenario('A proposal with no capability offers acceptance', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying', {openPullRequests: 1})]},
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nНичего менять не нужно.\n');
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const specify = spineOf(await (await fetch(page.url)).text(), '1', 'Specify');
+          assert.match(specify, /aria-label="Принять Specify"/);
+          assert.equal(specify.includes('data-gate="specifying"'), false);
+        },
+      );
+    });
+    scenario('A named capability without a delta leaves the place empty', async () => {
       await hosted(
         {login: () => MANAGER, tickets: () => [held('1', 'specifying', {openPullRequests: 1})]},
         async (page, window, paths) => {
@@ -4057,9 +4131,32 @@ spec('sidebar', () => {
           writeChange(
             paths.arcadia,
             '1',
-            'specs/section-text/spec.md',
-            '## Purpose\n\nNo requirement yet.\n',
+            'proposal.md',
+            '## Capabilities\n\n### Added\n\n- section-text the row\n',
           );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const specify = spineOf(await (await fetch(page.url)).text(), '1', 'Specify');
+          assert.equal(specify.includes('Принять Specify'), false);
+          assert.equal(specify.includes('data-gate="specifying"'), false);
+        },
+      );
+    });
+    scenario('A missing baseline leaves the place empty', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying', {openPullRequests: 1})]},
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'proposal.md',
+            '## Capabilities\n\n### Modified\n\n- section-text the row\n',
+          );
+          writeChange(paths.arcadia, '1', 'specs/section-text/spec.md', deltaRequirement());
           window.chooseAgent('cursor');
           assert.equal(
             (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))

@@ -1,4 +1,48 @@
+import type {SpecEntry} from '../spec-diff.ts';
+
 export type LineDraft = {line: string; text: string; question: string};
+
+/** Open fold indexes for one capability. The row list itself stays in client memory. */
+export type OpenFold = {id: string; open: readonly number[]};
+
+const SCENARIO_PREFIX = '#### Scenario: ';
+
+/** A fold index toggles. Indexes that were not clicked stay in their order. */
+export function toggleFold(open: readonly number[], index: number): number[] {
+  if (open.includes(index)) {
+    return open.filter(item => item !== index);
+  }
+  return [...open, index];
+}
+
+function scenarioLine(text: string, name: string): boolean {
+  return text.trim() === `${SCENARIO_PREFIX}${name}`;
+}
+
+/** The first matching row wins. A hidden row names its fold; a visible row does not. */
+export function scenarioTarget(
+  rows: readonly SpecEntry[],
+  capability: string,
+  name: string,
+): {capability: string; gap?: number; name: string} | undefined {
+  for (let index = 0; index < rows.length; index += 1) {
+    const entry = rows[index];
+    if (entry === undefined) {
+      continue;
+    }
+    if (entry.kind === 'gap') {
+      const hidden = entry.hidden.some(row => scenarioLine(row.text, name));
+      if (hidden) {
+        return {capability, gap: index, name};
+      }
+      continue;
+    }
+    if (scenarioLine(entry.text, name)) {
+      return {capability, name};
+    }
+  }
+  return undefined;
+}
 
 export function draftsAfterClick(
   open: readonly {line: string; text: string}[],
@@ -57,6 +101,9 @@ export function payload(event: {
 }
 
 /** A pair form submits when focus leaves it, including when focus leaves the document. */
-export function focusStaysInForm(form: {contains: (node: Node) => boolean}, next: Node | null): boolean {
+export function focusStaysInForm(
+  form: {contains: (node: Node) => boolean},
+  next: Node | null,
+): boolean {
   return next !== null && form.contains(next);
 }

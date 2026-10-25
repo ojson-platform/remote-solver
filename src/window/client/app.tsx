@@ -2,9 +2,9 @@ import type {ReactNode} from 'react';
 
 import type {SpineLayer} from '../spine.ts';
 import type {WindowSnapshot} from '../snapshot.ts';
+import type {LineDraft, OpenFold} from './gesture.ts';
 
 import {Board} from './board.tsx';
-import type {LineDraft} from './gesture.ts';
 import {ActForm, Hidden} from './forms.tsx';
 import {Cross, Pill} from './marks.tsx';
 import {Settings} from './settings.tsx';
@@ -117,12 +117,20 @@ export function App({
   snapshot,
   layer,
   drafts = [],
+  gaps = [],
+  openCaps = [],
 }: {
   snapshot: WindowSnapshot;
   layer?: SpineLayer;
   drafts?: readonly LineDraft[];
+  gaps?: readonly OpenFold[];
+  openCaps?: readonly string[];
 }): ReactNode {
-  const lamp = snapshot.lamp ? <p className="lamp on">шаги идут</p> : <p className="lamp">шаги стоят</p>;
+  const lamp = snapshot.lamp ? (
+    <p className="lamp on">шаги идут</p>
+  ) : (
+    <p className="lamp">шаги стоят</p>
+  );
   return (
     <>
       <div className="app">
@@ -150,7 +158,7 @@ export function App({
           <Board rows={snapshot.rows} opened={snapshot.opened?.key} />
         </div>
       </div>
-      <Sidebar snapshot={snapshot} layer={layer} drafts={drafts} />
+      <Sidebar snapshot={snapshot} layer={layer} drafts={drafts} gaps={gaps} openCaps={openCaps} />
       <Settings snapshot={snapshot} />
       <Popup text={snapshot.popup} />
       <Repair snapshot={snapshot} />

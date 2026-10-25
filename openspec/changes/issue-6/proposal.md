@@ -24,6 +24,6 @@ A section whose text is none stays none. Specify keeps the whole requirement bod
 
 ### Modified
 
-- `sidebar` Plan and Design rows show the whole section text, not the text up to the first blank line
+- section-text Plan and Design rows show the whole section text, not the text up to the first blank line
 
 ## Open questions

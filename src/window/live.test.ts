@@ -23,6 +23,7 @@ import {
   type LiveReview,
   type LiveTracker,
 } from './live.ts';
+import {renderWindow} from './client/render.ts';
 import type {WindowSnapshot} from './snapshot.ts';
 import {openWindow, type WindowTicket} from './window.ts';
 
@@ -137,6 +138,12 @@ async function laterTurn(): Promise<{lines: string[]; runs: number}> {
   await done;
   assert.equal(outcome, 'gone', lines.join('\n'));
   return {lines, runs};
+}
+
+async function pageHtml(url: string): Promise<string> {
+  const response = await fetch(new URL('/snapshot', url));
+  assert.equal(response.status, 200);
+  return renderWindow((await response.json()) as WindowSnapshot);
 }
 
 function articleOf(html: string, key: string): string {
@@ -343,8 +350,28 @@ spec('board', () => {
       });
       try {
         const afterOpen = reads;
+        const before = await (await fetch(new URL('/snapshot', page.url))).json() as {generation: number};
+        const events = await fetch(new URL('/events', page.url));
+        const reader = events.body?.getReader();
+        assert.ok(reader);
+        const decoder = new TextDecoder();
+        let opened = '';
+        while (!opened.includes('\n\n')) {
+          const chunk = await reader.read();
+          opened += decoder.decode(chunk.value, {stream: true});
+        }
         await vi.advanceTimersByTimeAsync(REFRESH_MS);
+        let changed = '';
+        while (!changed.includes('\n\n')) {
+          const chunk = await reader.read();
+          if (chunk.done) {
+            break;
+          }
+          changed += decoder.decode(chunk.value, {stream: true});
+        }
+        await reader.cancel();
         assert.ok(reads > afterOpen);
+        assert.match(changed, new RegExp(`"generation":${before.generation + 1}`));
       } finally {
         await page.close();
         vi.useRealTimers();
@@ -362,7 +389,7 @@ spec('board', () => {
         githubRoot: staged.github,
       });
       try {
-        const html = await (await fetch(page.url)).text();
+        const html = await pageHtml(page.url);
         assert.match(articleOf(html, '6'), /class="ticket pool"/);
         assert.match(html, /Show the whole Plan/);
         assert.equal(html.includes('data-key="9"'), false);
@@ -383,9 +410,9 @@ spec('board', () => {
         githubRoot: staged.github,
       });
       try {
-        assert.equal(await post(page.url, '/act', 'act=choose-agent&agent=cursor'), 303);
-        assert.equal(await post(page.url, '/take', 'key=6'), 303);
-        const html = await (await fetch(page.url)).text();
+        assert.equal(await post(page.url, '/act', 'act=choose-agent&agent=cursor'), 200);
+        assert.equal(await post(page.url, '/take', 'key=6'), 200);
+        const html = await pageHtml(page.url);
         assert.equal(staged.cycle.assignee, MANAGER);
         assert.ok(staged.cycle.labels.includes('sdd:proposing'));
         assert.match(stationOf(html, '6', 'proposing'), /class="plaque"/);
@@ -518,7 +545,7 @@ spec('board', () => {
         spyNote: () => '#6 start proposing → create-proposal',
       });
       try {
-        const html = await (await fetch(page.url)).text();
+        const html = await pageHtml(page.url);
         assert.match(html, /#6 start proposing → create-proposal/);
       } finally {
         await page.close();
@@ -635,7 +662,7 @@ spec('board', () => {
           page.note();
         });
         assert.equal((await read()).generation, 1);
-        assert.equal(await post(page.url, '/act', 'act=open&key=6'), 303);
+        assert.equal(await post(page.url, '/act', 'act=open&key=6'), 200);
         assert.equal((await read()).generation, 2);
         await page.refresh();
         assert.equal((await read()).generation, 3);

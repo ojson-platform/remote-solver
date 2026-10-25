@@ -31,12 +31,16 @@
   },
   "dependencies": {
     "@ai-hero/sandcastle": "0.12.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
     "yaml": "^2.8.0"
   },
   "devDependencies": {
     "@ojson/infra": "^1.0.1",
     "@ojson/spec-coverage": "^0.0.2",
     "@types/node": "^26.6.2",
+    "@types/react": "19.2.0",
+    "@types/react-dom": "19.2.0",
     "esbuild": "^0.28.2",
     "vitest": "^3.2.4"
   }

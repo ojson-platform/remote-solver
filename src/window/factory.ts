@@ -18,7 +18,7 @@ import {
 const NEEDS_AGENT = 'фабрике ещё нужен агент';
 const SILENT_AGENT = 'агент не отвечает';
 
-export const FACTORY_AGENTS = ['cursor', 'codex', 'claude-code', 'opencode'] as const;
+export {FACTORY_AGENTS} from './types.ts';
 
 type Pair = {
   mechanical: string;

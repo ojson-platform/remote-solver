@@ -15,6 +15,8 @@ import {
   watchSpy,
 } from './window/live.ts';
 
+export {bundleClient} from './window/client/bundle.ts';
+
 const usage = `Usage:
   remote-solver spy [--parallel N] [--interval S]
   remote-solver review

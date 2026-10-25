@@ -8,4 +8,6 @@ docs/superpowers/
 
 # Built by `pnpm build`; `prepare` and `prepublishOnly` write them.
 bin/remote-solver.mjs
+bin/client.js
+bin/face.css
 skills/sdd-flow/scripts/sdd.mjs

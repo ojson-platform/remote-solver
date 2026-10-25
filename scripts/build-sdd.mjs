@@ -1,4 +1,5 @@
 import * as esbuild from 'esbuild';
+import {copyFileSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -29,9 +30,24 @@ await esbuild.build({
   entryPoints: ['src/sdd.ts'],
   outfile: target('skills/sdd-flow/scripts/sdd.mjs', 'sdd.mjs'),
 });
+const bin = target('bin/remote-solver.mjs', 'remote-solver.mjs');
+const beside = path.dirname(bin);
+// Same options as bundleClient(). The esbuild API cannot live inside this ESM
+// bin: it calls require() and reads __filename, and the bin has top-level await.
+await esbuild.build({
+  absWorkingDir: root,
+  entryPoints: ['src/window/client/main.tsx'],
+  bundle: true,
+  format: 'iife',
+  platform: 'browser',
+  jsx: 'automatic',
+  outfile: path.join(beside, 'client.js'),
+  logLevel: 'silent',
+});
+copyFileSync(path.join(root, 'src/window/face.css'), path.join(beside, 'face.css'));
 await esbuild.build({
   ...common,
   entryPoints: ['src/cli.ts'],
-  outfile: target('bin/remote-solver.mjs', 'remote-solver.mjs'),
-  external: ['@ai-hero/sandcastle'],
+  outfile: bin,
+  external: ['@ai-hero/sandcastle', 'esbuild'],
 });

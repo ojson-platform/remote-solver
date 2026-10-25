@@ -32,6 +32,26 @@ test('the build writes both files beside each other and leaves the repo files al
   const spy = readFileSync(path.join(dir, 'remote-solver.mjs'), 'utf8');
   assert.doesNotMatch(chat, /@ai-hero\/sandcastle/);
   assert.match(spy, /from "@ai-hero\/sandcastle"/);
+  assert.doesNotMatch(spy, /esbuild JavaScript API cannot be bundled/);
+  const clientJs = readFileSync(path.join(dir, 'client.js'), 'utf8');
+  const face = readFileSync(path.join(dir, 'face.css'), 'utf8');
+  assert.match(clientJs, /EventSource/);
+  assert.match(face, /--bg:/);
+  const loaded = spawnSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      `import {pathToFileURL} from 'node:url';
+       const mod = await import(pathToFileURL(process.argv[2]).href);
+       const text = await mod.bundleClient();
+       if (!text.includes('EventSource')) process.exit(2);`,
+      '_',
+      path.join(dir, 'remote-solver.mjs'),
+    ],
+    {cwd: root, encoding: 'utf8'},
+  );
+  assert.equal(loaded.status, 0, output(loaded));
   const sdd = spawnSync(process.execPath, [path.join(dir, 'sdd.mjs')], {
     cwd: root,
     encoding: 'utf8',
@@ -80,6 +100,8 @@ test('the package ships the built files and not the source', () => {
   const files = (JSON.parse(json) as {files: {path: string}[]}[])[0].files.map(file => file.path);
   for (const required of [
     'bin/remote-solver.mjs',
+    'bin/client.js',
+    'bin/face.css',
     'prompts/sdd.md',
     'skills/sdd-init/SKILL.md',
     'skills/sdd-flow/SKILL.md',

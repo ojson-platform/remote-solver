@@ -1,7 +1,9 @@
-import {createRoot} from 'react-dom/client';
-
+import type {SpecEntry} from '../spec-diff.ts';
 import type {SpineLayer} from '../spine.ts';
 import type {WindowSnapshot} from '../snapshot.ts';
+import type {LineDraft} from './gesture.ts';
+
+import {createRoot} from 'react-dom/client';
 
 import {App} from './app.tsx';
 import {postForm} from './forms.tsx';
@@ -12,15 +14,26 @@ import {
   headClickToggles,
   lineFieldClosesOnEscape,
   payload,
+  scenarioTarget,
   SHEET_FIELD_KEY,
   SHEET_SCROLL_KEY,
-  type LineDraft,
+  toggleFold,
 } from './gesture.ts';
 
-type Memory = {key?: string; station?: string; layer?: SpineLayer | ''; drafts: LineDraft[]};
+type FoldMemory = {id: string; rows: readonly SpecEntry[]; open: number[]};
+
+type Memory = {
+  key?: string;
+  station?: string;
+  layer?: SpineLayer | '';
+  drafts: LineDraft[];
+  folds: FoldMemory[];
+  openCaps: string[];
+  scroll?: {id: string; name: string};
+};
 
 function lineDrafts(): LineDraft[] {
-  return Array.from(document.querySelectorAll('.doc form.line-note')).map(form => {
+  return Array.from(document.querySelectorAll('.spine form.line-note')).map(form => {
     const line = form.previousElementSibling;
     const field = form.querySelector('textarea');
     const question = form.querySelector('[name="question"]');
@@ -32,6 +45,118 @@ function lineDrafts(): LineDraft[] {
   });
 }
 
+function sameRows(left: readonly SpecEntry[], right: readonly SpecEntry[]): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function gapIndex(value: string | null): number | undefined {
+  if (value === null || !/^\d+$/.test(value)) {
+    return undefined;
+  }
+  return Number(value);
+}
+
+function rememberFold(
+  memory: Memory,
+  id: string,
+  rows: readonly SpecEntry[],
+  open: readonly number[],
+): void {
+  const rest = memory.folds.filter(item => item.id !== id);
+  if (open.length === 0) {
+    memory.folds = rest;
+    return;
+  }
+  memory.folds = [...rest, {id, rows, open: [...open]}];
+}
+
+function reconcileFolds(memory: Memory, shot: WindowSnapshot): void {
+  const opened = shot.opened;
+  if (opened === undefined) {
+    memory.folds = [];
+    memory.openCaps = [];
+    return;
+  }
+  const next: FoldMemory[] = [];
+  for (const fold of memory.folds) {
+    const cap = opened.spine.capabilities.find(item => item.id === fold.id);
+    if (cap === undefined || !sameRows(cap.rows, fold.rows)) {
+      continue;
+    }
+    next.push(fold);
+  }
+  memory.folds = next;
+}
+
+function revealCaps(memory: Memory): void {
+  for (const id of memory.openCaps) {
+    const cap = document.getElementById(`cap-${id}`);
+    if (cap instanceof HTMLDetailsElement) {
+      cap.open = true;
+    }
+  }
+  const pending = memory.scroll;
+  memory.scroll = undefined;
+  if (pending === undefined || pending.name === '') {
+    return;
+  }
+  const cap = document.getElementById(`cap-${pending.id}`);
+  if (cap instanceof HTMLDetailsElement) {
+    cap.open = true;
+  }
+  const row = cap?.querySelector(`[data-scenario=${CSS.escape(pending.name)}]`);
+  if (row instanceof HTMLElement) {
+    row.scrollIntoView({block: 'nearest'});
+  }
+}
+
+function onFold(memory: Memory, shot: WindowSnapshot, bar: HTMLElement): boolean {
+  const opened = shot.opened;
+  if (opened === undefined) {
+    return false;
+  }
+  const id = bar.getAttribute('data-cap') ?? '';
+  const index = gapIndex(bar.getAttribute('data-gap'));
+  const cap = opened.spine.capabilities.find(item => item.id === id);
+  if (id === '' || index === undefined || cap === undefined) {
+    return false;
+  }
+  memory.drafts = lineDrafts();
+  const current = memory.folds.find(item => item.id === id && sameRows(item.rows, cap.rows));
+  const open = toggleFold(current === undefined ? [] : current.open, index);
+  rememberFold(memory, id, cap.rows, open);
+  return true;
+}
+
+function onJump(memory: Memory, shot: WindowSnapshot, jump: HTMLElement): boolean {
+  const opened = shot.opened;
+  if (opened === undefined) {
+    return false;
+  }
+  const id = jump.getAttribute('data-cap') ?? '';
+  const name = jump.textContent?.trim() ?? '';
+  const cap = opened.spine.capabilities.find(item => item.id === id);
+  if (id === '' || name === '' || cap === undefined) {
+    return false;
+  }
+  const found = scenarioTarget(cap.rows, id, name);
+  if (found === undefined) {
+    return false;
+  }
+  memory.drafts = lineDrafts();
+  const current = memory.folds.find(item => item.id === id && sameRows(item.rows, cap.rows));
+  const open = current === undefined ? [] : [...current.open];
+  if (found.gap !== undefined && !open.includes(found.gap)) {
+    open.push(found.gap);
+  }
+  rememberFold(memory, id, cap.rows, open);
+  if (!memory.openCaps.includes(found.capability)) {
+    memory.openCaps = [...memory.openCaps, found.capability];
+  }
+  memory.scroll = {id: found.capability, name: found.name};
+  return true;
+}
+
 function keptLayer(memory: Memory, next: WindowSnapshot): SpineLayer | undefined {
   const opened = next.opened;
   if (!opened) {
@@ -39,6 +164,11 @@ function keptLayer(memory: Memory, next: WindowSnapshot): SpineLayer | undefined
   }
   if (memory.key !== opened.key || memory.station !== opened.spine.station) {
     memory.drafts = [];
+    if (memory.key !== opened.key) {
+      memory.folds = [];
+      memory.openCaps = [];
+      memory.scroll = undefined;
+    }
     return opened.spine.open;
   }
   if (memory.layer === '') {
@@ -59,7 +189,7 @@ function boot(): void {
   }
   const view = createRoot(root);
   let shot: WindowSnapshot | undefined;
-  const memory: Memory = {drafts: []};
+  const memory: Memory = {drafts: [], folds: [], openCaps: []};
   const draw = () => {
     if (!shot) {
       return;
@@ -68,7 +198,17 @@ function boot(): void {
     memory.key = shot.opened?.key;
     memory.station = shot.opened?.spine.station;
     memory.layer = layer ?? '';
-    view.render(<App snapshot={shot} layer={layer} drafts={memory.drafts} />);
+    reconcileFolds(memory, shot);
+    view.render(
+      <App
+        snapshot={shot}
+        layer={layer}
+        drafts={memory.drafts}
+        gaps={memory.folds}
+        openCaps={memory.openCaps}
+      />,
+    );
+    revealCaps(memory);
     const show = shot.show;
     if (show) {
       const card = document.querySelector(`article[data-key="${CSS.escape(show)}"]`);
@@ -174,13 +314,17 @@ function boot(): void {
     }
     form.requestSubmit();
   });
-  document.addEventListener('scroll', event => {
-    const sheet = event.target;
-    if (!(sheet instanceof HTMLElement) || !sheet.classList.contains('sheet')) {
-      return;
-    }
-    sessionStorage.setItem(SHEET_SCROLL_KEY, String(sheet.scrollTop));
-  }, true);
+  document.addEventListener(
+    'scroll',
+    event => {
+      const sheet = event.target;
+      if (!(sheet instanceof HTMLElement) || !sheet.classList.contains('sheet')) {
+        return;
+      }
+      sessionStorage.setItem(SHEET_SCROLL_KEY, String(sheet.scrollTop));
+    },
+    true,
+  );
   document.addEventListener('focusin', event => {
     const sheet = event.target instanceof Element ? event.target.closest('.sheet') : null;
     const field = event.target;
@@ -195,7 +339,8 @@ function boot(): void {
   document.addEventListener('click', event => {
     const target = event.target instanceof Element ? event.target : null;
     const row = target?.closest('.spine .row');
-    const toggles = target !== null && (headClickToggles(target) || target.closest('label') !== null);
+    const toggles =
+      target !== null && (headClickToggles(target) || target.closest('label') !== null);
     if (row && toggles && target?.closest('.acts') === null && shot?.opened) {
       const pick = row.parentElement?.querySelector('.spine-pick');
       const layer = pick?.getAttribute('value');
@@ -203,6 +348,20 @@ function boot(): void {
         memory.layer = memory.layer === layer ? '' : (layer as SpineLayer);
         draw();
       }
+    }
+    const bar = target?.closest('button.fold-bar');
+    if (bar instanceof HTMLElement) {
+      if (shot && onFold(memory, shot, bar)) {
+        draw();
+      }
+      return;
+    }
+    const jump = target?.closest('button.jump');
+    if (jump instanceof HTMLElement) {
+      if (shot && onJump(memory, shot, jump)) {
+        draw();
+      }
+      return;
     }
     const dismiss = target?.closest('[data-dismiss-line]');
     if (dismiss) {

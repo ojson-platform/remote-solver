@@ -1,11 +1,16 @@
 import type {ReactNode} from 'react';
 
+import type {SpecEntry, SpecRow} from '../spec-diff.ts';
 import type {Spine, SpineLayer, SpineSourceLine} from '../spine.ts';
+import type {WindowSnapshot} from '../snapshot.ts';
 import type {GateStation, SidebarBlock} from '../types.ts';
-import type {SnapshotRow, WindowSnapshot} from '../snapshot.ts';
+import type {LineDraft, OpenFold} from './gesture.ts';
+
+import {Fragment} from 'react';
+
+import {unchangedLabel} from '../spec-diff.ts';
 
 import {Gate} from './board.tsx';
-import type {LineDraft} from './gesture.ts';
 import {ActForm, Hidden} from './forms.tsx';
 import {Cross, SendMark} from './marks.tsx';
 
@@ -32,8 +37,7 @@ function codeLine(line: string, places: Record<string, string>): ReactNode {
       );
     }
     const url = places[`${found[1]}:${found[2]}`];
-    const token =
-      url === undefined || url === '' ? core : <a href={url}>{core}</a>;
+    const token = url === undefined || url === '' ? core : <a href={url}>{core}</a>;
     return (
       <span key={index}>
         {prefix}
@@ -51,7 +55,11 @@ function codeLine(line: string, places: Record<string, string>): ReactNode {
   );
 }
 
-function sentence(model: Spine, layer: Exclude<SpineLayer, 'Accept'>, places: Record<string, string>): ReactNode {
+function sentence(
+  model: Spine,
+  layer: Exclude<SpineLayer, 'Accept'>,
+  places: Record<string, string>,
+): ReactNode {
   const own = model.lines.filter(line => line.layer === layer);
   if (own.length === 0) {
     return null;
@@ -61,7 +69,9 @@ function sentence(model: Spine, layer: Exclude<SpineLayer, 'Accept'>, places: Re
     if (index > 0) {
       nodes.push(<br key={`br-${index}`} />);
     }
-    nodes.push(line.layer === 'Code' ? <span key={index}>{codeLine(line.raw, places)}</span> : line.text);
+    nodes.push(
+      line.layer === 'Code' ? <span key={index}>{codeLine(line.raw, places)}</span> : line.text,
+    );
   });
   return <span className="sentence">{nodes}</span>;
 }
@@ -114,7 +124,8 @@ function SpineRow({
         <span className="here">{model.station}</span>
       </>
     ) : null;
-  const preview = excerpt === undefined || excerpt === '' ? null : <span className="excerpt">{excerpt}</span>;
+  const preview =
+    excerpt === undefined || excerpt === '' ? null : <span className="excerpt">{excerpt}</span>;
   const rest =
     sentenceNode == null && preview == null ? null : (
       <label className="rest" htmlFor={`spine-${layer}`}>
@@ -169,17 +180,32 @@ function LineNote({
   line,
   question,
   text,
+  path,
+  at,
+  side,
 }: {
   keyName: string;
   line: string;
   question: string;
   text: string;
+  path?: string;
+  at?: string;
+  side?: string;
 }): ReactNode {
+  const anchor =
+    path === undefined || at === undefined || side === undefined ? null : (
+      <>
+        <Hidden name="path" value={path} />
+        <Hidden name="at" value={at} />
+        <Hidden name="side" value={side} />
+      </>
+    );
   return (
     <ActForm act="answer" className="line-note">
       <Hidden name="key" value={keyName} />
       <Hidden name="line" value={line} />
       <Hidden name="question" value={question} />
+      {anchor}
       <div className="draft">
         <textarea
           name="reply"
@@ -245,7 +271,9 @@ function PlanLines({
     }
     gap = false;
     const trimmed = line.text.trim();
-    const question = pull ? questions.find(item => item.open && trimmed === `- [ ] ${item.text}`) : undefined;
+    const question = pull
+      ? questions.find(item => item.open && trimmed === `- [ ] ${item.text}`)
+      : undefined;
     if (!pull) {
       out.push(
         <p className="line" key={index}>
@@ -255,18 +283,30 @@ function PlanLines({
       return;
     }
     const draft = drafts.find(item => item.line === line.text.trimEnd());
+    const path = `openspec/changes/issue-${keyName}/proposal.md`;
     out.push(
       <span key={index}>
         <button
           type="button"
           className={draft ? 'line is-on' : 'line'}
           data-line={line.text.trimEnd()}
+          data-path={path}
+          data-at={line.line}
+          data-side="right"
           data-question={question?.text}
         >
           {line.text.trimEnd()}
         </button>
         {draft ? (
-          <LineNote keyName={keyName} line={draft.line} question={draft.question} text={draft.text} />
+          <LineNote
+            keyName={keyName}
+            line={draft.line}
+            question={draft.question}
+            text={draft.text}
+            path={path}
+            at={String(line.line)}
+            side="right"
+          />
         ) : null}
       </span>,
     );
@@ -336,7 +376,12 @@ function PlanDocument({
   );
 }
 
-function reviewFold(model: Spine, keyName: string, gate: NonNullable<Spine['reviewGate']>, shown: boolean): ReactNode {
+function reviewFold(
+  model: Spine,
+  keyName: string,
+  gate: NonNullable<Spine['reviewGate']>,
+  shown: boolean,
+): ReactNode {
   if (!model.pull) {
     return null;
   }
@@ -350,7 +395,13 @@ function reviewFold(model: Spine, keyName: string, gate: NonNullable<Spine['revi
   );
 }
 
-function Blocks({blocks, places}: {blocks: readonly SidebarBlock[]; places: Record<string, string>}): ReactNode {
+function Blocks({
+  blocks,
+  places,
+}: {
+  blocks: readonly SidebarBlock[];
+  places: Record<string, string>;
+}): ReactNode {
   return blocks
     .filter(block => block.kind === 'reason' || block.kind === 'ask')
     .map((block, index) => {
@@ -412,14 +463,165 @@ function codeExtra(blocks: readonly SidebarBlock[], places: Record<string, strin
     });
 }
 
+function scenarioOf(text: string): string | undefined {
+  const trimmed = text.trim();
+  const prefix = '#### Scenario: ';
+  if (!trimmed.startsWith(prefix)) {
+    return undefined;
+  }
+  const name = trimmed.slice(prefix.length);
+  if (name === '') {
+    return undefined;
+  }
+  return name;
+}
+
+function lineBody(row: SpecRow): ReactNode {
+  const bits = row.bits;
+  if (bits === undefined) {
+    return row.text;
+  }
+  return bits.map((bit, index) => {
+    if (!bit.changed) {
+      return <span key={index}>{bit.text}</span>;
+    }
+    return (
+      <span className="bit" key={index}>
+        {bit.text}
+      </span>
+    );
+  });
+}
+
+function numberCell(value: number | undefined): ReactNode {
+  if (value === undefined) {
+    return <span className="num" />;
+  }
+  return <span className="num">{value}</span>;
+}
+
+function noteAnchor(row: SpecRow): {path: string; at: string; side: string} | undefined {
+  const anchor = row.anchor;
+  if (anchor === undefined) {
+    return undefined;
+  }
+  return {path: anchor.path, at: String(anchor.line), side: 'right'};
+}
+
+function DiffRow({
+  row,
+  pull,
+  drafts,
+  keyName,
+}: {
+  row: SpecRow;
+  pull: boolean;
+  drafts: readonly LineDraft[];
+  keyName: string;
+}): ReactNode {
+  const scene = scenarioOf(row.text);
+  const anchor = noteAnchor(row);
+  const showButton = pull && row.text.trim() !== '';
+  const draft = drafts.find(item => item.line === row.text);
+  const body = lineBody(row);
+  let text: ReactNode;
+  if (showButton) {
+    text = (
+      <button
+        type="button"
+        className={draft === undefined ? 'line' : 'line is-on'}
+        data-line={row.text}
+        data-path={anchor?.path}
+        data-at={anchor?.at}
+        data-side={anchor?.side}
+        data-scenario={scene}
+      >
+        {body}
+      </button>
+    );
+  } else {
+    text = (
+      <span className="line" data-scenario={scene}>
+        {body}
+      </span>
+    );
+  }
+  return (
+    <div className={`diff-row ${row.kind}`}>
+      {numberCell(row.left)}
+      {numberCell(row.right)}
+      <div className="diff-text">
+        {text}
+        {showButton && draft !== undefined ? (
+          <LineNote
+            keyName={keyName}
+            line={draft.line}
+            question={draft.question}
+            text={draft.text}
+            path={anchor?.path}
+            at={anchor?.at}
+            side={anchor?.side}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function SpecRows({
+  id,
+  rows,
+  pull,
+  gaps,
+  drafts,
+  keyName,
+}: {
+  id: string;
+  rows: readonly SpecEntry[];
+  pull: boolean;
+  gaps: readonly OpenFold[];
+  drafts: readonly LineDraft[];
+  keyName: string;
+}): ReactNode {
+  const open = gaps.find(item => item.id === id)?.open ?? [];
+  return rows.map((entry, index) => {
+    if (entry.kind !== 'gap') {
+      return <DiffRow key={index} row={entry} pull={pull} drafts={drafts} keyName={keyName} />;
+    }
+    const shown = open.includes(index);
+    return (
+      <Fragment key={index}>
+        <button type="button" className="fold-bar" data-cap={id} data-gap={index}>
+          {unchangedLabel(entry.count)}
+        </button>
+        {shown
+          ? entry.hidden.map((row, hiddenIndex) => (
+              <DiffRow
+                key={`${index}-${hiddenIndex}`}
+                row={row}
+                pull={pull}
+                drafts={drafts}
+                keyName={keyName}
+              />
+            ))
+          : null}
+      </Fragment>
+    );
+  });
+}
+
 export function Sidebar({
   snapshot,
   layer,
   drafts = [],
+  gaps = [],
+  openCaps = [],
 }: {
   snapshot: WindowSnapshot;
   layer: SpineLayer | undefined;
   drafts?: readonly LineDraft[];
+  gaps?: readonly OpenFold[];
+  openCaps?: readonly string[];
 }): ReactNode {
   const opened = snapshot.opened;
   if (!opened) {
@@ -436,7 +638,11 @@ export function Sidebar({
     name === 'Plan' || name === 'Specify' || name === 'Design' || name === 'Accept' ? (
       <Gate row={row} name={station} side />
     ) : null;
-  const hereControl = (name: SpineLayer, station: GateStation, act: 'accept' | 'gate' | 'none'): ReactNode => {
+  const hereControl = (
+    name: SpineLayer,
+    station: GateStation,
+    act: 'accept' | 'gate' | 'none',
+  ): ReactNode => {
     if (act === 'accept') {
       return (
         <ActForm act="accept-review" className="accept">
@@ -490,18 +696,27 @@ export function Sidebar({
           </div>
         )}
         <div className="spine">
-          <SpineRow layer="Change" model={model} open={open === 'Change'} sentenceNode={sentence(model, 'Change', places)}>
+          <SpineRow
+            layer="Change"
+            model={model}
+            open={open === 'Change'}
+            sentenceNode={sentence(model, 'Change', places)}
+          >
             <p>Двери читают {model.readPath}.</p>
           </SpineRow>
           <SpineRow
             layer="Plan"
             model={model}
             open={open === 'Plan'}
-            sentenceNode={model.proposal.excerpt === '' ? sentence(model, 'Plan', places) : undefined}
+            sentenceNode={
+              model.proposal.excerpt === '' ? sentence(model, 'Plan', places) : undefined
+            }
             excerpt={model.proposal.excerpt}
             control={hereControl('Plan', 'proposing', planAct)}
           >
-            {model.proposal.present ? <PlanDocument model={model} keyName={row.key} drafts={drafts} /> : null}
+            {model.proposal.present ? (
+              <PlanDocument model={model} keyName={row.key} drafts={drafts} />
+            ) : null}
             {reviewFold(model, row.key, 'proposed', model.proposal.present)}
           </SpineRow>
           <SpineRow
@@ -512,8 +727,24 @@ export function Sidebar({
             control={hereControl('Specify', 'specifying', specifyAct)}
           >
             {model.capabilities.map((item, index) => (
-              <details className="cap" id={`cap-${item.id}`} open={index === 0} key={item.id}>
-                <summary>{item.id}</summary>
+              <details
+                className="cap"
+                id={`cap-${item.id}`}
+                open={index === 0 || openCaps.includes(item.id)}
+                key={item.id}
+              >
+                <summary>
+                  {item.id}
+                  {item.badge === undefined ? null : <span className="badge">{item.badge}</span>}
+                </summary>
+                <SpecRows
+                  id={item.id}
+                  rows={item.rows}
+                  pull={model.pull}
+                  gaps={gaps}
+                  drafts={drafts}
+                  keyName={row.key}
+                />
               </details>
             ))}
             {reviewFold(model, row.key, 'specified', model.capabilities.length > 0)}
@@ -552,7 +783,12 @@ export function Sidebar({
             ) : null}
             {reviewFold(model, row.key, 'designed', model.design.present)}
           </SpineRow>
-          <SpineRow layer="Tasks" model={model} open={open === 'Tasks'} sentenceNode={sentence(model, 'Tasks', places)}>
+          <SpineRow
+            layer="Tasks"
+            model={model}
+            open={open === 'Tasks'}
+            sentenceNode={sentence(model, 'Tasks', places)}
+          >
             {model.tasks.map(task => (
               <details className="task" key={task.id}>
                 <summary>
@@ -571,7 +807,12 @@ export function Sidebar({
               </details>
             ))}
           </SpineRow>
-          <SpineRow layer="Code" model={model} open={open === 'Code'} sentenceNode={sentence(model, 'Code', places)}>
+          <SpineRow
+            layer="Code"
+            model={model}
+            open={open === 'Code'}
+            sentenceNode={sentence(model, 'Code', places)}
+          >
             {model.checks === undefined ? null : (
               <p
                 className={

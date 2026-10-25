@@ -508,7 +508,8 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       return id;
     },
     async openThread(pull, target: ThreadTarget) {
-      await run([
+      const body = target.plain ? target.body : markRobot(target.body);
+      const args = [
         'api',
         '--method',
         'POST',
@@ -520,8 +521,14 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
         '-F',
         `line=${target.line}`,
         '-f',
-        `body=${markRobot(target.body)}`,
-      ]);
+        `body=${body}`,
+      ];
+      if (target.side === 'right') {
+        args.push('-f', 'side=RIGHT');
+      } else if (target.side === 'left') {
+        args.push('-f', 'side=LEFT');
+      }
+      await run(args);
     },
     async reply(pull, comment, body) {
       await run([

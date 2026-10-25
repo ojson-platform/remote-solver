@@ -64,6 +64,28 @@ export type {
   WindowTicket,
 } from './types.ts';
 
+function wholeLine(at: string): number | undefined {
+  if (!/^[0-9]+$/.test(at)) {
+    return undefined;
+  }
+  return Number(at);
+}
+
+function anchorSide(side: string): 'right' | 'left' {
+  if (side === 'left') {
+    return 'left';
+  }
+  return 'right';
+}
+
+function quotedLine(source: string, reply: string): string {
+  const line = source.trim();
+  if (line === '') {
+    return reply;
+  }
+  return `> ${line}\n\n${reply}`;
+}
+
 /** The window for one launch. Another launch has its own home path. */
 export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
   const offered = launch.agents ?? FACTORY_AGENTS;
@@ -295,16 +317,56 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
         gateOff,
       });
     },
-    answer(key: string, question: string, reply: string, source = '') {
+    async answer(
+      key: string,
+      question: string,
+      reply: string,
+      source = '',
+      path = '',
+      at = '',
+      side = '',
+    ): Promise<string | undefined> {
+      const text = reply.trim();
+      const asked = question.trim();
+      if (text === '') {
+        if (asked === '') {
+          return 'Комментарий пустой. Напишите его в поле.';
+        }
+        return 'Ответ пустой. Напишите его в поле.';
+      }
       const item = checkout.sorted().find(ticket => ticket.key === key);
-      if (!item || (item.openPullRequests ?? 0) !== 1 || !outside.commentPull) {
+      if (!item || (item.openPullRequests ?? 0) !== 1) {
         return 'комментарий не записан';
       }
-      const asked = question.trim();
-      const line = source.trim();
-      const body =
-        asked !== '' ? `- [ ] ${asked}\n\n${reply}` : line !== '' ? `> ${line}\n\n${reply}` : reply;
-      outside.commentPull(key, body);
+      const comment = (body: string): string | undefined => {
+        if (!outside.commentPull) {
+          return 'комментарий не записан';
+        }
+        outside.commentPull(key, body);
+        return undefined;
+      };
+      if (asked !== '') {
+        return comment(`- [ ] ${asked}\n\n${text}`);
+      }
+      const line = wholeLine(at);
+      if (path === '' || line === undefined) {
+        return comment(quotedLine(source, text));
+      }
+      try {
+        if (!outside.threadPull) {
+          throw new Error('thread is missing');
+        }
+        await outside.threadPull(key, text, {path, line, side: anchorSide(side)});
+      } catch {
+        try {
+          if (!outside.speakPull) {
+            throw new Error('speak is missing');
+          }
+          await outside.speakPull(key, quotedLine(source, text));
+        } catch {
+          return 'комментарий не записан';
+        }
+      }
       return undefined;
     },
     acceptReview(key: string) {

@@ -295,3 +295,50 @@ test('posted bodies carry the spy mark, and the shared login is not the robot', 
     ],
   );
 });
+
+test('a plain thread sends the side and leaves the body unmarked', async () => {
+  const calls: string[][] = [];
+  const {review} = githubAdapters({
+    run: async args => {
+      calls.push(args);
+      return '';
+    },
+  });
+  await review.openThread('15', {
+    commit: 'abc',
+    path: 'src/a.ts',
+    line: 4,
+    body: 'смотрите сюда',
+    plain: true,
+    side: 'right',
+  });
+  await review.openThread('15', {
+    commit: 'abc',
+    path: 'src/a.ts',
+    line: 4,
+    body: 'смотрите сюда',
+    plain: true,
+    side: 'left',
+  });
+  await review.openThread('15', {
+    commit: 'abc',
+    path: 'src/a.ts',
+    line: 1,
+    body: 'sdd:note baseline',
+  });
+  const right = calls[0] ?? [];
+  const left = calls[1] ?? [];
+  const marked = calls[2] ?? [];
+  assert.equal(right.includes('side=RIGHT'), true);
+  assert.equal(right.includes('body=смотрите сюда'), true);
+  assert.equal(
+    right.some(arg => arg.includes('🤖')),
+    false,
+  );
+  assert.equal(left.includes('side=LEFT'), true);
+  assert.equal(marked.includes('body=🤖 sdd:note baseline'), true);
+  assert.equal(
+    marked.some(arg => arg.startsWith('side=')),
+    false,
+  );
+});

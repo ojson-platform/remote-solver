@@ -2969,7 +2969,7 @@ spec('board', () => {
           assert.equal(shot.opened.spine.pull, true);
           assert.ok(shot.opened.spine.capabilities.some(item => item.id === 'section-text'));
           assert.equal(
-            shot.opened.spine.capabilities.every(item => item.requirements.length === 0),
+            shot.opened.spine.capabilities.every(item => item.rows.length === 0),
             true,
           );
           const specify = shot.opened.layers.find(layer => layer.layer === 'Specify');

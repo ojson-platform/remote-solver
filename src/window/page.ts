@@ -3,6 +3,7 @@ import {createServer, type IncomingMessage, type ServerResponse} from 'node:http
 import {plaqueLines} from './board.ts';
 import {crossButton, fieldClose, hairline, pill, rootCss, sendMark} from './face.ts';
 import {FACTORY_AGENTS} from './factory.ts';
+import {reviewReady, snapshot} from './snapshot.ts';
 import {
   buildSpine,
   layerForStation,
@@ -90,6 +91,8 @@ type Surface = {
 };
 
 type PageView = {
+  /** Grows when a turn changes, a tracker read commits, or a gesture is written. */
+  generation: number;
   popup?: string;
   repair?: string;
   ask?: {key: string; station: string; side: boolean};
@@ -419,19 +422,6 @@ function spineSentence(
   return own
     .map(line => (line.layer === 'Code' ? linkFocusLine(line.raw, place) : escape(line.text)))
     .join('<br>');
-}
-
-function reviewReady(model: Spine, gate: NonNullable<Spine['reviewGate']>): boolean {
-  if (gate === 'proposed') {
-    return model.proposal.present && !model.proposal.questions.some(question => question.open);
-  }
-  if (gate === 'designed') {
-    return (
-      model.design.present &&
-      !model.design.decisions.split('\n').some(line => line.trimStart().startsWith('- [ ]'))
-    );
-  }
-  return model.capabilities.some(item => item.requirements.length > 0);
 }
 
 /** Escape closes the line field when the caret is inside it. */
@@ -1799,13 +1789,17 @@ const client = `
   });
 `;
 
+function settleOpened(surface: Surface, view: PageView): void {
+  if (view.opened !== '' && !findCard(surface.board(), view.opened)) {
+    view.opened = '';
+  }
+}
+
 function boardDocument(surface: Surface, view: PageView): string {
+  settleOpened(surface, view);
   const board = surface.board();
   const settings = surface.settings();
   const card = view.opened === '' ? undefined : findCard(board, view.opened);
-  if (view.opened !== '' && !card) {
-    view.opened = '';
-  }
   const doorAt = (file: string) => surface.doorPlace(file);
   const place = (file: string, line: number) => surface.openReviewPlace(file, line);
   const blocks = card ? surface.sidebar() : [];
@@ -2308,6 +2302,15 @@ function redirect(res: ServerResponse): void {
   res.end();
 }
 
+function json(res: ServerResponse, body: unknown): void {
+  res.writeHead(200, {'content-type': 'application/json; charset=utf-8'});
+  res.end(JSON.stringify(body));
+}
+
+function written(view: PageView): void {
+  view.generation += 1;
+}
+
 function failure(error: unknown): string {
   if (error instanceof Error && error.message !== '') {
     return error.message;
@@ -2345,6 +2348,7 @@ async function handle(
         view.show = taken;
       }
       surface.spy();
+      written(view);
       redirect(res);
       return;
     }
@@ -2357,6 +2361,7 @@ async function handle(
       text(res, 409, 'не записано');
       return;
     }
+    written(view);
     redirect(res);
     return;
   }
@@ -2367,13 +2372,24 @@ async function handle(
     res.end(html);
     return;
   }
+  if (req.method === 'GET' && url.pathname === '/snapshot') {
+    settleOpened(surface, view);
+    const body = snapshot(surface, view);
+    view.status = undefined;
+    json(res, body);
+    return;
+  }
   res.writeHead(404);
   res.end();
 }
 
 /** One process serves the window page. */
-export function serveBoard(surface: Surface): Promise<{url: string; close(): Promise<void>}> {
-  const view: PageView = {opened: '', service: {}, serviceDirty: false};
+export function serveBoard(surface: Surface): Promise<{
+  url: string;
+  close(): Promise<void>;
+  note(): void;
+}> {
+  const view: PageView = {generation: 0, opened: '', service: {}, serviceDirty: false};
   const epoch = {n: 0};
   const server = createServer((req, res) => {
     handle(surface, req, res, view, epoch).catch(error => {
@@ -2394,6 +2410,9 @@ export function serveBoard(surface: Surface): Promise<{url: string; close(): Pro
       }
       resolve({
         url: `http://127.0.0.1:${address.port}/`,
+        note() {
+          view.generation += 1;
+        },
         close: () =>
           new Promise((done, fail) => {
             server.close(error => (error ? fail(error) : done()));

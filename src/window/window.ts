@@ -219,7 +219,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
   return {
     board,
     spyNote: () => outside.spyNote?.() ?? '',
-    turn: key => outside.turn?.(key),
+    turn: (key: string) => outside.turn?.(key),
     shelf: () => shelfOf(roles.list()),
     settings: () => home.settings(settingsOpen),
     addRole: (role: RoleRecord) => roles.add(role),

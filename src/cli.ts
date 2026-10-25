@@ -10,7 +10,7 @@ import {
   boardModel,
   defaultHomePath,
   serveLiveBoard,
-  applyTurn,
+  noteTurn,
   turnsLine,
   watchSpy,
 } from './window/live.ts';
@@ -135,7 +135,9 @@ async function runBoard(home: string | undefined): Promise<void> {
   void watchSpy(box, {
     running,
     setTurn(issue, turn) {
-      applyTurn(turns, issue, turn);
+      noteTurn(turns, issue, turn, () => {
+        page.note();
+      });
     },
     refresh: () => page.refresh(),
   }).catch(error => {

@@ -19,6 +19,7 @@ import {
 import {changeDir} from '../machine/naming.ts';
 import {openWindow, type WindowTicket} from './window.ts';
 import {draftsAfterClick, headClickToggles, lineFieldClosesOnEscape, serveBoard} from './page.ts';
+import type {WindowSnapshot} from './snapshot.ts';
 
 const MANAGER = 'ada';
 
@@ -239,6 +240,13 @@ async function post(url: string, pathname: string, body: string) {
     redirect: 'manual',
   });
   return {status: response.status, body: await response.text()};
+}
+
+async function readSnapshot(url: string): Promise<WindowSnapshot> {
+  const response = await fetch(new URL('/snapshot', url));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), 'application/json; charset=utf-8');
+  return response.json() as Promise<WindowSnapshot>;
 }
 
 function delay(ms: number): Promise<void> {
@@ -2929,6 +2937,127 @@ spec('board', () => {
         assert.match(forms[0] ?? '', /close-repair/);
         assert.equal(tickets[0]?.openPullRequests, 2);
       });
+    });
+  });
+
+  requirement('The board command serves this repository', () => {
+    scenario('The snapshot names the current turn', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('6', 'specifying')],
+          spyNote: () => '#6 specifying → restore-baseline',
+          turn: key => {
+            if (key === '6') {
+              return 'restore-baseline';
+            }
+            return undefined;
+          },
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const shot = await readSnapshot(page.url);
+          assert.equal(shot.spy, '#6 specifying → restore-baseline');
+          const row = shot.rows.find(item => item.key === '6');
+          assert.ok(row);
+          assert.equal(row.action, 'restore-baseline');
+        },
+      );
+    });
+    scenario('The snapshot shows the action on an empty plaque', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying'), held('2', 'tasking')],
+          turn: key => {
+            if (key === '1') {
+              return 'restore-baseline';
+            }
+            if (key === '2') {
+              return 'create-tasks';
+            }
+            return undefined;
+          },
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const shot = await readSnapshot(page.url);
+          const specifying = shot.rows.find(item => item.key === '1');
+          const tasking = shot.rows.find(item => item.key === '2');
+          assert.ok(specifying);
+          assert.ok(tasking);
+          assert.equal(specifying.plaque.top, undefined);
+          assert.equal(specifying.plaque.bottom, 'restore-baseline');
+          assert.equal(tasking.plaque.top, undefined);
+          assert.equal(tasking.plaque.bottom, 'create-tasks');
+        },
+      );
+    });
+    scenario('The snapshot hides Specify acceptance without a delta', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying', {openPullRequests: 1})]},
+        async (page, window, paths) => {
+          const baseline = path.join(
+            paths.arcadia,
+            'services',
+            'billing',
+            'openspec',
+            'specs',
+            'section-text',
+            'spec.md',
+          );
+          mkdirSync(path.dirname(baseline), {recursive: true});
+          writeFileSync(baseline, deltaRequirement());
+          writeChange(
+            paths.arcadia,
+            '1',
+            'specs/section-text/spec.md',
+            '## Purpose\n\nNo requirement yet.\n',
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            303,
+          );
+          const shot = await readSnapshot(page.url);
+          assert.ok(shot.opened);
+          assert.equal(shot.opened.spine.pull, true);
+          assert.ok(shot.opened.spine.capabilities.some(item => item.id === 'section-text'));
+          assert.equal(
+            shot.opened.spine.capabilities.every(item => item.requirements.length === 0),
+            true,
+          );
+          const specify = shot.opened.layers.find(layer => layer.layer === 'Specify');
+          const plan = shot.opened.layers.find(layer => layer.layer === 'Plan');
+          assert.ok(specify);
+          assert.ok(plan);
+          assert.equal(specify.act, 'none');
+          assert.equal(plan.act, 'gate');
+        },
+      );
+    });
+    scenario('The snapshot shows an error once', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                new URLSearchParams({act: 'answer', key: '1', reply: ''}).toString(),
+              )
+            ).status,
+            303,
+          );
+          const first = await readSnapshot(page.url);
+          assert.equal(first.status, 'Комментарий пустой. Напишите его в поле.');
+          const second = await readSnapshot(page.url);
+          assert.equal(second.status, undefined);
+        },
+      );
     });
   });
 });

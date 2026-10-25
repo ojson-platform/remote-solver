@@ -26,7 +26,15 @@ type Surface = {
   spy: () => void;
   sidebar: () => SidebarBlock[];
   spine: () => Spine | undefined;
-  answer: (key: string, question: string, reply: string, line?: string) => string | undefined;
+  answer: (
+    key: string,
+    question: string,
+    reply: string,
+    line?: string,
+    path?: string,
+    at?: string,
+    side?: string,
+  ) => string | undefined | Promise<string | undefined>;
   acceptReview: (key: string) => string | undefined;
   shelf: () => {name: string; outcome: RoleOutcome}[];
   settings: () => SettingsState;
@@ -191,7 +199,11 @@ function finish(
   return 'see';
 }
 
-function apply(surface: Surface, params: URLSearchParams, view: PageView): ActResult {
+async function apply(
+  surface: Surface,
+  params: URLSearchParams,
+  view: PageView,
+): Promise<ActResult> {
   const act = params.get('act');
   if (act === 'repair') {
     const key = params.get('key');
@@ -360,11 +372,14 @@ function apply(surface: Surface, params: URLSearchParams, view: PageView): ActRe
           : 'Ответ пустой. Напишите его в поле.';
     } else if (key) {
       view.show = key;
-      const status = surface.answer(
+      const status = await surface.answer(
         key,
         params.get('question') ?? '',
         reply,
         params.get('line') ?? '',
+        params.get('path') ?? '',
+        params.get('at') ?? '',
+        params.get('side') ?? '',
       );
       if (status !== undefined) {
         view.status = status;
@@ -662,7 +677,7 @@ async function handle(
       json(res, liveSnapshot(surface, view));
       return;
     }
-    const result = apply(surface, params, view);
+    const result = await apply(surface, params, view);
     if (result === 'unknown') {
       text(res, 400, 'неизвестное действие');
       return;

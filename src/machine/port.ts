@@ -77,7 +77,14 @@ export type Tracker = {
   phaseHint(from: Phase, to: Phase): string;
 };
 
-export type ThreadTarget = {commit: string; path: string; line: number; body: string};
+export type ThreadTarget = {
+  commit: string;
+  path: string;
+  line: number;
+  body: string;
+  side?: 'right' | 'left';
+  plain?: boolean;
+};
 
 export type Review = {
   pulls(key: IssueKey): Promise<Pull[]>;

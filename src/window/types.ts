@@ -107,6 +107,17 @@ export type WindowOutside = {
   writeHooks?: (key: string, text: string) => void;
   /** The comment on the single open pull request. */
   commentPull?: (key: string, body: string) => void;
+  /**
+   * A review thread on the single open pull request.
+   * Rejects when the pull, its head, or the host refuses. The body is not a quote.
+   */
+  threadPull?: (
+    key: string,
+    body: string,
+    place: {path: string; line: number; side: 'right' | 'left'},
+  ) => Promise<void>;
+  /** Conversation comment used when a thread is refused. A refusal rejects. */
+  speakPull?: (key: string, body: string) => Promise<void>;
   /** Threads and the conversation for this key. The window does not call a review host. */
   review?: (key: string) => WindowReview | undefined;
   /**

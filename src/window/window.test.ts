@@ -1603,7 +1603,7 @@ function proveARunningStepHidesTheIconWhileTheOccasionStillSortsFirst58(): void 
   const hidden = cards?.find(card => card.key === '2');
   const shown = cards?.find(card => card.key === '4');
   assert.equal(hidden?.icon, undefined);
-  assert.equal(hidden?.reason, undefined);
+  assert.equal(hidden?.reason, 'Ask');
   assert.equal(shown?.icon, true);
   assert.equal(shown?.reason, 'Ask');
   rmSync(dir, {recursive: true, force: true});
@@ -3225,6 +3225,18 @@ function proveAnOpenCycleWhoseOnlySidebarBlockIsFocusShowsThatBlock113(): void {
   rmSync(dir, {recursive: true, force: true});
 }
 
+function proveASpecifyingCycleWithNoOccasionHasNoReasonBlock(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [cycle('1', 'specifying')]);
+  const card = columnCards(window.board(), 'specifying')?.[0];
+  assert.equal(card?.icon, undefined);
+  assert.equal(card?.reason, undefined);
+  window.openCard('1');
+  assert.equal(kinds(window.sidebar()).includes('reason'), false);
+  rmSync(dir, {recursive: true, force: true});
+}
+
 function proveACardWithNoIconHasNoSidebarReasonBlock115(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
@@ -3240,11 +3252,13 @@ function proveACardWithNoIconHasNoSidebarReasonBlock115(): void {
   );
   const card = columnCards(window.board(), 'specifying')?.[0];
   assert.equal(card?.icon, undefined);
-  assert.equal(card?.reason, undefined);
+  assert.equal(card?.reason, 'Ask');
   window.openCard('1');
   const blocks = window.sidebar();
-  assert.equal(kinds(blocks).includes('reason'), false);
-  assert.deepEqual(blocks, [{kind: 'ask', body: 'please decide'}]);
+  assert.deepEqual(blocks, [
+    {kind: 'reason', line: 'Ask'},
+    {kind: 'ask', body: 'please decide'},
+  ]);
   rmSync(dir, {recursive: true, force: true});
 }
 
@@ -3939,7 +3953,7 @@ spec('sidebar', () => {
       proveAQuestionOnlyCardHidesTheLineAndTheSidebarStillShowsIt116();
     });
     scenario('No icon means no reason block', () => {
-      proveACardWithNoIconHasNoSidebarReasonBlock115();
+      proveASpecifyingCycleWithNoOccasionHasNoReasonBlock();
     });
   });
   requirement('Ask shows the latest comment that is not focus', () => {
@@ -4441,7 +4455,7 @@ test('pending checks hide the icon on a pool ticket with two open pull requests'
   const card = window.board().pool.find(item => item.key === '1');
   assert.ok(card);
   assert.equal(card.icon, undefined);
-  assert.equal(card.reason, undefined);
+  assert.equal(card.reason, 'несколько pull request');
   assert.equal(card.takeDisabled, true);
   rmSync(dir, {recursive: true, force: true});
 });
@@ -4464,7 +4478,7 @@ test('a running step hides the icon on a pool ticket with a checkout break', () 
   const card = window.board().pool.find(item => item.key === '1');
   assert.ok(card);
   assert.equal(card.icon, undefined);
-  assert.equal(card.reason, undefined);
+  assert.equal(card.reason, 'каталога нет');
   assert.equal(card.takeDisabled, true);
   rmSync(dir, {recursive: true, force: true});
 });

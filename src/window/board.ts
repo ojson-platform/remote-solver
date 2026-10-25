@@ -410,6 +410,8 @@ export function plaqueLines(input: {
   station?: ColumnName;
   phaseRow?: PhaseRow;
   reason?: string;
+  /** Action of the worker on this cycle. Used only when the plaque would otherwise be empty. */
+  action?: string;
 }): {top?: string; bottom?: string} {
   const phase = input.phaseRow === undefined ? undefined : phaseText(input.phaseRow);
   const check =
@@ -433,7 +435,11 @@ export function plaqueLines(input: {
     input.reason,
     top === 'ревью' ? input.unanswered : undefined,
   ];
-  const bottom = candidates.find(line => line !== undefined && line !== '' && line !== top);
+  const found = candidates.find(line => line !== undefined && line !== '' && line !== top);
+  const bottom =
+    found === undefined && top === undefined && input.action !== undefined && input.action !== ''
+      ? input.action
+      : found;
   return {top, bottom};
 }
 
@@ -448,7 +454,10 @@ function buildCycle(
   review: WindowReview | undefined,
 ): Placed {
   const files = changeFiles(checkout, item.key);
-  const questions = unchecked(files.read(changeRel(item.key, 'proposal.md')), HEADINGS.openQuestions);
+  const questions = unchecked(
+    files.read(changeRel(item.key, 'proposal.md')),
+    HEADINGS.openQuestions,
+  );
   const decisions = unchecked(files.read(changeRel(item.key, 'design.md')), HEADINGS.openDecisions);
   const phaseRow = phaseRowOf(column, item, files, questions, decisions);
   const parts = reasonParts(item, phase, breakReason, reading, questions, decisions);
@@ -460,7 +469,7 @@ function buildCycle(
   if (occasion && !hideIcon) {
     card.icon = true;
   }
-  if (occasion && !hideIcon && !reasonHidden(parts, phaseRow)) {
+  if (occasion && !reasonHidden(parts, phaseRow)) {
     card.reason = parts.join(' · ');
   }
   if (phaseRow !== undefined) {

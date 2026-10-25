@@ -8,7 +8,12 @@ A skill run that changes nothing is not started again until the decision changes
 
 ### Requirement: A run with no commit is not repeated
 
-When a skill run produces no commit, the spy SHALL NOT start that issue again while the phase, the action, and the reason are unchanged. The idle notice SHALL be reported once. A different phase, action, or reason SHALL start. An exit other than the no-commit exit SHALL clear the idle mark, so the same decision MAY start again.
+When a skill run produces no commit, the spy SHALL NOT start that issue again while the phase, the action, and the reason are unchanged. The idle notice SHALL be reported once. A different phase, action, or reason SHALL start. An exit other than the no-commit exit SHALL clear the idle mark, so the same decision MAY start again. When one worker runs a later turn and that turn produces no commit, the idle mark SHALL be that later turn.
+
+#### Scenario: A later turn with no commit stays idle
+
+- **WHEN** one worker's first turn commits and its next turn does not
+- **THEN** the spy does not start that later turn again
 
 #### Scenario: The same decision stays idle
 

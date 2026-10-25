@@ -7,14 +7,17 @@ import {test, vi} from 'vitest';
 
 import {machine} from '../adapters/compose.ts';
 import {memoryPorts} from '../adapters/github.ts';
+import type {RunningTurn} from '../main.ts';
 import type {IssueRecord, Runtime, Vcs} from '../machine/port.ts';
 import {modelFor} from '../machine/skill.ts';
 import {
+  applyTurn,
   boardModel,
   defaultHomePath,
   openLiveBoard,
   REFRESH_MS,
   serveLiveBoard,
+  turnsLine,
   watchSpy,
   type LiveReview,
   type LiveTracker,
@@ -22,6 +25,117 @@ import {
 import {openWindow, type WindowTicket} from './window.ts';
 
 const MANAGER = 'ada';
+
+/** One worker commits create-proposal, then restore-baseline commits nothing. Waits through the next poll. */
+async function laterTurn(): Promise<{lines: string[]; runs: number}> {
+  const {tracker, review} = memoryPorts({
+    user: MANAGER,
+    issues: [
+      {
+        key: '6',
+        title: 'Show the whole Plan',
+        body: '',
+        state: 'OPEN',
+        labels: ['remote-solver', 'sdd:cycle', 'sdd:proposing', 'sdd:auto-plan'],
+        assignee: MANAGER,
+      },
+    ],
+    pulls: {6: [{id: '11', title: '#6: Show the whole Plan', state: 'OPEN'}]},
+  });
+  const proposalPath = path.join('openspec', 'changes', 'issue-6', 'proposal.md');
+  const proposal = [
+    '## Capabilities',
+    '',
+    '### Modified',
+    '',
+    '- section-text rows show the whole section',
+    '',
+  ].join('\n');
+  let written = false;
+  const vcs: Vcs = {
+    prepare: async () => '',
+    tip: async () => 'abc',
+    filesAt: () => ({
+      exists: rel => written && rel === proposalPath,
+      read: rel => (written && rel === proposalPath ? proposal : ''),
+      list: () => [],
+    }),
+    compare: async () => null,
+    push: async () => {},
+    head: async () => 'abc',
+    published: async () => true,
+    dirty: async () => [],
+  };
+  const lines: string[] = [];
+  const turns = new Map<string, RunningTurn>();
+  let cleared = false;
+  let pollsAfter = 0;
+  let release: () => void = () => {};
+  const settled = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  let runs = 0;
+  const runtime: Runtime = {
+    async run() {
+      runs += 1;
+      if (runs === 1) {
+        written = true;
+        return {commits: 1};
+      }
+      return {commits: 0};
+    },
+    async ask() {
+      return {text: ''};
+    },
+  };
+  const box = machine(tmpdir(), {
+    config: {
+      queues: [{name: 'remote-solver'}],
+      base: 'master',
+      branchScope: 'sdd',
+      ignoreComments: [],
+    },
+    tracker,
+    review,
+    vcs,
+    runtime,
+  });
+  const controller = new AbortController();
+  const done = watchSpy(
+    box,
+    {
+      running: new Set<string>(),
+      setTurn(issue, turn) {
+        applyTurn(turns, issue, turn);
+        const line = turnsLine([...turns.values()]);
+        lines.push(line);
+        if (line === '' && lines.some(item => item.includes('restore-baseline'))) {
+          cleared = true;
+        }
+      },
+      async refresh() {
+        if (!cleared) {
+          return;
+        }
+        pollsAfter += 1;
+        if (pollsAfter >= 2) {
+          release();
+        }
+      },
+    },
+    controller.signal,
+  );
+  const outcome = await Promise.race([
+    settled.then(() => 'gone' as const),
+    new Promise<'stuck'>(resolve => {
+      setTimeout(() => resolve('stuck'), 8000);
+    }),
+  ]);
+  controller.abort();
+  await done;
+  assert.equal(outcome, 'gone', lines.join('\n'));
+  return {lines, runs};
+}
 
 function articleOf(html: string, key: string): string {
   const at = html.indexOf(`data-key="${key}"`);
@@ -319,10 +433,14 @@ spec('board', () => {
         dirty: async () => [],
       };
       const notes: string[] = [];
+      const turns = new Map<string, RunningTurn>();
       const sink = {
         running: new Set<string>(),
         setNote(line: string) {
           notes.push(line);
+        },
+        setTurn(issue: string, turn: RunningTurn | undefined) {
+          applyTurn(turns, issue, turn);
         },
         refresh: async () => {},
       };
@@ -336,6 +454,7 @@ spec('board', () => {
         async run(skill) {
           runs.push(`${skill.key} ${skill.action}`);
           leading = sink.running.has(skill.key);
+          assert.equal(turnsLine([...turns.values()]), '#6 proposing → create-proposal');
           release();
           return {commits: 0};
         },
@@ -363,6 +482,20 @@ spec('board', () => {
       assert.deepEqual(runs, ['6 create-proposal']);
       assert.equal(leading, true);
       assert.ok(notes.some(line => line.includes('#6 start proposing → create-proposal')));
+    });
+
+    scenario('The spy line follows the next turn and then goes', async () => {
+      const {lines} = await laterTurn();
+      assert.ok(lines.includes('#6 specifying → restore-baseline'));
+      assert.equal(lines.at(-1), '');
+    });
+
+    scenario("Another worker's line stays", () => {
+      const turns = new Map<string, RunningTurn>();
+      applyTurn(turns, '6', {issue: '6', phase: 'specifying', action: 'restore-baseline'});
+      applyTurn(turns, '7', {issue: '7', phase: 'proposing', action: 'create-proposal'});
+      applyTurn(turns, '6', undefined);
+      assert.equal(turnsLine([...turns.values()]), '#7 proposing → create-proposal');
     });
 
     scenario('The page shows the spy line', async () => {
@@ -494,6 +627,17 @@ spec('board', () => {
       } finally {
         rmSync(staged.dir, {recursive: true, force: true});
       }
+    });
+  });
+});
+
+spec('idle', () => {
+  requirement('A run with no commit is not repeated', () => {
+    scenario('A later turn with no commit stays idle', async () => {
+      const {lines, runs} = await laterTurn();
+      assert.equal(runs, 2);
+      assert.equal(lines.filter(line => line.includes('restore-baseline')).length, 1);
+      assert.equal(lines.at(-1), '');
     });
   });
 });

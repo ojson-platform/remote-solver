@@ -61,6 +61,7 @@ type Surface = {
   closeCard: () => void;
   checkouts: () => string[];
   spyNote: () => string;
+  turn: (key: string) => string | undefined;
   openReviewPlace: (file: string, line: number) => string | undefined;
   doorPlace: (file: string) => string | undefined;
   gateMark: (key: string, station: string, side?: boolean) => void;
@@ -299,7 +300,7 @@ function corner(card: Pick<PoolCard, 'key' | 'takeDisabled' | 'alarm'>): string 
   return `<div class="corner"><form class="take" method="post" action="/take">${hidden('key', card.key)}<button class="round play${off}" type="submit"${disabled} aria-label="Взять">${glyph('play')}</button></form></div>`;
 }
 
-function plaque(row: Drawn): string {
+function plaque(row: Drawn, action: string | undefined): string {
   const lines = plaqueLines({
     ask: row.ask,
     gaps: row.layers,
@@ -307,6 +308,7 @@ function plaque(row: Drawn): string {
     station: row.station,
     phaseRow: row.phaseRow,
     reason: row.reason,
+    action,
   });
   const top =
     lines.top === undefined
@@ -385,10 +387,14 @@ function gateControl(row: Drawn, name: GateStation, side: boolean): string {
   return `<form class="gate" data-gate="${name}" method="post" action="/act">${hidden('act', 'gate')}${hidden('key', row.key)}${hidden('station', name)}${where}<button class="${off ? 'tick' : 'stop'}" type="submit" aria-label="${label}">${mark}</button></form>`;
 }
 
-function stationsOf(row: Drawn, place: (file: string) => string | undefined): string {
+function stationsOf(
+  row: Drawn,
+  place: (file: string) => string | undefined,
+  action: string | undefined,
+): string {
   return COLUMN_NAMES.map(name => {
     if (row.station === name) {
-      return `<div class="station" data-station="${name}">${plaque(row)}</div>`;
+      return `<div class="station" data-station="${name}">${plaque(row, action)}</div>`;
     }
     const door = row.doors?.[name];
     if (door) {
@@ -425,7 +431,7 @@ function reviewReady(model: Spine, gate: NonNullable<Spine['reviewGate']>): bool
       !model.design.decisions.split('\n').some(line => line.trimStart().startsWith('- [ ]'))
     );
   }
-  return true;
+  return model.capabilities.some(item => item.requirements.length > 0);
 }
 
 /** Escape closes the line field when the caret is inside it. */
@@ -688,7 +694,12 @@ function verbs(row: Drawn, roles: readonly {name: string; outcome: RoleOutcome}[
   return `<div class="verbs">${buttons}</div>`;
 }
 
-function ticketRow(row: Drawn, open: boolean, place: (file: string) => string | undefined): string {
+function ticketRow(
+  row: Drawn,
+  open: boolean,
+  place: (file: string) => string | undefined,
+  action: string | undefined,
+): string {
   const openClass = open ? ' is-open' : '';
   const poolClass = row.pool ? ' pool' : '';
   const drag = row.pool && !row.takeDisabled ? ' draggable="true"' : '';
@@ -703,7 +714,7 @@ function ticketRow(row: Drawn, open: boolean, place: (file: string) => string | 
     ),
     play,
     '</div>',
-    stationsOf(row, place),
+    stationsOf(row, place, action),
     '</div>',
     '</article>',
   ].join('');
@@ -1800,7 +1811,9 @@ function boardDocument(surface: Surface, view: PageView): string {
   const blocks = card ? surface.sidebar() : [];
   const roles = surface.shelf();
   const drawn = drawnRows(board);
-  const rows = drawn.map(row => ticketRow(row, row.key === view.opened, doorAt)).join('');
+  const rows = drawn
+    .map(row => ticketRow(row, row.key === view.opened, doorAt, surface.turn(row.key)))
+    .join('');
   const openRow = drawn.find(row => row.key === view.opened);
   const focus = blocks.find(block => block.kind === 'focus');
   const model =
@@ -1828,8 +1841,10 @@ function boardDocument(surface: Surface, view: PageView): string {
   const note = surface.spyNote();
   const spy = note === '' ? '' : `<p class="spy">${escape(note)}</p>`;
   const gear = `${hidden('act', 'open-settings')}${pill('Настройки')}`;
+  const statusText = view.status;
+  view.status = undefined;
   const status =
-    view.status === undefined ? '' : `<p class="status" role="status">${escape(view.status)}</p>`;
+    statusText === undefined ? '' : `<p class="status" role="status">${escape(statusText)}</p>`;
   const show = view.show ? ` data-show="${escape(view.show)}"` : '';
   return `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ai-factory</title><style>${style}</style><body${show}><div class="app"><header class="top"><p class="word">ai-factory</p>${lamp}${spy}<form method="post" action="/act">${gear}</form></header>${banners(board.rows)}${status}<div class="stage"><main class="board">${head()}${rows}</main></div></div>${drawerHtml}${sheet}${popup}${repair}${ask}<script>${client}</script></body></html>`;
 }

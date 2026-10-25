@@ -110,7 +110,6 @@ function reasonLine(
     gathered: (item: WindowTicket) => string | undefined;
     serviceBroken: (checkout: string) => boolean;
     cardOf: (item: WindowTicket) => CardState;
-    leading: (key: string) => boolean;
   },
 ): string | undefined {
   const phase = phaseOf([...item.labels]);
@@ -126,9 +125,6 @@ function reasonLine(
   const several = (item.openPullRequests ?? 0) > 1;
   const broken = checkout.reason !== '';
   if (where === 'pool' && !broken && !several) {
-    return undefined;
-  }
-  if (ctx.leading(item.key) || item.checks === 'pending') {
     return undefined;
   }
   const questions = questionCount(checkout.checkout, item.key);
@@ -156,7 +152,6 @@ export function blocksFor(
     gathered: (item: WindowTicket) => string | undefined;
     serviceBroken: (checkout: string) => boolean;
     cardOf: (item: WindowTicket) => CardState;
-    leading: (key: string) => boolean;
   },
 ): SidebarBlock[] {
   const blocks: SidebarBlock[] = [];

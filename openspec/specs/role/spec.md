@@ -44,7 +44,7 @@ A `pull-comment` outcome SHALL write the role text on the single open pull reque
 #### Scenario: Zero pull requests set no icon
 
 - **WHEN** the cycle has no open pull request and the manager runs a `pull-comment` verb
-- **THEN** no comment is written, the card gains no icon from that run, and the verb shows `комментарий не записан`
+- **THEN** no comment is written, the card gains no icon from that run, and the verb shows `комментарий не записан`. The next load does not show that line
 
 ### Requirement: HTML opens and is not written on the cycle
 

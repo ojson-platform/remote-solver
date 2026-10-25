@@ -3,6 +3,7 @@ import type {SpineLayer} from '../spine.ts';
 import type {WindowSnapshot} from '../snapshot.ts';
 import type {LineDraft} from './gesture.ts';
 
+import {flushSync} from 'react-dom';
 import {createRoot} from 'react-dom/client';
 
 import {App} from './app.tsx';
@@ -96,7 +97,6 @@ function revealCaps(memory: Memory): void {
     }
   }
   const pending = memory.scroll;
-  memory.scroll = undefined;
   if (pending === undefined || pending.name === '') {
     return;
   }
@@ -105,9 +105,11 @@ function revealCaps(memory: Memory): void {
     cap.open = true;
   }
   const row = cap?.querySelector(`[data-scenario=${CSS.escape(pending.name)}]`);
-  if (row instanceof HTMLElement) {
-    row.scrollIntoView({block: 'nearest'});
+  if (!(row instanceof HTMLElement)) {
+    return;
   }
+  row.scrollIntoView({block: 'nearest'});
+  memory.scroll = undefined;
 }
 
 function onFold(memory: Memory, shot: WindowSnapshot, bar: HTMLElement): boolean {
@@ -153,6 +155,7 @@ function onJump(memory: Memory, shot: WindowSnapshot, jump: HTMLElement): boolea
   if (!memory.openCaps.includes(found.capability)) {
     memory.openCaps = [...memory.openCaps, found.capability];
   }
+  memory.layer = 'Specify';
   memory.scroll = {id: found.capability, name: found.name};
   return true;
 }
@@ -194,20 +197,23 @@ function boot(): void {
     if (!shot) {
       return;
     }
-    const layer = keptLayer(memory, shot);
-    memory.key = shot.opened?.key;
-    memory.station = shot.opened?.spine.station;
+    const frame = shot;
+    const layer = keptLayer(memory, frame);
+    memory.key = frame.opened?.key;
+    memory.station = frame.opened?.spine.station;
     memory.layer = layer ?? '';
-    reconcileFolds(memory, shot);
-    view.render(
-      <App
-        snapshot={shot}
-        layer={layer}
-        drafts={memory.drafts}
-        gaps={memory.folds}
-        openCaps={memory.openCaps}
-      />,
-    );
+    reconcileFolds(memory, frame);
+    flushSync(() => {
+      view.render(
+        <App
+          snapshot={frame}
+          layer={layer}
+          drafts={memory.drafts}
+          gaps={memory.folds}
+          openCaps={memory.openCaps}
+        />,
+      );
+    });
     revealCaps(memory);
     const show = shot.show;
     if (show) {

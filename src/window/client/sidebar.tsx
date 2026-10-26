@@ -618,7 +618,7 @@ export function Sidebar({
   openCaps = [],
 }: {
   snapshot: WindowSnapshot;
-  layer: SpineLayer | undefined;
+  layer: SpineLayer | '' | undefined;
   drafts?: readonly LineDraft[];
   gaps?: readonly OpenFold[];
   openCaps?: readonly string[];
@@ -696,14 +696,6 @@ export function Sidebar({
           </div>
         )}
         <div className="spine">
-          <SpineRow
-            layer="Change"
-            model={model}
-            open={open === 'Change'}
-            sentenceNode={sentence(model, 'Change', places)}
-          >
-            <p>Двери читают {model.readPath}.</p>
-          </SpineRow>
           <SpineRow
             layer="Plan"
             model={model}

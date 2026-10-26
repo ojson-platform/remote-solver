@@ -121,7 +121,7 @@ export function App({
   openCaps = [],
 }: {
   snapshot: WindowSnapshot;
-  layer?: SpineLayer;
+  layer?: SpineLayer | '';
   drafts?: readonly LineDraft[];
   gaps?: readonly OpenFold[];
   openCaps?: readonly string[];
@@ -174,7 +174,7 @@ export function WindowView({
 }: {
   snapshot: WindowSnapshot;
   css: string;
-  layer?: SpineLayer;
+  layer?: SpineLayer | '';
 }): ReactNode {
   return (
     <html lang="ru">

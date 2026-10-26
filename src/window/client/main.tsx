@@ -13,9 +13,11 @@ import {
   focusStaysInForm,
   gesture,
   headClickToggles,
+  keptSpineLayer,
   lineFieldClosesOnEscape,
   payload,
   scenarioTarget,
+  toggledSpineLayer,
   SHEET_FIELD_KEY,
   SHEET_SCROLL_KEY,
   toggleFold,
@@ -160,24 +162,20 @@ function onJump(memory: Memory, shot: WindowSnapshot, jump: HTMLElement): boolea
   return true;
 }
 
-function keptLayer(memory: Memory, next: WindowSnapshot): SpineLayer | undefined {
+function keptLayer(memory: Memory, next: WindowSnapshot): SpineLayer | '' | undefined {
   const opened = next.opened;
-  if (!opened) {
-    return undefined;
-  }
-  if (memory.key !== opened.key || memory.station !== opened.spine.station) {
+  if (opened && (memory.key !== opened.key || memory.station !== opened.spine.station)) {
     memory.drafts = [];
     if (memory.key !== opened.key) {
       memory.folds = [];
       memory.openCaps = [];
       memory.scroll = undefined;
     }
-    return opened.spine.open;
   }
-  if (memory.layer === '') {
-    return undefined;
-  }
-  return memory.layer ?? opened.spine.open;
+  return keptSpineLayer(
+    memory,
+    opened ? {key: opened.key, station: opened.spine.station, open: opened.spine.open} : undefined,
+  );
 }
 
 async function readSnapshot(): Promise<WindowSnapshot> {
@@ -349,9 +347,10 @@ function boot(): void {
       target !== null && (headClickToggles(target) || target.closest('label') !== null);
     if (row && toggles && target?.closest('.acts') === null && shot?.opened) {
       const pick = row.parentElement?.querySelector('.spine-pick');
-      const layer = pick?.getAttribute('value');
-      if (layer) {
-        memory.layer = memory.layer === layer ? '' : (layer as SpineLayer);
+      const next = toggledSpineLayer(memory.layer ?? '', pick?.getAttribute('value') ?? '');
+      if (next !== undefined) {
+        event.preventDefault();
+        memory.layer = next;
         draw();
       }
     }

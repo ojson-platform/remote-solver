@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {existsSync, lstatSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
+import {existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {vi} from 'vitest';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
-import {machine} from './adapters/compose.ts';
+import {machine, type Machine} from './adapters/compose.ts';
+import {tryHoldIssue} from './adapters/lock.ts';
 import {linkedTitle, memoryPorts} from './adapters/github.ts';
 import {changeText, readChange, type ChangeView} from './machine/change.ts';
 import {resolveCycle, resolveIssue} from './machine/flow.ts';
@@ -26,6 +27,7 @@ import {placeOnDiff} from './reviewer/place.ts';
 import {describeQueue, reviewQueue} from './reviewer/plan.ts';
 import {runReview} from './reviewer/run.ts';
 import {parseVerdict} from './reviewer/verdict.ts';
+import {driveIssue} from './main.ts';
 import {fixThread, publish, runSdd} from './sdd.ts';
 
 const files: FileSource = {exists: () => false, read: () => '', list: () => []};
@@ -1396,6 +1398,41 @@ spec('idle', () => {
         turned.start.map(item => item.issue),
         ['1'],
       );
+    });
+  });
+
+  requirement('Another process does not start a held issue', () => {
+    scenario('A held issue does not start an agent', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-hold-'));
+      const held = tryHoldIssue(root, '7');
+      assert.ok(held);
+      let ran = false;
+      const box = {
+        root,
+        runtime: {
+          async run() {
+            ran = true;
+            return {commits: 0};
+          },
+        },
+      } as Machine;
+      const result = await driveIssue(box, '7');
+      assert.equal(ran, false);
+      assert.equal(result.busy, true);
+      assert.equal(result.code, 0);
+      assert.equal(result.idle, undefined);
+      held.release();
+    });
+    scenario('A dead holder releases the issue', () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-hold-dead-'));
+      const file = path.join(root, '.sandcastle', 'locks', '7');
+      mkdirSync(path.dirname(file), {recursive: true});
+      writeFileSync(file, '99999999\n');
+      const held = tryHoldIssue(root, '7');
+      assert.ok(held);
+      assert.equal(readFileSync(file, 'utf8').trim(), String(process.pid));
+      held.release();
+      assert.equal(existsSync(file), false);
     });
   });
 });

@@ -205,6 +205,7 @@ spec('artifact', () => {
       const issueAt = prompt.indexOf('{{ISSUE_TEXT}}');
       const stepAt = prompt.indexOf('{{STEP}}');
       assert.ok(issueAt >= 0 && issueAt < stepAt);
+      assert.match(prompt, /Do not search for `sdd\.mjs`, `bin\/`, or `node_modules`, and do not read them/);
     });
 
     scenario('An empty issue stays empty', async () => {

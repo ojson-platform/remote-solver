@@ -193,6 +193,41 @@ function onJump(memory: Memory, shot: WindowSnapshot, jump: HTMLElement): boolea
   return true;
 }
 
+function copyMemory(memory: Memory): Memory {
+  const saved: Memory = {
+    key: memory.key,
+    station: memory.station,
+    layer: memory.layer,
+    drafts: memory.drafts.map(draft => ({
+      line: draft.line,
+      text: draft.text,
+      question: draft.question,
+    })),
+    folds: memory.folds.map(fold => ({
+      id: fold.id,
+      rows: structuredClone(fold.rows),
+      open: [...fold.open],
+    })),
+    openCaps: [...memory.openCaps],
+    specs: memory.specs.map(spec => ({id: spec.id, open: spec.open})),
+  };
+  if (memory.scroll !== undefined) {
+    saved.scroll = {id: memory.scroll.id, name: memory.scroll.name};
+  }
+  return saved;
+}
+
+function restoreMemory(memory: Memory, saved: Memory): void {
+  memory.key = saved.key;
+  memory.station = saved.station;
+  memory.layer = saved.layer;
+  memory.drafts = saved.drafts;
+  memory.folds = saved.folds;
+  memory.openCaps = saved.openCaps;
+  memory.specs = saved.specs;
+  memory.scroll = saved.scroll;
+}
+
 function keptLayer(memory: Memory, next: WindowSnapshot): SpineLayer | '' | undefined {
   const opened = next.opened;
   if (opened && (memory.key !== opened.key || memory.station !== opened.spine.station)) {
@@ -320,6 +355,7 @@ function boot(): void {
     const act = params.get('act') ?? '';
     const tracked = base !== undefined;
     let mine = 0;
+    let drawerBefore: Memory | undefined;
     if (base !== undefined) {
       mine = ++seq;
       if (
@@ -330,6 +366,9 @@ function boot(): void {
         act === 'gate'
       ) {
         hold = holdGesture(hold, mine, act, params, paintFrame(base, hold));
+      }
+      if (act === 'open' || act === 'close-card') {
+        drawerBefore = copyMemory(memory);
       }
       gestures += 1;
       if (settingsAct(act)) {
@@ -356,6 +395,9 @@ function boot(): void {
         }
       } else if (snapshot !== undefined) {
         keep(snapshot);
+      }
+      if (snapshot === undefined && drawerBefore !== undefined) {
+        restoreMemory(memory, drawerBefore);
       }
       draw();
     };

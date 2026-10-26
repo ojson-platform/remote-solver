@@ -118,7 +118,7 @@ function absentOnRef(error: unknown): boolean {
   );
 }
 
-function showFile(root: string, ref: string, rel: string): string {
+function showFile(root: string, ref: string, rel: string, strict: boolean): string {
   try {
     return execFileSync('git', ['show', `${ref}:${rel}`], {
       cwd: root,
@@ -126,15 +126,19 @@ function showFile(root: string, ref: string, rel: string): string {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
   } catch (error) {
-    if (absentOnRef(error)) {
+    if (!strict || absentOnRef(error)) {
       return '';
     }
     throw error;
   }
 }
 
-/** Files on one ref. A path that is not on that ref is empty. Any other git failure throws. */
-function filesOfRef(root: string, ref: string | null): FileSource {
+/**
+ * Files on one ref.
+ * Lenient: a git failure is an empty file or an empty list.
+ * Strict: a missing path on that ref is empty. Any other git failure throws.
+ */
+function filesOfRef(root: string, ref: string | null, strict: boolean): FileSource {
   return {
     exists(rel) {
       return ref !== null && existsOnRef(root, ref, rel);
@@ -143,31 +147,48 @@ function filesOfRef(root: string, ref: string | null): FileSource {
       if (!ref) {
         return '';
       }
-      return showFile(root, ref, rel);
+      return showFile(root, ref, rel, strict);
     },
     list(rel) {
       if (!ref) {
         return [];
       }
-      return git(root, ['ls-tree', '-r', '--name-only', ref, rel])
+      return git(root, ['ls-tree', '-r', '--name-only', ref, rel], !strict)
         .split('\n')
         .filter(line => line.length > 0);
     },
   };
 }
 
-/** The issue branch only. A file that exists only in the checkout is not the change. */
-export function gitFiles(root: string, key: string, prefix: string): FileSource {
-  return filesOfRef(root, issueRef(root, key, prefix));
-}
-
-/** The issue branch when it exists. Null when neither `<prefix>/<key>` nor `origin/<prefix>/<key>` is present. */
-export function branchFiles(root: string, key: string, prefix: string): FileSource | null {
+function filesOnBranch(
+  root: string,
+  key: string,
+  prefix: string,
+  strict: boolean,
+): FileSource | null {
   const ref = issueRef(root, key, prefix);
   if (ref === null) {
     return null;
   }
-  return filesOfRef(root, ref);
+  return filesOfRef(root, ref, strict);
+}
+
+/** The issue branch only. A file that exists only in the checkout is not the change. A git failure is empty. */
+export function gitFiles(root: string, key: string, prefix: string): FileSource {
+  return filesOfRef(root, issueRef(root, key, prefix), false);
+}
+
+/** The issue branch when it exists. Null when neither `<prefix>/<key>` nor `origin/<prefix>/<key>` is present. A git failure is empty. */
+export function branchFiles(root: string, key: string, prefix: string): FileSource | null {
+  return filesOnBranch(root, key, prefix, false);
+}
+
+/**
+ * The issue branch for the deferred spine read.
+ * Null when the branch is absent. A missing path on the branch is empty. Any other git failure throws.
+ */
+export function strictBranchFiles(root: string, key: string, prefix: string): FileSource | null {
+  return filesOnBranch(root, key, prefix, true);
 }
 
 function existsOnRef(root: string, ref: string, rel: string): boolean {

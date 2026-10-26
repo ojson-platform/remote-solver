@@ -5031,7 +5031,7 @@ function restoreIssueBranch(checkout: string): void {
   git(checkout, ['branch', '-f', 'sdd/1', 'master']);
 }
 
-/** The deferred spine reads `tasks.md`. Fail that show so the answering board still can. */
+/** Fail `git show` of `proposal.md`. The board still answers; the deferred spine read throws. */
 function failGitShow(): () => void {
   const real = execFileSync('/usr/bin/which', ['git'], {encoding: 'utf8'}).trim();
   const dir = mkdtempSync(path.join(tmpdir(), 'spine-git-'));
@@ -5042,7 +5042,7 @@ function failGitShow(): () => void {
       '#!/bin/sh',
       'if [ "$1" = "show" ]; then',
       '  case " $* " in',
-      '    *tasks.md*)',
+      '    *proposal.md*)',
       '      echo "fatal: not a git repository (or any of the parent directories): .git" >&2',
       '      exit 128',
       '      ;;',

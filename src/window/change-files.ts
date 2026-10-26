@@ -3,7 +3,7 @@ import type {FileSource} from '../machine/port.ts';
 import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 
-import {branchFiles} from '../adapters/vcs.ts';
+import {branchFiles, strictBranchFiles} from '../adapters/vcs.ts';
 import {changeDir} from '../machine/naming.ts';
 
 const empty: FileSource = {
@@ -60,6 +60,18 @@ export function changeFiles(checkout: string | undefined, key: string): FileSour
     return empty;
   }
   return branchFiles(checkout, key, 'sdd') ?? disk(checkout);
+}
+
+/**
+ * Change files for the deferred spine read.
+ * The issue branch when it exists, the checkout when it does not.
+ * A missing path on that branch is empty. Any other git failure throws.
+ */
+export function strictChangeFiles(checkout: string | undefined, key: string): FileSource {
+  if (!checkout || checkout.trim() === '' || key.trim() === '') {
+    return empty;
+  }
+  return strictBranchFiles(checkout, key, 'sdd') ?? disk(checkout);
 }
 
 export function changeRel(key: string, name: string): string {

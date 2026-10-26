@@ -5031,6 +5031,40 @@ function restoreIssueBranch(checkout: string): void {
   git(checkout, ['branch', '-f', 'sdd/1', 'master']);
 }
 
+/** Fail `git rev-parse --verify`. The board still answers; the deferred spine read throws. */
+function failGitRevParse(): () => void {
+  const real = execFileSync('/usr/bin/which', ['git'], {encoding: 'utf8'}).trim();
+  const dir = mkdtempSync(path.join(tmpdir(), 'spine-git-'));
+  const bin = path.join(dir, 'git');
+  writeFileSync(
+    bin,
+    [
+      '#!/bin/sh',
+      'if [ "$1" = "rev-parse" ]; then',
+      '  case " $* " in',
+      '    *--verify*)',
+      '      echo "fatal: rev-parse failed" >&2',
+      '      exit 128',
+      '      ;;',
+      '  esac',
+      'fi',
+      `exec ${JSON.stringify(real)} "$@"`,
+      '',
+    ].join('\n'),
+  );
+  chmodSync(bin, 0o755);
+  const saved = process.env.PATH;
+  process.env.PATH = `${dir}${path.delimiter}${saved ?? ''}`;
+  return () => {
+    if (saved === undefined) {
+      delete process.env.PATH;
+    } else {
+      process.env.PATH = saved;
+    }
+    rmSync(dir, {recursive: true, force: true});
+  };
+}
+
 /** Fail `git show` of `proposal.md`. The board still answers; the deferred spine read throws. */
 function failGitShow(): () => void {
   const real = execFileSync('/usr/bin/which', ['git'], {encoding: 'utf8'}).trim();
@@ -5178,6 +5212,70 @@ spec('live-frame', () => {
           } finally {
             if (restoreBranch) {
               restoreIssueBranch(checkout);
+            }
+          }
+        },
+      );
+    });
+
+    scenario('A fatal ref lookup keeps the previous spine', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const checkout = path.join(paths.arcadia, 'services', 'billing');
+          const specFile = path.join(checkout, changeDir('1'), 'specs', SPEC_ID, 'spec.md');
+          plantCaseRead(paths.arcadia);
+          commitIssueBranch(checkout);
+          let restoreTree = false;
+          try {
+            window.chooseAgent('cursor');
+            assert.equal(
+              (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+                .status,
+              200,
+            );
+            await flushSpine();
+            const ready = await snapshotOnce(page.url);
+            assert.equal(ready.opened?.key, '1');
+            assert.equal(ready.opened?.spineReady, true);
+            assert.ok(ready.opened?.spine.capabilities.some(item => item.id === SPEC_ID));
+            rmSync(specFile);
+            assert.equal(existsSync(specFile), false);
+            restoreTree = true;
+            const logged: unknown[] = [];
+            const report = console.error;
+            const restoreGit = failGitRevParse();
+            console.error = (...args: unknown[]) => {
+              logged.push(args[0]);
+            };
+            try {
+              page.note();
+              const during = await snapshotOnce(page.url);
+              assert.equal(during.opened?.key, '1');
+              assert.equal(during.opened?.spineReady, false);
+              assert.ok(during.opened?.spine.capabilities.some(item => item.id === SPEC_ID));
+              await flushSpine();
+            } finally {
+              console.error = report;
+              restoreGit();
+            }
+            assert.equal(logged.length, 1);
+            const after = await snapshotOnce(page.url);
+            assert.equal(after.opened?.key, ready.opened?.key);
+            assert.equal(after.opened?.spineReady, true);
+            assert.deepEqual(
+              after.opened?.spine.capabilities.map(item => item.id),
+              ready.opened?.spine.capabilities.map(item => item.id),
+            );
+            assert.equal(after.status, undefined);
+          } finally {
+            if (restoreTree) {
+              git(checkout, [
+                'checkout',
+                'HEAD',
+                '--',
+                path.join(changeDir('1'), 'specs', SPEC_ID, 'spec.md'),
+              ]);
             }
           }
         },

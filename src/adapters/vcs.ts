@@ -89,6 +89,49 @@ function issueRef(root: string, key: string, prefix: string): string | null {
   return null;
 }
 
+function exitStatus(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null || !('status' in error)) {
+    return undefined;
+  }
+  return typeof error.status === 'number' ? error.status : undefined;
+}
+
+/** `root` or a parent holds `.git`. No such directory means the issue branch is absent. */
+function inRepository(root: string): boolean {
+  let current = path.resolve(root);
+  while (path.dirname(current) !== current) {
+    if (existsSync(path.join(current, '.git'))) {
+      return true;
+    }
+    current = path.dirname(current);
+  }
+  return existsSync(path.join(current, '.git'));
+}
+
+/**
+ * The issue ref for the deferred spine read.
+ * Exit 1 is a missing ref. Any other failure throws.
+ * A directory outside every repository is an absent branch.
+ */
+function strictIssueRef(root: string, key: string, prefix: string): string | null {
+  if (!inRepository(root)) {
+    return null;
+  }
+  for (const ref of [branchName(key, prefix), `origin/${branchName(key, prefix)}`]) {
+    try {
+      const found = git(root, ['rev-parse', '--verify', '--quiet', ref]).trim();
+      if (found !== '') {
+        return ref;
+      }
+    } catch (error) {
+      if (exitStatus(error) !== 1) {
+        throw error;
+      }
+    }
+  }
+  return null;
+}
+
 function errorText(error: unknown): string {
   if (typeof error !== 'object' || error === null) {
     return '';
@@ -166,7 +209,7 @@ function filesOnBranch(
   prefix: string,
   strict: boolean,
 ): FileSource | null {
-  const ref = issueRef(root, key, prefix);
+  const ref = strict ? strictIssueRef(root, key, prefix) : issueRef(root, key, prefix);
   if (ref === null) {
     return null;
   }
@@ -185,7 +228,8 @@ export function branchFiles(root: string, key: string, prefix: string): FileSour
 
 /**
  * The issue branch for the deferred spine read.
- * Null when the branch is absent. A missing path on the branch is empty. Any other git failure throws.
+ * Null when the checkout is not a repository, or the ref is missing (exit 1).
+ * A missing path on the branch is empty. Any other git failure throws.
  */
 export function strictBranchFiles(root: string, key: string, prefix: string): FileSource | null {
   return filesOnBranch(root, key, prefix, true);

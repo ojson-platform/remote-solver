@@ -71,3 +71,8 @@ The response SHALL include the drawer blocks and the last spine built for that t
 
 - **WHEN** a spine is ready and the next read fails
 - **THEN** the following snapshot has the same capability, `spineReady` true, the same drawer key, and no status
+
+#### Scenario: A fatal ref lookup keeps the previous spine
+
+- **WHEN** a spine is ready and the next ref lookup fails
+- **THEN** the following snapshot has the same capability, `spineReady` true, the same drawer key, and no status

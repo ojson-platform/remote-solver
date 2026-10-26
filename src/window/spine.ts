@@ -4,7 +4,7 @@ import type {GateStation} from './types.ts';
 import {missingBaselineIds, namedCapabilities} from '../machine/change.ts';
 import {changeDir} from '../machine/naming.ts';
 
-import {changeFiles, changeRel, listedSpecs} from './change-files.ts';
+import {changeRel, listedSpecs, strictChangeFiles} from './change-files.ts';
 import {specDiff} from './spec-diff.ts';
 
 export const SPINE_LAYERS = [
@@ -310,7 +310,7 @@ export function buildSpine(input: {
 }): Spine {
   const focus = linesFromFocus(input.focusBody ?? '');
   const lines = mergeLines(linesFromIssue(input.issueBody ?? ''), focus.lines);
-  const files = changeFiles(input.checkout, input.key);
+  const files = strictChangeFiles(input.checkout, input.key);
   const proposal = files.read(changeRel(input.key, 'proposal.md'));
   const design = files.read(changeRel(input.key, 'design.md'));
   const taskText = files.read(changeRel(input.key, 'tasks.md'));

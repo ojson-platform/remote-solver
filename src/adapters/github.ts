@@ -366,9 +366,22 @@ type RawIssue = {
   pull_request?: unknown;
 };
 
+const PULL_VIEW_FIELDS = 'statusCheckRollup,state,headRefOid,baseRefOid';
+const PULL_VIEW_FIELDS_HEAD = 'statusCheckRollup,state,headRefOid';
+
+/** This `gh` exits when `--json` names a field it does not know. */
+export function rejectedViewField(error: unknown, field: string): boolean {
+  const needle = `Unknown JSON field: "${field}"`;
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
+  const record = error as {stderr?: unknown; message?: unknown};
+  return String(record.stderr ?? '').includes(needle) || String(record.message ?? '').includes(needle);
+}
+
 /**
  * Head and base commits when `pr view` omitted them.
- * Older `gh pr view --json` has no `baseRefOid`.
+ * Older `gh pr view --json` has no `baseRefOid` and rejects the field.
  */
 export function pullRangeArgs(slug: string, pull: string): string[] {
   return ['api', `repos/${slug}/pulls/${pull}`, '--jq', '{head: .head.sha, base: .base.sha}'];
@@ -579,20 +592,29 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
     phaseHint: labelHint,
   };
 
+  const viewArgs = (id: string, fields: string) => [
+    'pr',
+    'view',
+    id,
+    '--repo',
+    repoSlug(),
+    '--json',
+    fields,
+  ];
+
   const viewPull = async (
     id: string,
   ): Promise<{checks: CheckState; head: string; base: string}> => {
-    const view = JSON.parse(
-      await run([
-        'pr',
-        'view',
-        id,
-        '--repo',
-        repoSlug(),
-        '--json',
-        'statusCheckRollup,state,headRefOid,baseRefOid',
-      ]),
-    ) as CheckRollup & {headRefOid?: unknown; baseRefOid?: unknown};
+    let raw: string;
+    try {
+      raw = await run(viewArgs(id, PULL_VIEW_FIELDS));
+    } catch (error) {
+      if (!rejectedViewField(error, 'baseRefOid')) {
+        throw error;
+      }
+      raw = await run(viewArgs(id, PULL_VIEW_FIELDS_HEAD));
+    }
+    const view = JSON.parse(raw) as CheckRollup & {headRefOid?: unknown; baseRefOid?: unknown};
     const record = {
       checks: classifyChecks(view),
       head: typeof view.headRefOid === 'string' ? view.headRefOid : '',
@@ -834,22 +856,22 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       }
     },
     async range(pull) {
-      const seen = seenPull.get(pull);
-      if (seen && seen.head !== '') {
-        return commitRange(seen.head, seen.base);
-      }
+      let seen = seenPull.get(pull);
       if (!seen) {
-        const viewed = await viewPull(pull);
-        if (viewed.head !== '') {
-          return commitRange(viewed.head, viewed.base);
-        }
+        seen = await viewPull(pull);
+      }
+      if (seen.head !== '' && seen.base !== '') {
+        return commitRange(seen.head, seen.base);
       }
       const view = JSON.parse(await run(pullRangeArgs(repoSlug(), pull))) as {
         head?: string;
         base?: string | null;
       };
+      const head = seen.head !== '' ? seen.head : (view.head ?? '');
       const base = view.base ?? '';
-      return {head: view.head ?? '', base: base === '' ? null : base};
+      const next = {checks: seen.checks, head, base};
+      seenPull.set(pull, next);
+      return commitRange(head, base);
     },
     async resolveThread(thread) {
       const query =

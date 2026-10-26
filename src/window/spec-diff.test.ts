@@ -441,6 +441,41 @@ test('eight shared lines before the first edit collapse to a gap of five', () =>
   );
 });
 
+test('a change in a later scenario keeps the requirement heading and folds what precedes it', () => {
+  const lines = [
+    '### Requirement: Чтение',
+    'Тело требования.',
+    '#### Scenario: Первый',
+    '- **WHEN** первый',
+    '- **THEN** первый',
+    '#### Scenario: Второй',
+    '- **WHEN** второй',
+    '- **THEN** было',
+  ];
+  const baseline = text(lines);
+  const delta = text([
+    '## MODIFIED Requirements',
+    '',
+    ...lines.slice(0, -1),
+    '- **THEN** стало',
+  ]);
+  const got = specDiff(baseline, delta, deltaPath);
+  const visible = rowsOf(got.rows).map(row => row.text);
+  assert.deepEqual(visible, [
+    '### Requirement: Чтение',
+    '#### Scenario: Второй',
+    '- **WHEN** второй',
+    '- **THEN** было',
+    '- **THEN** стало',
+  ]);
+  const gaps = gapsOf(got.rows);
+  assert.equal(gaps.length, 1);
+  assert.deepEqual(
+    gaps[0]?.hidden.map(row => row.text),
+    ['Тело требования.', '#### Scenario: Первый', '- **WHEN** первый', '- **THEN** первый'],
+  );
+});
+
 test('a red line paired with a green line carries word bits', () => {
   const baseline = text(['### Requirement: Слова', '', 'альфа бета']);
   const delta = text(['## MODIFIED Requirements', '', '### Requirement: Слова', '', 'альфа гамма']);

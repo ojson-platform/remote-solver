@@ -1,7 +1,7 @@
 import type {SpecEntry} from '../spec-diff.ts';
 import type {SpineLayer} from '../spine.ts';
 import type {WindowSnapshot} from '../snapshot.ts';
-import type {LineDraft} from './gesture.ts';
+import type {LineDraft, SpecOpen} from './gesture.ts';
 
 import {flushSync} from 'react-dom';
 import {createRoot} from 'react-dom/client';
@@ -10,17 +10,20 @@ import {App} from './app.tsx';
 import {postForm} from './forms.tsx';
 import {
   draftsAfterClick,
+  foldsAfterSpec,
   focusStaysInForm,
+  forcedAfterSpec,
   gesture,
   headClickToggles,
   keptSpineLayer,
   lineFieldClosesOnEscape,
   payload,
+  rememberedSpec,
+  revealFold,
   scenarioTarget,
   toggledSpineLayer,
   SHEET_FIELD_KEY,
   SHEET_SCROLL_KEY,
-  toggleFold,
 } from './gesture.ts';
 
 type FoldMemory = {id: string; rows: readonly SpecEntry[]; open: number[]};
@@ -32,6 +35,7 @@ type Memory = {
   drafts: LineDraft[];
   folds: FoldMemory[];
   openCaps: string[];
+  specs: SpecOpen[];
   scroll?: {id: string; name: string};
 };
 
@@ -127,8 +131,33 @@ function onFold(memory: Memory, shot: WindowSnapshot, bar: HTMLElement): boolean
   }
   memory.drafts = lineDrafts();
   const current = memory.folds.find(item => item.id === id && sameRows(item.rows, cap.rows));
-  const open = toggleFold(current === undefined ? [] : current.open, index);
+  const open = revealFold(current === undefined ? [] : current.open, index);
   rememberFold(memory, id, cap.rows, open);
+  return true;
+}
+
+function onSpecToggle(memory: Memory, details: HTMLDetailsElement): boolean {
+  if (!details.classList.contains('cap') || !details.id.startsWith('cap-')) {
+    return false;
+  }
+  const id = details.id.slice('cap-'.length);
+  if (id === '') {
+    return false;
+  }
+  const open = details.open;
+  const specs = rememberedSpec(memory.specs, id, open);
+  const folds = foldsAfterSpec(memory.folds, id, open);
+  const openCaps = forcedAfterSpec(memory.openCaps, id, open);
+  if (
+    JSON.stringify(memory.specs) === JSON.stringify(specs) &&
+    JSON.stringify(memory.folds) === JSON.stringify(folds) &&
+    JSON.stringify(memory.openCaps) === JSON.stringify(openCaps)
+  ) {
+    return false;
+  }
+  memory.specs = specs;
+  memory.folds = folds;
+  memory.openCaps = openCaps;
   return true;
 }
 
@@ -169,6 +198,7 @@ function keptLayer(memory: Memory, next: WindowSnapshot): SpineLayer | '' | unde
     if (memory.key !== opened.key) {
       memory.folds = [];
       memory.openCaps = [];
+      memory.specs = [];
       memory.scroll = undefined;
     }
   }
@@ -190,7 +220,7 @@ function boot(): void {
   }
   const view = createRoot(root);
   let shot: WindowSnapshot | undefined;
-  const memory: Memory = {drafts: [], folds: [], openCaps: []};
+  const memory: Memory = {drafts: [], folds: [], openCaps: [], specs: []};
   const draw = () => {
     if (!shot) {
       return;
@@ -209,6 +239,7 @@ function boot(): void {
           drafts={memory.drafts}
           gaps={memory.folds}
           openCaps={memory.openCaps}
+          specOpen={memory.specs}
         />,
       );
     });
@@ -340,6 +371,19 @@ function boot(): void {
       sessionStorage.setItem(SHEET_FIELD_KEY, name);
     }
   });
+  document.addEventListener(
+    'toggle',
+    event => {
+      const details = event.target;
+      if (!(details instanceof HTMLDetailsElement)) {
+        return;
+      }
+      if (onSpecToggle(memory, details)) {
+        draw();
+      }
+    },
+    true,
+  );
   document.addEventListener('click', event => {
     const target = event.target instanceof Element ? event.target : null;
     const row = target?.closest('.spine .row');
@@ -377,7 +421,7 @@ function boot(): void {
       draw();
       return;
     }
-    const line = target?.closest('button.line');
+    const line = target?.closest('button.line, button.diff-row');
     if (line instanceof HTMLElement) {
       const targetLine = line.getAttribute('data-line') ?? '';
       const current = lineDrafts();

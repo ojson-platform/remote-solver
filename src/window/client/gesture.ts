@@ -54,12 +54,63 @@ export function keptSpineLayer(
   return memory.layer;
 }
 
-/** A fold index toggles. Indexes that were not clicked stay in their order. */
-export function toggleFold(open: readonly number[], index: number): number[] {
+/** Open capability rows. Closing one drops its expanded gaps. */
+export type SpecOpen = {id: string; open: boolean};
+
+/** A gap opens and stays open. A second click does not hide its lines. */
+export function revealFold(open: readonly number[], index: number): number[] {
   if (open.includes(index)) {
-    return open.filter(item => item !== index);
+    return [...open];
   }
   return [...open, index];
+}
+
+/** The first capability starts open. A scenario jump forces its capability open. */
+export function capIsOpen(
+  id: string,
+  index: number,
+  remembered: readonly SpecOpen[],
+  forced: readonly string[],
+): boolean {
+  if (forced.includes(id)) {
+    return true;
+  }
+  const found = remembered.find(item => item.id === id);
+  if (found) {
+    return found.open;
+  }
+  return index === 0;
+}
+
+export function rememberedSpec(
+  remembered: readonly SpecOpen[],
+  id: string,
+  open: boolean,
+): SpecOpen[] {
+  return [...remembered.filter(item => item.id !== id), {id, open}];
+}
+
+/** A jump keeps the capability open. Closing it removes that force. */
+export function forcedAfterSpec(forced: readonly string[], id: string, open: boolean): string[] {
+  if (!open) {
+    return forced.filter(item => item !== id);
+  }
+  if (forced.includes(id)) {
+    return [...forced];
+  }
+  return [...forced, id];
+}
+
+/** Closing a capability hides the lines that were expanded inside it. */
+export function foldsAfterSpec<T extends {id: string}>(
+  folds: readonly T[],
+  id: string,
+  open: boolean,
+): T[] {
+  if (open) {
+    return [...folds];
+  }
+  return folds.filter(item => item.id !== id);
 }
 
 function scenarioLine(text: string, name: string): boolean {

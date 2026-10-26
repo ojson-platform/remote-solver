@@ -1,4 +1,5 @@
 import type {SpecEntry} from '../spec-diff.ts';
+import type {SpineLayer} from '../spine.ts';
 
 export type LineDraft = {line: string; text: string; question: string};
 
@@ -6,6 +7,52 @@ export type LineDraft = {line: string; text: string; question: string};
 export type OpenFold = {id: string; open: readonly number[]};
 
 const SCENARIO_PREFIX = '#### Scenario: ';
+
+const SPINE_LAYERS = [
+  'Change',
+  'Plan',
+  'Specify',
+  'Design',
+  'Tasks',
+  'Code',
+  'Accept',
+] as const satisfies readonly SpineLayer[];
+
+function isSpineLayer(value: string): value is SpineLayer {
+  return (SPINE_LAYERS as readonly string[]).includes(value);
+}
+
+/**
+ * The layer a head click leaves open. The same row closes, so the spine can
+ * have no open row. The caller cancels the label click so the checkbox stays
+ * with this choice.
+ */
+export function toggledSpineLayer(
+  current: SpineLayer | '',
+  picked: string,
+): SpineLayer | '' | undefined {
+  if (!isSpineLayer(picked)) {
+    return undefined;
+  }
+  return current === picked ? '' : picked;
+}
+
+/** An empty remembered layer stays closed. A new cycle or station opens the plaque row. */
+export function keptSpineLayer(
+  memory: {key?: string; station?: string; layer?: SpineLayer | ''},
+  opened: {key: string; station: string | undefined; open: SpineLayer} | undefined,
+): SpineLayer | '' | undefined {
+  if (!opened) {
+    return undefined;
+  }
+  if (memory.key !== opened.key || memory.station !== opened.station) {
+    return opened.open;
+  }
+  if (memory.layer === undefined) {
+    return opened.open;
+  }
+  return memory.layer;
+}
 
 /** A fold index toggles. Indexes that were not clicked stay in their order. */
 export function toggleFold(open: readonly number[], index: number): number[] {

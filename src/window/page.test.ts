@@ -3149,6 +3149,23 @@ spec('sidebar', () => {
         },
       );
     });
+    scenario('The Change row stays out', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const side = bandOf(await pageHtml(page.url), '1');
+          assert.equal(side.includes('id="spine-Change"'), false);
+          assert.equal(side.includes('Двери читают'), false);
+          assert.match(side, /id="spine-Plan"[^>]*checked/);
+        },
+      );
+    });
     scenario('An open row does not narrow its neighbors', async () => {
       await hosted(
         {

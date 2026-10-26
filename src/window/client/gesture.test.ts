@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
 
-import {scenarioTarget, toggleFold} from './gesture.ts';
+import {keptSpineLayer, scenarioTarget, toggledSpineLayer, toggleFold} from './gesture.ts';
 
 test('toggleFold drops an index that is already open and keeps the rest', () => {
   const open = [2, 0, 4];
@@ -86,6 +86,32 @@ spec('spec-diff', () => {
         gap: 1,
         name,
       });
+    });
+  });
+});
+
+spec('sidebar', () => {
+  requirement('The open row shows only the blocks the cycle has', () => {
+    scenario('A second click closes the open row', () => {
+      const opened = {key: '1', station: 'proposing', open: 'Plan' as const};
+      assert.equal(keptSpineLayer({key: '1', station: 'proposing', layer: 'Plan'}, opened), 'Plan');
+      assert.equal(toggledSpineLayer('Plan', 'Plan'), '');
+      assert.equal(
+        keptSpineLayer({key: '1', station: 'proposing', layer: ''}, opened),
+        '',
+      );
+      assert.equal(toggledSpineLayer('', 'Specify'), 'Specify');
+      assert.equal(
+        keptSpineLayer({key: '1', station: 'proposing', layer: 'Specify'}, opened),
+        'Specify',
+      );
+      assert.equal(
+        keptSpineLayer(
+          {key: '1', station: 'proposing', layer: ''},
+          {key: '1', station: 'specifying', open: 'Specify'},
+        ),
+        'Specify',
+      );
     });
   });
 });

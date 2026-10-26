@@ -35,6 +35,7 @@ type Memory = {
   station?: string;
   layer?: SpineLayer | '';
   drafts: LineDraft[];
+  remark: string;
   folds: FoldMemory[];
   openCaps: string[];
   specs: SpecOpen[];
@@ -52,6 +53,21 @@ function lineDrafts(): LineDraft[] {
       question: question instanceof HTMLInputElement ? question.value : '',
     };
   });
+}
+
+function documentRemark(): string {
+  const open = document.querySelector(
+    '.spine > section:has(.spine-pick:checked) form.note textarea',
+  );
+  if (open instanceof HTMLTextAreaElement && open.value !== '') {
+    return open.value;
+  }
+  for (const field of Array.from(document.querySelectorAll('.spine form.note textarea'))) {
+    if (field instanceof HTMLTextAreaElement && field.value !== '') {
+      return field.value;
+    }
+  }
+  return '';
 }
 
 function sameRows(left: readonly SpecEntry[], right: readonly SpecEntry[]): boolean {
@@ -203,6 +219,7 @@ function copyMemory(memory: Memory): Memory {
       text: draft.text,
       question: draft.question,
     })),
+    remark: memory.remark,
     folds: memory.folds.map(fold => ({
       id: fold.id,
       rows: structuredClone(fold.rows),
@@ -222,6 +239,7 @@ function restoreMemory(memory: Memory, saved: Memory): void {
   memory.station = saved.station;
   memory.layer = saved.layer;
   memory.drafts = saved.drafts;
+  memory.remark = saved.remark;
   memory.folds = saved.folds;
   memory.openCaps = saved.openCaps;
   memory.specs = saved.specs;
@@ -232,6 +250,7 @@ function keptLayer(memory: Memory, next: WindowSnapshot): SpineLayer | '' | unde
   const opened = next.opened;
   if (opened && (memory.key !== opened.key || memory.station !== opened.spine.station)) {
     memory.drafts = [];
+    memory.remark = '';
     if (memory.key !== opened.key) {
       memory.folds = [];
       memory.openCaps = [];
@@ -271,7 +290,7 @@ function boot(): void {
   let gestures = 0;
   let settingsGestures = 0;
   let reading = false;
-  const memory: Memory = {drafts: [], folds: [], openCaps: [], specs: []};
+  const memory: Memory = {drafts: [], remark: '', folds: [], openCaps: [], specs: []};
   const draw = () => {
     if (base === undefined) {
       return;
@@ -297,6 +316,7 @@ function boot(): void {
           snapshot={frame}
           layer={layer}
           drafts={memory.drafts}
+          remark={memory.remark}
           gaps={memory.folds}
           openCaps={memory.openCaps}
           specOpen={memory.specs}
@@ -369,6 +389,7 @@ function boot(): void {
       }
       if (act === 'open' || act === 'close-card') {
         memory.drafts = lineDrafts();
+        memory.remark = documentRemark();
         drawerBefore = copyMemory(memory);
       }
       gestures += 1;

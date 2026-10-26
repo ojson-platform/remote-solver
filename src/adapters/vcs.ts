@@ -89,6 +89,51 @@ function issueRef(root: string, key: string, prefix: string): string | null {
   return null;
 }
 
+function errorText(error: unknown): string {
+  if (typeof error !== 'object' || error === null) {
+    return '';
+  }
+  let body = '';
+  if ('stderr' in error && typeof error.stderr === 'string') {
+    body = error.stderr;
+  } else if ('stderr' in error && error.stderr instanceof Uint8Array) {
+    body = Buffer.from(error.stderr).toString('utf8');
+  }
+  const message = error instanceof Error ? error.message : '';
+  return `${body}\n${message}`;
+}
+
+/** `git show ref:path` failed because that path is not on the ref. */
+function absentOnRef(error: unknown): boolean {
+  const text = errorText(error);
+  if (!text.includes("fatal: path '")) {
+    return false;
+  }
+  return (
+    text.includes('does not exist in ') ||
+    text.includes('exists on disk, but not in ') ||
+    text.includes('exists, but not ') ||
+    text.includes('is in the index, but not ') ||
+    text.includes('does not exist (neither on disk nor in the index)')
+  );
+}
+
+function showFile(root: string, ref: string, rel: string): string {
+  try {
+    return execFileSync('git', ['show', `${ref}:${rel}`], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (error) {
+    if (absentOnRef(error)) {
+      return '';
+    }
+    throw error;
+  }
+}
+
+/** Files on one ref. A path that is not on that ref is empty. Any other git failure throws. */
 function filesOfRef(root: string, ref: string | null): FileSource {
   return {
     exists(rel) {
@@ -98,13 +143,13 @@ function filesOfRef(root: string, ref: string | null): FileSource {
       if (!ref) {
         return '';
       }
-      return git(root, ['show', `${ref}:${rel}`], true);
+      return showFile(root, ref, rel);
     },
     list(rel) {
       if (!ref) {
         return [];
       }
-      return git(root, ['ls-tree', '-r', '--name-only', ref, rel], true)
+      return git(root, ['ls-tree', '-r', '--name-only', ref, rel])
         .split('\n')
         .filter(line => line.length > 0);
     },

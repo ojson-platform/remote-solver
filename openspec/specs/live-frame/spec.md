@@ -55,7 +55,7 @@ The window SHALL show one strip while a gesture response, a snapshot read, or a 
 
 ### Requirement: The snapshot does not wait to read the spine
 
-The response SHALL include the drawer blocks and the last spine built for that ticket. When that spine is missing or older than the latest content epoch, `spineReady` SHALL be false and the read SHALL run after the response. A finished read SHALL publish a new generation without counting as new content. A failed read SHALL leave the previous spine, or a drawer without a diff, and SHALL set `spineReady` true. A spy snapshot SHALL keep the previous spine visible until the new one is ready, and SHALL replace rows immediately.
+The response SHALL include the drawer blocks and the last spine built for that ticket. When that spine is missing or older than the latest content epoch, `spineReady` SHALL be false and the read SHALL run after the response. A finished read SHALL publish a new generation without counting as new content. A failed read SHALL leave the previous spine, or a drawer without a diff, and SHALL set `spineReady` true. The open key SHALL stay, and that snapshot SHALL NOT set `status`. A spy snapshot SHALL keep the previous spine visible until the new one is ready, and SHALL replace rows immediately.
 
 #### Scenario: The next frame fills the spine in the same drawer
 
@@ -66,3 +66,8 @@ The response SHALL include the drawer blocks and the last spine built for that t
 
 - **WHEN** a spine is ready and a later content generation is published
 - **THEN** the first snapshot of that generation still has the previous spine with `spineReady` false, and the following snapshot has `spineReady` true
+
+#### Scenario: A failed read keeps the previous spine
+
+- **WHEN** a spine is ready and the next read fails
+- **THEN** the following snapshot has the same capability, `spineReady` true, the same drawer key, and no status

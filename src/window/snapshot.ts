@@ -83,6 +83,7 @@ export type WindowSnapshot = {
   opened?: {
     key: string;
     title: string;
+    spineReady: boolean;
     spine: Spine;
     layers: {layer: SpineLayer; act: LayerAct}[];
     blocks: SidebarBlock[];
@@ -100,6 +101,7 @@ type SnapshotSurface = {
   turn(key: string): string | undefined;
   sidebar(): SidebarBlock[];
   spine(): Spine | undefined;
+  heldSpine?: () => {spine?: Spine; ready: boolean};
   doorPlace(file: string): string | undefined;
   openReviewPlace(file: string, line: number): string | undefined;
 };
@@ -318,18 +320,29 @@ function openCycle(
     return undefined;
   }
   const focus = surface.sidebar().find(block => block.kind === 'focus');
-  const model =
-    surface.spine() ??
+  const focusBody = focus?.kind === 'focus' ? focus.body : undefined;
+  const unread = (): Spine =>
     buildSpine({
       key: row.key,
       station: row.station,
-      focusBody: focus?.kind === 'focus' ? focus.body : undefined,
+      focusBody,
       gateOff: row.gateOff,
     });
+  let model: Spine;
+  let spineReady: boolean;
+  if (surface.heldSpine) {
+    const held = surface.heldSpine();
+    model = held.spine ?? unread();
+    spineReady = held.ready;
+  } else {
+    model = surface.spine() ?? unread();
+    spineReady = true;
+  }
   const action = surface.turn(row.key);
   return {
     key: row.key,
     title: row.title,
+    spineReady,
     spine: model,
     layers: SPINE_LAYERS.map(layer => ({layer, act: layerAct(layer, model, action)})),
     blocks: surface.sidebar(),
@@ -342,7 +355,7 @@ export function snapshot(surface: SnapshotSurface, view: SnapshotView): WindowSn
   const drawn = facts(board);
   const opened = openCycle(surface, view, drawn);
   const reviewPlaces: Record<string, string> = {};
-  if (opened) {
+  if (opened?.spineReady) {
     rememberPlaces(opened.spine.rest.join('\n'), surface.openReviewPlace, reviewPlaces);
     for (const line of opened.spine.lines) {
       rememberPlaces(line.raw, surface.openReviewPlace, reviewPlaces);

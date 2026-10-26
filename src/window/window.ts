@@ -33,7 +33,7 @@ import {focusNamesPlace, focusPlaque} from './focus.ts';
 import {openRoleEditor, runRole, shelfOf} from './role.ts';
 import {openServiceGroup} from './service-group.ts';
 import {blocksFor} from './sidebar.ts';
-import {buildSpine, reviewGateForPhase} from './spine.ts';
+import {buildSpine, reviewGateForPhase, type Spine} from './spine.ts';
 import {runSpy} from './spy.ts';
 import {COLUMN_NAMES, GATE_LABEL, GATE_STATIONS, isGateStation} from './types.ts';
 
@@ -238,6 +238,43 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     return COLUMN_NAMES.indexOf(station) > COLUMN_NAMES.indexOf(plaque);
   }
 
+  let held: {key: string; spine: Spine} | undefined;
+  let spineKey = '';
+  let spineEpoch = -1;
+  let spineState: 'idle' | 'due' | 'ready' | 'failed' = 'idle';
+
+  function readOpenSpine(): Spine | undefined {
+    if (openKey === '') {
+      return undefined;
+    }
+    const item = checkout.sorted().find(ticket => ticket.key === openKey);
+    if (!item) {
+      return undefined;
+    }
+    const cycles = placed(checkout.settle().watch);
+    const column = cycles.columns.find(entry => entry.cards.some(card => card.key === item.key));
+    const station = column?.name ?? cycles.pool.find(card => card.key === item.key)?.station;
+    const phase = phaseOf([...item.labels]);
+    const gateOff: Partial<Record<GateStation, true>> = {};
+    for (const name of GATE_STATIONS) {
+      if (item.labels.includes(GATE_LABEL[name])) {
+        gateOff[name] = true;
+      }
+    }
+    return buildSpine({
+      key: item.key,
+      checkout: checkout.gathered(item),
+      station,
+      focusBody: focusPlaque(item.comments),
+      issueBody: item.body,
+      checks: item.checks,
+      diff: item.diff === true,
+      pull: (item.openPullRequests ?? 0) === 1,
+      reviewGate: reviewGateForPhase(phase),
+      gateOff,
+    });
+  }
+
   return {
     board,
     spyNote: () => outside.spyNote?.() ?? '',
@@ -287,35 +324,49 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     overlay: () => overlaySession.view(home.doc()),
     sidebar,
     spine() {
+      return readOpenSpine();
+    },
+    armSpine(epoch: number): boolean {
       if (openKey === '') {
-        return undefined;
+        return false;
       }
-      const item = checkout.sorted().find(ticket => ticket.key === openKey);
-      if (!item) {
-        return undefined;
+      if (spineKey === openKey && spineEpoch === epoch && spineState === 'ready') {
+        return false;
       }
-      const cycles = placed(checkout.settle().watch);
-      const column = cycles.columns.find(entry => entry.cards.some(card => card.key === item.key));
-      const station = column?.name ?? cycles.pool.find(card => card.key === item.key)?.station;
-      const phase = phaseOf([...item.labels]);
-      const gateOff: Partial<Record<GateStation, true>> = {};
-      for (const name of GATE_STATIONS) {
-        if (item.labels.includes(GATE_LABEL[name])) {
-          gateOff[name] = true;
-        }
+      if (spineKey === openKey && spineEpoch === epoch && spineState === 'failed') {
+        return false;
       }
-      return buildSpine({
-        key: item.key,
-        checkout: checkout.gathered(item),
-        station,
-        focusBody: focusPlaque(item.comments),
-        issueBody: item.body,
-        checks: item.checks,
-        diff: item.diff === true,
-        pull: (item.openPullRequests ?? 0) === 1,
-        reviewGate: reviewGateForPhase(phase),
-        gateOff,
-      });
+      if (spineKey !== openKey) {
+        held = undefined;
+      }
+      spineState = 'due';
+      return true;
+    },
+    warmSpine(epoch: number): void {
+      const key = openKey;
+      const built = readOpenSpine();
+      if (openKey !== key || !built) {
+        return;
+      }
+      held = {key, spine: built};
+      spineKey = key;
+      spineEpoch = epoch;
+      spineState = 'ready';
+    },
+    failSpine(epoch: number): void {
+      spineKey = openKey;
+      spineEpoch = epoch;
+      spineState = 'failed';
+    },
+    heldSpine(): {spine?: Spine; ready: boolean} {
+      if (openKey === '') {
+        return {ready: true};
+      }
+      const spine = held?.key === openKey ? held.spine : undefined;
+      if (spineState === 'due') {
+        return {spine, ready: false};
+      }
+      return {spine, ready: true};
     },
     async answer(
       key: string,

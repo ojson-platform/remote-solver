@@ -12,6 +12,7 @@ import type {
 
 import {readFileSync} from 'node:fs';
 import {createServer, type IncomingMessage, type ServerResponse} from 'node:http';
+import {setImmediate} from 'node:timers';
 
 import {bundleClient} from './client/bundle.ts';
 import {snapshot} from './snapshot.ts';
@@ -26,6 +27,10 @@ type Surface = {
   spy: () => void;
   sidebar: () => SidebarBlock[];
   spine: () => Spine | undefined;
+  heldSpine?: () => {spine?: Spine; ready: boolean};
+  armSpine?: (epoch: number) => boolean;
+  warmSpine?: (epoch: number) => void;
+  failSpine?: (epoch: number) => void;
   answer: (
     key: string,
     question: string,
@@ -90,6 +95,8 @@ type Surface = {
 type PageView = {
   /** Grows when a turn changes, a tracker read commits, or a gesture is written. */
   generation: number;
+  /** Grows on a content write. A finished spine read does not. */
+  contentEpoch: number;
   popup?: string;
   repair?: string;
   ask?: {key: string; station: string; side: boolean};
@@ -616,16 +623,25 @@ function json(res: ServerResponse, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-function written(view: PageView, listeners: Set<ServerResponse>): void {
+function written(view: PageView, listeners: Set<ServerResponse>, kind: 'content' | 'spine'): void {
   view.generation += 1;
+  if (kind === 'content') {
+    view.contentEpoch += 1;
+  }
   const frame = `event: change\ndata: ${JSON.stringify({generation: view.generation})}\n\n`;
   for (const client of listeners) {
     client.write(frame);
   }
 }
 
-function liveSnapshot(surface: Surface, view: PageView) {
+function liveSnapshot(
+  surface: Surface,
+  view: PageView,
+  listeners: Set<ServerResponse>,
+  schedule: (surface: Surface, view: PageView, listeners: Set<ServerResponse>) => void,
+) {
   settleOpened(surface, view);
+  schedule(surface, view, listeners);
   const body = snapshot(surface, view);
   view.status = undefined;
   return body;
@@ -654,6 +670,7 @@ async function handle(
   listeners: Set<ServerResponse>,
   clientJs: string,
   css: string,
+  schedule: (surface: Surface, view: PageView, listeners: Set<ServerResponse>) => void,
 ): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://127.0.0.1');
   if (req.method === 'POST' && (url.pathname === '/take' || url.pathname === '/act')) {
@@ -678,8 +695,8 @@ async function handle(
         view.show = taken;
       }
       surface.spy();
-      written(view, listeners);
-      json(res, liveSnapshot(surface, view));
+      written(view, listeners, 'content');
+      json(res, liveSnapshot(surface, view, listeners, schedule));
       return;
     }
     const result = await apply(surface, params, view, mine, epoch);
@@ -695,8 +712,8 @@ async function handle(
       text(res, 409, 'не записано');
       return;
     }
-    written(view, listeners);
-    json(res, liveSnapshot(surface, view));
+    written(view, listeners, 'content');
+    json(res, liveSnapshot(surface, view, listeners, schedule));
     return;
   }
   if (req.method === 'GET' && url.pathname === '/') {
@@ -727,7 +744,7 @@ async function handle(
     return;
   }
   if (req.method === 'GET' && url.pathname === '/snapshot') {
-    json(res, liveSnapshot(surface, view));
+    json(res, liveSnapshot(surface, view, listeners, schedule));
     return;
   }
   res.writeHead(404);
@@ -740,13 +757,44 @@ export async function serveBoard(surface: Surface): Promise<{
   close(): Promise<void>;
   note(): void;
 }> {
-  const view: PageView = {generation: 0, opened: '', service: {}, serviceDirty: false};
+  const view: PageView = {
+    generation: 0,
+    contentEpoch: 0,
+    opened: '',
+    service: {},
+    serviceDirty: false,
+  };
   const epoch = {n: 0};
   const listeners = new Set<ServerResponse>();
+  let warmToken = 0;
+
+  function scheduleSpine(surface: Surface, view: PageView, listeners: Set<ServerResponse>): void {
+    if (view.opened === '' || !surface.armSpine?.(view.contentEpoch)) {
+      return;
+    }
+    const token = ++warmToken;
+    const key = view.opened;
+    const epoch = view.contentEpoch;
+    setImmediate(() => {
+      if (token !== warmToken || view.opened !== key) {
+        return;
+      }
+      try {
+        surface.warmSpine?.(epoch);
+      } catch (error) {
+        console.error(error);
+        surface.failSpine?.(epoch);
+      }
+      if (view.opened === key && view.contentEpoch === epoch) {
+        written(view, listeners, 'spine');
+      }
+    });
+  }
+
   const clientJs = await bundleClient();
   const css = faceCss();
   const server = createServer((req, res) => {
-    handle(surface, req, res, view, epoch, listeners, clientJs, css).catch(error => {
+    handle(surface, req, res, view, epoch, listeners, clientJs, css, scheduleSpine).catch(error => {
       if (!res.headersSent) {
         text(res, 500, failure(error));
         return;
@@ -765,7 +813,7 @@ export async function serveBoard(surface: Surface): Promise<{
       resolve({
         url: `http://127.0.0.1:${address.port}/`,
         note() {
-          written(view, listeners);
+          written(view, listeners, 'content');
         },
         close: () =>
           new Promise((done, fail) => {

@@ -980,14 +980,18 @@ spec('board', () => {
         });
         assert.equal((await read()).generation, 1);
         assert.equal(await post(page.url, '/act', 'act=open&key=6'), 200);
-        assert.equal((await read()).generation, 2);
-        await page.refresh();
+        await new Promise(resolve => setImmediate(resolve));
+        await new Promise(resolve => setImmediate(resolve));
         assert.equal((await read()).generation, 3);
+        await page.refresh();
+        assert.equal((await read()).generation, 4);
+        await new Promise(resolve => setImmediate(resolve));
+        await new Promise(resolve => setImmediate(resolve));
         noteTurn(turns, '6', undefined, () => {
           page.note();
         });
         const gone = await read();
-        assert.equal(gone.generation, 4);
+        assert.equal(gone.generation, 6);
         assert.equal(gone.spy, '');
       } finally {
         await page.close();

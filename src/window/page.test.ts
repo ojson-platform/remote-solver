@@ -256,17 +256,34 @@ function shown(body: string): string {
 async function paint(response: Response): Promise<string> {
   const body = await response.text();
   const type = response.headers.get('content-type') ?? '';
-  if (type.includes('json')) {
-    return renderWindow(JSON.parse(body) as WindowSnapshot);
+  if (!type.includes('json')) {
+    return body;
   }
-  return body;
+  const shot = JSON.parse(body) as WindowSnapshot;
+  if (shot.opened?.spineReady === false) {
+    return renderWindow(await readSnapshot(response.url));
+  }
+  return renderWindow(shot);
 }
 
-async function readSnapshot(url: string): Promise<WindowSnapshot> {
+async function readOnce(url: string): Promise<WindowSnapshot> {
   const response = await fetch(new URL('/snapshot', url));
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('content-type'), 'application/json; charset=utf-8');
   return response.json() as Promise<WindowSnapshot>;
+}
+
+async function readSnapshot(url: string): Promise<WindowSnapshot> {
+  let shot = await readOnce(url);
+  for (
+    let attempt = 0;
+    attempt < 20 && shot.opened && shot.opened.spineReady === false;
+    attempt += 1
+  ) {
+    await new Promise(resolve => setImmediate(resolve));
+    shot = await readOnce(url);
+  }
+  return shot;
 }
 
 function delay(ms: number): Promise<void> {
@@ -407,7 +424,7 @@ function idle() {
 async function hosted(
   outside: Parameters<typeof openWindow>[1],
   run: (
-    page: {url: string},
+    page: {url: string; note(): void},
     window: ReturnType<typeof openWindow>,
     paths: {home: string; arcadia: string},
   ) => Promise<void>,
@@ -3872,6 +3889,7 @@ spec('sidebar', () => {
           assert.match(asking, /<label class="draft">Комментарий/);
           assert.equal(asking.includes('Принять Plan'), false);
           writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+          page.note();
           const side = bandOf(await pageHtml(page.url), '1');
           assert.match(side, /aria-label="Принять Plan"/);
           assert.equal(
@@ -4953,6 +4971,94 @@ spec('spec-diff', () => {
           );
           assert.deepEqual([...comments, ...spoken], [`- [ ] ${question}\n\n${reply}`]);
           assert.deepEqual(threads, []);
+        },
+      );
+    });
+  });
+});
+
+function caseReadDelta(): {baseline: string; delta: string} {
+  return {
+    baseline: specText(['### Requirement: Чтение', '', 'Старый текст.']),
+    delta: specText([
+      '## MODIFIED Requirements',
+      '',
+      '### Requirement: Чтение',
+      '',
+      'Новый текст.',
+    ]),
+  };
+}
+
+function plantCaseRead(arcadia: string): void {
+  const {baseline, delta} = caseReadDelta();
+  writeBaseline(arcadia, SPEC_ID, baseline);
+  writeChange(arcadia, '1', `specs/${SPEC_ID}/spec.md`, delta);
+}
+
+async function flushSpine(): Promise<void> {
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+}
+
+async function snapshotOnce(url: string): Promise<WindowSnapshot> {
+  const response = await fetch(new URL('/snapshot', url));
+  assert.equal(response.status, 200);
+  return response.json() as Promise<WindowSnapshot>;
+}
+
+spec('live-frame', () => {
+  requirement('The snapshot does not wait to read the spine', () => {
+    scenario('The next frame fills the spine in the same drawer', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          plantCaseRead(paths.arcadia);
+          window.chooseAgent('cursor');
+          const response = await fetch(new URL('act', page.url), {
+            method: 'POST',
+            headers: {'content-type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({act: 'open', key: '1'}).toString(),
+          });
+          const first = (await response.json()) as WindowSnapshot;
+          assert.equal(first.opened?.key, '1');
+          assert.equal(first.opened?.spineReady, false);
+          assert.equal(
+            first.opened?.spine.capabilities.some(item => item.id === SPEC_ID),
+            false,
+          );
+          await flushSpine();
+          const second = await snapshotOnce(page.url);
+          assert.equal(second.opened?.spineReady, true);
+          assert.ok(second.opened?.spine.capabilities.some(item => item.id === SPEC_ID));
+        },
+      );
+    });
+
+    scenario('A spy snapshot keeps the previous spine until the next one is ready', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          plantCaseRead(paths.arcadia);
+          window.chooseAgent('cursor');
+          const response = await fetch(new URL('act', page.url), {
+            method: 'POST',
+            headers: {'content-type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({act: 'open', key: '1'}).toString(),
+          });
+          assert.equal(response.status, 200);
+          await response.json();
+          await flushSpine();
+          const ready = await snapshotOnce(page.url);
+          assert.equal(ready.opened?.spineReady, true);
+          assert.ok(ready.opened?.spine.capabilities.some(item => item.id === SPEC_ID));
+          page.note();
+          const during = await snapshotOnce(page.url);
+          assert.equal(during.opened?.spineReady, false);
+          assert.ok(during.opened?.spine.capabilities.some(item => item.id === SPEC_ID));
+          await flushSpine();
+          const after = await snapshotOnce(page.url);
+          assert.equal(after.opened?.spineReady, true);
         },
       );
     });

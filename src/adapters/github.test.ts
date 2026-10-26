@@ -1,16 +1,22 @@
 import assert from 'node:assert/strict';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
-import {test} from 'vitest';
+import {test, vi} from 'vitest';
 
 import {
   changesPayload,
   classifyChecks,
   githubAdapters,
+  isRestGet,
   linkedTitle,
   linksFrom,
   memoryPorts,
+  PULL_LIST_FRESH_MS,
   pullRangeArgs,
+  readRest,
+  resetMillis,
+  restAnswer,
   threadRecord,
+  withRestValidators,
   type CheckRollup,
 } from './github.ts';
 import {setPhase} from '../machine/labels.ts';
@@ -164,13 +170,17 @@ test('setPhase keeps a single phase label and refuses a gate label', async () =>
   await assert.rejects(setPhase('7', 'proposed', tracker), /gate label sdd:proposed/);
 });
 
-function viewedIssue(number: number, login?: string): string {
+function viewedIssue(
+  number: number,
+  login?: string,
+  labels: {name: string}[] = [],
+): string {
   return JSON.stringify({
     number,
     title: 't',
     body: '',
     state: 'OPEN',
-    labels: [],
+    labels,
     assignees: login ? [{login}] : [],
   });
 }
@@ -186,7 +196,7 @@ function issueRead(number: number, fields: string | Error, login?: string) {
     if (args[0] === 'issue' && args[1] === 'view') {
       return viewedIssue(number, login);
     }
-    if (args[0] === 'issue' && args[1] === 'list') {
+    if (args.join(' ').includes('/issues?state=open')) {
       return `[${viewedIssue(number, login)}]`;
     }
     throw new Error(args.join(' '));
@@ -210,8 +220,8 @@ test('an organization issue field named sddHooks is the cycle field', async () =
       if (args[0] === 'issue' && args[1] === 'view') {
         return viewedIssue(7, 'me');
       }
-      if (args[0] === 'issue' && args[1] === 'list') {
-        return `[${viewedIssue(7, 'me')}]`;
+      if (args.join(' ').includes('/issues?state=open')) {
+        return `[${viewedIssue(7, 'me', [{name: 'sdd:cycle'}])}]`;
       }
       throw new Error(joined);
     },
@@ -344,6 +354,250 @@ spec('spec-diff', () => {
         marked.some(arg => arg.startsWith('side=')),
         false,
       );
+    });
+  });
+});
+
+spec('github-read', () => {
+  requirement('The cycle field is read for a cycle', () => {
+    scenario('An issue without the cycle label skips the field', async () => {
+      const calls: string[] = [];
+      const {tracker} = githubAdapters({
+        run: async args => {
+          calls.push(args.join(' '));
+          if (args.join(' ').includes('/issues?state=open')) {
+            return JSON.stringify([
+              {
+                number: 7,
+                title: 't',
+                body: '',
+                state: 'OPEN',
+                labels: [{name: 'sdd:cycle'}],
+                assignees: [],
+              },
+              {
+                number: 8,
+                title: 'u',
+                body: '',
+                state: 'OPEN',
+                labels: [{name: 'bug'}],
+                assignees: [],
+              },
+            ]);
+          }
+          if (args.join(' ').includes('issues/7/issue-field-values')) {
+            return JSON.stringify([
+              {issue_field_name: 'sddHooks', data_type: 'text', value: 'archive:\n  before: keep\n'},
+            ]);
+          }
+          throw new Error(args.join(' '));
+        },
+      });
+      const open = await tracker.listOpen();
+      const cycle = open.find(issue => issue.key === '7');
+      const other = open.find(issue => issue.key === '8');
+      assert.deepEqual(cycle?.sddHooks, {archive: {before: 'keep'}});
+      assert.equal(other !== undefined && 'sddHooks' in other, false);
+      assert.equal(
+        calls.some(call => call.includes('issues/7/issue-field-values')),
+        true,
+      );
+      assert.equal(
+        calls.some(call => call.includes('issues/8/issue-field-values')),
+        false,
+      );
+    });
+  });
+
+  requirement('One pull view carries checks and commits', () => {
+    scenario('Checks and the two commits come from one view', async () => {
+      const calls: string[][] = [];
+      const {review} = githubAdapters({
+        run: async args => {
+          calls.push(args);
+          if (args[0] === 'pr' && args[1] === 'list' && args.includes('merged')) {
+            return '[]';
+          }
+          if (args[0] === 'pr' && args[1] === 'list') {
+            return JSON.stringify([
+              {number: 11, title: '#7: change', state: 'OPEN'},
+              {number: 12, title: '#12: change', state: 'OPEN'},
+            ]);
+          }
+          if (args[0] === 'pr' && args[1] === 'view' && args.includes('11')) {
+            return JSON.stringify({
+              state: 'OPEN',
+              statusCheckRollup: [],
+              headRefOid: 'aaa',
+              baseRefOid: 'bbb',
+            });
+          }
+          if (args[0] === 'pr' && args[1] === 'view' && args.includes('12')) {
+            return JSON.stringify({state: 'OPEN', statusCheckRollup: []});
+          }
+          if (args.join(' ').includes('pulls/12')) {
+            return JSON.stringify({head: 'ccc', base: 'ddd'});
+          }
+          throw new Error(args.join(' '));
+        },
+      });
+      assert.equal((await review.pulls('7'))[0]?.checks, 'none');
+      assert.deepEqual(await review.range('11'), {head: 'aaa', base: 'bbb'});
+      const views = calls.filter(args => args[0] === 'pr' && args[1] === 'view');
+      assert.equal(views.length, 1);
+      assert.match(views[0]?.join(' ') ?? '', /headRefOid/);
+      assert.match(views[0]?.join(' ') ?? '', /baseRefOid/);
+      assert.equal(
+        calls.some(args => args.join(' ').includes('pulls/11')),
+        false,
+      );
+      assert.equal((await review.pulls('12'))[0]?.checks, 'none');
+      assert.deepEqual(await review.range('12'), {head: 'ccc', base: 'ddd'});
+      assert.equal(
+        calls.filter(args => args.join(' ').includes('pulls/12')).length,
+        1,
+      );
+    });
+  });
+
+  requirement('Open pull requests are one repository list', () => {
+    scenario('Two issues share one open list', async () => {
+      const calls: string[][] = [];
+      const {review} = githubAdapters({
+        run: async args => {
+          calls.push(args);
+          if (args[0] === 'pr' && args[1] === 'list' && args.includes('open')) {
+            return JSON.stringify([
+              {number: 11, title: '#7: change', state: 'OPEN'},
+              {number: 12, title: '#8: other', state: 'OPEN'},
+              {number: 13, title: 'unrelated', state: 'OPEN'},
+            ]);
+          }
+          if (args[0] === 'pr' && args[1] === 'list' && args.includes('merged')) {
+            return '[]';
+          }
+          if (args[0] === 'pr' && args[1] === 'view') {
+            return JSON.stringify({state: 'OPEN', statusCheckRollup: [], headRefOid: 'a', baseRefOid: 'b'});
+          }
+          throw new Error(args.join(' '));
+        },
+      });
+      const seven = await review.pulls('7');
+      const eight = await review.pulls('8');
+      const openLists = calls.filter(
+        args => args[0] === 'pr' && args[1] === 'list' && args.includes('open'),
+      );
+      assert.equal(openLists.length, 1);
+      assert.equal(
+        calls.some(args => args.includes('--search')),
+        false,
+      );
+      assert.deepEqual(
+        seven.map(pull => pull.id),
+        ['11'],
+      );
+      assert.deepEqual(
+        eight.map(pull => pull.id),
+        ['12'],
+      );
+    });
+
+    scenario('A merged pull request stays on the issue', async () => {
+      const {review} = githubAdapters({
+        run: async args => {
+          if (args[0] === 'pr' && args[1] === 'list' && args.includes('merged')) {
+            return JSON.stringify([{number: 9, title: '#7: old', state: 'MERGED'}]);
+          }
+          if (args[0] === 'pr' && args[1] === 'list') {
+            return '[]';
+          }
+          throw new Error(args.join(' '));
+        },
+      });
+      const pulls = await review.pulls('7');
+      assert.equal(pulls[0]?.id, '9');
+      assert.equal(pulls[0]?.state, 'MERGED');
+    });
+
+    scenario('The open list is read again after it ages', async () => {
+      vi.useFakeTimers();
+      let openLists = 0;
+      const {review} = githubAdapters({
+        run: async args => {
+          if (args[0] === 'pr' && args[1] === 'list' && args.includes('open')) {
+            openLists += 1;
+            return '[]';
+          }
+          if (args[0] === 'pr' && args[1] === 'list' && args.includes('merged')) {
+            return '[]';
+          }
+          throw new Error(args.join(' '));
+        },
+      });
+      try {
+        await review.pulls('7');
+        await review.pulls('8');
+        assert.equal(openLists, 1);
+        await vi.advanceTimersByTimeAsync(PULL_LIST_FRESH_MS);
+        await review.pulls('7');
+        assert.equal(openLists, 2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    scenario('A created pull request asks for the open list again', async () => {
+      let openLists = 0;
+      const {review} = githubAdapters({
+        run: async args => {
+          if (args[0] === 'pr' && args[1] === 'list' && args.includes('open')) {
+            openLists += 1;
+            return '[]';
+          }
+          if (args[0] === 'pr' && args[1] === 'list' && args.includes('merged')) {
+            return '[]';
+          }
+          if (args[0] === 'pr' && args[1] === 'create') {
+            return 'https://github.com/acme/billing/pull/15\n';
+          }
+          throw new Error(args.join(' '));
+        },
+      });
+      assert.equal(await review.ensurePull('7', '#7: change', 'body'), '15');
+      const afterCreate = openLists;
+      await review.pulls('7');
+      assert.ok(openLists > afterCreate);
+    });
+  });
+
+  requirement('A repeated REST read sends the previous validator', () => {
+    scenario('A repeated REST read sends the previous validator', () => {
+      const ok = ['HTTP/2.0 200 OK', 'etag: W/"abc"', '', '[]'].join('\n');
+      const same = ['HTTP/2.0 304 Not Modified', 'etag: W/"abc"', '', ''].join('\n');
+      const first = readRest(ok);
+      assert.equal(first.store?.etag, 'W/"abc"');
+      assert.equal(first.store?.body, '[]');
+      const sent = withRestValidators(
+        ['api', 'repos/acme/billing/issues/7/comments'],
+        first.store?.etag,
+      );
+      assert.equal(sent.includes('-i'), true);
+      assert.equal(sent.includes('If-None-Match: W/"abc"'), true);
+      assert.equal(isRestGet(['api', 'user', '--jq', '.login']), false);
+      assert.equal(isRestGet(['api', 'graphql', '-f', 'query=x']), false);
+      const again = readRest(same);
+      assert.equal(again.notModified, true);
+      assert.equal(restAnswer(again, first.store), '[]');
+    });
+  });
+
+  requirement('A spent rate limit pauses polling', () => {
+    scenario('A nameless rate limit reads the reset resource', () => {
+      assert.equal(
+        resetMillis(JSON.stringify({resources: {core: {reset: 1_793_005_596}}})),
+        1_793_005_596_000,
+      );
+      assert.equal(resetMillis('not json'), undefined);
     });
   });
 });

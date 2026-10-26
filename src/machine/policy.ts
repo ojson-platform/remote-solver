@@ -1,4 +1,4 @@
-import type {CheckState, IssueRecord} from './port.ts';
+import type {CheckState, Conversation, IssueRecord, ThreadRecord} from './port.ts';
 
 import path from 'node:path';
 
@@ -46,6 +46,8 @@ export type PullSnapshot = {
   state: string;
   review: ReviewView;
   checks: CheckState;
+  /** Threads and conversation from the one read. The board paints them without asking again. */
+  reading?: {threads: ThreadRecord[]; notes: Conversation[]};
 };
 
 export function writingGate(phase: Phase, change: ChangeView): {artifact: boolean; open: number} {

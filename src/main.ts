@@ -1,11 +1,12 @@
 import path from 'node:path';
 
 import {solverRoot, turn, type Machine} from './adapters/compose.ts';
+import {githubPauseRemaining} from './adapters/github.ts';
 import {performCycle} from './machine/flow.ts';
 import {endStep, observedSignal, runMarks} from './machine/focus.ts';
 import {exited, signature, tick, type State} from './machine/scheduler.ts';
 import {modeOfSkill} from './machine/skill.ts';
-import {loadCycle} from './machine/snapshot.ts';
+import {loadCycle, type CycleSnapshot} from './machine/snapshot.ts';
 
 // Spy: poll the tracker and run up to --parallel issues in this process. Each
 // issue's agent runs in the worktree sandcastle keeps for branch sdd/<key>.
@@ -98,8 +99,8 @@ export type SpyWatch = {
   onReport?: (line: string) => void;
   /** Sets one issue's turn, or clears it when the worker has left that turn. */
   onTurn?: (issue: string, turn: RunningTurn | undefined) => void;
-  /** A poll finished. The board refreshes its tickets from here. */
-  onCycle?: () => void;
+  /** A poll finished. The snapshot is the reading that poll already made. */
+  onCycle?: (snapshot?: CycleSnapshot) => void;
   /** Stops the loop at the next wait. */
   signal?: AbortSignal;
 };
@@ -139,49 +140,51 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
     if (watch?.signal?.aborted) {
       return;
     }
-    try {
-      const snapshot = await loadCycle(
-        box.tracker,
-        box.review,
-        key => box.vcs.filesAt(key),
-        box.config.queues,
-      );
-      const decisions = await performCycle(
-        snapshot,
-        {
-          tracker: box.tracker,
-          review: box.review,
-          filesAt: key => box.vcs.filesAt(key),
-          queues: box.config.queues,
-        },
-        new Set(state.running),
-      );
-      const turned = tick(state, decisions, parallel);
-      state = turned.state;
-      for (const line of turned.report) {
-        say(watch, line.issue === null ? line.reason : `#${line.issue}: ${line.reason}`);
-      }
-      for (const decision of turned.start) {
-        say(watch, `#${decision.issue} start ${decision.phase} → ${decision.action}`);
-        watch?.onTurn?.(decision.issue, {
-          issue: decision.issue,
-          phase: decision.phase,
-          action: decision.action,
-        });
-        const sig = signature(decision);
-        state = {...state, running: [...state.running, decision.issue]};
-        publish();
-        void driveIssue(box, decision.issue, watch).then(
-          result => finish(decision.issue, result.code, result.idle ?? sig),
-          error => {
-            console.error(error instanceof Error ? error.message : String(error));
-            finish(decision.issue, 1, sig);
-          },
+    if (githubPauseRemaining() === 0) {
+      try {
+        const snapshot = await loadCycle(
+          box.tracker,
+          box.review,
+          key => box.vcs.filesAt(key),
+          box.config.queues,
         );
+        const decisions = await performCycle(
+          snapshot,
+          {
+            tracker: box.tracker,
+            review: box.review,
+            filesAt: key => box.vcs.filesAt(key),
+            queues: box.config.queues,
+          },
+          new Set(state.running),
+        );
+        const turned = tick(state, decisions, parallel);
+        state = turned.state;
+        for (const line of turned.report) {
+          say(watch, line.issue === null ? line.reason : `#${line.issue}: ${line.reason}`);
+        }
+        for (const decision of turned.start) {
+          say(watch, `#${decision.issue} start ${decision.phase} → ${decision.action}`);
+          watch?.onTurn?.(decision.issue, {
+            issue: decision.issue,
+            phase: decision.phase,
+            action: decision.action,
+          });
+          const sig = signature(decision);
+          state = {...state, running: [...state.running, decision.issue]};
+          publish();
+          void driveIssue(box, decision.issue, watch).then(
+            result => finish(decision.issue, result.code, result.idle ?? sig),
+            error => {
+              console.error(error instanceof Error ? error.message : String(error));
+              finish(decision.issue, 1, sig);
+            },
+          );
+        }
+        watch?.onCycle?.(snapshot);
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : String(error));
       }
-      watch?.onCycle?.();
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
     }
 
     await new Promise<void>(resolve => {
@@ -190,7 +193,7 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
         resolve();
         return;
       }
-      const timer = setTimeout(done, intervalMs);
+      const timer = setTimeout(done, Math.max(intervalMs, githubPauseRemaining()));
       function done(): void {
         clearTimeout(timer);
         watch?.signal?.removeEventListener('abort', done);

@@ -6,9 +6,10 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test, vi} from 'vitest';
 
 import {machine} from '../adapters/compose.ts';
-import {memoryPorts} from '../adapters/github.ts';
+import {clearGithubPause, memoryPorts, noteGithubPause, readRest} from '../adapters/github.ts';
 import type {RunningTurn} from '../main.ts';
-import type {IssueRecord, Runtime, ThreadTarget, Vcs} from '../machine/port.ts';
+import type {IssueRecord, Review, Runtime, ThreadTarget, Vcs} from '../machine/port.ts';
+import {pullSnapshots} from '../machine/snapshot.ts';
 import {modelFor} from '../machine/skill.ts';
 import {
   applyTurn,
@@ -104,6 +105,15 @@ async function laterTurn(): Promise<{lines: string[]; runs: number}> {
     runtime,
   });
   const controller = new AbortController();
+  const beat = async () => {
+    if (!cleared) {
+      return;
+    }
+    pollsAfter += 1;
+    if (pollsAfter >= 2) {
+      release();
+    }
+  };
   const done = watchSpy(
     box,
     {
@@ -117,13 +127,10 @@ async function laterTurn(): Promise<{lines: string[]; runs: number}> {
         }
       },
       async refresh() {
-        if (!cleared) {
-          return;
-        }
-        pollsAfter += 1;
-        if (pollsAfter >= 2) {
-          release();
-        }
+        await beat();
+      },
+      apply() {
+        return beat();
       },
     },
     controller.signal,
@@ -378,6 +385,315 @@ spec('board', () => {
         vi.useRealTimers();
         rmSync(staged.dir, {recursive: true, force: true});
       }
+    });
+
+    scenario('A spy poll paints from the reading it already has', async () => {
+      const staged = yard();
+      const ports = memoryPorts({
+        user: MANAGER,
+        issues: [
+          {
+            key: '6',
+            title: 'Show the whole Plan',
+            body: '',
+            state: 'OPEN',
+            labels: ['sdd:cycle', 'remote-solver'],
+            assignee: '',
+          },
+        ],
+      });
+      let lists = 0;
+      let refreshes = 0;
+      const listOpen = ports.tracker.listOpen.bind(ports.tracker);
+      ports.tracker.listOpen = async () => {
+        lists += 1;
+        return listOpen();
+      };
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: ports.tracker,
+        review: ports.review,
+        githubRoot: staged.github,
+      });
+      const vcs: Vcs = {
+        prepare: async () => '',
+        tip: async () => 'abc',
+        filesAt: () => ({exists: () => false, read: () => '', list: () => []}),
+        compare: async () => null,
+        push: async () => {},
+        head: async () => 'abc',
+        published: async () => true,
+        dirty: async () => [],
+      };
+      const runtime: Runtime = {
+        async run() {
+          return {commits: 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
+      };
+      const box = machine(staged.dir, {
+        config: {
+          queues: [{name: 'remote-solver'}],
+          base: 'master',
+          branchScope: 'sdd',
+          ignoreComments: [],
+        },
+        tracker: ports.tracker,
+        review: ports.review,
+        vcs,
+        runtime,
+      });
+      const controller = new AbortController();
+      const done = watchSpy(
+        box,
+        {
+          running: new Set<string>(),
+          refresh: async () => {
+            refreshes += 1;
+          },
+          apply(snapshot) {
+            live.apply(snapshot);
+          },
+        },
+        controller.signal,
+      );
+      try {
+        const deadline = Date.now() + 3000;
+        let painted = false;
+        while (Date.now() < deadline) {
+          const cards = [
+            ...live.window.board().pool,
+            ...live.window.board().columns.flatMap(column => column.cards),
+          ];
+          painted = cards.some(card => card.title === 'Show the whole Plan');
+          if (painted) {
+            break;
+          }
+          await new Promise(resolve => {
+            setTimeout(resolve, 20);
+          });
+        }
+        assert.equal(painted, true);
+        assert.equal(refreshes, 0);
+        assert.equal(lists, 1);
+      } finally {
+        controller.abort();
+        await done;
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('The board keeps the spy\'s threads', async () => {
+      const staged = yard();
+      staged.cycle.assignee = MANAGER;
+      staged.cycle.labels = ['sdd:cycle', 'remote-solver', 'sdd:proposing'];
+      const seen: string[] = [];
+      const review: LiveReview = {
+        pulls: async () => [{id: '11', title: '#6: Show the whole Plan', state: 'OPEN', checks: 'green'}],
+        async threadList(pull) {
+          seen.push(`thread:${pull}`);
+          return [];
+        },
+        async comments(pull) {
+          seen.push(`note:${pull}`);
+          return [];
+        },
+        range: async () => ({head: 'abc', base: null}),
+        speak: async () => {},
+        openThread: async () => {},
+      };
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review,
+        githubRoot: staged.github,
+      });
+      try {
+        await live.refresh();
+        seen.length = 0;
+        live.apply({
+          issues: [staged.cycle],
+          cycles: [staged.cycle],
+          pulls: new Map([
+            [
+              '6',
+              [
+                {
+                  id: '11',
+                  title: '#6: Show the whole Plan',
+                  state: 'OPEN',
+                  checks: 'green',
+                  review: {unanswered: true, rollback: null, layers: []},
+                  reading: {
+                    threads: [
+                      {
+                        id: 'T1',
+                        comment: 'C1',
+                        path: 'src/a.ts',
+                        line: 4,
+                        resolved: false,
+                        body: 'смотрите',
+                      },
+                    ],
+                    notes: [{body: 'раз', robot: false}],
+                  },
+                },
+              ],
+            ],
+          ]),
+          changes: new Map(),
+        });
+        const board = live.window.board();
+        const card = board.columns.flatMap(column => column.cards).find(item => item.key === '6');
+        assert.equal(card?.unanswered, 'смотрите');
+        await live.refresh();
+        assert.deepEqual(seen, []);
+        const again = live.window.board().columns.flatMap(column => column.cards).find(item => item.key === '6');
+        assert.equal(again?.unanswered, 'смотрите');
+      } finally {
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('A cycle outside the spy still reads threads', async () => {
+      const staged = yard();
+      staged.cycle.assignee = MANAGER;
+      staged.cycle.labels = ['sdd:cycle', 'remote-solver', 'sdd:proposing'];
+      const nine: IssueRecord = {
+        key: '9',
+        title: 'Other cycle',
+        body: '',
+        state: 'OPEN',
+        labels: ['sdd:cycle', 'remote-solver', 'sdd:proposing'],
+        assignee: MANAGER,
+        dependsOn: [],
+      };
+      staged.tracker.listOpen = async () => [staged.cycle, nine];
+      const seen: string[] = [];
+      const review: LiveReview = {
+        pulls: async key => [
+          {
+            id: key === '6' ? '11' : '19',
+            title: `#${key}: plan`,
+            state: 'OPEN',
+            checks: 'none',
+          },
+        ],
+        async threadList(pull) {
+          seen.push(`thread:${pull}`);
+          return [
+            {
+              id: 'T9',
+              comment: 'C9',
+              path: 'src/b.ts',
+              line: 2,
+              resolved: false,
+              body: 'чужой',
+            },
+          ];
+        },
+        async comments(pull) {
+          seen.push(`note:${pull}`);
+          return [];
+        },
+        range: async () => ({head: 'abc', base: null}),
+        speak: async () => {},
+        openThread: async () => {},
+      };
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review,
+        githubRoot: staged.github,
+      });
+      try {
+        live.apply({
+          issues: [staged.cycle, nine],
+          cycles: [staged.cycle],
+          pulls: new Map([
+            [
+              '6',
+              [
+                {
+                  id: '11',
+                  title: '#6: plan',
+                  state: 'OPEN',
+                  checks: 'none',
+                  review: {unanswered: true, rollback: null, layers: []},
+                  reading: {
+                    threads: [
+                      {
+                        id: 'T1',
+                        comment: 'C1',
+                        path: 'src/a.ts',
+                        line: 4,
+                        resolved: false,
+                        body: 'смотрите',
+                      },
+                    ],
+                    notes: [],
+                  },
+                },
+              ],
+            ],
+          ]),
+          changes: new Map(),
+        });
+        await live.refresh();
+        assert.deepEqual(seen, ['thread:19', 'note:19']);
+      } finally {
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('The spy reads a pull request\'s threads once', async () => {
+      const calls: string[] = [];
+      const review: Review = {
+        pulls: async () => {
+          calls.push('pulls');
+          return [{id: '11', title: '#6: plan', state: 'OPEN', checks: 'none'}];
+        },
+        threads: async () => {
+          calls.push('threads');
+          return [];
+        },
+        threadList: async () => {
+          calls.push('threadList');
+          return [
+            {
+              id: 'T1',
+              comment: 'C1',
+              path: 'src/a.ts',
+              line: 4,
+              resolved: false,
+              body: 'смотрите',
+            },
+          ];
+        },
+        comments: async () => {
+          calls.push('comments');
+          return [{body: 'раз', robot: false}];
+        },
+        ensurePull: async () => '',
+        openThread: async () => {},
+        reply: async () => {},
+        say: async () => {},
+        speak: async () => {},
+        flag: async () => {},
+        range: async () => ({head: '', base: null}),
+        resolveThread: async () => {},
+        checksText: async () => '',
+        merge: async () => {},
+      };
+      const snaps = await pullSnapshots(review, '6');
+      assert.deepEqual(calls, ['pulls', 'threadList', 'comments']);
+      assert.equal(snaps[0]?.reading?.threads[0]?.body, 'смотрите');
+      assert.equal(snaps[0]?.review.unanswered, true);
     });
 
     scenario('The page pool lists a cycle in this repository', async () => {
@@ -916,4 +1232,48 @@ test('an empty pull id writes nothing', async () => {
   } finally {
     rmSync(hosted.staged.dir, {recursive: true, force: true});
   }
+});
+
+spec('github-read', () => {
+  requirement('A spent rate limit pauses polling', () => {
+    scenario('A spent rate limit waits until the reset', async () => {
+      vi.useFakeTimers();
+      const staged = yard();
+      let reads = 0;
+      const listOpen = staged.tracker.listOpen.bind(staged.tracker);
+      staged.tracker.listOpen = async () => {
+        reads += 1;
+        return listOpen();
+      };
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        const afterOpen = reads;
+        const resetSec = Math.floor(Date.now() / 1000) + 90;
+        const limited = [
+          'HTTP/2.0 403 Forbidden',
+          `x-ratelimit-reset: ${resetSec}`,
+          '',
+          '{"message":"API rate limit exceeded"}',
+        ].join('\n');
+        const read = readRest(limited);
+        assert.equal(read.pauseUntil, resetSec * 1000);
+        noteGithubPause(read.pauseUntil ?? 0);
+        await vi.advanceTimersByTimeAsync(REFRESH_MS);
+        assert.equal(reads, afterOpen);
+        await vi.advanceTimersByTimeAsync(REFRESH_MS);
+        assert.ok(reads > afterOpen);
+      } finally {
+        clearGithubPause();
+        await page.close();
+        vi.useRealTimers();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+  });
 });

@@ -10,7 +10,7 @@ import {BusyEdge} from './busy.tsx';
 import {ActForm, Hidden} from './forms.tsx';
 import {Cross, Pill} from './marks.tsx';
 import {Settings} from './settings.tsx';
-import {Sidebar} from './sidebar.tsx';
+import {Sidebar, type DocumentRemark} from './sidebar.tsx';
 
 function Repair({snapshot}: {snapshot: WindowSnapshot}): ReactNode {
   if (snapshot.repair === undefined) {
@@ -119,7 +119,7 @@ export function App({
   snapshot,
   layer,
   drafts = [],
-  remark = '',
+  remark = {Plan: '', Specify: '', Design: ''},
   gaps = [],
   openCaps = [],
   specOpen = [],
@@ -128,7 +128,7 @@ export function App({
   snapshot: WindowSnapshot;
   layer?: SpineLayer | '';
   drafts?: readonly LineDraft[];
-  remark?: string;
+  remark?: DocumentRemark;
   gaps?: readonly OpenFold[];
   openCaps?: readonly string[];
   specOpen?: readonly SpecOpen[];

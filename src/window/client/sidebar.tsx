@@ -620,11 +620,17 @@ function SpecRows({
   });
 }
 
+export type DocumentRemark = {
+  Plan: string;
+  Specify: string;
+  Design: string;
+};
+
 export function Sidebar({
   snapshot,
   layer,
   drafts = [],
-  remark = '',
+  remark = {Plan: '', Specify: '', Design: ''},
   gaps = [],
   openCaps = [],
   specOpen = [],
@@ -633,7 +639,7 @@ export function Sidebar({
   snapshot: WindowSnapshot;
   layer: SpineLayer | '' | undefined;
   drafts?: readonly LineDraft[];
-  remark?: string;
+  remark?: DocumentRemark;
   gaps?: readonly OpenFold[];
   openCaps?: readonly string[];
   specOpen?: readonly SpecOpen[];
@@ -726,7 +732,7 @@ export function Sidebar({
             {model.proposal.present ? (
               <PlanDocument model={model} keyName={row.key} drafts={drafts} />
             ) : null}
-            {reviewFold(model, row.key, 'proposed', model.proposal.present, remark)}
+            {reviewFold(model, row.key, 'proposed', model.proposal.present, remark.Plan)}
           </SpineRow>
           <SpineRow
             layer="Specify"
@@ -756,7 +762,7 @@ export function Sidebar({
                 />
               </details>
             ))}
-            {reviewFold(model, row.key, 'specified', model.capabilities.length > 0, remark)}
+            {reviewFold(model, row.key, 'specified', model.capabilities.length > 0, remark.Specify)}
           </SpineRow>
           <SpineRow
             layer="Design"
@@ -790,7 +796,7 @@ export function Sidebar({
                 )}
               </>
             ) : null}
-            {reviewFold(model, row.key, 'designed', model.design.present, remark)}
+            {reviewFold(model, row.key, 'designed', model.design.present, remark.Design)}
           </SpineRow>
           <SpineRow
             layer="Tasks"

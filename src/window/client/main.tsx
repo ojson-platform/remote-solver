@@ -3,6 +3,7 @@ import type {SpineLayer} from '../spine.ts';
 import type {WindowSnapshot} from '../snapshot.ts';
 import type {LineDraft, SpecOpen} from './gesture.ts';
 import type {BusyEdges, FrameHold} from './frame.ts';
+import type {DocumentRemark} from './sidebar.tsx';
 
 import {flushSync} from 'react-dom';
 import {createRoot} from 'react-dom/client';
@@ -35,7 +36,7 @@ type Memory = {
   station?: string;
   layer?: SpineLayer | '';
   drafts: LineDraft[];
-  remark: string;
+  remark: DocumentRemark;
   folds: FoldMemory[];
   openCaps: string[];
   specs: SpecOpen[];
@@ -55,19 +56,28 @@ function lineDrafts(): LineDraft[] {
   });
 }
 
-function documentRemark(): string {
-  const open = document.querySelector(
-    '.spine > section:has(.spine-pick:checked) form.note textarea',
-  );
-  if (open instanceof HTMLTextAreaElement && open.value !== '') {
-    return open.value;
-  }
+function blankRemark(): DocumentRemark {
+  return {Plan: '', Specify: '', Design: ''};
+}
+
+function copyRemark(remark: DocumentRemark): DocumentRemark {
+  return {Plan: remark.Plan, Specify: remark.Specify, Design: remark.Design};
+}
+
+function documentRemark(): DocumentRemark {
+  const remark = blankRemark();
   for (const field of Array.from(document.querySelectorAll('.spine form.note textarea'))) {
-    if (field instanceof HTMLTextAreaElement && field.value !== '') {
-      return field.value;
+    if (!(field instanceof HTMLTextAreaElement)) {
+      continue;
+    }
+    const section = field.closest('.spine > section');
+    const pick = section?.querySelector(':scope > .spine-pick');
+    const layer = pick?.getAttribute('value') ?? '';
+    if (layer === 'Plan' || layer === 'Specify' || layer === 'Design') {
+      remark[layer] = field.value;
     }
   }
-  return '';
+  return remark;
 }
 
 function sameRows(left: readonly SpecEntry[], right: readonly SpecEntry[]): boolean {
@@ -219,7 +229,7 @@ function copyMemory(memory: Memory): Memory {
       text: draft.text,
       question: draft.question,
     })),
-    remark: memory.remark,
+    remark: copyRemark(memory.remark),
     folds: memory.folds.map(fold => ({
       id: fold.id,
       rows: structuredClone(fold.rows),
@@ -239,7 +249,7 @@ function restoreMemory(memory: Memory, saved: Memory): void {
   memory.station = saved.station;
   memory.layer = saved.layer;
   memory.drafts = saved.drafts;
-  memory.remark = saved.remark;
+  memory.remark = copyRemark(saved.remark);
   memory.folds = saved.folds;
   memory.openCaps = saved.openCaps;
   memory.specs = saved.specs;
@@ -250,7 +260,7 @@ function keptLayer(memory: Memory, next: WindowSnapshot): SpineLayer | '' | unde
   const opened = next.opened;
   if (opened && (memory.key !== opened.key || memory.station !== opened.spine.station)) {
     memory.drafts = [];
-    memory.remark = '';
+    memory.remark = blankRemark();
     if (memory.key !== opened.key) {
       memory.folds = [];
       memory.openCaps = [];
@@ -290,7 +300,13 @@ function boot(): void {
   let gestures = 0;
   let settingsGestures = 0;
   let reading = false;
-  const memory: Memory = {drafts: [], remark: '', folds: [], openCaps: [], specs: []};
+  const memory: Memory = {
+    drafts: [],
+    remark: blankRemark(),
+    folds: [],
+    openCaps: [],
+    specs: [],
+  };
   const draw = () => {
     if (base === undefined) {
       return;

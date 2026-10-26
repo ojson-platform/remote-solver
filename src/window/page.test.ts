@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {request as httpRequest} from 'node:http';
-import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {parse, stringify} from 'yaml';
@@ -5004,6 +5012,59 @@ async function flushSpine(): Promise<void> {
   await new Promise(resolve => setImmediate(resolve));
 }
 
+function commitIssueBranch(checkout: string): void {
+  git(checkout, ['init', '-b', 'master']);
+  git(checkout, ['config', 'user.email', 'test@example.com']);
+  git(checkout, ['config', 'user.name', 'Test']);
+  git(checkout, ['add', 'openspec']);
+  git(checkout, ['commit', '-m', 'spec']);
+  git(checkout, ['checkout', '-b', 'sdd/1']);
+}
+
+function dropIssueSpec(checkout: string): void {
+  git(checkout, ['rm', path.join(changeDir('1'), 'specs', SPEC_ID, 'spec.md')]);
+  git(checkout, ['commit', '-m', 'drop']);
+}
+
+function restoreIssueBranch(checkout: string): void {
+  git(checkout, ['checkout', 'master']);
+  git(checkout, ['branch', '-f', 'sdd/1', 'master']);
+}
+
+/** The deferred spine reads `tasks.md`. Fail that show so the answering board still can. */
+function failGitShow(): () => void {
+  const real = execFileSync('/usr/bin/which', ['git'], {encoding: 'utf8'}).trim();
+  const dir = mkdtempSync(path.join(tmpdir(), 'spine-git-'));
+  const bin = path.join(dir, 'git');
+  writeFileSync(
+    bin,
+    [
+      '#!/bin/sh',
+      'if [ "$1" = "show" ]; then',
+      '  case " $* " in',
+      '    *tasks.md*)',
+      '      echo "fatal: not a git repository (or any of the parent directories): .git" >&2',
+      '      exit 128',
+      '      ;;',
+      '  esac',
+      'fi',
+      `exec ${JSON.stringify(real)} "$@"`,
+      '',
+    ].join('\n'),
+  );
+  chmodSync(bin, 0o755);
+  const saved = process.env.PATH;
+  process.env.PATH = `${dir}${path.delimiter}${saved ?? ''}`;
+  return () => {
+    if (saved === undefined) {
+      delete process.env.PATH;
+    } else {
+      process.env.PATH = saved;
+    }
+    rmSync(dir, {recursive: true, force: true});
+  };
+}
+
 async function snapshotOnce(url: string): Promise<WindowSnapshot> {
   const response = await fetch(new URL('/snapshot', url));
   assert.equal(response.status, 200);
@@ -5062,6 +5123,63 @@ spec('live-frame', () => {
           await flushSpine();
           const after = await snapshotOnce(page.url);
           assert.equal(after.opened?.spineReady, true);
+        },
+      );
+    });
+
+    scenario('A failed read keeps the previous spine', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const checkout = path.join(paths.arcadia, 'services', 'billing');
+          plantCaseRead(paths.arcadia);
+          commitIssueBranch(checkout);
+          let restoreBranch = false;
+          try {
+            window.chooseAgent('cursor');
+            assert.equal(
+              (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+                .status,
+              200,
+            );
+            await flushSpine();
+            const ready = await snapshotOnce(page.url);
+            assert.equal(ready.opened?.key, '1');
+            assert.equal(ready.opened?.spineReady, true);
+            assert.ok(ready.opened?.spine.capabilities.some(item => item.id === SPEC_ID));
+            dropIssueSpec(checkout);
+            restoreBranch = true;
+            const logged: unknown[] = [];
+            const report = console.error;
+            const restoreGit = failGitShow();
+            console.error = (...args: unknown[]) => {
+              logged.push(args[0]);
+            };
+            try {
+              page.note();
+              const during = await snapshotOnce(page.url);
+              assert.equal(during.opened?.key, '1');
+              assert.equal(during.opened?.spineReady, false);
+              assert.ok(during.opened?.spine.capabilities.some(item => item.id === SPEC_ID));
+              await flushSpine();
+            } finally {
+              console.error = report;
+              restoreGit();
+            }
+            assert.equal(logged.length, 1);
+            const after = await snapshotOnce(page.url);
+            assert.equal(after.opened?.key, ready.opened?.key);
+            assert.equal(after.opened?.spineReady, true);
+            assert.deepEqual(
+              after.opened?.spine.capabilities.map(item => item.id),
+              ready.opened?.spine.capabilities.map(item => item.id),
+            );
+            assert.equal(after.status, undefined);
+          } finally {
+            if (restoreBranch) {
+              restoreIssueBranch(checkout);
+            }
+          }
         },
       );
     });

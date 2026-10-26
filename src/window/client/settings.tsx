@@ -3,6 +3,7 @@ import type {ReactNode} from 'react';
 import type {WindowSnapshot} from '../snapshot.ts';
 import {FACTORY_AGENTS, ROLE_OUTCOMES, type SkillMode} from '../types.ts';
 
+import {BusyEdge} from './busy.tsx';
 import {ActForm, Hidden} from './forms.tsx';
 import {Cross, Hairline, Pill} from './marks.tsx';
 
@@ -87,7 +88,7 @@ function unwritable(group: WindowSnapshot['serviceConfig']): boolean {
   return group.ignoreComments?.some(item => item.warning === true) === true;
 }
 
-export function Settings({snapshot}: {snapshot: WindowSnapshot}): ReactNode {
+export function Settings({snapshot, busy}: {snapshot: WindowSnapshot; busy?: boolean}): ReactNode {
   if (!snapshot.settings.open) {
     return null;
   }
@@ -100,6 +101,7 @@ export function Settings({snapshot}: {snapshot: WindowSnapshot}): ReactNode {
   return (
     <div className="veil">
       <div className="sheet" role="dialog" aria-label="Настройки">
+        <BusyEdge on={busy ?? false} />
         <header>
           <h2>Настройки</h2>
           <ActForm act="close-settings">

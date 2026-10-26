@@ -368,6 +368,7 @@ function boot(): void {
         hold = holdGesture(hold, mine, act, params, paintFrame(base, hold));
       }
       if (act === 'open' || act === 'close-card') {
+        memory.drafts = lineDrafts();
         drawerBefore = copyMemory(memory);
       }
       gestures += 1;

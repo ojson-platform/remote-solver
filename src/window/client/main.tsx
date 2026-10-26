@@ -2,12 +2,14 @@ import type {SpecEntry} from '../spec-diff.ts';
 import type {SpineLayer} from '../spine.ts';
 import type {WindowSnapshot} from '../snapshot.ts';
 import type {LineDraft, SpecOpen} from './gesture.ts';
+import type {BusyEdges, FrameHold} from './frame.ts';
 
 import {flushSync} from 'react-dom';
 import {createRoot} from 'react-dom/client';
 
 import {App} from './app.tsx';
 import {postForm} from './forms.tsx';
+import {busyEdges, emptyHold, holdGesture, paintFrame, releaseHold, settingsAct} from './frame.ts';
 import {
   draftsAfterClick,
   foldsAfterSpec,
@@ -213,6 +215,14 @@ async function readSnapshot(): Promise<WindowSnapshot> {
   return response.json() as Promise<WindowSnapshot>;
 }
 
+function holdsSeq(hold: FrameHold, mine: number): boolean {
+  return (
+    hold.open?.seq === mine ||
+    hold.settings?.seq === mine ||
+    hold.gates.some(gate => gate.seq === mine)
+  );
+}
+
 function boot(): void {
   const root = document.getElementById('root');
   if (!root) {
@@ -220,17 +230,32 @@ function boot(): void {
   }
   const view = createRoot(root);
   let shot: WindowSnapshot | undefined;
+  let base: WindowSnapshot | undefined;
+  let hold = emptyHold();
+  let seq = 0;
+  let gestures = 0;
+  let settingsGestures = 0;
+  let reading = false;
   const memory: Memory = {drafts: [], folds: [], openCaps: [], specs: []};
   const draw = () => {
-    if (!shot) {
+    if (base === undefined) {
       return;
     }
-    const frame = shot;
+    const frame = paintFrame(base, hold);
+    shot = frame;
     const layer = keptLayer(memory, frame);
     memory.key = frame.opened?.key;
     memory.station = frame.opened?.spine.station;
     memory.layer = layer ?? '';
     reconcileFolds(memory, frame);
+    const busy: BusyEdges = busyEdges({
+      gestures,
+      reading,
+      drawer: frame.opened !== undefined,
+      spineReady: frame.opened?.spineReady !== false,
+      settingsOpen: frame.settings.open,
+      settingsGesture: settingsGestures > 0,
+    });
     flushSync(() => {
       view.render(
         <App
@@ -240,11 +265,12 @@ function boot(): void {
           gaps={memory.folds}
           openCaps={memory.openCaps}
           specOpen={memory.specs}
+          busy={busy}
         />,
       );
     });
     revealCaps(memory);
-    const show = shot.show;
+    const show = frame.show;
     if (show) {
       const card = document.querySelector(`article[data-key="${CSS.escape(show)}"]`);
       const board = document.querySelector('.board');
@@ -273,8 +299,14 @@ function boot(): void {
       }
     }
   };
+  const keep = (next: WindowSnapshot) => {
+    if (base !== undefined && next.generation < base.generation) {
+      return;
+    }
+    base = next;
+  };
   const take = async (next: WindowSnapshot) => {
-    shot = next;
+    keep(next);
     draw();
   };
   document.addEventListener('submit', event => {
@@ -284,16 +316,66 @@ function boot(): void {
     }
     event.preventDefault();
     const path = new URL(form.action, location.href).pathname;
+    const params = postForm(form);
+    const act = params.get('act') ?? '';
+    const tracked = base !== undefined;
+    let mine = 0;
+    if (base !== undefined) {
+      mine = ++seq;
+      if (
+        act === 'open' ||
+        act === 'close-card' ||
+        act === 'open-settings' ||
+        act === 'close-settings' ||
+        act === 'gate'
+      ) {
+        hold = holdGesture(hold, mine, act, params, paintFrame(base, hold));
+      }
+      gestures += 1;
+      if (settingsAct(act)) {
+        settingsGestures += 1;
+      }
+      draw();
+    }
+    let settled = false;
+    const finish = (snapshot: WindowSnapshot | undefined) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (tracked) {
+        gestures -= 1;
+        if (settingsAct(act)) {
+          settingsGestures -= 1;
+        }
+        if (snapshot !== undefined && (mine === seq || holdsSeq(hold, mine))) {
+          keep(snapshot);
+          hold = releaseHold(hold, mine);
+        } else if (snapshot === undefined) {
+          hold = releaseHold(hold, mine);
+        }
+      } else if (snapshot !== undefined) {
+        keep(snapshot);
+      }
+      draw();
+    };
     void fetch(path, {
       method: 'POST',
       headers: {'content-type': 'application/x-www-form-urlencoded'},
-      body: postForm(form),
-    }).then(async response => {
-      if (!response.ok) {
-        return;
-      }
-      await take((await response.json()) as WindowSnapshot);
-    });
+      body: params,
+    })
+      .then(async response => {
+        if (!response.ok) {
+          return undefined;
+        }
+        return (await response.json()) as WindowSnapshot;
+      })
+      .then(snapshot => {
+        finish(snapshot);
+      })
+      .catch(() => {
+        finish(undefined);
+      });
   });
   document.addEventListener('dragstart', event => {
     const card = event.target;
@@ -328,15 +410,30 @@ function boot(): void {
       return;
     }
     event.preventDefault();
+    gestures += 1;
+    draw();
+    let dropped: WindowSnapshot | undefined;
     void fetch('/take', {
       method: 'POST',
       headers: {'content-type': 'application/x-www-form-urlencoded'},
       body: new URLSearchParams({key: value}),
-    }).then(async response => {
-      if (response.ok) {
-        await take((await response.json()) as WindowSnapshot);
-      }
-    });
+    })
+      .then(async response => {
+        if (response.ok) {
+          dropped = (await response.json()) as WindowSnapshot;
+        }
+      })
+      .catch(() => {
+        dropped = undefined;
+      })
+      .finally(() => {
+        gestures -= 1;
+        if (dropped !== undefined) {
+          void take(dropped);
+          return;
+        }
+        draw();
+      });
   });
   document.addEventListener('focusout', event => {
     const form = event.target instanceof Element ? event.target.closest('form.pair') : null;
@@ -448,8 +545,21 @@ function boot(): void {
     }
   });
   const source = new EventSource('/events');
+  let reads = 0;
   source.addEventListener('change', () => {
-    void readSnapshot().then(take);
+    reads += 1;
+    reading = true;
+    draw();
+    void readSnapshot()
+      .then(body => {
+        keep(body);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        reads -= 1;
+        reading = reads > 0;
+        draw();
+      });
   });
   void readSnapshot().then(take);
 }

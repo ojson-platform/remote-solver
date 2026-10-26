@@ -1,6 +1,7 @@
 import type {WindowSnapshot} from '../snapshot.ts';
 
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {test} from 'vitest';
 
@@ -76,4 +77,32 @@ test('draws a strip on the window, the drawer, and the sheet', () => {
 
   const off = renderToStaticMarkup(<App snapshot={snapshot} />);
   assert.equal(off.includes('class="busy"'), false);
+});
+
+test('the sheet strip sticks to the visible top of the scroller', () => {
+  const css = readFileSync(new URL('../face.css', import.meta.url), 'utf8');
+  const busy = css.match(/\.busy \{[^}]*\}/);
+  assert.ok(busy);
+  assert.match(busy[0], /position:\s*absolute/);
+  const sheetBusy = css.match(/\.sheet > \.busy \{[^}]*\}/);
+  assert.ok(sheetBusy);
+  assert.match(sheetBusy[0], /position:\s*sticky/);
+  assert.match(sheetBusy[0], /top:\s*0/);
+  assert.match(sheetBusy[0], /z-index:\s*3/);
+  assert.match(sheetBusy[0], /margin-bottom:\s*-2px/);
+  const sharedAt = css.indexOf('.sheet, .popup {');
+  const unpaddedAt = css.indexOf('.sheet { padding: 0; }');
+  assert.ok(sharedAt !== -1 && unpaddedAt > sharedAt);
+  assert.match(css.slice(sharedAt, unpaddedAt), /overflow:\s*auto/);
+  assert.match(css.slice(sharedAt, unpaddedAt), /padding:\s*18px/);
+  assert.match(css, /\.sheet-body \{[^}]*padding:\s*18px/);
+  assert.doesNotMatch(css, /\.popup > \.busy/);
+
+  const on = renderToStaticMarkup(
+    <App snapshot={openShot()} busy={{window: true, drawer: true, settings: true}} />,
+  );
+  assert.match(
+    on,
+    /<div class="sheet" role="dialog" aria-label="Настройки"><div class="busy" aria-hidden="true"><\/div><div class="sheet-body">/,
+  );
 });

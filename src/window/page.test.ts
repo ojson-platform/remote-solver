@@ -1199,6 +1199,54 @@ test('a stalled answer cannot overwrite a newer act', async () => {
   }
 });
 
+test('a stalled answer does not lend its card to an act that leaves show', async () => {
+  let release: ((status: string | undefined) => void) | undefined;
+  let started = false;
+  const surface = idle();
+  surface.answer = () =>
+    new Promise(resolve => {
+      started = true;
+      release = resolve;
+    });
+  surface.drag = () => ({status: 'ДЕРЖИТ'});
+  const page = await serveBoard(surface);
+  let pending: Promise<{status: number; body: string}> | undefined;
+  try {
+    const prior = await post(
+      page.url,
+      'act',
+      new URLSearchParams({act: 'drag', name: 'Note', key: 'CCC'}).toString(),
+    );
+    assert.equal(prior.status, 200);
+    assert.equal((JSON.parse(prior.body) as WindowSnapshot).show, 'CCC');
+    pending = post(
+      page.url,
+      'act',
+      new URLSearchParams({act: 'answer', key: 'AAA', reply: 'ответ'}).toString(),
+    );
+    while (!started) {
+      await delay(5);
+    }
+    const newer = await post(page.url, 'act', new URLSearchParams({act: 'close-popup'}).toString());
+    assert.equal(newer.status, 200);
+    const published = JSON.parse(newer.body) as WindowSnapshot;
+    assert.equal(published.show, 'CCC');
+    const kept = await readSnapshot(page.url);
+    assert.equal(kept.show, 'CCC');
+    const finish = release;
+    release = undefined;
+    finish?.('СТАРОЕ');
+    const late = await pending;
+    assert.equal(late.status, 409);
+    assert.equal(late.body, 'устарело');
+    assert.equal((await readSnapshot(page.url)).show, 'CCC');
+  } finally {
+    release?.('СТАРОЕ');
+    await pending?.catch(() => undefined);
+    await page.close();
+  }
+});
+
 test('the last queue down button is disabled and moving past the end is 409', async () => {
   let moves = 0;
   await hosted(

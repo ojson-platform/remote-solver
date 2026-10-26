@@ -28,6 +28,14 @@ export function linkCommand(links: Link[], serviceRoot: string): string {
     steps.push(`ln -sfn ${shQuote(modules)} node_modules`);
     excluded.push('/node_modules');
   }
+  const skills = links.find(link => link.to === 'skills');
+  const verb = skills ? path.join(skills.from, 'sdd-flow', 'scripts', 'sdd.mjs') : '';
+  if (verb !== '' && existsSync(verb)) {
+    steps.push(
+      'if [ ! -e scripts/sdd.mjs ] || [ -L scripts/sdd.mjs ]; then mkdir -p scripts && ln -sfn ../.sandcastle/skills/sdd-flow/scripts/sdd.mjs scripts/sdd.mjs; fi',
+    );
+    excluded.push('/scripts/sdd.mjs');
+  }
   steps.push('exclude="$(git rev-parse --git-path info/exclude)"', 'mkdir -p "$(dirname "$exclude")"');
   for (const rule of excluded) {
     steps.push(`{ grep -qxF ${shQuote(rule)} "$exclude" 2>/dev/null || echo ${shQuote(rule)} >> "$exclude"; }`);

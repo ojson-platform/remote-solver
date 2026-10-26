@@ -55,6 +55,32 @@ test('the links the hook makes in a sandcastle worktree are not dirt, and the ex
   assert.equal(exclude.filter(line => line === '/node_modules').length, 1);
 });
 
+test('the verb script is linked into the checkout and stays out of git status', async () => {
+  const parent = mkdtempSync(path.join(tmpdir(), 'sdd-verb-'));
+  const solver = path.join(parent, 'solver');
+  const service = path.join(parent, 'service');
+  const verb = path.join(solver, 'skills', 'sdd-flow', 'scripts', 'sdd.mjs');
+  mkdirSync(path.dirname(verb), {recursive: true});
+  writeFileSync(verb, 'console.log("sdd")\n');
+  mkdirSync(service);
+  const git = (cwd: string, args: string[]) => execFileSync('git', args, {cwd, encoding: 'utf8'}).trim();
+  git(service, ['init', '-q']);
+  writeFileSync(path.join(service, '.gitignore'), 'node_modules/\n');
+  git(service, ['add', '.']);
+  git(service, ['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'base']);
+  git(service, ['worktree', 'add', '-q', '-b', 'sdd/1', '.sandcastle/worktrees/sdd-1']);
+  const worktree = path.join(service, '.sandcastle', 'worktrees', 'sdd-1');
+  const command = linkCommand(solver, service);
+  execFileSync('sh', ['-c', command], {cwd: worktree});
+  execFileSync('sh', ['-c', command], {cwd: worktree});
+  const linked = path.join(worktree, 'scripts', 'sdd.mjs');
+  assert.equal(lstatSync(linked).isSymbolicLink(), true);
+  assert.equal(readFileSync(linked, 'utf8'), 'console.log("sdd")\n');
+  assert.deepEqual(await gitVcs(worktree).dirty(), []);
+  const exclude = readFileSync(path.join(service, '.git', 'info', 'exclude'), 'utf8').split('\n');
+  assert.equal(exclude.filter(line => line === '/scripts/sdd.mjs').length, 1);
+});
+
 test('the service env link points at the package and does not replace an existing file', () => {
   const parent = mkdtempSync(path.join(tmpdir(), 'sdd-env-'));
   const solver = path.join(parent, 'solver');

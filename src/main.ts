@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import {solverRoot, turn, type Machine} from './adapters/compose.ts';
 import {githubPauseRemaining} from './adapters/github.ts';
+import {tryHoldIssue} from './adapters/lock.ts';
 import {performCycle} from './machine/flow.ts';
 import {endStep, observedSignal, runMarks} from './machine/focus.ts';
 import {exited, signature, tick, type State} from './machine/scheduler.ts';
@@ -33,7 +34,7 @@ export async function runIssue(box: Machine, key: string): Promise<number> {
   return (await driveIssue(box, key)).code;
 }
 
-export type DriveResult = {code: number; idle?: string};
+export type DriveResult = {code: number; idle?: string; busy?: boolean};
 
 /** One issue, up to 40 steps. The idle mark is the turn that made no commit. */
 export async function driveIssue(
@@ -41,6 +42,19 @@ export async function driveIssue(
   key: string,
   watch?: SpyWatch,
 ): Promise<DriveResult> {
+  const held = tryHoldIssue(box.root, key);
+  if (!held) {
+    console.log(`#${key} already running`);
+    return {code: 0, busy: true};
+  }
+  try {
+    return await driveHeldIssue(box, key, watch);
+  } finally {
+    held.release();
+  }
+}
+
+async function driveHeldIssue(box: Machine, key: string, watch?: SpyWatch): Promise<DriveResult> {
   const runtime = box.runtime;
   if (!runtime) {
     throw new Error('runtime is not configured');
@@ -174,7 +188,20 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
           state = {...state, running: [...state.running, decision.issue]};
           publish();
           void driveIssue(box, decision.issue, watch).then(
-            result => finish(decision.issue, result.code, result.idle ?? sig),
+            result => {
+              if (result.busy) {
+                watch?.onTurn?.(decision.issue, undefined);
+                state = exited(state, decision.issue, 0, sig);
+                publish();
+                const reason = 'already running';
+                if (state.reported[decision.issue] !== reason) {
+                  state = {...state, reported: {...state.reported, [decision.issue]: reason}};
+                  say(watch, `#${decision.issue} already running`);
+                }
+                return;
+              }
+              finish(decision.issue, result.code, result.idle ?? sig);
+            },
             error => {
               console.error(error instanceof Error ? error.message : String(error));
               finish(decision.issue, 1, sig);

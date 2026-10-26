@@ -39,3 +39,17 @@ The spy SHALL NOT settle or start an issue whose worker is still running. It SHA
 
 - **WHEN** two issues are ready to start and the cap is 1
 - **THEN** the spy starts one of them
+
+### Requirement: Another process does not start a held issue
+
+A second process SHALL NOT start an agent for an issue a live process already holds. It SHALL NOT mark that decision idle. A hold whose process is gone SHALL be taken by the next drive.
+
+#### Scenario: A held issue does not start an agent
+
+- **WHEN** another process already holds the issue
+- **THEN** a drive of that issue does not start an agent
+
+#### Scenario: A dead holder releases the issue
+
+- **WHEN** the process recorded in the hold is gone
+- **THEN** the next drive takes the hold

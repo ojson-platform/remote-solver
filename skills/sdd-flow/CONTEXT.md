@@ -1,6 +1,6 @@
 # Context
 
-Skills talk to the tracker, the review, and the repository only through `node scripts/sdd.mjs`. Every read and every write below is one of its verbs. The source of this package, the GitHub API, `gh`, and `remote-solver` are not part of a skill.
+Skills talk to the tracker, the review, and the repository only through `node scripts/sdd.mjs`. Every read and every write below is one of its verbs. The source of this package, the built `sdd.mjs`, `bin/`, `node_modules`, the GitHub API, `gh`, and `remote-solver` are not part of a skill. Do not search for them and do not open them to learn a verb.
 
 ## Outcome
 
@@ -109,7 +109,7 @@ The work the run found belongs to another layer: `thread open <pull> <file> <lin
 ## Publish
 
 1. The checkout lists only the files of this commit. Anything else is an artifact the task did not name: a generated directory is ignored by the repository, a stray file is deleted, a file that belongs to the task joins the commit. Find why it appeared and remove that cause in the same run. `publish` refuses a dirty checkout and lists its files.
-2. Commit. The repository's own commit rule wins: read it where the repository states commit messages (`CONTRIBUTING`, the agent style guide, a commitlint config). Without one, the subject is `#<issue>: <what changed>`. The body contains a line `#<issue>`. Any uncommitted `openspec/` of this issue joins the commit.
+2. Commit. The repository's own commit rule wins when a checkout-root file states it: `CONTRIBUTING`, `CONTRIBUTING.md`, `AGENTS.md`, `commitlint.config.js`, `commitlint.config.cjs`, `commitlint.config.mjs`, `.commitlintrc`, or `.commitlintrc.json`. Read those paths only. When none of them exists, the subject is `#<issue>: <what changed>`. Do not search the tree. The body contains a line `#<issue>`. Any uncommitted `openspec/` of this issue joins the commit.
 3. `node scripts/sdd.mjs publish <issue> "#<issue>: <what changed>"`. The argument is the pull request title, not the commit subject. It pushes the issue branch and opens the pull request when there is none.
 4. The layer's mirror line, when the skill names one: § Issue mirror.
 

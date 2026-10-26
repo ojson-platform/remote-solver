@@ -162,13 +162,18 @@ function SpineRow({
   );
 }
 
-function Remark({keyName}: {keyName: string}): ReactNode {
+function Remark({keyName, text}: {keyName: string; text: string}): ReactNode {
   return (
     <ActForm act="answer" className="note">
       <Hidden name="key" value={keyName} />
       <label className="draft">
         Комментарий
-        <textarea name="reply" rows={2} placeholder="Замечание ко всему документу" />
+        <textarea
+          name="reply"
+          rows={2}
+          placeholder="Замечание ко всему документу"
+          defaultValue={text}
+        />
         <button className="send" type="submit" aria-label="Записать">
           <SendMark />
         </button>
@@ -383,6 +388,7 @@ function reviewFold(
   keyName: string,
   gate: NonNullable<Spine['reviewGate']>,
   shown: boolean,
+  remark: string,
 ): ReactNode {
   if (!model.pull) {
     return null;
@@ -392,7 +398,7 @@ function reviewFold(
   }
   return (
     <div className="plan-foot">
-      <Remark keyName={keyName} />
+      <Remark keyName={keyName} text={remark} />
     </div>
   );
 }
@@ -618,6 +624,7 @@ export function Sidebar({
   snapshot,
   layer,
   drafts = [],
+  remark = '',
   gaps = [],
   openCaps = [],
   specOpen = [],
@@ -626,6 +633,7 @@ export function Sidebar({
   snapshot: WindowSnapshot;
   layer: SpineLayer | '' | undefined;
   drafts?: readonly LineDraft[];
+  remark?: string;
   gaps?: readonly OpenFold[];
   openCaps?: readonly string[];
   specOpen?: readonly SpecOpen[];
@@ -718,7 +726,7 @@ export function Sidebar({
             {model.proposal.present ? (
               <PlanDocument model={model} keyName={row.key} drafts={drafts} />
             ) : null}
-            {reviewFold(model, row.key, 'proposed', model.proposal.present)}
+            {reviewFold(model, row.key, 'proposed', model.proposal.present, remark)}
           </SpineRow>
           <SpineRow
             layer="Specify"
@@ -748,7 +756,7 @@ export function Sidebar({
                 />
               </details>
             ))}
-            {reviewFold(model, row.key, 'specified', model.capabilities.length > 0)}
+            {reviewFold(model, row.key, 'specified', model.capabilities.length > 0, remark)}
           </SpineRow>
           <SpineRow
             layer="Design"
@@ -782,7 +790,7 @@ export function Sidebar({
                 )}
               </>
             ) : null}
-            {reviewFold(model, row.key, 'designed', model.design.present)}
+            {reviewFold(model, row.key, 'designed', model.design.present, remark)}
           </SpineRow>
           <SpineRow
             layer="Tasks"

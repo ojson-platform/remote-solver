@@ -119,6 +119,7 @@ export function App({
   snapshot,
   layer,
   drafts = [],
+  remark = '',
   gaps = [],
   openCaps = [],
   specOpen = [],
@@ -127,6 +128,7 @@ export function App({
   snapshot: WindowSnapshot;
   layer?: SpineLayer | '';
   drafts?: readonly LineDraft[];
+  remark?: string;
   gaps?: readonly OpenFold[];
   openCaps?: readonly string[];
   specOpen?: readonly SpecOpen[];
@@ -169,6 +171,7 @@ export function App({
         snapshot={snapshot}
         layer={layer}
         drafts={drafts}
+        remark={remark}
         gaps={gaps}
         openCaps={openCaps}
         specOpen={specOpen}

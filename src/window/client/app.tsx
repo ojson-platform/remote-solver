@@ -2,7 +2,7 @@ import type {ReactNode} from 'react';
 
 import type {SpineLayer} from '../spine.ts';
 import type {WindowSnapshot} from '../snapshot.ts';
-import type {LineDraft, OpenFold} from './gesture.ts';
+import type {LineDraft, OpenFold, SpecOpen} from './gesture.ts';
 
 import {Board} from './board.tsx';
 import {ActForm, Hidden} from './forms.tsx';
@@ -119,12 +119,14 @@ export function App({
   drafts = [],
   gaps = [],
   openCaps = [],
+  specOpen = [],
 }: {
   snapshot: WindowSnapshot;
   layer?: SpineLayer | '';
   drafts?: readonly LineDraft[];
   gaps?: readonly OpenFold[];
   openCaps?: readonly string[];
+  specOpen?: readonly SpecOpen[];
 }): ReactNode {
   const lamp = snapshot.lamp ? (
     <p className="lamp on">шаги идут</p>
@@ -158,7 +160,14 @@ export function App({
           <Board rows={snapshot.rows} opened={snapshot.opened?.key} />
         </div>
       </div>
-      <Sidebar snapshot={snapshot} layer={layer} drafts={drafts} gaps={gaps} openCaps={openCaps} />
+      <Sidebar
+        snapshot={snapshot}
+        layer={layer}
+        drafts={drafts}
+        gaps={gaps}
+        openCaps={openCaps}
+        specOpen={specOpen}
+      />
       <Settings snapshot={snapshot} />
       <Popup text={snapshot.popup} />
       <Repair snapshot={snapshot} />

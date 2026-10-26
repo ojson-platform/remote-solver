@@ -458,6 +458,40 @@ spec('github-read', () => {
         1,
       );
     });
+
+    scenario('A client without the base field still reads the pull request', async () => {
+      const calls: string[][] = [];
+      const {review} = githubAdapters({
+        run: async args => {
+          calls.push(args);
+          const joined = args.join(' ');
+          if (args[0] === 'pr' && args[1] === 'list' && args.includes('merged')) {
+            return '[]';
+          }
+          if (args[0] === 'pr' && args[1] === 'list') {
+            return JSON.stringify([{number: 11, title: '#7: change', state: 'OPEN'}]);
+          }
+          if (args[0] === 'pr' && args[1] === 'view' && joined.includes('baseRefOid')) {
+            throw Object.assign(new Error('gh exited 1'), {
+              stderr: 'Unknown JSON field: "baseRefOid"\n',
+              stdout: '',
+            });
+          }
+          if (args[0] === 'pr' && args[1] === 'view') {
+            return JSON.stringify({state: 'OPEN', statusCheckRollup: [], headRefOid: 'aaa'});
+          }
+          if (joined.includes('pulls/11')) {
+            return JSON.stringify({head: 'aaa', base: 'bbb'});
+          }
+          throw new Error(joined);
+        },
+      });
+      assert.equal((await review.pulls('7'))[0]?.checks, 'none');
+      assert.deepEqual(await review.range('11'), {head: 'aaa', base: 'bbb'});
+      assert.equal(calls.filter(args => args.join(' ').includes('pulls/11')).length, 1);
+      assert.deepEqual(await review.range('11'), {head: 'aaa', base: 'bbb'});
+      assert.equal(calls.filter(args => args.join(' ').includes('pulls/11')).length, 1);
+    });
   });
 
   requirement('Open pull requests are one repository list', () => {

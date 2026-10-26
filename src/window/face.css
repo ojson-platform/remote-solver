@@ -388,6 +388,7 @@
   .spine h4 { margin: 10px 0 2px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; }
   .spine .hold { margin: 0 0 6px; color: var(--brass); font-size: 12px; }
   .spine .cap, .spine .task { border-top: 1px solid var(--line); padding-top: 8px; }
+  .spine .fold > .cap:first-child { border-top: 0; padding-top: 0; }
   .spine summary { cursor: pointer; font: 600 12px/1.2 ui-monospace, "SF Mono", Menlo, monospace; }
   .spine .jump {
     display: block;
@@ -428,7 +429,10 @@
     cursor: pointer;
   }
   .spine button.line:hover,
-  .spine button.line.is-on { background: rgba(230, 179, 90, 0.1); }
+  .spine button.line.is-on {
+    background-image: linear-gradient(rgba(230, 179, 90, 0.2), rgba(230, 179, 90, 0.2));
+    box-shadow: inset 3px 0 0 var(--brass);
+  }
   .spine .gap { display: block; height: 6px; }
   .spine .cap summary { white-space: nowrap; }
   .spine .badge { margin-left: 8px; color: var(--muted); font-weight: 500; white-space: nowrap; }
@@ -451,7 +455,29 @@
   .spine .diff-row .bit { border-radius: 2px; }
   .spine .diff-row.add .bit { background: color-mix(in srgb, var(--green) 48%, transparent); }
   .spine .diff-row.del .bit { background: color-mix(in srgb, var(--red) 48%, transparent); }
-  .spine .diff-row button.line { width: 100%; margin: 0; }
+  .spine .diff-row button.line,
+  .spine button.diff-row {
+    display: grid;
+    grid-template-columns: 2.6em 2.6em minmax(0, 1fr);
+    column-gap: 8px;
+    align-items: start;
+    width: 100%;
+    margin: 0;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: 1.45;
+    text-align: left;
+    cursor: pointer;
+  }
+  .spine button.diff-row:hover,
+  .spine button.diff-row.is-on {
+    background-image: linear-gradient(rgba(230, 179, 90, 0.2), rgba(230, 179, 90, 0.2));
+    box-shadow: inset 3px 0 0 var(--brass);
+  }
   .spine button.fold-bar {
     display: block;
     width: calc(100% + 32px);
@@ -461,7 +487,7 @@
     border-radius: 0;
     background: transparent;
     color: var(--muted);
-    text-align: left;
+    text-align: center;
     cursor: pointer;
   }
   .spine form.line-note { position: relative; margin: 18px 10px 8px; }

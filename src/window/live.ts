@@ -244,11 +244,18 @@ export function openLiveBoard(options: LiveBoardOptions) {
     reading: Map<string, WindowReview>,
   ): Promise<WindowTicket> {
     const ticket = ticketFrom(issue, repo, services.get(issue.key));
+    let comments: {body: string; manager?: boolean}[] | undefined;
+    let open: Pull[] = [];
     try {
-      const comments = await tracker.comments(issue.key);
-      const open = (await review.pulls(issue.key)).filter(pull => pull.state === 'OPEN');
-      let diff = false;
-      let checks: WindowTicket['checks'];
+      comments = await tracker.comments(issue.key);
+      open = (await review.pulls(issue.key)).filter(pull => pull.state === 'OPEN');
+    } catch (error) {
+      console.error(error);
+      return ticket;
+    }
+    let diff = false;
+    let checks: WindowTicket['checks'];
+    try {
       if (open.length === 1) {
         const pull = open[0];
         if (pull) {
@@ -277,18 +284,17 @@ export function openLiveBoard(options: LiveBoardOptions) {
           }
         }
       }
-      return {
-        ...ticket,
-        comments,
-        openPullRequests: open.length,
-        ...(checks !== undefined ? {checks} : {}),
-        ...(diff ? {diff: true} : {}),
-        ...(phaseOf(issue.labels) === 'accepting' && open.length === 1 ? {mergeAhead: true} : {}),
-      };
     } catch (error) {
       console.error(error);
-      return ticket;
     }
+    return {
+      ...ticket,
+      ...(comments ? {comments} : {}),
+      openPullRequests: open.length,
+      ...(checks !== undefined ? {checks} : {}),
+      ...(diff ? {diff: true} : {}),
+      ...(phaseOf(issue.labels) === 'accepting' && open.length === 1 ? {mergeAhead: true} : {}),
+    };
   }
 
   async function refresh(): Promise<boolean> {

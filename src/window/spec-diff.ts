@@ -396,6 +396,49 @@ function diffSteps<T>(
   return steps;
 }
 
+function requirementHeading(text: string): boolean {
+  return text.startsWith('### Requirement:');
+}
+
+function scenarioHeading(text: string): boolean {
+  return text.startsWith('#### Scenario:');
+}
+
+function sectionHeading(text: string): boolean {
+  return text.startsWith('## ') && !text.startsWith('### ');
+}
+
+function lineText(rows: readonly SpecRow[], index: number): string {
+  return rows[index]?.text.trim() ?? '';
+}
+
+/** The scenario that contains this line, or -1 when the line is above every scenario. */
+function scenarioIndex(rows: readonly SpecRow[], from: number): number {
+  for (let index = from; index >= 0; index -= 1) {
+    const text = lineText(rows, index);
+    if (scenarioHeading(text)) {
+      return index;
+    }
+    if (requirementHeading(text) || sectionHeading(text)) {
+      return -1;
+    }
+  }
+  return -1;
+}
+
+function requirementIndex(rows: readonly SpecRow[], from: number): number {
+  for (let index = from; index >= 0; index -= 1) {
+    const text = lineText(rows, index);
+    if (requirementHeading(text)) {
+      return index;
+    }
+    if (sectionHeading(text)) {
+      return -1;
+    }
+  }
+  return -1;
+}
+
 function fold(rows: readonly SpecRow[]): SpecEntry[] {
   const changed: number[] = [];
   for (let index = 0; index < rows.length; index += 1) {
@@ -404,9 +447,14 @@ function fold(rows: readonly SpecRow[]): SpecEntry[] {
   if (changed.length === 0) return [...rows];
   const shown = new Array<boolean>(rows.length).fill(false);
   for (const index of changed) {
-    const start = Math.max(0, index - CONTEXT);
+    const scenario = scenarioIndex(rows, index);
+    const requirement = scenario < 0 ? -1 : requirementIndex(rows, scenario);
+    const back = scenario < 0 ? 0 : scenario;
+    const start = Math.max(back, index - CONTEXT);
     const end = Math.min(rows.length, index + CONTEXT + 1);
     for (let cursor = start; cursor < end; cursor += 1) shown[cursor] = true;
+    if (requirement >= 0) shown[requirement] = true;
+    if (scenario >= 0) shown[scenario] = true;
   }
   const entries: SpecEntry[] = [];
   let index = 0;

@@ -17,12 +17,17 @@ GitHub reads for the board and the spy stay inside the rate limit.
 
 ### Requirement: One pull view carries checks and commits
 
-An open pull request's checks and its head and base commits SHALL come from one `pr view`. A range read after that view SHALL NOT ask GitHub again when the view included both commits. When the view omits the commits, the range SHALL fall back to one REST read of the pull request.
+An open pull request's checks and its head and base commits SHALL come from one `pr view`. A range read after that view SHALL NOT ask GitHub again when the view included both commits. When the view omits the commits, the range SHALL fall back to one REST read of the pull request. When the client rejects the base commit field, the pull request SHALL still be read from a view without that field, and the base commit SHALL come from one REST read.
 
 #### Scenario: Checks and the two commits come from one view
 
 - **WHEN** the review reads an open pull request and then its range
 - **THEN** one view asks for the checks and both commits, the range does not ask again, and a view that omits the commits is followed by one REST read
+
+#### Scenario: A client without the base field still reads the pull request
+
+- **WHEN** the view that asks for the base commit is rejected as an unknown field
+- **THEN** the open pull request is still returned and one REST read supplies the base commit
 
 ### Requirement: Open pull requests are one repository list
 

@@ -32,7 +32,7 @@ The collapsed capability summary SHALL show `new` when the baseline text is empt
 
 ### Requirement: The drawer shows the folded spec
 
-The drawer SHALL show a unified diff of the baseline against the folded spec. A row SHALL show the baseline line number on the left and the folded line number on the right. A changed word inside a one-line replacement SHALL be marked. A run of more than six unchanged lines between changes SHALL be one gap row whose hidden rows are in the snapshot. More than three unchanged lines before the first change, or after the last change, SHALL be a gap that keeps the three lines next to the change. The section headings of the delta SHALL NOT appear in the rows.
+The drawer SHALL show a unified diff of the baseline against the folded spec. A row SHALL show the baseline line number on the left and the folded line number on the right. A changed word inside a one-line replacement SHALL be marked. A run of more than six unchanged lines between changes SHALL be one gap row whose hidden rows are in the snapshot. More than three unchanged lines before the first change, or after the last change, SHALL be a gap that keeps the three lines next to the change. When a changed line lies in a scenario, the drawer SHALL show that requirement's heading and that scenario's heading, and the lines between those headings SHALL be one gap. Context beside that change SHALL NOT include a line from an earlier scenario. The section headings of the delta SHALL NOT appear in the rows.
 
 #### Scenario: A changed line shows both numbers and the changed words
 
@@ -53,6 +53,34 @@ The drawer SHALL show a unified diff of the baseline against the folded spec. A 
 
 - **WHEN** the baseline has a Purpose section and the delta appends a requirement under ADDED Requirements
 - **THEN** the rows contain the Purpose line and the new requirement, and contain no ADDED heading
+
+#### Scenario: Earlier scenarios fold up to the requirement heading
+
+- **WHEN** a later scenario replaces one line and an earlier scenario stands between that line and the requirement heading
+- **THEN** the requirement heading and the later scenario heading are visible, and the earlier scenario and the requirement body are inside a gap
+
+### Requirement: An opened gap stays open until the capability closes
+
+Choosing a gap SHALL show its lines. Choosing that gap again SHALL leave the lines shown. Closing the capability and opening it again SHALL hide those lines.
+
+#### Scenario: A second click leaves the gap open
+
+- **WHEN** a gap is open and the person chooses it again
+- **THEN** the gap stays open
+
+#### Scenario: Closing the capability hides the lines again
+
+- **WHEN** a gap is open and the person closes that capability
+- **THEN** the gap is closed
+
+### Requirement: The fold control sits apart from the spec text
+
+The fold control SHALL be centered. The first capability SHALL NOT have a rule above it. A commentable diff row SHALL be one control, so the line numbers and the text highlight and receive the comment together.
+
+#### Scenario: The fold control is centered and the list has no rule above it
+
+- **WHEN** the drawer shows a capability diff
+- **THEN** the fold control is centered and the first capability has no top rule
 
 ### Requirement: A line comment uses a thread when the line has an anchor
 

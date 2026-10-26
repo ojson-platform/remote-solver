@@ -4,17 +4,17 @@ import assert from 'node:assert/strict';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
 
-import {keptSpineLayer, scenarioTarget, toggledSpineLayer, toggleFold} from './gesture.ts';
+import {keptSpineLayer, scenarioTarget, toggledSpineLayer, revealFold, foldsAfterSpec, capIsOpen} from './gesture.ts';
 
-test('toggleFold drops an index that is already open and keeps the rest', () => {
+test('revealFold keeps an index that is already open', () => {
   const open = [2, 0, 4];
-  assert.deepEqual(toggleFold(open, 0), [2, 4]);
+  assert.deepEqual(revealFold(open, 0), [2, 0, 4]);
   assert.deepEqual(open, [2, 0, 4]);
 });
 
-test('toggleFold adds an index that was closed and keeps the rest', () => {
+test('revealFold adds an index that was closed and keeps the rest', () => {
   const open = [2, 4];
-  assert.deepEqual(toggleFold(open, 0), [2, 4, 0]);
+  assert.deepEqual(revealFold(open, 0), [2, 4, 0]);
   assert.deepEqual(open, [2, 4]);
 });
 
@@ -86,6 +86,20 @@ spec('spec-diff', () => {
         gap: 1,
         name,
       });
+    });
+  });
+
+  requirement('An opened gap stays open until the capability closes', () => {
+    scenario('A second click leaves the gap open', () => {
+      assert.deepEqual(revealFold([1], 1), [1]);
+      assert.deepEqual(revealFold([1], 2), [1, 2]);
+    });
+    scenario('Closing the capability hides the lines again', () => {
+      const folds = [{id: 'case-read', open: [1, 2]}];
+      assert.deepEqual(foldsAfterSpec(folds, 'case-read', true), [...folds]);
+      assert.deepEqual(foldsAfterSpec(folds, 'case-read', false), []);
+      assert.equal(capIsOpen('case-read', 0, [{id: 'case-read', open: false}], []), false);
+      assert.equal(capIsOpen('case-read', 0, [], []), true);
     });
   });
 });

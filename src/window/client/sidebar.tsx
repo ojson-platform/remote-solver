@@ -4,7 +4,7 @@ import type {SpecEntry, SpecRow} from '../spec-diff.ts';
 import type {Spine, SpineLayer, SpineSourceLine} from '../spine.ts';
 import type {WindowSnapshot} from '../snapshot.ts';
 import type {GateStation, SidebarBlock} from '../types.ts';
-import type {LineDraft, OpenFold} from './gesture.ts';
+import type {LineDraft, OpenFold, SpecOpen} from './gesture.ts';
 
 import {Fragment} from 'react';
 
@@ -12,6 +12,7 @@ import {unchangedLabel} from '../spec-diff.ts';
 
 import {Gate} from './board.tsx';
 import {ActForm, Hidden} from './forms.tsx';
+import {capIsOpen} from './gesture.ts';
 import {Cross, SendMark} from './marks.tsx';
 
 function codeLine(line: string, places: Record<string, string>): ReactNode {
@@ -524,47 +525,49 @@ function DiffRow({
   const showButton = pull && row.text.trim() !== '';
   const draft = drafts.find(item => item.line === row.text);
   const body = lineBody(row);
-  let text: ReactNode;
-  if (showButton) {
-    text = (
+  const note =
+    showButton && draft !== undefined ? (
+      <LineNote
+        keyName={keyName}
+        line={draft.line}
+        question={draft.question}
+        text={draft.text}
+        path={anchor?.path}
+        at={anchor?.at}
+        side={anchor?.side}
+      />
+    ) : null;
+  if (!showButton) {
+    return (
+      <div className={`diff-row ${row.kind}`}>
+        {numberCell(row.left)}
+        {numberCell(row.right)}
+        <div className="diff-text">
+          <span className="line" data-scenario={scene}>
+            {body}
+          </span>
+        </div>
+      </div>
+    );
+  }
+  const pressed = draft === undefined ? `diff-row ${row.kind}` : `diff-row is-on ${row.kind}`;
+  return (
+    <>
       <button
         type="button"
-        className={draft === undefined ? 'line' : 'line is-on'}
+        className={pressed}
         data-line={row.text}
         data-path={anchor?.path}
         data-at={anchor?.at}
         data-side={anchor?.side}
         data-scenario={scene}
       >
-        {body}
+        {numberCell(row.left)}
+        {numberCell(row.right)}
+        <span className="diff-text">{body}</span>
       </button>
-    );
-  } else {
-    text = (
-      <span className="line" data-scenario={scene}>
-        {body}
-      </span>
-    );
-  }
-  return (
-    <div className={`diff-row ${row.kind}`}>
-      {numberCell(row.left)}
-      {numberCell(row.right)}
-      <div className="diff-text">
-        {text}
-        {showButton && draft !== undefined ? (
-          <LineNote
-            keyName={keyName}
-            line={draft.line}
-            question={draft.question}
-            text={draft.text}
-            path={anchor?.path}
-            at={anchor?.at}
-            side={anchor?.side}
-          />
-        ) : null}
-      </div>
-    </div>
+      {note}
+    </>
   );
 }
 
@@ -616,12 +619,14 @@ export function Sidebar({
   drafts = [],
   gaps = [],
   openCaps = [],
+  specOpen = [],
 }: {
   snapshot: WindowSnapshot;
   layer: SpineLayer | '' | undefined;
   drafts?: readonly LineDraft[];
   gaps?: readonly OpenFold[];
   openCaps?: readonly string[];
+  specOpen?: readonly SpecOpen[];
 }): ReactNode {
   const opened = snapshot.opened;
   if (!opened) {
@@ -722,7 +727,7 @@ export function Sidebar({
               <details
                 className="cap"
                 id={`cap-${item.id}`}
-                open={index === 0 || openCaps.includes(item.id)}
+                open={capIsOpen(item.id, index, specOpen, openCaps)}
                 key={item.id}
               >
                 <summary>

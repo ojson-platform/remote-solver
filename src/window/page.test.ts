@@ -4594,6 +4594,59 @@ spec('spec-diff', () => {
     });
   });
 
+  requirement('The drawer shows the folded spec', () => {
+    scenario('Earlier scenarios fold up to the requirement heading', async () => {
+      const body = [
+        '### Requirement: Чтение',
+        'Тело требования.',
+        '#### Scenario: Первый',
+        '- **WHEN** первый',
+        '- **THEN** первый',
+        '#### Scenario: Второй',
+        '- **WHEN** второй',
+        '- **THEN** было',
+      ];
+      const baseline = specText(body);
+      const delta = specText([
+        '## MODIFIED Requirements',
+        '',
+        ...body.slice(0, -1),
+        '- **THEN** стало',
+      ]);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const {shot} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const {cap, gaps} = specView(shot, SPEC_ID);
+          const visible = cap.rows.flatMap(entry => (entry.kind === 'gap' ? [] : [entry.text]));
+          assert.deepEqual(visible, [
+            '### Requirement: Чтение',
+            '#### Scenario: Второй',
+            '- **WHEN** второй',
+            '- **THEN** было',
+            '- **THEN** стало',
+          ]);
+          assert.equal(gaps.length, 1);
+          assert.deepEqual(gaps[0]?.hidden.map(row => row.text), [
+            'Тело требования.',
+            '#### Scenario: Первый',
+            '- **WHEN** первый',
+            '- **THEN** первый',
+          ]);
+        },
+      );
+    });
+  });
+
+  requirement('The fold control sits apart from the spec text', () => {
+    scenario('The fold control is centered and the list has no rule above it', () => {
+      const css = readFileSync(new URL('./face.css', import.meta.url), 'utf8');
+      assert.match(css, /\.spine button\.fold-bar \{[^}]*text-align: center/);
+      assert.match(css, /\.spine \.fold > \.cap:first-child \{[^}]*border-top: 0/);
+      assert.match(css, /\.spine button\.diff-row:hover/);
+    });
+  });
+
   requirement('A line comment uses a thread when the line has an anchor', () => {
     scenario('A line copied from the delta opens a thread', async () => {
       const {baseline, delta, newLine} = replacedLines();
@@ -4630,6 +4683,10 @@ spec('spec-diff', () => {
           assert.equal(button.includes(`data-path="${DELTA_PATH}"`), true);
           assert.equal(button.includes(`data-at="${added.anchor.line}"`), true);
           assert.equal(button.includes('data-side="right"'), true);
+          const rowStart = html.lastIndexOf('<button', html.indexOf(`data-line="${newLine}"`));
+          const row = html.slice(rowStart, html.indexOf('</button>', rowStart));
+          assert.match(row, /class="diff-row /);
+          assert.match(row, /class="num"/);
           assert.equal(
             (
               await post(

@@ -4232,3 +4232,648 @@ spec('role', () => {
     });
   });
 });
+
+const SPEC_ID = 'case-read';
+const DELTA_PATH = 'openspec/changes/issue-1/specs/case-read/spec.md';
+const PROPOSAL_PATH = 'openspec/changes/issue-1/proposal.md';
+
+type ThreadPlace = {path: string; line: number; side: 'right' | 'left'};
+
+function specText(lines: readonly string[]): string {
+  return `${lines.join('\n')}\n`;
+}
+
+function sourceLine(source: string, needle: string): number {
+  const index = source.split('\n').findIndex(line => line === needle);
+  assert.notEqual(index, -1, needle);
+  return index + 1;
+}
+
+function writeBaseline(arcadia: string, id: string, body: string): void {
+  const file = path.join(arcadia, 'services', 'billing', 'openspec', 'specs', id, 'spec.md');
+  mkdirSync(path.dirname(file), {recursive: true});
+  writeFileSync(file, body);
+}
+
+async function showCard(page: {url: string}, window: ReturnType<typeof openWindow>): Promise<void> {
+  window.chooseAgent('cursor');
+  assert.equal(
+    (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())).status,
+    200,
+  );
+}
+
+async function drawSpec(
+  page: {url: string},
+  window: ReturnType<typeof openWindow>,
+  arcadia: string,
+  delta: string,
+  baseline?: string,
+): Promise<{shot: WindowSnapshot; html: string}> {
+  if (baseline !== undefined) {
+    writeBaseline(arcadia, SPEC_ID, baseline);
+  }
+  writeChange(arcadia, '1', `specs/${SPEC_ID}/spec.md`, delta);
+  await showCard(page, window);
+  const shot = await readSnapshot(page.url);
+  return {shot, html: renderWindow(shot)};
+}
+
+function specView(shot: WindowSnapshot, id: string) {
+  const cap = shot.opened?.spine.capabilities.find(item => item.id === id);
+  assert.ok(cap, id);
+  const flat = cap.rows.flatMap(entry => (entry.kind === 'gap' ? entry.hidden : [entry]));
+  const gaps = cap.rows.flatMap(entry => (entry.kind === 'gap' ? [entry] : []));
+  return {cap, flat, gaps};
+}
+
+function capHtml(html: string, id: string): string {
+  const marker = `id="cap-${id}"`;
+  const at = html.indexOf(marker);
+  assert.ok(at >= 0, marker);
+  const start = html.lastIndexOf('<details', at);
+  const end = html.indexOf('</details>', at);
+  assert.ok(end > start);
+  return html.slice(start, end);
+}
+
+function summaryHtml(html: string, id: string): string {
+  const cap = capHtml(html, id);
+  const start = cap.indexOf('<summary>');
+  const end = cap.indexOf('</summary>');
+  assert.ok(end > start);
+  return cap.slice(start, end + '</summary>'.length);
+}
+
+function assertNoSpineBadge(html: string): void {
+  const row = spineOf(html, '1', 'Specify').split('<div class="fold">')[0] ?? '';
+  assert.equal(row.includes('class="badge"'), false);
+}
+
+function assertBadge(html: string, id: string, badge: string | undefined): void {
+  assertNoSpineBadge(html);
+  const summary = summaryHtml(html, id);
+  if (badge === undefined) {
+    assert.equal(summary.includes('class="badge"'), false);
+    return;
+  }
+  assert.match(summary, new RegExp(`<span class="badge">${badge}</span>`));
+}
+
+function diffBlock(html: string, id: string, kind: string, text: string): string {
+  const chunks = capHtml(html, id).split('<div class="diff-row ').slice(1);
+  const found = chunks.find(chunk => chunk.startsWith(kind) && chunk.includes(text));
+  assert.ok(found, `${kind} ${text}`);
+  return found;
+}
+
+function numCells(block: string): string[] {
+  return [...block.matchAll(/<span class="num">([^<]*)<\/span>/g)].map(match => match[1] ?? '');
+}
+
+function lineButton(html: string, line: string): string {
+  const marker = `data-line="${line}"`;
+  const at = html.indexOf(marker);
+  assert.ok(at >= 0, marker);
+  const start = html.lastIndexOf('<button', at);
+  return html.slice(start, html.indexOf('>', at) + 1);
+}
+
+function answerFields(fields: Record<string, string>): string {
+  return new URLSearchParams({act: 'answer', key: '1', ...fields}).toString();
+}
+
+function replacedLines(): {baseline: string; delta: string; oldLine: string; newLine: string} {
+  const oldLine = 'Старый текст.';
+  const newLine = 'Новый текст.';
+  return {
+    oldLine,
+    newLine,
+    baseline: specText(['### Requirement: Чтение', '', oldLine]),
+    delta: specText(['## MODIFIED Requirements', '', '### Requirement: Чтение', '', newLine]),
+  };
+}
+
+spec('spec-diff', () => {
+  requirement('A capability carries one badge', () => {
+    scenario('A modified requirement is changed', async () => {
+      const {baseline, delta} = replacedLines();
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const {shot, html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          assert.equal(specView(shot, SPEC_ID).cap.badge, 'changed');
+          assertBadge(html, SPEC_ID, 'changed');
+        },
+      );
+    });
+    scenario('A spec with no baseline is new', async () => {
+      const lines = ['### Requirement: Чтение', '', 'Текст.'];
+      const delta = specText(['## ADDED Requirements', '', ...lines]);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const {shot, html} = await drawSpec(page, window, paths.arcadia, delta);
+          const view = specView(shot, SPEC_ID);
+          assert.equal(view.cap.badge, 'new');
+          assert.deepEqual(
+            view.flat.map(row => row.text),
+            lines,
+          );
+          assert.ok(view.flat.every(row => row.kind === 'add'));
+          assertBadge(html, SPEC_ID, 'new');
+        },
+      );
+    });
+    scenario('An empty fold is removed', async () => {
+      const lines = ['### Requirement: Чтение', '', 'Текст.'];
+      const baseline = specText(lines);
+      const delta = specText(['## REMOVED Requirements', '', '### Requirement: Чтение']);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const {shot, html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const view = specView(shot, SPEC_ID);
+          assert.equal(view.cap.badge, 'removed');
+          assert.deepEqual(
+            view.flat.map(row => row.text),
+            lines,
+          );
+          assert.ok(view.flat.every(row => row.kind === 'del'));
+          assertBadge(html, SPEC_ID, 'removed');
+        },
+      );
+    });
+    scenario('The same text has no badge', async () => {
+      const lines = ['### Requirement: Чтение', '', 'Текст.'];
+      const baseline = specText(lines);
+      const delta = specText(['## MODIFIED Requirements', '', ...lines]);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const {shot, html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const view = specView(shot, SPEC_ID);
+          assert.equal(view.cap.badge, undefined);
+          assert.ok(view.flat.length > 0);
+          assert.ok(view.flat.every(row => row.kind === 'ctx'));
+          const cap = capHtml(html, SPEC_ID);
+          assert.equal(cap.includes('class="diff-row add"'), false);
+          assert.equal(cap.includes('class="diff-row del"'), false);
+          assertBadge(html, SPEC_ID, undefined);
+        },
+      );
+    });
+  });
+
+  requirement('The drawer shows the folded spec', () => {
+    scenario('A changed line shows both numbers and the changed words', async () => {
+      const oldLine = 'Старый текст требования.';
+      const newLine = 'Новый текст требования.';
+      const baseline = specText(['### Requirement: Чтение', '', oldLine]);
+      const folded = specText(['### Requirement: Чтение', '', newLine]);
+      const delta = specText([
+        '## MODIFIED Requirements',
+        '',
+        '### Requirement: Чтение',
+        '',
+        newLine,
+      ]);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const {html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const left = String(sourceLine(baseline, oldLine));
+          const right = String(sourceLine(folded, newLine));
+          const deletion = diffBlock(html, SPEC_ID, 'del', 'class="bit">Старый');
+          const addition = diffBlock(html, SPEC_ID, 'add', 'class="bit">Новый');
+          assert.deepEqual(numCells(deletion).slice(0, 2), [left, '']);
+          assert.deepEqual(numCells(addition).slice(0, 2), ['', right]);
+          assert.match(deletion, /<span class="bit">Старый<\/span>/);
+          assert.match(addition, /<span class="bit">Новый<\/span>/);
+          assert.match(deletion, /<span>текст<\/span>/);
+          assert.match(addition, /<span>текст<\/span>/);
+        },
+      );
+    });
+    scenario('Unchanged lines between hunks sit in the gap', async () => {
+      const between = ['u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10'];
+      const baseline = specText(['### Requirement: Чтение', 'head-old', ...between, 'tail-old']);
+      const delta = specText([
+        '## MODIFIED Requirements',
+        '',
+        '### Requirement: Чтение',
+        'head-new',
+        ...between,
+        'tail-new',
+      ]);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const {shot} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const {gaps} = specView(shot, SPEC_ID);
+          assert.equal(gaps.length, 1);
+          const gap = gaps[0];
+          assert.ok(gap);
+          assert.deepEqual(
+            gap.hidden.map(row => row.text),
+            ['u4', 'u5', 'u6', 'u7'],
+          );
+        },
+      );
+    });
+    scenario('Lines before the first change sit in a gap', async () => {
+      const baseline = specText([
+        '### Requirement: Чтение',
+        'k1',
+        'k2',
+        'k3',
+        'k4',
+        'k5',
+        'k6',
+        'k7',
+        'old-end',
+      ]);
+      const delta = specText([
+        '## MODIFIED Requirements',
+        '',
+        '### Requirement: Чтение',
+        'k1',
+        'k2',
+        'k3',
+        'k4',
+        'k5',
+        'k6',
+        'k7',
+        'new-end',
+      ]);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const {shot} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const {cap, gaps} = specView(shot, SPEC_ID);
+          assert.equal(gaps.length, 1);
+          const gap = gaps[0];
+          assert.ok(gap);
+          assert.deepEqual(
+            gap.hidden.map(row => row.text),
+            ['### Requirement: Чтение', 'k1', 'k2', 'k3', 'k4'],
+          );
+          const visible: string[] = [];
+          for (const entry of cap.rows) {
+            if (entry.kind === 'gap') {
+              continue;
+            }
+            visible.push(entry.text);
+          }
+          assert.equal(visible.includes('k5'), true);
+          assert.equal(visible.includes('k6'), true);
+          assert.equal(visible.includes('k7'), true);
+          assert.equal(visible.includes('k1'), false);
+          assert.equal(visible.includes('k4'), false);
+        },
+      );
+    });
+    scenario('Added text keeps the purpose and drops the delta heading', async () => {
+      const baseline = specText([
+        '## Purpose',
+        '',
+        'Зачем эта возможность.',
+        '',
+        '## Requirements',
+        '',
+        '### Requirement: Есть',
+        '',
+        'Текст.',
+      ]);
+      const delta = specText([
+        '## ADDED Requirements',
+        '',
+        '### Requirement: Новое',
+        '',
+        'Дописано.',
+      ]);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const {shot, html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const texts = specView(shot, SPEC_ID).flat.map(row => row.text);
+          assert.equal(texts.includes('Зачем эта возможность.'), true);
+          assert.equal(texts.includes('### Requirement: Новое'), true);
+          assert.equal(texts.includes('Дописано.'), true);
+          assert.equal(
+            texts.some(text => text.includes('ADDED')),
+            false,
+          );
+          assert.equal(capHtml(html, SPEC_ID).includes('ADDED'), false);
+        },
+      );
+    });
+  });
+
+  requirement('A line comment uses a thread when the line has an anchor', () => {
+    scenario('A line copied from the delta opens a thread', async () => {
+      const {baseline, delta, newLine} = replacedLines();
+      const reply = 'Смотрите сюда.';
+      const threads: {key: string; body: string; place: ThreadPlace}[] = [];
+      const comments: string[] = [];
+      const spoken: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1})],
+          commentPull: (_key, body) => {
+            comments.push(body);
+          },
+          threadPull: async (key, body, place) => {
+            threads.push({key, body, place});
+          },
+          speakPull: async (_key, body) => {
+            spoken.push(body);
+          },
+        },
+        async (page, window, paths) => {
+          const {shot, html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const added = specView(shot, SPEC_ID).flat.find(
+            row => row.kind === 'add' && row.text === newLine,
+          );
+          assert.ok(added);
+          assert.ok(added.anchor);
+          assert.equal(added.anchor.path, DELTA_PATH);
+          assert.equal(added.anchor.side, 'right');
+          assert.equal(added.anchor.line, sourceLine(delta, newLine));
+          assert.notEqual(added.anchor.line, added.right);
+          const button = lineButton(html, newLine);
+          assert.equal(button.includes(`data-path="${DELTA_PATH}"`), true);
+          assert.equal(button.includes(`data-at="${added.anchor.line}"`), true);
+          assert.equal(button.includes('data-side="right"'), true);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                answerFields({
+                  line: newLine,
+                  reply,
+                  path: added.anchor.path,
+                  at: String(added.anchor.line),
+                  side: added.anchor.side,
+                }),
+              )
+            ).status,
+            200,
+          );
+          assert.deepEqual(threads, [
+            {
+              key: '1',
+              body: reply,
+              place: {path: DELTA_PATH, line: added.anchor.line, side: 'right'},
+            },
+          ]);
+          assert.deepEqual(comments, []);
+          assert.deepEqual(spoken, []);
+        },
+      );
+    });
+    scenario('A baseline line quotes the pull request', async () => {
+      const {baseline, delta, oldLine} = replacedLines();
+      const reply = 'Здесь узко.';
+      const threads: ThreadPlace[] = [];
+      const comments: string[] = [];
+      const spoken: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1})],
+          commentPull: (_key, body) => {
+            comments.push(body);
+          },
+          threadPull: async (_key, _body, place) => {
+            threads.push(place);
+          },
+          speakPull: async (_key, body) => {
+            spoken.push(body);
+          },
+        },
+        async (page, window, paths) => {
+          const {shot, html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const visible = specView(shot, SPEC_ID).flat.find(
+            row => row.kind === 'del' && row.text === oldLine,
+          );
+          assert.ok(visible);
+          assert.equal(visible.anchor, undefined);
+          const button = lineButton(html, oldLine);
+          assert.equal(button.includes('data-path='), false);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                answerFields({
+                  line: oldLine,
+                  reply,
+                }),
+              )
+            ).status,
+            200,
+          );
+          assert.deepEqual([...comments, ...spoken], [`> ${oldLine}\n\n${reply}`]);
+          assert.deepEqual(threads, []);
+        },
+      );
+    });
+    scenario('A refused thread is quoted', async () => {
+      const {baseline, delta, newLine} = replacedLines();
+      const reply = 'Смотрите сюда.';
+      const spoken: string[] = [];
+      let threadCalls = 0;
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1})],
+          threadPull: async () => {
+            threadCalls += 1;
+            throw new Error('host refused the thread');
+          },
+          speakPull: async (_key, body) => {
+            spoken.push(body);
+          },
+        },
+        async (page, window, paths) => {
+          const {shot} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const added = specView(shot, SPEC_ID).flat.find(
+            row => row.kind === 'add' && row.text === newLine,
+          );
+          assert.ok(added);
+          const anchor = added.anchor;
+          assert.ok(anchor);
+          const posted = await post(
+            page.url,
+            'act',
+            answerFields({
+              line: newLine,
+              reply,
+              path: anchor.path,
+              at: String(anchor.line),
+              side: anchor.side,
+            }),
+          );
+          assert.equal(posted.status, 200);
+          const next = JSON.parse(posted.body) as WindowSnapshot;
+          assert.equal(threadCalls, 1);
+          assert.deepEqual(spoken, [`> ${newLine}\n\n${reply}`]);
+          assert.equal(next.status, undefined);
+          assert.equal(JSON.stringify(next).includes('host refused the thread'), false);
+        },
+      );
+    });
+    scenario('Both writes failing leave the comment unrecorded', async () => {
+      const {baseline, delta, newLine} = replacedLines();
+      const reply = 'Смотрите сюда.';
+      let threadCalls = 0;
+      let speakCalls = 0;
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1})],
+          threadPull: async () => {
+            threadCalls += 1;
+            throw new Error('host refused the thread');
+          },
+          speakPull: async () => {
+            speakCalls += 1;
+            throw new Error('host refused the quote');
+          },
+        },
+        async (page, window, paths) => {
+          const {shot} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const added = specView(shot, SPEC_ID).flat.find(
+            row => row.kind === 'add' && row.text === newLine,
+          );
+          assert.ok(added);
+          const anchor = added.anchor;
+          assert.ok(anchor);
+          const posted = await post(
+            page.url,
+            'act',
+            answerFields({
+              line: newLine,
+              reply,
+              path: anchor.path,
+              at: String(anchor.line),
+              side: anchor.side,
+            }),
+          );
+          assert.equal(posted.status, 200);
+          const next = JSON.parse(posted.body) as WindowSnapshot;
+          assert.equal(threadCalls, 1);
+          assert.equal(speakCalls, 1);
+          assert.equal(next.status, 'комментарий не записан');
+          assert.equal(statusOf(renderWindow(next)), 'комментарий не записан');
+          assert.equal(JSON.stringify(next).includes('host refused'), false);
+        },
+      );
+    });
+    scenario('A plan line opens a thread on proposal.md', async () => {
+      const line = 'Годность проверки.';
+      const reply = 'Сначала сократить.';
+      const proposal = specText(['## Outcome', '', line]);
+      const threads: {key: string; body: string; place: ThreadPlace}[] = [];
+      const comments: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
+          commentPull: (_key, body) => {
+            comments.push(body);
+          },
+          threadPull: async (key, body, place) => {
+            threads.push({key, body, place});
+          },
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'proposal.md', proposal);
+          await showCard(page, window);
+          const html = renderWindow(await readSnapshot(page.url));
+          const button = lineButton(html, line);
+          const at = sourceLine(proposal, line);
+          assert.equal(button.includes(`data-path="${PROPOSAL_PATH}"`), true);
+          assert.equal(button.includes(`data-at="${at}"`), true);
+          assert.equal(button.includes('data-side="right"'), true);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                answerFields({
+                  line,
+                  reply,
+                  path: PROPOSAL_PATH,
+                  at: String(at),
+                  side: 'right',
+                }),
+              )
+            ).status,
+            200,
+          );
+          assert.deepEqual(threads, [
+            {key: '1', body: reply, place: {path: PROPOSAL_PATH, line: at, side: 'right'}},
+          ]);
+          assert.deepEqual(comments, []);
+        },
+      );
+    });
+    scenario('An open question stays a conversation reply', async () => {
+      const question = 'Писать ли имя проверки?';
+      const reply = 'Да, короткое имя.';
+      const line = `- [ ] ${question}`;
+      const proposal = specText(['## Open questions', '', line]);
+      const threads: ThreadPlace[] = [];
+      const comments: string[] = [];
+      const spoken: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
+          commentPull: (_key, body) => {
+            comments.push(body);
+          },
+          threadPull: async (_key, _body, place) => {
+            threads.push(place);
+          },
+          speakPull: async (_key, body) => {
+            spoken.push(body);
+          },
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'proposal.md', proposal);
+          await showCard(page, window);
+          const html = renderWindow(await readSnapshot(page.url));
+          const button = lineButton(html, line);
+          const at = sourceLine(proposal, line);
+          assert.equal(button.includes(`data-question="${question}"`), true);
+          assert.equal(button.includes(`data-path="${PROPOSAL_PATH}"`), true);
+          assert.equal(button.includes(`data-at="${at}"`), true);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                answerFields({
+                  question,
+                  line,
+                  reply,
+                  path: PROPOSAL_PATH,
+                  at: String(at),
+                  side: 'right',
+                }),
+              )
+            ).status,
+            200,
+          );
+          assert.deepEqual([...comments, ...spoken], [`- [ ] ${question}\n\n${reply}`]);
+          assert.deepEqual(threads, []);
+        },
+      );
+    });
+  });
+});

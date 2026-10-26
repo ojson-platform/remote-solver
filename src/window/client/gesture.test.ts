@@ -1,6 +1,7 @@
 import type {SpecEntry} from '../spec-diff.ts';
 
 import assert from 'node:assert/strict';
+import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
 
 import {scenarioTarget, toggleFold} from './gesture.ts';
@@ -65,5 +66,26 @@ test('scenarioTarget trims a hidden scenario line and keeps that fold index', ()
     capability: 'case-read',
     gap: 1,
     name: 'Проверка',
+  });
+});
+
+spec('spec-diff', () => {
+  requirement('A task opens its scenario', () => {
+    scenario('A task opens the scenario inside a gap', () => {
+      const name = 'Скрытый сценарий';
+      const rows: SpecEntry[] = [
+        {kind: 'ctx', text: 'видно'},
+        {
+          kind: 'gap',
+          count: 1,
+          hidden: [{kind: 'ctx', text: `#### Scenario: ${name}`}],
+        },
+      ];
+      assert.deepEqual(scenarioTarget(rows, 'case-read', name), {
+        capability: 'case-read',
+        gap: 1,
+        name,
+      });
+    });
   });
 });

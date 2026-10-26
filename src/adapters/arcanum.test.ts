@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
 
 import {arcanumOpenThread, arcanumSpeak} from './arcanum.ts';
@@ -28,30 +29,47 @@ function fakeHttp(active: unknown = {id: 7}) {
   return {get, post, gets, posts};
 }
 
-test('a right-side thread posts the changelist entry as a published comment', async () => {
-  const {get, post, gets, posts} = fakeHttp();
-  const body = 'смотрите сюда';
-  await arcanumOpenThread({get, post}, '42', {
-    commit: 'abc',
-    path: specPath,
-    line: 12,
-    body,
-    side: 'right',
-  });
-  assert.deepEqual(gets, [activeDiff, changelist]);
-  assert.deepEqual(posts, [
-    {
-      path: '/v2/public/diff/7/comment',
-      body: {
-        entry_id: 'e1',
-        is_draft: false,
-        side: 'new',
+spec('spec-diff', () => {
+  requirement('Arcanum posts a published thread on the active diff', () => {
+    scenario('A published thread uses the changelist entry', async () => {
+      const {get, post, gets, posts} = fakeHttp();
+      const body = 'смотрите сюда';
+      await arcanumOpenThread({get, post}, '42', {
+        commit: 'abc',
+        path: specPath,
         line: 12,
-        size: 1,
-        content: body,
-      },
-    },
-  ]);
+        body,
+        side: 'right',
+      });
+      assert.deepEqual(gets, [activeDiff, changelist]);
+      assert.deepEqual(posts, [
+        {
+          path: '/v2/public/diff/7/comment',
+          body: {
+            entry_id: 'e1',
+            is_draft: false,
+            side: 'new',
+            line: 12,
+            size: 1,
+            content: body,
+          },
+        },
+      ]);
+    });
+    scenario('A missing file fails the thread', async () => {
+      const {get, post, posts} = fakeHttp();
+      await assert.rejects(
+        arcanumOpenThread({get, post}, '42', {
+          commit: 'abc',
+          path: 'src/missing.ts',
+          line: 12,
+          body: 'смотрите сюда',
+          side: 'right',
+        }),
+      );
+      assert.deepEqual(posts, []);
+    });
+  });
 });
 
 test('a left-side thread posts the old side', async () => {
@@ -77,20 +95,6 @@ test('a left-side thread posts the old side', async () => {
       },
     },
   ]);
-});
-
-test('a path missing from the changelist rejects and posts nothing', async () => {
-  const {get, post, posts} = fakeHttp();
-  await assert.rejects(
-    arcanumOpenThread({get, post}, '42', {
-      commit: 'abc',
-      path: 'src/missing.ts',
-      line: 12,
-      body: 'смотрите сюда',
-      side: 'right',
-    }),
-  );
-  assert.deepEqual(posts, []);
 });
 
 test('a pull request comment posts the given content', async () => {

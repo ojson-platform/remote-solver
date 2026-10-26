@@ -1625,7 +1625,10 @@ test('a code place in focus opens the review url', async () => {
       assert.equal(focus.includes('https://arcanum.example/other'), false);
       assert.equal(/<a\b[^>]*>[^<]*solid/.test(focus), false);
       assert.equal(/<a\b[^>]*>[^<]*src\/b\.ts:9/.test(focus), false);
-      assert.deepEqual(calls, [{file: 'src/a.ts', line: 4}]);
+      assert.deepEqual(calls, [
+        {file: 'src/a.ts', line: 4},
+        {file: 'src/a.ts', line: 4},
+      ]);
       assert.ok(window.sidebar().some(block => block.kind === 'focus'));
       const closed = await post(
         page.url,

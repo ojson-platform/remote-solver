@@ -355,7 +355,7 @@ export function snapshot(surface: SnapshotSurface, view: SnapshotView): WindowSn
   const drawn = facts(board);
   const opened = openCycle(surface, view, drawn);
   const reviewPlaces: Record<string, string> = {};
-  if (opened?.spineReady) {
+  if (opened) {
     rememberPlaces(opened.spine.rest.join('\n'), surface.openReviewPlace, reviewPlaces);
     for (const line of opened.spine.lines) {
       rememberPlaces(line.raw, surface.openReviewPlace, reviewPlaces);

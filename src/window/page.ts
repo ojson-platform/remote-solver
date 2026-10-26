@@ -373,7 +373,6 @@ async function apply(
           ? 'Комментарий пустой. Напишите его в поле.'
           : 'Ответ пустой. Напишите его в поле.';
     } else if (key) {
-      view.show = key;
       const status = await surface.answer(
         key,
         params.get('question') ?? '',
@@ -386,6 +385,7 @@ async function apply(
       if (mine !== epoch.n) {
         return 'stale';
       }
+      view.show = key;
       if (status !== undefined) {
         view.status = status;
       }

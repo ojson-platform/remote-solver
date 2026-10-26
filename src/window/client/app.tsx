@@ -2,9 +2,11 @@ import type {ReactNode} from 'react';
 
 import type {SpineLayer} from '../spine.ts';
 import type {WindowSnapshot} from '../snapshot.ts';
+import type {BusyEdges} from './frame.ts';
 import type {LineDraft, OpenFold, SpecOpen} from './gesture.ts';
 
 import {Board} from './board.tsx';
+import {BusyEdge} from './busy.tsx';
 import {ActForm, Hidden} from './forms.tsx';
 import {Cross, Pill} from './marks.tsx';
 import {Settings} from './settings.tsx';
@@ -120,6 +122,7 @@ export function App({
   gaps = [],
   openCaps = [],
   specOpen = [],
+  busy,
 }: {
   snapshot: WindowSnapshot;
   layer?: SpineLayer | '';
@@ -127,6 +130,7 @@ export function App({
   gaps?: readonly OpenFold[];
   openCaps?: readonly string[];
   specOpen?: readonly SpecOpen[];
+  busy?: BusyEdges;
 }): ReactNode {
   const lamp = snapshot.lamp ? (
     <p className="lamp on">шаги идут</p>
@@ -136,6 +140,7 @@ export function App({
   return (
     <>
       <div className="app">
+        <BusyEdge on={busy?.window ?? false} />
         <header className="top">
           <p className="word">ai-factory</p>
           {lamp}
@@ -167,8 +172,9 @@ export function App({
         gaps={gaps}
         openCaps={openCaps}
         specOpen={specOpen}
+        busy={busy?.drawer}
       />
-      <Settings snapshot={snapshot} />
+      <Settings snapshot={snapshot} busy={busy?.settings} />
       <Popup text={snapshot.popup} />
       <Repair snapshot={snapshot} />
       <Ask snapshot={snapshot} />

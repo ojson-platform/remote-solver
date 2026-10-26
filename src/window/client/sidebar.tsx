@@ -11,6 +11,7 @@ import {Fragment} from 'react';
 import {unchangedLabel} from '../spec-diff.ts';
 
 import {Gate} from './board.tsx';
+import {BusyEdge} from './busy.tsx';
 import {ActForm, Hidden} from './forms.tsx';
 import {capIsOpen} from './gesture.ts';
 import {Cross, SendMark} from './marks.tsx';
@@ -620,6 +621,7 @@ export function Sidebar({
   gaps = [],
   openCaps = [],
   specOpen = [],
+  busy,
 }: {
   snapshot: WindowSnapshot;
   layer: SpineLayer | '' | undefined;
@@ -627,6 +629,7 @@ export function Sidebar({
   gaps?: readonly OpenFold[];
   openCaps?: readonly string[];
   specOpen?: readonly SpecOpen[];
+  busy?: boolean;
 }): ReactNode {
   const opened = snapshot.opened;
   if (!opened) {
@@ -673,6 +676,7 @@ export function Sidebar({
     : 'Метки sdd:auto-merge нет. Машина мержит только с этой меткой.';
   return (
     <aside className="sidebar" data-key={opened.key}>
+      <BusyEdge on={busy ?? false} />
       <header>
         <div>
           <p className="kicker">{opened.key}</p>

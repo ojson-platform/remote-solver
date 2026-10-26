@@ -18,12 +18,16 @@ export async function pullSnapshots(review: Review, key: string): Promise<PullSn
   const pulls = await review.pulls(key);
   const snapshots: PullSnapshot[] = [];
   for (const pull of pulls) {
+    if (pull.state !== 'OPEN') {
+      snapshots.push({...pull, review: emptyReview});
+      continue;
+    }
+    const threads = await review.threadList(pull.id);
+    const notes = await review.comments(pull.id);
     snapshots.push({
       ...pull,
-      review:
-        pull.state === 'OPEN'
-          ? reviewOf(await review.threads(pull.id), await review.comments(pull.id))
-          : emptyReview,
+      review: reviewOf(threads, notes),
+      reading: {threads, notes},
     });
   }
   return snapshots;

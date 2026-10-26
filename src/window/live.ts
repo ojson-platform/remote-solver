@@ -1,5 +1,6 @@
 import type {Machine} from '../adapters/compose.ts';
 import type {Conversation, IssueRecord, Pull, ThreadRecord, ThreadTarget} from '../machine/port.ts';
+import type {CycleSnapshot} from '../machine/snapshot.ts';
 
 import {existsSync, mkdirSync, readFileSync} from 'node:fs';
 import {homedir} from 'node:os';
@@ -7,6 +8,7 @@ import path from 'node:path';
 
 import {parse} from 'yaml';
 
+import {githubPauseRemaining} from '../adapters/github.ts';
 import {markerName, parseMarker} from '../machine/marker.ts';
 import {phaseOf} from '../machine/phase.ts';
 import {modelFor, type SkillMode} from '../machine/skill.ts';
@@ -18,7 +20,7 @@ import {isDoc, type WindowReview, type WindowTicket} from './types.ts';
 import {openWindow} from './window.ts';
 
 /** How often the served page reads the tracker again. */
-export const REFRESH_MS = 15_000;
+export const REFRESH_MS = 60_000;
 
 /** The header line for the turns that are running. Empty when none are. */
 export function turnsLine(turns: readonly RunningTurn[]): string {
@@ -93,6 +95,8 @@ export function watchSpy(
     /** One issue's turn, or none when that worker has left it. */
     setTurn?: (issue: string, turn: RunningTurn | undefined) => void;
     refresh: () => Promise<void>;
+    /** Paint from a poll that already read the tracker. */
+    apply?: (snapshot: CycleSnapshot) => void;
   },
   signal?: AbortSignal,
 ): Promise<void> {
@@ -110,7 +114,11 @@ export function watchSpy(
     onTurn(issue: string, turn: RunningTurn | undefined) {
       sink.setTurn?.(issue, turn);
     },
-    onCycle() {
+    onCycle(snapshot?: CycleSnapshot) {
+      if (snapshot) {
+        sink.apply?.(snapshot);
+        return;
+      }
       forget(sink.refresh());
     },
   };
@@ -205,6 +213,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
   let cache: WindowTicket[] = [];
   let pullByKey = new Map<string, string>();
   let reviews = new Map<string, WindowReview>();
+  const spyThreadPull = new Map<string, string>();
   const services = new Map<string, string>();
 
   function bump(): void {
@@ -256,10 +265,16 @@ export function openLiveBoard(options: LiveBoardOptions) {
               console.error(error);
             }
           }
-          reading.set(
-            issue.key,
-            reviewOf(await review.threadList(pull.id), await review.comments(pull.id)),
-          );
+          const seen = spyThreadPull.get(issue.key);
+          const held = seen === pull.id ? reviews.get(issue.key) : undefined;
+          if (held) {
+            reading.set(issue.key, held);
+          } else {
+            reading.set(
+              issue.key,
+              reviewOf(await review.threadList(pull.id), await review.comments(pull.id)),
+            );
+          }
         }
       }
       return {
@@ -277,6 +292,9 @@ export function openLiveBoard(options: LiveBoardOptions) {
   }
 
   async function refresh(): Promise<boolean> {
+    if (githubPauseRemaining() > 0) {
+      return false;
+    }
     const gen = generation;
     const issues = await tracker.listOpen();
     const login = await tracker.login().catch(error => {
@@ -301,6 +319,52 @@ export function openLiveBoard(options: LiveBoardOptions) {
     if (login) {
       loginName = login;
     }
+    return true;
+  }
+
+  function apply(snapshot: CycleSnapshot): boolean {
+    const prior = new Map(cache.map(ticket => [ticket.key, ticket]));
+    const tickets: WindowTicket[] = [];
+    for (const issue of snapshot.issues) {
+      if (!issue.labels.includes('sdd:cycle')) {
+        continue;
+      }
+      const previous = prior.get(issue.key);
+      const ticket = ticketFrom(issue, repo, services.get(issue.key));
+      const listed = snapshot.pulls.get(issue.key);
+      const open = listed?.filter(pull => pull.state === 'OPEN');
+      let openCount = previous?.openPullRequests;
+      let checks = previous?.checks;
+      if (open) {
+        openCount = open.length;
+        checks = undefined;
+        const only = open.length === 1 ? open[0] : undefined;
+        if (only) {
+          checks = only.checks;
+          pullByKey.set(issue.key, only.id);
+          if (only.reading) {
+            reviews.set(issue.key, reviewOf(only.reading.threads, only.reading.notes));
+            spyThreadPull.set(issue.key, only.id);
+          } else {
+            reviews.delete(issue.key);
+            spyThreadPull.delete(issue.key);
+          }
+        } else {
+          pullByKey.delete(issue.key);
+          reviews.delete(issue.key);
+          spyThreadPull.delete(issue.key);
+        }
+      }
+      tickets.push({
+        ...ticket,
+        ...(previous?.comments ? {comments: previous.comments} : {}),
+        ...(openCount !== undefined ? {openPullRequests: openCount} : {}),
+        ...(checks !== undefined ? {checks} : {}),
+        ...(previous?.diff ? {diff: true} : {}),
+        ...(phaseOf(issue.labels) === 'accepting' && openCount === 1 ? {mergeAhead: true} : {}),
+      });
+    }
+    cache = tickets;
     return true;
   }
 
@@ -394,13 +458,14 @@ export function openLiveBoard(options: LiveBoardOptions) {
   if (options.githubRoot) {
     view.leaveRoots({github: options.githubRoot});
   }
-  return {window: view, refresh};
+  return {window: view, refresh, apply};
 }
 
 /** Serve the board and keep the ticket cache fresh. The URL is the page. */
 export async function serveLiveBoard(options: LiveBoardOptions): Promise<{
   url: string;
   refresh(): Promise<void>;
+  apply(snapshot: CycleSnapshot): void;
   close(): Promise<void>;
   note(): void;
 }> {
@@ -413,6 +478,11 @@ export async function serveLiveBoard(options: LiveBoardOptions): Promise<{
       page.note();
     }
   };
+  const apply = (snapshot: CycleSnapshot) => {
+    if (live.apply(snapshot)) {
+      page.note();
+    }
+  };
   const timer = setInterval(() => {
     forget(refresh());
   }, REFRESH_MS);
@@ -420,6 +490,7 @@ export async function serveLiveBoard(options: LiveBoardOptions): Promise<{
   return {
     url: page.url,
     refresh,
+    apply,
     note: () => {
       page.note();
     },

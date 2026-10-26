@@ -138,9 +138,202 @@ function command(
   });
 }
 
+export type RestBody = {etag: string; body: string};
+
+export type RestRead = {
+  body: string;
+  store?: RestBody;
+  notModified: boolean;
+  pauseUntil?: number;
+};
+
+const restBodies = new Map<string, RestBody>();
+let pausedUntil = 0;
+
+/** Milliseconds until a spent rate limit may call gh again. */
+export function githubPauseRemaining(now = Date.now()): number {
+  return Math.max(0, pausedUntil - now);
+}
+
+/** Hold polling until a rate-limit reset. `until` is a unix millisecond time. */
+export function noteGithubPause(until: number): void {
+  pausedUntil = until;
+}
+
+/** Drop the pause and the cached REST bodies. Tests start from an empty gate. */
+export function clearGithubPause(): void {
+  pausedUntil = 0;
+  restBodies.clear();
+}
+
+/** A GET `gh api` read. Mutations, GraphQL, and `--jq` stay on the plain path. */
+export function isRestGet(args: readonly string[]): boolean {
+  if (args[0] !== 'api') {
+    return false;
+  }
+  const skip = new Set([
+    '-f',
+    '-F',
+    '--method',
+    '-X',
+    '--input',
+    '--jq',
+    '-q',
+    '-i',
+    '--include',
+    'graphql',
+  ]);
+  if (args.some(arg => skip.has(arg))) {
+    return false;
+  }
+  return args.some(arg => arg !== 'api' && !arg.startsWith('-'));
+}
+
+/** Ask `gh api` for headers, and send the previous validator when we have one. */
+export function withRestValidators(args: readonly string[], etag?: string): string[] {
+  const next = [...args];
+  const at = next.indexOf('api');
+  const extra = ['-i'];
+  if (etag) {
+    extra.push('-H', `If-None-Match: ${etag}`);
+  }
+  next.splice(at + 1, 0, ...extra);
+  return next;
+}
+
+function splitHttp(
+  stdout: string,
+): {status: number; headers: Map<string, string>; body: string} | undefined {
+  const blocks = stdout.split(/\r?\n(?=HTTP\/\d)/);
+  const last = blocks[blocks.length - 1] ?? '';
+  const lines = last.split(/\r?\n/);
+  const statusLine = /^HTTP\/\d(?:\.\d)? (\d{3})/.exec(lines[0] ?? '');
+  if (!statusLine?.[1]) {
+    return undefined;
+  }
+  const headers = new Map<string, string>();
+  let index = 1;
+  while (index < lines.length && lines[index] !== '') {
+    const line = lines[index] ?? '';
+    const colon = line.indexOf(':');
+    if (colon > 0) {
+      headers.set(line.slice(0, colon).toLowerCase(), line.slice(colon + 1).trim());
+    }
+    index += 1;
+  }
+  return {status: Number(statusLine[1]), headers, body: lines.slice(index + 1).join('\n')};
+}
+
+/** Headers and body of one `gh api -i` response. A 304 keeps the previous body. */
+export function readRest(stdout: string): RestRead {
+  const http = splitHttp(stdout);
+  if (!http) {
+    return {body: stdout, notModified: false};
+  }
+  const etag = http.headers.get('etag');
+  const reset = Number(http.headers.get('x-ratelimit-reset'));
+  const pauseUntil =
+    http.status === 403 && Number.isFinite(reset) && reset > 0 ? reset * 1000 : undefined;
+  const pause = pauseUntil !== undefined ? {pauseUntil} : {};
+  if (http.status === 304) {
+    return {body: '', notModified: true, ...pause};
+  }
+  const store = http.status === 200 && etag ? {etag, body: http.body} : undefined;
+  return {body: http.body, notModified: false, ...(store ? {store} : {}), ...pause};
+}
+
+/** The body a caller parses. A 304 returns the cached body. */
+export function restAnswer(read: RestRead, cached: RestBody | undefined): string {
+  if (read.notModified) {
+    return cached?.body ?? '';
+  }
+  return read.body;
+}
+
+/** The unix millisecond reset named by a 403 or by the rate-limit resource. */
+export function resetMillis(stdout: string): number | undefined {
+  const read = readRest(stdout);
+  if (read.pauseUntil !== undefined) {
+    return read.pauseUntil;
+  }
+  try {
+    const parsed = JSON.parse(read.body) as {resources?: {core?: {reset?: unknown}}};
+    const reset = parsed.resources?.core?.reset;
+    if (typeof reset === 'number' && reset > 0) {
+      return reset * 1000;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+async function learnReset(): Promise<number | undefined> {
+  try {
+    const {stdout} = await command('gh', ['api', 'rate_limit', '-i']);
+    return resetMillis(stdout);
+  } catch (error) {
+    return resetMillis(fieldOf(error, 'stdout'));
+  }
+}
+
+function rememberPause(until: number | undefined): void {
+  if (until !== undefined && until > Date.now()) {
+    pausedUntil = until;
+  }
+}
+
+function fieldOf(error: unknown, key: 'stdout' | 'stderr'): string {
+  if (error && typeof error === 'object' && key in error) {
+    const value = (error as {stdout?: unknown; stderr?: unknown})[key];
+    return typeof value === 'string' ? value : '';
+  }
+  return '';
+}
+
+function rateLimited(stdout: string, stderr: string): boolean {
+  return /rate limit exceeded/i.test(`${stdout}\n${stderr}`);
+}
+
 export async function gh(args: string[], input?: string): Promise<string> {
-  const {stdout} = await command('gh', args, input);
-  return stdout;
+  if (githubPauseRemaining() > 0) {
+    throw Object.assign(new Error('gh exited 1'), {
+      stdout: '',
+      stderr: 'API rate limit exceeded',
+    });
+  }
+  const get = isRestGet(args);
+  const key = args.join('\0');
+  const cached = get ? restBodies.get(key) : undefined;
+  const sent = get ? withRestValidators(args, cached?.etag) : args;
+  try {
+    const {stdout} = await command('gh', sent, input);
+    if (!get) {
+      return stdout;
+    }
+    const read = readRest(stdout);
+    rememberPause(read.pauseUntil);
+    if (read.store) {
+      restBodies.set(key, read.store);
+    }
+    return restAnswer(read, cached);
+  } catch (error) {
+    const stdout = fieldOf(error, 'stdout');
+    const stderr = fieldOf(error, 'stderr');
+    if (get) {
+      const read = readRest(stdout);
+      rememberPause(read.pauseUntil);
+      if (read.notModified && cached) {
+        return cached.body;
+      }
+    }
+    if (rateLimited(stdout, stderr) && githubPauseRemaining() === 0) {
+      const named = resetMillis(stdout);
+      const learned = named !== undefined && named > Date.now() ? named : await learnReset();
+      pausedUntil = learned !== undefined && learned > Date.now() ? learned : Date.now() + 60_000;
+    }
+    throw error;
+  }
 }
 
 /** GitHub check vocabulary stays in this adapter. The machine sees CheckState. */
@@ -168,16 +361,21 @@ type RawIssue = {
   title: string;
   body: string | null;
   state: string;
-  labels: {name: string}[];
+  labels?: {name: string}[];
   assignees?: {login: string}[];
+  pull_request?: unknown;
 };
 
 /**
- * Head and base commits of one pull request.
- * The pull REST record: `gh pr view --json` has no `baseRefOid` on older CLI builds.
+ * Head and base commits when `pr view` omitted them.
+ * Older `gh pr view --json` has no `baseRefOid`.
  */
 export function pullRangeArgs(slug: string, pull: string): string[] {
   return ['api', `repos/${slug}/pulls/${pull}`, '--jq', '{head: .head.sha, base: .base.sha}'];
+}
+
+function commitRange(head: string, base: string): {head: string; base: string | null} {
+  return {head, base: base === '' ? null : base};
 }
 
 /** A pull belongs to an issue when its title starts with `#<key>:` or `#<key> `. */
@@ -192,6 +390,10 @@ export function linksFrom(body: string): {parent?: string; dependsOn: string[]} 
   return {parent, dependsOn};
 }
 
+function carriesCycle(issue: RawIssue): boolean {
+  return (issue.labels ?? []).some(label => label.name === 'sdd:cycle');
+}
+
 function asRecord(issue: RawIssue, sddHooks?: unknown): IssueRecord {
   const body = issue.body ?? '';
   const links = linksFrom(body);
@@ -199,8 +401,8 @@ function asRecord(issue: RawIssue, sddHooks?: unknown): IssueRecord {
     key: String(issue.number),
     title: issue.title,
     body,
-    state: issue.state,
-    labels: issue.labels.map(label => label.name),
+    state: issue.state.toUpperCase(),
+    labels: (issue.labels ?? []).map(label => label.name),
     assignee: issue.assignees?.[0]?.login ?? '',
     service: '',
     ...(sddHooks !== undefined ? {sddHooks} : {}),
@@ -282,12 +484,16 @@ export type GitHubAdapters = {
   run?: (args: string[], input?: string) => Promise<string>;
 };
 
+/** How long one repository pull list serves every issue read in that span. */
+export const PULL_LIST_FRESH_MS = 15_000;
+
 export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker; review: Review} {
   const prBase = options.prBase ?? 'master';
   const ignored = options.ignoreComments ?? [];
   const run = options.run ?? gh;
   let slug: string | null = null;
   let user: string | null = null;
+  const seenPull = new Map<string, {checks: CheckState; head: string; base: string}>();
   const repoSlug = () => {
     if (!slug) {
       slug = repo().slug;
@@ -329,20 +535,13 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
     login,
     async listOpen() {
       const found = JSON.parse(
-        await run([
-          'issue',
-          'list',
-          '--repo',
-          repoSlug(),
-          '--state',
-          'open',
-          '--limit',
-          '100',
-          '--json',
-          'number,title,body,state,labels,assignees',
-        ]),
+        await run(['api', `repos/${repoSlug()}/issues?state=open&per_page=100`]),
       ) as RawIssue[];
-      return Promise.all(found.map(withField));
+      return Promise.all(
+        found
+          .filter(issue => issue.pull_request === undefined)
+          .map(issue => (carriesCycle(issue) ? withField(issue) : Promise.resolve(asRecord(issue)))),
+      );
     },
     issue: async key => withField(await readIssue(key)),
     async assign(key, login) {
@@ -369,9 +568,10 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       await run(['issue', 'comment', key, '--repo', repoSlug(), '--body', commentBody(body)]);
     },
     async comments(key) {
-      return JSON.parse(
-        await run(['api', `repos/${repoSlug()}/issues/${key}/comments`, '--jq', '[.[] | {body}]']),
-      ) as {body: string}[];
+      const raw = JSON.parse(
+        await run(['api', `repos/${repoSlug()}/issues/${key}/comments?per_page=100`]),
+      ) as {body?: string}[];
+      return raw.map(comment => ({body: comment.body ?? ''}));
     },
     async close(key, comment) {
       await run(['issue', 'close', key, '--repo', repoSlug(), '--comment', markRobot(comment)]);
@@ -379,23 +579,70 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
     phaseHint: labelHint,
   };
 
-  const linked = async (key: string) => {
-    const found = JSON.parse(
+  const viewPull = async (
+    id: string,
+  ): Promise<{checks: CheckState; head: string; base: string}> => {
+    const view = JSON.parse(
+      await run([
+        'pr',
+        'view',
+        id,
+        '--repo',
+        repoSlug(),
+        '--json',
+        'statusCheckRollup,state,headRefOid,baseRefOid',
+      ]),
+    ) as CheckRollup & {headRefOid?: unknown; baseRefOid?: unknown};
+    const record = {
+      checks: classifyChecks(view),
+      head: typeof view.headRefOid === 'string' ? view.headRefOid : '',
+      base: typeof view.baseRefOid === 'string' ? view.baseRefOid : '',
+    };
+    seenPull.set(id, record);
+    return record;
+  };
+
+  const readPullList = async (state: 'open' | 'merged') =>
+    JSON.parse(
       await run([
         'pr',
         'list',
         '--repo',
         repoSlug(),
         '--state',
-        'all',
-        '--search',
-        `#${key} in:title`,
+        state,
         '--json',
         'number,title,state',
         '--limit',
-        '20',
+        '100',
       ]),
     ) as {number: number; title: string; state: string}[];
+
+  let repoPullsCache: {at: number; pulls: Promise<{number: number; title: string; state: string}[]>} | undefined;
+
+  const dropRepoPulls = () => {
+    repoPullsCache = undefined;
+  };
+
+  const repoPulls = () => {
+    const now = Date.now();
+    if (repoPullsCache && now - repoPullsCache.at < PULL_LIST_FRESH_MS) {
+      return repoPullsCache.pulls;
+    }
+    const pulls = Promise.all([readPullList('open'), readPullList('merged')]).then(lists =>
+      lists.flat(),
+    );
+    repoPullsCache = {at: now, pulls};
+    pulls.catch(() => {
+      if (repoPullsCache?.pulls === pulls) {
+        dropRepoPulls();
+      }
+    });
+    return pulls;
+  };
+
+  const linked = async (key: string) => {
+    const found = await repoPulls();
     return found.filter(pr => linkedTitle(key, pr.title));
   };
 
@@ -408,10 +655,8 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
           found.push({id, title: pr.title, state: pr.state, checks: 'none'});
           continue;
         }
-        const view = JSON.parse(
-          await run(['pr', 'view', id, '--repo', repoSlug(), '--json', 'statusCheckRollup,state']),
-        ) as CheckRollup;
-        found.push({id, title: pr.title, state: pr.state, checks: classifyChecks(view)});
+        const viewed = await viewPull(id);
+        found.push({id, title: pr.title, state: pr.state, checks: viewed.checks});
       }
       return found;
     },
@@ -468,16 +713,11 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
     },
     async comments(pull) {
       const comments = JSON.parse(
-        await run([
-          'api',
-          `repos/${repoSlug()}/issues/${pull}/comments`,
-          '--jq',
-          '[.[] | {login: .user.login, body}]',
-        ]),
-      ) as {login: string; body: string}[];
+        await run(['api', `repos/${repoSlug()}/issues/${pull}/comments?per_page=100`]),
+      ) as {user?: {login?: string}; body?: string}[];
       return comments.map(comment => ({
-        body: comment.body,
-        robot: spokeByRobot(comment.body, comment.login, ignored),
+        body: comment.body ?? '',
+        robot: spokeByRobot(comment.body ?? '', comment.user?.login ?? '', ignored),
       }));
     },
     async ensurePull(key, title, body) {
@@ -505,6 +745,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       if (!id) {
         throw new Error(`gh pr create returned no pull number: ${url}`);
       }
+      dropRepoPulls();
       return id;
     },
     async openThread(pull, target: ThreadTarget) {
@@ -593,6 +834,16 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       }
     },
     async range(pull) {
+      const seen = seenPull.get(pull);
+      if (seen && seen.head !== '') {
+        return commitRange(seen.head, seen.base);
+      }
+      if (!seen) {
+        const viewed = await viewPull(pull);
+        if (viewed.head !== '') {
+          return commitRange(viewed.head, viewed.base);
+        }
+      }
       const view = JSON.parse(await run(pullRangeArgs(repoSlug(), pull))) as {
         head?: string;
         base?: string | null;

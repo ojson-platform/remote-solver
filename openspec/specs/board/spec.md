@@ -489,7 +489,7 @@ The window SHALL show the path or the reason and SHALL NOT draw a field for: **Ð
 
 ### Requirement: The board command serves this repository
 
-`remote-solver board` SHALL serve the window for the GitHub repository of the working directory, print its URL, and run the machine spy in that same process. The home file SHALL be `~/.aifactory/config.yaml` when the command does not name one. When that file is missing, the watch list SHALL be that repository's `owner/repo`. Open issues that carry `sdd:cycle` SHALL be the cycles. The working directory SHALL be the gathered checkout for that repository, and an empty service SHALL mean that directory. Another repository on the watch list SHALL stay under the GitHub root. Take SHALL assign the process login. The window's spy SHALL add `sdd:proposing` for a phaseless cycle this manager holds. The machine spy SHALL start an agent for a cycle it would start from `remote-solver spy`. While that agent runs, the window SHALL treat the step as leading. While a worker is on a turn, the page SHALL show that issue, its phase, and its action, as `#<issue> <phase> â†’ <action>`. A later turn of the same worker SHALL replace that line. When the worker leaves the turn, that line SHALL go, and another worker's line SHALL stay. While the page stays open it SHALL read the tracker again about every 15 seconds. When the home agent is cursor, a step SHALL use that mode's model from the merged factory config. Any other home agent, and an empty agent, SHALL keep the built-in model for that mode.
+`remote-solver board` SHALL serve the window for the GitHub repository of the working directory, print its URL, and run the machine spy in that same process. The home file SHALL be `~/.aifactory/config.yaml` when the command does not name one. When that file is missing, the watch list SHALL be that repository's `owner/repo`. Open issues that carry `sdd:cycle` SHALL be the cycles. The working directory SHALL be the gathered checkout for that repository, and an empty service SHALL mean that directory. Another repository on the watch list SHALL stay under the GitHub root. Take SHALL assign the process login. The window's spy SHALL add `sdd:proposing` for a phaseless cycle this manager holds. The machine spy SHALL start an agent for a cycle it would start from `remote-solver spy`. While that agent runs, the window SHALL treat the step as leading. While a worker is on a turn, the page SHALL show that issue, its phase, and its action, as `#<issue> <phase> â†’ <action>`. A later turn of the same worker SHALL replace that line. When the worker leaves the turn, that line SHALL go, and another worker's line SHALL stay. While the page stays open it SHALL read the tracker again about every minute. A spy poll that already read the tracker SHALL paint the page from that reading and SHALL NOT read the tracker again for that poll. When that reading includes the threads and the conversation of one open pull request, the page SHALL show that thread and SHALL NOT read those threads or pull request comments again. A cycle the spy did not read SHALL still have its threads read when the page refreshes. The spy SHALL read an open pull request's threads once. When the home agent is cursor, a step SHALL use that mode's model from the merged factory config. Any other home agent, and an empty agent, SHALL keep the built-in model for that mode.
 
 `GET /snapshot` SHALL return a JSON snapshot of the header, the rows, and the open cycle's spine. `GET /` SHALL remain an HTML page that loads the client. `GET /events` SHALL be a server-sent stream of `change` events carrying the generation. A successful `POST /act` or `POST /take` SHALL return that snapshot as JSON. A refused gesture SHALL stay a text error. The snapshot generation SHALL start at 0 and SHALL grow when the turn changes, when a tracker read commits, and when a gesture is written. Reading the page, a refused gesture, and setting the same turn again SHALL NOT grow it. An open client SHALL receive a new generation without reloading the page. The snapshot's spy line SHALL be the current turn line, and that cycle's row SHALL carry the turn's action. When a plaque has no top line and no other bottom line, the snapshot's bottom line SHALL be the worker's action. When the open cycle is specifying and one pull request is open, the snapshot's Specify layer SHALL offer acceptance when the specs are ready, and SHALL offer neither acceptance nor the specifying gate when they are not. The specs are ready when the change has a delta file, or when the proposal names no capability under Added or Modified. A baseline spec SHALL NOT by itself make them ready. A missing baseline for a Modified capability SHALL NOT offer acceptance. While this cycle's action is `restore-baseline`, `create-initial-specs`, or `improve-specs`, the layer SHALL NOT offer acceptance. An error the page would show between the header and the board SHALL be in the snapshot that is sent next, and SHALL be absent from the snapshot after that.
 
@@ -511,7 +511,27 @@ The window SHALL show the path or the reason and SHALL NOT draw a field for: **Ð
 #### Scenario: The page reads the tracker again while it stays open
 
 - **WHEN** the page stays open
-- **THEN** it reads the tracker again about 15 seconds later, and an open client receives the new generation without reloading
+- **THEN** it reads the tracker again about a minute later, and an open client receives the new generation without reloading
+
+#### Scenario: A spy poll paints from the reading it already has
+
+- **WHEN** the spy finishes a poll
+- **THEN** the page uses that reading and does not read the tracker again for the poll
+
+#### Scenario: The board keeps the spy's threads
+
+- **WHEN** the spy poll includes the threads and the conversation of a cycle's one open pull request
+- **THEN** the page shows that thread and does not read the threads or the pull request comments again for that pull request
+
+#### Scenario: A cycle outside the spy still reads threads
+
+- **WHEN** the page refreshes a cycle the spy did not read and one pull request is open
+- **THEN** the page reads that pull request's threads
+
+#### Scenario: The spy reads a pull request's threads once
+
+- **WHEN** the spy reads one open pull request
+- **THEN** the threads are read once and the reading keeps the thread text
 
 #### Scenario: The page pool lists a cycle in this repository
 

@@ -142,6 +142,9 @@ async function runBoard(home: string | undefined): Promise<void> {
       });
     },
     refresh: () => page.refresh(),
+    apply: snapshot => {
+      page.apply(snapshot);
+    },
   }).catch(error => {
     console.error(error instanceof Error ? error.message : String(error));
   });

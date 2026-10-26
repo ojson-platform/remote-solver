@@ -102,137 +102,139 @@ export function Settings({snapshot, busy}: {snapshot: WindowSnapshot; busy?: boo
     <div className="veil">
       <div className="sheet" role="dialog" aria-label="Настройки">
         <BusyEdge on={busy ?? false} />
-        <header>
-          <h2>Настройки</h2>
-          <ActForm act="close-settings">
-            <button className="x" type="submit" aria-label={dirty ? 'Закрыть без записи' : 'Закрыть'}>
-              <Cross />
-            </button>
-          </ActForm>
-        </header>
-        <div className="blocks">
-          <section className="group">
-            <h3>Дом</h3>
-            <ModeFields
-              modelAct="leave-model"
-              effortAct="leave-effort"
-              speedAct="leave-speed"
-              models={settings.models}
-              effort={settings.effort}
-              effortWords={settings.effortWords}
-              speed={settings.speed}
-              speedWords={settings.speedWords}
-            />
-            <ActForm act="leave-watch" onChangeSubmit>
-              <label>список наблюдения</label>
-              <textarea name="names" defaultValue={settings.watch.join('\n')} />
+        <div className="sheet-body">
+          <header>
+            <h2>Настройки</h2>
+            <ActForm act="close-settings">
+              <button className="x" type="submit" aria-label={dirty ? 'Закрыть без записи' : 'Закрыть'}>
+                <Cross />
+              </button>
             </ActForm>
-            <ActForm act="leave-roots" className="pair">
-              <label>arcadia</label>
-              <input name="arcadia" defaultValue={settings.roots.arcadia} />
-              <label>github</label>
-              <input name="github" defaultValue={settings.roots.github} />
-            </ActForm>
-            <div className="roles">
-              <h3>Роли</h3>
-              {settings.roles.map(role => (
-                <div className="role" key={role.name}>
-                  <ActForm act="rename-role" onChangeSubmit>
-                    <Hidden name="name" value={role.name} />
-                    <label>имя</label>
-                    <input name="next" defaultValue={role.name} />
-                  </ActForm>
-                  <ActForm act="choose-role-outcome" onChangeSubmit>
-                    <Hidden name="name" value={role.name} />
-                    <label>исход</label>
-                    <select name="outcome" defaultValue={role.outcome}>
-                      {options(ROLE_OUTCOMES, role.outcome)}
+          </header>
+          <div className="blocks">
+            <section className="group">
+              <h3>Дом</h3>
+              <ModeFields
+                modelAct="leave-model"
+                effortAct="leave-effort"
+                speedAct="leave-speed"
+                models={settings.models}
+                effort={settings.effort}
+                effortWords={settings.effortWords}
+                speed={settings.speed}
+                speedWords={settings.speedWords}
+              />
+              <ActForm act="leave-watch" onChangeSubmit>
+                <label>список наблюдения</label>
+                <textarea name="names" defaultValue={settings.watch.join('\n')} />
+              </ActForm>
+              <ActForm act="leave-roots" className="pair">
+                <label>arcadia</label>
+                <input name="arcadia" defaultValue={settings.roots.arcadia} />
+                <label>github</label>
+                <input name="github" defaultValue={settings.roots.github} />
+              </ActForm>
+              <div className="roles">
+                <h3>Роли</h3>
+                {settings.roles.map(role => (
+                  <div className="role" key={role.name}>
+                    <ActForm act="rename-role" onChangeSubmit>
+                      <Hidden name="name" value={role.name} />
+                      <label>имя</label>
+                      <input name="next" defaultValue={role.name} />
+                    </ActForm>
+                    <ActForm act="choose-role-outcome" onChangeSubmit>
+                      <Hidden name="name" value={role.name} />
+                      <label>исход</label>
+                      <select name="outcome" defaultValue={role.outcome}>
+                        {options(ROLE_OUTCOMES, role.outcome)}
+                      </select>
+                    </ActForm>
+                    <ActForm act="set-role-text" onChangeSubmit>
+                      <Hidden name="name" value={role.name} />
+                      <label>текст</label>
+                      <textarea name="text" defaultValue={role.text} />
+                    </ActForm>
+                    {role.outcome === 'ticket-fields' ? (
+                      <ActForm act="set-role-labels" onChangeSubmit>
+                        <Hidden name="name" value={role.name} />
+                        <fieldset>
+                          <legend>метки</legend>
+                          {FIELD_LABELS.map(label => (
+                            <label className="check" key={label}>
+                              <input
+                                type="checkbox"
+                                name="labels"
+                                value={label}
+                                defaultChecked={role.labels?.includes(label) === true}
+                              />
+                              {label}
+                            </label>
+                          ))}
+                        </fieldset>
+                      </ActForm>
+                    ) : null}
+                    <ActForm act="remove-role">
+                      <Hidden name="name" value={role.name} />
+                      <Hairline label="Удалить" />
+                    </ActForm>
+                  </div>
+                ))}
+                <ActForm act="choose-agent" className="add" onChangeSubmit>
+                  <label>агент</label>
+                  <select name="agent" defaultValue={settings.agent}>
+                    {options(FACTORY_AGENTS, settings.agent)}
+                  </select>
+                  <label>новая роль</label>
+                  <input name="name" placeholder="имя" />
+                  <select name="outcome" defaultValue="html">
+                    {options(ROLE_OUTCOMES, 'html')}
+                  </select>
+                  <textarea name="text" placeholder="текст" />
+                  <Pill label="Добавить" />
+                </ActForm>
+              </div>
+            </section>
+            <div className="stack">
+              {overlay.checkout === '' ? (
+                <section className="group">
+                  <h3>{overlay.file}</h3>
+                  <p className="empty">Чекаут ещё не выбран.</p>
+                  {snapshot.checkouts.map(checkout => (
+                    <ActForm act="choose-checkout" key={checkout}>
+                      <Hidden name="checkout" value={checkout} />
+                      <Hairline label={checkout} />
+                    </ActForm>
+                  ))}
+                </section>
+              ) : (
+                <section className="group">
+                  <h3>{overlay.file}</h3>
+                  <p className="path">{overlay.checkout}</p>
+                  <ActForm act="choose-overlay-agent" onChangeSubmit>
+                    <label>агент слоя</label>
+                    <select name="agent" defaultValue={overlay.agent}>
+                      {options(FACTORY_AGENTS, overlay.agent, true)}
                     </select>
                   </ActForm>
-                  <ActForm act="set-role-text" onChangeSubmit>
-                    <Hidden name="name" value={role.name} />
-                    <label>текст</label>
-                    <textarea name="text" defaultValue={role.text} />
+                  <ModeFields
+                    modelAct="leave-overlay-model"
+                    effortAct="leave-overlay-effort"
+                    speedAct="leave-overlay-speed"
+                    models={overlay.models}
+                    effort={overlay.effort}
+                    effortWords={overlay.effortWords}
+                    speed={overlay.speed}
+                    speedWords={overlay.speedWords}
+                  />
+                  <ActForm act="leave-overlay-watch" onChangeSubmit>
+                    <label>watch слоя</label>
+                    <textarea name="names" defaultValue={overlay.watch.join('\n')} />
                   </ActForm>
-                  {role.outcome === 'ticket-fields' ? (
-                    <ActForm act="set-role-labels" onChangeSubmit>
-                      <Hidden name="name" value={role.name} />
-                      <fieldset>
-                        <legend>метки</legend>
-                        {FIELD_LABELS.map(label => (
-                          <label className="check" key={label}>
-                            <input
-                              type="checkbox"
-                              name="labels"
-                              value={label}
-                              defaultChecked={role.labels?.includes(label) === true}
-                            />
-                            {label}
-                          </label>
-                        ))}
-                      </fieldset>
-                    </ActForm>
-                  ) : null}
-                  <ActForm act="remove-role">
-                    <Hidden name="name" value={role.name} />
-                    <Hairline label="Удалить" />
-                  </ActForm>
-                </div>
-              ))}
-              <ActForm act="choose-agent" className="add" onChangeSubmit>
-                <label>агент</label>
-                <select name="agent" defaultValue={settings.agent}>
-                  {options(FACTORY_AGENTS, settings.agent)}
-                </select>
-                <label>новая роль</label>
-                <input name="name" placeholder="имя" />
-                <select name="outcome" defaultValue="html">
-                  {options(ROLE_OUTCOMES, 'html')}
-                </select>
-                <textarea name="text" placeholder="текст" />
-                <Pill label="Добавить" />
-              </ActForm>
+                </section>
+              )}
+              <ServiceGroup snapshot={snapshot} canSave={canSave} choices={choices} />
             </div>
-          </section>
-          <div className="stack">
-            {overlay.checkout === '' ? (
-              <section className="group">
-                <h3>{overlay.file}</h3>
-                <p className="empty">Чекаут ещё не выбран.</p>
-                {snapshot.checkouts.map(checkout => (
-                  <ActForm act="choose-checkout" key={checkout}>
-                    <Hidden name="checkout" value={checkout} />
-                    <Hairline label={checkout} />
-                  </ActForm>
-                ))}
-              </section>
-            ) : (
-              <section className="group">
-                <h3>{overlay.file}</h3>
-                <p className="path">{overlay.checkout}</p>
-                <ActForm act="choose-overlay-agent" onChangeSubmit>
-                  <label>агент слоя</label>
-                  <select name="agent" defaultValue={overlay.agent}>
-                    {options(FACTORY_AGENTS, overlay.agent, true)}
-                  </select>
-                </ActForm>
-                <ModeFields
-                  modelAct="leave-overlay-model"
-                  effortAct="leave-overlay-effort"
-                  speedAct="leave-overlay-speed"
-                  models={overlay.models}
-                  effort={overlay.effort}
-                  effortWords={overlay.effortWords}
-                  speed={overlay.speed}
-                  speedWords={overlay.speedWords}
-                />
-                <ActForm act="leave-overlay-watch" onChangeSubmit>
-                  <label>watch слоя</label>
-                  <textarea name="names" defaultValue={overlay.watch.join('\n')} />
-                </ActForm>
-              </section>
-            )}
-            <ServiceGroup snapshot={snapshot} canSave={canSave} choices={choices} />
           </div>
         </div>
       </div>

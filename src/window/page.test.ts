@@ -3345,7 +3345,11 @@ spec('sidebar', () => {
         },
       );
     });
-    scenario('A line comment quotes the line', async () => {
+    scenario('A plan line opens a thread', async () => {
+      const line = 'Сайдбар читает ветку.';
+      const reply = 'Здесь узко.';
+      const proposal = '## Scope\n\nСайдбар читает ветку.\n';
+      const threads: {key: string; body: string; place: ThreadPlace}[] = [];
       const comments: string[] = [];
       await hosted(
         {
@@ -3354,38 +3358,41 @@ spec('sidebar', () => {
           commentPull: (_key, body) => {
             comments.push(body);
           },
+          threadPull: async (key, body, place) => {
+            threads.push({key, body, place});
+          },
         },
         async (page, window, paths) => {
-          writeChange(paths.arcadia, '1', 'proposal.md', '## Scope\n\nСайдбар читает ветку.\n');
-          window.chooseAgent('cursor');
-          assert.equal(
-            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
-              .status,
-            200,
-          );
+          writeChange(paths.arcadia, '1', 'proposal.md', proposal);
+          await showCard(page, window);
           const html = await pageHtml(page.url);
-          const side = bandOf(html, '1');
-          assert.match(
-            side,
-            /<button type="button" class="line" data-line="Сайдбар читает ветку\."/,
-          );
+          const button = lineButton(html, line);
+          const at = sourceLine(proposal, line);
+          assert.equal(at, 3);
+          assert.equal(button.includes(`data-path="${PROPOSAL_PATH}"`), true);
+          assert.equal(button.includes(`data-at="${at}"`), true);
+          assert.equal(button.includes('data-side="right"'), true);
           assert.match(html, /\.spine button\.line:hover/);
           assert.equal(
             (
               await post(
                 page.url,
                 'act',
-                new URLSearchParams({
-                  act: 'answer',
-                  key: '1',
-                  line: 'Сайдбар читает ветку.',
-                  reply: 'Здесь узко.',
-                }).toString(),
+                answerFields({
+                  line,
+                  reply,
+                  path: PROPOSAL_PATH,
+                  at: String(at),
+                  side: 'right',
+                }),
               )
             ).status,
             200,
           );
-          assert.deepEqual(comments, ['> Сайдбар читает ветку.\n\nЗдесь узко.']);
+          assert.deepEqual(threads, [
+            {key: '1', body: reply, place: {path: PROPOSAL_PATH, line: at, side: 'right'}},
+          ]);
+          assert.deepEqual(comments, []);
         },
       );
     });

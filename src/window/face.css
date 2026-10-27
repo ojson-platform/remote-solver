@@ -161,6 +161,20 @@
     cursor: pointer;
     text-align: left;
   }
+  .name { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; }
+  .name .face { display: inline; width: auto; }
+  .name .title { display: inline; }
+  .pull { color: var(--muted); }
+  .project {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 0 6px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 11px;
+    text-decoration: none;
+  }
   .corner { position: absolute; top: 8px; right: 8px; }
   .round {
     width: 22px;

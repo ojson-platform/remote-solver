@@ -757,8 +757,27 @@ export function Sidebar({
       <BusyEdge on={busy ?? false} />
       <header>
         <div>
-          <p className="kicker">{opened.key}</p>
-          <p className="full">{opened.title}</p>
+          <p className="name">
+            {row.issue ? (
+              <a className="key" href={row.issue}>
+                #{opened.key}
+              </a>
+            ) : (
+              <span className="key">#{opened.key}</span>
+            )}
+            <span className="full">: {opened.title}</span>
+            {row.pull ? (
+              <span className="pull">
+                {' '}
+                (PR: <a href={row.pull.href}>#{row.pull.id}</a>)
+              </span>
+            ) : null}
+          </p>
+          {row.project ? (
+            <a className="project" href={row.project.href}>
+              {row.project.name}
+            </a>
+          ) : null}
         </div>
         <ActForm act="close-card">
           <button className="x" type="submit" aria-label="Закрыть">

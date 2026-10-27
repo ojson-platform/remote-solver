@@ -39,6 +39,9 @@ export type SnapshotDoor = {
 export type SnapshotRow = {
   key: string;
   title: string;
+  issue?: string;
+  pull?: {id: string; href: string};
+  project?: {name: string; href: string};
   pool: boolean;
   station?: ColumnName;
   /** Action token while a worker is on a turn for this cycle. */
@@ -134,7 +137,40 @@ type Fact = {
   takeDisabled?: true;
   alarm?: true;
   choices: string[];
+  repo?: string;
+  service?: string;
+  pull?: string;
 };
+
+export function ticketLinks(input: {key: string; repo?: string; service?: string; pull?: string}): {
+  issue?: string;
+  pull?: {id: string; href: string};
+  project?: {name: string; href: string};
+} {
+  const repo = input.repo?.trim() ?? '';
+  if (repo === '' || !repo.includes('/')) {
+    return {};
+  }
+  const issue = `https://github.com/${repo}/issues/${input.key}`;
+  const pull =
+    input.pull && input.pull.trim() !== ''
+      ? {id: input.pull.trim(), href: `https://github.com/${repo}/pull/${input.pull.trim()}`}
+      : undefined;
+  if (input.service === undefined) {
+    return {issue, ...(pull ? {pull} : {})};
+  }
+  const service = input.service.trim();
+  if (service === '') {
+    const name = repo.slice(repo.lastIndexOf('/') + 1);
+    return {issue, ...(pull ? {pull} : {}), project: {name, href: `https://github.com/${repo}`}};
+  }
+  const name = service.slice(service.lastIndexOf('/') + 1);
+  return {
+    issue,
+    ...(pull ? {pull} : {}),
+    project: {name, href: `https://github.com/${repo}/tree/HEAD/${service}`},
+  };
+}
 
 /** Spec turns hide Specify acceptance until this cycle's turn ends. */
 const SPEC_TURNS = new Set(['restore-baseline', 'create-initial-specs', 'improve-specs']);
@@ -198,6 +234,9 @@ function facts(board: BoardState): Fact[] {
       occasion: card.occasion,
       doors: card.doors,
       choices: [],
+      ...(card.repo !== undefined ? {repo: card.repo} : {}),
+      ...(card.service !== undefined ? {service: card.service} : {}),
+      ...(card.pull !== undefined ? {pull: card.pull} : {}),
     })),
   );
   taken.sort((left, right) => {
@@ -222,6 +261,9 @@ function facts(board: BoardState): Fact[] {
     takeDisabled: card.takeDisabled,
     alarm: card.alarm,
     choices: card.choices,
+    ...(card.repo !== undefined ? {repo: card.repo} : {}),
+    ...(card.service !== undefined ? {service: card.service} : {}),
+    ...(card.pull !== undefined ? {pull: card.pull} : {}),
   }));
   return [...taken, ...pool];
 }
@@ -262,6 +304,7 @@ function publish(
     title: row.title,
     pool: row.pool,
     choices: row.choices,
+    ...ticketLinks({key: row.key, repo: row.repo, service: row.service, pull: row.pull}),
     ...(row.station !== undefined ? {station: row.station} : {}),
     ...(shown !== undefined ? {action: shown} : {}),
     ...(row.phaseRow !== undefined ? {phaseRow: row.phaseRow} : {}),

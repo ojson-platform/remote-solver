@@ -293,6 +293,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
       openPullRequests: open.length,
       ...(checks !== undefined ? {checks} : {}),
       ...(diff ? {diff: true} : {}),
+      ...(open.length === 1 && open[0] ? {pull: open[0].id} : {}),
       ...(phaseOf(issue.labels) === 'accepting' && open.length === 1 ? {mergeAhead: true} : {}),
     };
   }
@@ -341,12 +342,14 @@ export function openLiveBoard(options: LiveBoardOptions) {
       const open = listed?.filter(pull => pull.state === 'OPEN');
       let openCount = previous?.openPullRequests;
       let checks = previous?.checks;
+      let onlyId: string | undefined;
       if (open) {
         openCount = open.length;
         checks = undefined;
         const only = open.length === 1 ? open[0] : undefined;
         if (only) {
           checks = only.checks;
+          onlyId = only.id;
           pullByKey.set(issue.key, only.id);
           if (only.reading) {
             reviews.set(issue.key, reviewOf(only.reading.threads, only.reading.notes));
@@ -367,6 +370,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
         ...(openCount !== undefined ? {openPullRequests: openCount} : {}),
         ...(checks !== undefined ? {checks} : {}),
         ...(previous?.diff ? {diff: true} : {}),
+        ...(onlyId !== undefined ? {pull: onlyId} : {}),
         ...(phaseOf(issue.labels) === 'accepting' && openCount === 1 ? {mergeAhead: true} : {}),
       });
     }

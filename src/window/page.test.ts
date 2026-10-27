@@ -97,8 +97,9 @@ test('the page shows the pool, the columns, and Take writes the assignee', async
       assert.equal(response.status, 200);
       const html = await pageHtml(page.url);
       assert.equal(html.includes('<h1>'), false);
-      assert.match(html, /<span class="key">1<\/span>/);
-      assert.match(html, /<h2 class="title">Take me<\/h2>/);
+      assert.match(html, /<span class="key">#1<\/span>/);
+      assert.match(html, /Take me/);
+      assert.equal(html.includes('github.com'), false);
       for (const name of COLUMN_NAMES) {
         assert.match(html, new RegExp(`<span class="phase">${name}</span>`));
       }
@@ -1136,7 +1137,8 @@ test('a stalled open cannot overwrite a newer dialog', async () => {
     assert.ok(late.body.length > 0);
     assert.deepEqual(calls, ['BBB']);
     const band = bandOf(await pageHtml(page.url), 'BBB');
-    assert.match(band, /<p class="kicker">BBB<\/p>/);
+    assert.match(band, /<span class="key">#BBB<\/span>/);
+    assert.match(band, /: BBB/);
     assert.equal(band.includes('AAA'), false);
   } finally {
     if (finish) {
@@ -5476,6 +5478,174 @@ spec('live-frame', () => {
               ]);
             }
           }
+        },
+      );
+    });
+  });
+});
+
+spec('ticket-heading', () => {
+  requirement('The ticket heading is one line', () => {
+    scenario('The board shows the issue link beside the title', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'specifying', {
+              repo: 'acme/billing',
+              title: 'Take me',
+              sddService: 'services/billing',
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const article = articleOf(await pageHtml(page.url), '1');
+          const href = 'href="https://github.com/acme/billing/issues/1"';
+          assert.match(article, new RegExp(`<a class="key" ${href}>#1</a>`));
+          assert.match(article, /: Take me/);
+          const face = article.slice(
+            article.indexOf('<button class="face"'),
+            article.indexOf('</button>'),
+          );
+          assert.equal(face.includes(href), false);
+        },
+      );
+    });
+
+    scenario('A ticket without a repo has no link', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {title: 'Take me'})],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const article = articleOf(await pageHtml(page.url), '1');
+          const text = article.replace(/>\s+</g, '><').replace(/<[^>]+>/g, '');
+          assert.match(text, /#1: Take me/);
+          assert.equal(article.includes('github.com'), false);
+        },
+      );
+    });
+  });
+
+  requirement('The sidebar names the one open pull request', () => {
+    scenario('One pull request is a muted link in the sidebar', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'specifying', {
+              repo: 'acme/billing',
+              pull: '11',
+              openPullRequests: 1,
+              title: 'Take me',
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          const article = articleOf(html, '1');
+          const side = bandOf(html, '1');
+          assert.match(side, /https:\/\/github\.com\/acme\/billing\/pull\/11/);
+          assert.match(side, /\(PR:/);
+          assert.equal(article.includes('/pull/11'), false);
+          assert.match(html, /\.pull\s*\{[^}]*color:\s*var\(--muted\)/);
+        },
+      );
+    });
+
+    scenario('Several pull requests omit the parenthesis', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'specifying', {repo: 'acme/billing', pull: '11', openPullRequests: 2}),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const side = bandOf(await pageHtml(page.url), '1');
+          assert.equal(side.includes('(PR:'), false);
+          assert.equal(side.includes('/pull/11'), false);
+        },
+      );
+    });
+  });
+
+  requirement('The project badge links to the project root', () => {
+    scenario('A service path badges its last segment', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'specifying', {
+              repo: 'acme/billing',
+              pull: '11',
+              openPullRequests: 1,
+              title: 'Take me',
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          const href = 'href="https://github.com/acme/billing/tree/HEAD/services/billing"';
+          for (const part of [articleOf(html, '1'), bandOf(html, '1')]) {
+            assert.match(part, new RegExp(`<a class="project" ${href}>billing</a>`));
+          }
+        },
+      );
+    });
+
+    scenario('An empty service badges the repository root', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {repo: 'acme/billing', sddService: ''})],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const article = articleOf(await pageHtml(page.url), '1');
+          const badge = article.match(/<a class="project" href="([^"]+)">billing<\/a>/);
+          assert.ok(badge);
+          assert.equal(badge[1], 'https://github.com/acme/billing');
+          assert.equal(badge[1].includes('/issues/'), false);
+          assert.match(article, /\/issues\//);
+        },
+      );
+    });
+
+    scenario('An unnamed service has no badge', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            {...held('1', 'specifying', {repo: 'acme/billing'}), sddService: undefined},
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          assert.match(html, /https:\/\/github\.com\/acme\/billing\/issues\/1/);
+          assert.equal(html.includes('class="project"'), false);
         },
       );
     });

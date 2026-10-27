@@ -165,6 +165,7 @@
   .name .face { display: inline; width: auto; }
   .name .title { display: inline; }
   .pull { color: var(--muted); }
+  .pull a { color: inherit; }
   .project {
     display: inline-block;
     margin-top: 4px;

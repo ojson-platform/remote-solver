@@ -161,7 +161,7 @@
     cursor: pointer;
     text-align: left;
   }
-  .name { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; }
+  .ident > .name, .sidebar header .name { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; }
   .name .face { display: inline; width: auto; }
   .name .title { display: inline; }
   .pull { color: var(--muted); }

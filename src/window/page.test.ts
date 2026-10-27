@@ -5558,6 +5558,7 @@ spec('ticket-heading', () => {
           assert.match(side, /\(PR:/);
           assert.equal(article.includes('/pull/11'), false);
           assert.match(html, /\.pull\s*\{[^}]*color:\s*var\(--muted\)/);
+          assert.match(html, /\.pull a\s*\{[^}]*color:\s*inherit/);
         },
       );
     });

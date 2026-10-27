@@ -84,7 +84,7 @@ The fold control SHALL be centered. The first capability SHALL NOT have a rule a
 
 ### Requirement: A line comment uses a thread when the line has an anchor
 
-A row copied from the delta SHALL carry an anchor: the delta path, the line number in that file, and side `right`. Choosing that row and sending text SHALL call `openThread` with the person's text only. A row without an anchor SHALL call `speak` with the visible line quoted above the text. A refused thread SHALL call `speak` with the same quote and SHALL NOT put the host error in the snapshot. Both calls failing SHALL yield `комментарий не записан`. A Plan body line SHALL carry an anchor to that line of `proposal.md`. An open question SHALL stay a conversation reply.
+A row copied from the delta SHALL carry an anchor: the delta path, the line number in that file, and side `right`. Choosing that row and sending text SHALL call `openThread` with the person's text only. A row without an anchor SHALL call `speak` with the visible line quoted above the text. A refused thread SHALL call `speak` with the same quote and SHALL NOT put the host error in the snapshot. Both calls failing SHALL yield `комментарий не записан`. A Plan body line SHALL carry an anchor to that line of `proposal.md`. An open question SHALL stay a conversation reply. A Design body line SHALL carry an anchor to that line of `design.md`. An open question of the design SHALL stay a conversation reply. A `- [ ]` line of the design outside Open questions SHALL open a thread.
 
 #### Scenario: A line copied from the delta opens a thread
 
@@ -111,10 +111,25 @@ A row copied from the delta SHALL carry an anchor: the delta path, the line numb
 - **WHEN** the person comments a body line of the plan and one pull request is open
 - **THEN** the review thread is opened on `proposal.md` at that file line
 
+#### Scenario: A design line opens a thread on design.md
+
+- **WHEN** the person comments a body line of the design and one pull request is open
+- **THEN** the review thread is opened on `design.md` at that file line
+
 #### Scenario: An open question stays a conversation reply
 
 - **WHEN** the person answers an open question line of the plan
 - **THEN** the conversation receives that question as an open checkbox and does not open a thread
+
+#### Scenario: An open design question stays a conversation reply
+
+- **WHEN** the person answers an open question line of the design
+- **THEN** the conversation receives that question as an open checkbox and does not open a thread
+
+#### Scenario: A design checkbox outside Open questions opens a thread
+
+- **WHEN** the person comments a `- [ ]` line of the design that is not in Open questions and one pull request is open
+- **THEN** the review thread is opened on `design.md` at that file line and the conversation receives no quote
 
 ### Requirement: A task opens its scenario
 

@@ -5185,6 +5185,61 @@ spec('spec-diff', () => {
         },
       );
     });
+    scenario('A repeated design checkbox outside Open questions opens a thread', async () => {
+      const question = 'Имя модуля?';
+      const line = `- [ ] ${question}`;
+      const reply = 'Это заметка.';
+      const design = specText(['## Open questions', '', line, '', '## Notes', '', line]);
+      const threads: {key: string; body: string; place: ThreadPlace}[] = [];
+      const comments: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'designing', {openPullRequests: 1})],
+          commentPull: (_key, body) => {
+            comments.push(body);
+          },
+          threadPull: async (key, body, place) => {
+            threads.push({key, body, place});
+          },
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'design.md', design);
+          await showCard(page, window);
+          const html = renderWindow(await readSnapshot(page.url));
+          const button = lineButton(html, line);
+          assert.equal(button.includes(`data-question="${question}"`), true);
+          const notesHeading = html.indexOf('<h3>Notes</h3>');
+          assert.ok(notesHeading >= 0);
+          const notesButton = lineButton(html.slice(notesHeading), line);
+          assert.equal(notesButton.includes('data-question'), false);
+          const openAt = sourceLine(design, line);
+          const notesAt =
+            design.split('\n').findIndex((row, index) => index >= openAt && row === line) + 1;
+          assert.ok(notesAt > openAt);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                answerFields({
+                  line,
+                  reply,
+                  path: DESIGN_PATH,
+                  at: String(notesAt),
+                  side: 'right',
+                }),
+              )
+            ).status,
+            200,
+          );
+          assert.deepEqual(threads, [
+            {key: '1', body: reply, place: {path: DESIGN_PATH, line: notesAt, side: 'right'}},
+          ]);
+          assert.deepEqual(comments, []);
+        },
+      );
+    });
   });
 });
 

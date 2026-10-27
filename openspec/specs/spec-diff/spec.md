@@ -84,7 +84,7 @@ The fold control SHALL be centered. The first capability SHALL NOT have a rule a
 
 ### Requirement: A line comment uses a thread when the line has an anchor
 
-A row copied from the delta SHALL carry an anchor: the delta path, the line number in that file, and side `right`. Choosing that row and sending text SHALL call `openThread` with the person's text only. A row without an anchor SHALL call `speak` with the visible line quoted above the text. A refused thread SHALL call `speak` with the same quote and SHALL NOT put the host error in the snapshot. Both calls failing SHALL yield `комментарий не записан`. A Plan body line SHALL carry an anchor to that line of `proposal.md`. An open question SHALL stay a conversation reply. A Design body line SHALL carry an anchor to that line of `design.md`. An open question of the design SHALL stay a conversation reply. A `- [ ]` line of the design outside Open questions SHALL open a thread.
+A row copied from the delta SHALL carry an anchor: the delta path, the line number in that file, and side `right`. Choosing that row and sending text SHALL call `openThread` with the person's text only. A row without an anchor SHALL call `speak` with the visible line quoted above the text. A refused thread SHALL call `speak` with the same quote and SHALL NOT put the host error in the snapshot. Both calls failing SHALL yield `комментарий не записан`. A Plan body line SHALL carry an anchor to that line of `proposal.md`. An open question SHALL stay a conversation reply. A Design body line SHALL carry an anchor to that line of `design.md`. An open question of the design SHALL stay a conversation reply. A `- [ ]` line of the design outside Open questions SHALL open a thread. A `- [ ]` line outside Open questions SHALL open a thread even when its text equals an open question.
 
 #### Scenario: A line copied from the delta opens a thread
 
@@ -130,6 +130,11 @@ A row copied from the delta SHALL carry an anchor: the delta path, the line numb
 
 - **WHEN** the person comments a `- [ ]` line of the design that is not in Open questions and one pull request is open
 - **THEN** the review thread is opened on `design.md` at that file line and the conversation receives no quote
+
+#### Scenario: A repeated design checkbox outside Open questions opens a thread
+
+- **WHEN** the design has the same `- [ ]` line in Open questions and in another section, and the person comments the line outside Open questions while one pull request is open
+- **THEN** the review thread is opened on `design.md` at that outside line and the conversation receives no quote
 
 ### Requirement: A task opens its scenario
 

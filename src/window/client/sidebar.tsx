@@ -429,7 +429,7 @@ function DesignDocument({
             <PlanLines
               lines={part.lines}
               pull={model.pull}
-              questions={model.design.questions}
+              questions={[]}
               drafts={drafts}
               keyName={keyName}
               file="design.md"

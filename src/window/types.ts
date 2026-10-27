@@ -53,6 +53,8 @@ export type WindowTicket = {
   parent?: string;
   dependsOn?: readonly string[];
   openPullRequests?: number;
+  /** Id of the single open pull request. */
+  pull?: string;
   /** The single open pull request has a non-empty diff. The window does not read git. */
   diff?: boolean;
   comments?: readonly WindowComment[];
@@ -269,6 +271,12 @@ export type PoolCard = {
   queue: string;
   /** Service choices copied from the checkout card. */
   choices: string[];
+  /** Present when the ticket names `owner/repo`. */
+  repo?: string;
+  /** Copied from `sddService`, including `''`. Absent when the field is unnamed. */
+  service?: string;
+  /** Id of the single open pull request. */
+  pull?: string;
 };
 
 export const COLUMN_NAMES = [
@@ -331,6 +339,12 @@ export type CycleCard = {
   doors?: Partial<Record<ColumnName, StationDoor>>;
   /** Future gates whose auto label is already set. Absent when every gate is on. */
   gateOff?: Partial<Record<GateStation, true>>;
+  /** Present when the ticket names `owner/repo`. */
+  repo?: string;
+  /** Copied from `sddService`, including `''`. Absent when the field is unnamed. */
+  service?: string;
+  /** Id of the single open pull request. */
+  pull?: string;
 };
 
 export type BoardState = {

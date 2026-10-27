@@ -495,6 +495,15 @@ function buildCycle(
   if (gateOff) {
     card.gateOff = gateOff;
   }
+  if (item.repo) {
+    card.repo = item.repo;
+  }
+  if (item.sddService !== undefined) {
+    card.service = item.sddService;
+  }
+  if ((item.openPullRequests ?? 0) === 1 && item.pull) {
+    card.pull = item.pull;
+  }
   return {card, occasion};
 }
 
@@ -520,6 +529,15 @@ function poolCard(
   };
   if (checkout.checkout) {
     card.checkout = checkout.checkout;
+  }
+  if (item.repo) {
+    card.repo = item.repo;
+  }
+  if (item.sddService !== undefined) {
+    card.service = item.sddService;
+  }
+  if ((item.openPullRequests ?? 0) === 1 && item.pull) {
+    card.pull = item.pull;
   }
   const station = phase ? columnOf(phase, item) : null;
   if (station) {

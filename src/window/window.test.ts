@@ -2700,7 +2700,12 @@ function proveHealthyPoolCardsAreOrderedByKeyAndHaveNoIcon97(): void {
   ]);
   window.chooseAgent('cursor');
   const checkout = path.join(arcadia, 'services', 'billing');
-  const place = {queue: 'alpha', choices: ['services/billing'], checkout};
+  const place = {
+    queue: 'alpha',
+    choices: ['services/billing'],
+    checkout,
+    service: 'services/billing',
+  };
   assert.deepEqual(window.board().pool, [
     {key: 'a', title: 'First', take: true, ...place},
     {

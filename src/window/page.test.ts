@@ -5500,7 +5500,8 @@ spec('ticket-heading', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const article = articleOf(await pageHtml(page.url), '1');
+          const html = await pageHtml(page.url);
+          const article = articleOf(html, '1');
           const href = 'href="https://github.com/acme/billing/issues/1"';
           assert.match(article, new RegExp(`<a class="key" ${href}>#1</a>`));
           assert.match(article, /: Take me/);
@@ -5509,6 +5510,9 @@ spec('ticket-heading', () => {
             article.indexOf('</button>'),
           );
           assert.equal(face.includes(href), false);
+          assert.match(html, /\.ident > \.name[^{]*\{[^}]*display:\s*flex/);
+          assert.match(html, /\.sidebar header \.name[^{]*\{[^}]*display:\s*flex/);
+          assert.doesNotMatch(html, /(?:^|[{}])\s*\.name\s*\{\s*display:\s*flex/);
         },
       );
     });

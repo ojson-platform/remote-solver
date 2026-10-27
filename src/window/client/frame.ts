@@ -202,7 +202,7 @@ function shellSpine(row: SnapshotRow): Spine {
     capabilities: [],
     named: [],
     missingBaseline: [],
-    design: {present: false, boundary: '', approach: '', rejected: [], decisions: ''},
+    design: {present: false, sections: [], questions: []},
     tasks: [],
     diff: false,
     pull: false,

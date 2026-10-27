@@ -149,10 +149,9 @@ export function reviewReady(
     return model.proposal.present && !model.proposal.questions.some(question => question.open);
   }
   if (gate === 'designed') {
-    return (
-      model.design.present &&
-      !model.design.decisions.split('\n').some(line => line.trimStart().startsWith('- [ ]'))
-    );
+    const decisions = model.design.sections.find(section => section.heading === 'Open decisions');
+    const open = decisions?.lines.some(line => line.text.trimStart().startsWith('- [ ]')) ?? false;
+    return model.design.present && !open;
   }
   if (action !== undefined && SPEC_TURNS.has(action)) {
     return false;

@@ -3441,6 +3441,57 @@ spec('sidebar', () => {
         },
       );
     });
+    scenario('A design line opens a thread', async () => {
+      const line = 'Один модуль.';
+      const reply = 'Здесь узко.';
+      const design = '## Approach\n\nОдин модуль.\n';
+      const threads: {key: string; body: string; place: ThreadPlace}[] = [];
+      const comments: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'designing', {openPullRequests: 1})],
+          commentPull: (_key, body) => {
+            comments.push(body);
+          },
+          threadPull: async (key, body, place) => {
+            threads.push({key, body, place});
+          },
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'design.md', design);
+          await showCard(page, window);
+          const html = await pageHtml(page.url);
+          const button = lineButton(html, line);
+          const at = sourceLine(design, line);
+          assert.equal(at, 3);
+          assert.equal(button.includes(`data-path="${DESIGN_PATH}"`), true);
+          assert.equal(button.includes(`data-at="${at}"`), true);
+          assert.equal(button.includes('data-side="right"'), true);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                answerFields({
+                  line,
+                  reply,
+                  path: DESIGN_PATH,
+                  at: String(at),
+                  side: 'right',
+                }),
+              )
+            ).status,
+            200,
+          );
+          assert.equal(threads[0]?.place.path, DESIGN_PATH);
+          assert.deepEqual(threads, [
+            {key: '1', body: reply, place: {path: DESIGN_PATH, line: at, side: 'right'}},
+          ]);
+          assert.deepEqual(comments, []);
+        },
+      );
+    });
     scenario('An empty plan section stays out', async () => {
       await hosted(
         {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
@@ -3635,7 +3686,7 @@ spec('sidebar', () => {
       assert.equal(lineFieldClosesOnEscape('Escape', false), false);
       assert.equal(lineFieldClosesOnEscape('Enter', true), false);
     });
-    scenario('The Design row shows the named parts', async () => {
+    scenario('The Design row shows every section', async () => {
       await hosted(
         {login: () => MANAGER, tickets: () => [held('1', 'designing')]},
         async (page, window, paths) => {
@@ -3644,6 +3695,8 @@ spec('sidebar', () => {
             '1',
             'design.md',
             [
+              'До секции.',
+              '',
               '## Verification boundary',
               '',
               'Одна проверка.',
@@ -3674,11 +3727,14 @@ spec('sidebar', () => {
           );
           const side = bandOf(await pageHtml(page.url), '1');
           assert.match(side, /Одна проверка/);
+          assert.match(side, /Лишнее/);
           assert.match(side, /Один модуль/);
+          assert.match(side, /Не показывать/);
           assert.match(side, /Отклонено: второй модуль/);
           assert.match(side, /- \[ \] имя/);
-          assert.equal(side.includes('Лишнее'), false);
-          assert.equal(side.includes('Не показывать'), false);
+          assert.equal(side.includes('До секции.'), false);
+          assert.match(side, /<p class="line"/);
+          assert.equal(side.includes(`data-path="${DESIGN_PATH}"`), false);
         },
       );
     });
@@ -4289,6 +4345,7 @@ spec('role', () => {
 const SPEC_ID = 'case-read';
 const DELTA_PATH = 'openspec/changes/issue-1/specs/case-read/spec.md';
 const PROPOSAL_PATH = 'openspec/changes/issue-1/proposal.md';
+const DESIGN_PATH = 'openspec/changes/issue-1/design.md';
 
 type ThreadPlace = {path: string; line: number; side: 'right' | 'left'};
 
@@ -4932,6 +4989,54 @@ spec('spec-diff', () => {
         },
       );
     });
+    scenario('A design line opens a thread on design.md', async () => {
+      const line = 'Один модуль.';
+      const reply = 'Сначала сократить.';
+      const design = '## Approach\n\nОдин модуль.\n';
+      const threads: {key: string; body: string; place: ThreadPlace}[] = [];
+      const comments: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'designing', {openPullRequests: 1})],
+          commentPull: (_key, body) => {
+            comments.push(body);
+          },
+          threadPull: async (key, body, place) => {
+            threads.push({key, body, place});
+          },
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'design.md', design);
+          await showCard(page, window);
+          const html = renderWindow(await readSnapshot(page.url));
+          const button = lineButton(html, line);
+          const at = sourceLine(design, line);
+          assert.equal(button.includes(`data-path="${DESIGN_PATH}"`), true);
+          assert.equal(button.includes(`data-at="${at}"`), true);
+          assert.equal(button.includes('data-side="right"'), true);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                answerFields({
+                  line,
+                  reply,
+                  path: DESIGN_PATH,
+                  at: String(at),
+                  side: 'right',
+                }),
+              )
+            ).status,
+            200,
+          );
+          assert.equal(threads.length, 1);
+          assert.equal(threads[0]?.place.path, DESIGN_PATH);
+          assert.deepEqual(comments, []);
+        },
+      );
+    });
     scenario('An open question stays a conversation reply', async () => {
       const question = 'Писать ли имя проверки?';
       const reply = 'Да, короткое имя.';
@@ -4982,6 +5087,99 @@ spec('spec-diff', () => {
           );
           assert.deepEqual([...comments, ...spoken], [`- [ ] ${question}\n\n${reply}`]);
           assert.deepEqual(threads, []);
+        },
+      );
+    });
+    scenario('An open design question stays a conversation reply', async () => {
+      const question = 'Имя модуля?';
+      const reply = 'Да.';
+      const line = `- [ ] ${question}`;
+      const design = specText(['## Open questions', '', line]);
+      const threads: ThreadPlace[] = [];
+      const comments: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'designing', {openPullRequests: 1})],
+          commentPull: (_key, body) => {
+            comments.push(body);
+          },
+          threadPull: async (_key, _body, place) => {
+            threads.push(place);
+          },
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'design.md', design);
+          await showCard(page, window);
+          const html = renderWindow(await readSnapshot(page.url));
+          const button = lineButton(html, line);
+          assert.equal(button.includes(`data-question="${question}"`), true);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                answerFields({
+                  question,
+                  line,
+                  reply,
+                  path: DESIGN_PATH,
+                  at: String(sourceLine(design, line)),
+                  side: 'right',
+                }),
+              )
+            ).status,
+            200,
+          );
+          assert.deepEqual(comments, [`- [ ] ${question}\n\n${reply}`]);
+          assert.deepEqual(threads, []);
+        },
+      );
+    });
+    scenario('A design checkbox outside Open questions opens a thread', async () => {
+      const line = '- [ ] не вопрос';
+      const reply = 'Это заметка.';
+      const design = '## Notes\n\n- [ ] не вопрос\n';
+      const threads: {key: string; body: string; place: ThreadPlace}[] = [];
+      const comments: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'designing', {openPullRequests: 1})],
+          commentPull: (_key, body) => {
+            comments.push(body);
+          },
+          threadPull: async (key, body, place) => {
+            threads.push({key, body, place});
+          },
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'design.md', design);
+          await showCard(page, window);
+          const html = renderWindow(await readSnapshot(page.url));
+          const button = lineButton(html, line);
+          assert.equal(button.includes('data-question'), false);
+          const at = sourceLine(design, line);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                answerFields({
+                  line,
+                  reply,
+                  path: DESIGN_PATH,
+                  at: String(at),
+                  side: 'right',
+                }),
+              )
+            ).status,
+            200,
+          );
+          assert.deepEqual(threads, [
+            {key: '1', body: reply, place: {path: DESIGN_PATH, line: at, side: 'right'}},
+          ]);
+          assert.deepEqual(comments, []);
         },
       );
     });

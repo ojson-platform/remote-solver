@@ -59,10 +59,8 @@ export type Spine = {
   missingBaseline: string[];
   design: {
     present: boolean;
-    boundary: string;
-    approach: string;
-    rejected: string[];
-    decisions: string;
+    sections: SpineSection[];
+    questions: SpineQuestion[];
   };
   tasks: SpineTask[];
   checks?: string;
@@ -90,16 +88,6 @@ function section(text: string, heading: string): string {
   const rest = text.slice(match.index + match[0].length);
   const next = rest.search(/^## /m);
   return (next === -1 ? rest : rest.slice(0, next)).trim();
-}
-
-function paragraph(text: string): string {
-  const trimmed = text.trim();
-  if (trimmed === '') {
-    return '';
-  }
-  const end = trimmed.search(/\n\s*\n/);
-  const chunk = end === -1 ? trimmed : trimmed.slice(0, end);
-  return chunk.replace(/\s+/g, ' ').trim();
 }
 
 function oneLine(text: string): string {
@@ -342,13 +330,8 @@ export function buildSpine(input: {
     missingBaseline: missingBaselineIds(proposal, rel => files.exists(rel)),
     design: {
       present: design.trim() !== '',
-      boundary: paragraph(section(design, 'Verification boundary')),
-      approach: paragraph(section(design, 'Approach')),
-      rejected: design
-        .split('\n')
-        .map(line => line.trim())
-        .filter(line => line.startsWith('Отклонено:')),
-      decisions: section(design, 'Open decisions').trim(),
+      sections: sectionsOf(design),
+      questions: questionsOf(design),
     },
     tasks: tasksOf(taskText, owner),
     checks: checksLine(input.checks),

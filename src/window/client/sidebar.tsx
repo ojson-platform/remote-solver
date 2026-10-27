@@ -259,12 +259,14 @@ function PlanLines({
   questions,
   drafts,
   keyName,
+  file,
 }: {
   lines: readonly SpineSourceLine[];
   pull: boolean;
   questions: Spine['proposal']['questions'];
   drafts: readonly LineDraft[];
   keyName: string;
+  file: 'proposal.md' | 'design.md';
 }): ReactNode {
   let gap = false;
   const out: ReactNode[] = [];
@@ -290,7 +292,7 @@ function PlanLines({
       return;
     }
     const draft = drafts.find(item => item.line === line.text.trimEnd());
-    const path = `openspec/changes/issue-${keyName}/proposal.md`;
+    const path = `openspec/changes/issue-${keyName}/${file}`;
     out.push(
       <span key={index}>
         <button
@@ -349,6 +351,7 @@ function PlanDocument({
             questions={model.proposal.questions}
             drafts={drafts}
             keyName={keyName}
+            file="proposal.md"
           />
         </section>
       );
@@ -369,6 +372,67 @@ function PlanDocument({
               questions={model.proposal.questions}
               drafts={drafts}
               keyName={keyName}
+              file="proposal.md"
+            />
+          </div>
+        ))}
+      </section>
+    );
+  });
+  return (
+    <>
+      <div className="doc">{body}</div>
+      {model.pull ? lineTemplate(keyName) : null}
+    </>
+  );
+}
+
+function DesignDocument({
+  model,
+  keyName,
+  drafts,
+}: {
+  model: Spine;
+  keyName: string;
+  drafts: readonly LineDraft[];
+}): ReactNode {
+  const body = model.design.sections.map(section => {
+    const lines = section.lines;
+    if (section.heading === 'Open questions') {
+      if (!lines.some(line => line.text.trim() !== '')) {
+        return null;
+      }
+      return (
+        <section className="plan-section questions" key={section.heading}>
+          <h3>{section.heading}</h3>
+          <PlanLines
+            lines={lines}
+            pull={model.pull}
+            questions={model.design.questions}
+            drafts={drafts}
+            keyName={keyName}
+            file="design.md"
+          />
+        </section>
+      );
+    }
+    const parts = partsOf(lines);
+    if (parts.length === 0) {
+      return null;
+    }
+    return (
+      <section className="plan-section" key={section.heading}>
+        <h3>{section.heading}</h3>
+        {parts.map(part => (
+          <div key={part.heading === '' ? 'body' : part.heading}>
+            {part.heading === '' ? null : <h4>{part.heading}</h4>}
+            <PlanLines
+              lines={part.lines}
+              pull={model.pull}
+              questions={model.design.questions}
+              drafts={drafts}
+              keyName={keyName}
+              file="design.md"
             />
           </div>
         ))}
@@ -772,29 +836,7 @@ export function Sidebar({
             control={hereControl('Design', 'designing', designAct)}
           >
             {model.design.present ? (
-              <>
-                {model.design.boundary === '' ? null : (
-                  <>
-                    <h3>Verification boundary</h3>
-                    <p>{model.design.boundary}</p>
-                  </>
-                )}
-                {model.design.approach === '' ? null : (
-                  <>
-                    <h3>Approach</h3>
-                    <p>{model.design.approach}</p>
-                  </>
-                )}
-                {model.design.rejected.map(line => (
-                  <p key={line}>{line}</p>
-                ))}
-                {model.design.decisions === '' ? null : (
-                  <>
-                    <h3>Open decisions</h3>
-                    <p>{model.design.decisions}</p>
-                  </>
-                )}
-              </>
+              <DesignDocument model={model} keyName={row.key} drafts={drafts} />
             ) : null}
             {reviewFold(model, row.key, 'designed', model.design.present, remark.Design)}
           </SpineRow>

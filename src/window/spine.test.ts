@@ -6,8 +6,10 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {test} from 'vitest';
 
+import {readBranch} from '../machine/change.ts';
 import {changeDir} from '../machine/naming.ts';
-import {buildSpine, layerForStation, linesFromFocus, linesFromIssue} from './spine.ts';
+import {changeFiles} from './change-files.ts';
+import {buildSpine, layerForStation, linesFromFocus, linesFromIssue, projectSpine} from './spine.ts';
 
 function hasPhrase(entries: readonly SpecEntry[] | undefined, phrase: string): boolean {
   if (!entries) {
@@ -163,5 +165,40 @@ test('a removed scenario does not name the capability', () => {
   const spine = buildSpine({key: '1', checkout, station: 'tasking'});
   assert.equal(spine.tasks.find(task => task.id === 'gone')?.scenarios[0]?.capability, '');
   assert.equal(spine.tasks.find(task => task.id === 'kept')?.scenarios[0]?.capability, 'case-read');
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('the spine is a projection of the branch read', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'spine-'));
+  const checkout = path.join(dir, 'service');
+  const change = path.join(checkout, changeDir('1'));
+  mkdirSync(path.join(change, 'specs', 'case-read'), {recursive: true});
+  mkdirSync(path.join(checkout, 'openspec', 'specs', 'case-read'), {recursive: true});
+  writeFileSync(
+    path.join(change, 'proposal.md'),
+    ['# Change', '', '## Outcome', '', 'Итог одного чтения.', '', '## Capabilities', '', '### Modified', '', '- case-read', ''].join('\n'),
+  );
+  writeFileSync(path.join(checkout, 'openspec', 'specs', 'case-read', 'spec.md'), '### Requirement: Чтение\n\nБыло.\n');
+  writeFileSync(
+    path.join(change, 'specs', 'case-read', 'spec.md'),
+    '## MODIFIED Requirements\n\n### Requirement: Чтение\n\nСтало.\n',
+  );
+  const read = readBranch('1', changeFiles(checkout, '1'));
+  const projected = projectSpine(read.text, {
+    key: '1',
+    station: 'specifying',
+    issueBody: '<!-- sdd:begin -->\nPlan: из задачи\n<!-- sdd:end -->',
+    diff: true,
+  });
+  const built = buildSpine({
+    key: '1',
+    checkout,
+    station: 'specifying',
+    issueBody: '<!-- sdd:begin -->\nPlan: из задачи\n<!-- sdd:end -->',
+    diff: true,
+  });
+  assert.equal(read.facts.fingerprint.length > 0, true);
+  assert.equal(read.text.baselines.includes('case-read'), true);
+  assert.deepEqual(projected, built);
   rmSync(dir, {recursive: true, force: true});
 });

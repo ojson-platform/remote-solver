@@ -34,7 +34,7 @@ import {focusNamesPlace, focusPlaque} from './focus.ts';
 import {openRoleEditor, runRole, shelfOf} from './role.ts';
 import {openServiceGroup} from './service-group.ts';
 import {blocksFor} from './sidebar.ts';
-import {buildSpine, reviewGateForPhase, type Spine} from './spine.ts';
+import {buildSpine, projectSpine, reviewGateForPhase, type Spine} from './spine.ts';
 import {runSpy} from './spy.ts';
 import {COLUMN_NAMES, GATE_LABEL, GATE_STATIONS, isGateStation} from './types.ts';
 
@@ -266,9 +266,8 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
         gateOff[name] = true;
       }
     }
-    return buildSpine({
+    const chrome = {
       key: item.key,
-      checkout: checkout.gathered(item),
       station,
       focusBody: focusPlaque(item.comments),
       issueBody: item.body,
@@ -277,7 +276,12 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       pull: (item.openPullRequests ?? 0) === 1,
       reviewGate: reviewGateForPhase(phase),
       gateOff,
-    });
+    };
+    const text = outside.branchText?.(item.key);
+    if (text) {
+      return projectSpine(text, chrome);
+    }
+    return buildSpine({...chrome, checkout: checkout.gathered(item)});
   }
 
   return {

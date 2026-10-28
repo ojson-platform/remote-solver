@@ -1,4 +1,4 @@
-import type {BranchFacts} from '../machine/change.ts';
+import type {BranchFacts, BranchText} from '../machine/change.ts';
 
 export type Doc = Record<string, unknown>;
 
@@ -126,6 +126,8 @@ export type WindowOutside = {
   review?: (key: string) => WindowReview | undefined;
   /** Branch summary already stored for this key. Absent until a poll or a refresh has read it. */
   branchFacts?: (key: string) => BranchFacts | undefined;
+  /** Branch bytes from that same read. The spine uses them and does not open the branch again. */
+  branchText?: (key: string) => BranchText | undefined;
   /**
    * Mark of one cycle's files and the ticket fields the spine draws.
    * When this is present, the spine is read again only when the mark changes.

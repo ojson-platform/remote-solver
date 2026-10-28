@@ -256,6 +256,21 @@ function paintRows(rows: readonly SnapshotRow[], gates: FrameHold['gates']): Sna
   );
 }
 
+/** Keep the spine the client already painted when the snapshot names the same revision. */
+export function reuseOpenedSpine(
+  shot: WindowSnapshot,
+  kept: WindowSnapshot['opened'],
+): WindowSnapshot {
+  const opened = shot.opened;
+  if (!opened?.revision || kept?.key !== opened.key || kept.revision !== opened.revision) {
+    return shot;
+  }
+  if (kept.spine === opened.spine) {
+    return shot;
+  }
+  return {...shot, opened: {...opened, spine: kept.spine}};
+}
+
 /** Paint the hold over a snapshot. A later snapshot does not undo the hold. */
 export function paintFrame(
   shot: WindowSnapshot,

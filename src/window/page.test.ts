@@ -5698,6 +5698,8 @@ spec('live-frame', () => {
           const shot = JSON.parse(again.body) as WindowSnapshot;
           assert.equal(shot.opened?.key, '1');
           assert.equal(shot.opened?.spineReady, true);
+          assert.equal(typeof shot.opened?.revision, 'string');
+          assert.equal(shot.opened?.revision, ready.opened?.revision);
           assert.deepEqual(
             shot.opened?.spine.capabilities.map(item => item.id),
             ids,
@@ -5743,6 +5745,7 @@ spec('live-frame', () => {
           const shot = JSON.parse(again.body) as WindowSnapshot;
           assert.equal(shot.opened?.key, '1');
           assert.equal(shot.opened?.spineReady, true);
+          assert.equal(shot.opened?.revision, ready.opened?.revision);
           assert.deepEqual(
             shot.opened?.spine.capabilities.map(item => item.id),
             ids,

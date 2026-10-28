@@ -9,6 +9,7 @@ import type {
   WindowTicket,
 } from './types.ts';
 
+import {createHash} from 'node:crypto';
 import {existsSync, mkdirSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 
@@ -241,12 +242,15 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     return COLUMN_NAMES.indexOf(station) > COLUMN_NAMES.indexOf(plaque);
   }
 
-  const shelf = new Map<
-    string,
-    {spine?: Spine; epoch: number; mark: string | undefined; state: 'ready' | 'failed'}
-  >();
+  const shelf = new Map<string, {spine?: Spine; revision: string; state: 'ready' | 'failed'}>();
   let spineKey = '';
   let spineState: 'idle' | 'due' | 'ready' | 'failed' = 'idle';
+
+  function spineRevision(key: string, epoch: number): string {
+    const token = outside.spineToken?.(key);
+    const source = token !== undefined ? token : `epoch:${epoch}`;
+    return createHash('sha256').update(source).digest('hex');
+  }
 
   function readOpenSpine(): Spine | undefined {
     if (openKey === '') {
@@ -339,16 +343,9 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       if (openKey === '') {
         return false;
       }
-      const token = outside.spineToken?.(openKey);
+      const revision = spineRevision(openKey, epoch);
       const saved = shelf.get(openKey);
-      const settled = saved !== undefined;
-      if (token !== undefined) {
-        if (settled && saved.mark === token) {
-          spineKey = openKey;
-          spineState = saved.state;
-          return false;
-        }
-      } else if (settled && saved.epoch === epoch) {
+      if (saved !== undefined && saved.revision === revision) {
         spineKey = openKey;
         spineState = saved.state;
         return false;
@@ -359,12 +356,12 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     },
     warmSpine(epoch: number): void {
       const key = openKey;
-      const mark = outside.spineToken?.(key);
+      const revision = spineRevision(key, epoch);
       const built = readOpenSpine();
       if (openKey !== key || !built) {
         return;
       }
-      shelf.set(key, {spine: built, epoch, mark, state: 'ready'});
+      shelf.set(key, {spine: built, revision, state: 'ready'});
       spineKey = key;
       spineState = 'ready';
     },
@@ -373,8 +370,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       const previous = shelf.get(key);
       shelf.set(key, {
         spine: previous?.spine,
-        epoch,
-        mark: outside.spineToken?.(key),
+        revision: spineRevision(key, epoch),
         state: 'failed',
       });
       spineKey = key;

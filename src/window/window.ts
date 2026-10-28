@@ -376,15 +376,15 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       spineKey = key;
       spineState = 'failed';
     },
-    heldSpine(): {spine?: Spine; ready: boolean} {
+    heldSpine(): {spine?: Spine; ready: boolean; revision?: string} {
       if (openKey === '') {
         return {ready: true};
       }
       const saved = shelf.get(openKey);
       if (spineKey === openKey && spineState === 'due') {
-        return {spine: saved?.spine, ready: false};
+        return {spine: saved?.spine, ready: false, revision: saved?.revision};
       }
-      return {spine: saved?.spine, ready: true};
+      return {spine: saved?.spine, ready: true, revision: saved?.revision};
     },
     async answer(
       key: string,

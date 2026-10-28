@@ -87,6 +87,8 @@ export type WindowSnapshot = {
     key: string;
     title: string;
     spineReady: boolean;
+    /** Set once a spine is stored. The client keeps its painted spine while this stays the same. */
+    revision?: string;
     spine: Spine;
     layers: {layer: SpineLayer; act: LayerAct}[];
     blocks: SidebarBlock[];
@@ -104,7 +106,7 @@ type SnapshotSurface = {
   turn(key: string): string | undefined;
   sidebar(): SidebarBlock[];
   spine(): Spine | undefined;
-  heldSpine?: () => {spine?: Spine; ready: boolean};
+  heldSpine?: () => {spine?: Spine; ready: boolean; revision?: string};
   doorPlace(file: string): string | undefined;
   openReviewPlace(file: string, line: number): string | undefined;
 };
@@ -372,10 +374,12 @@ function openCycle(
     });
   let model: Spine;
   let spineReady: boolean;
+  let revision: string | undefined;
   if (surface.heldSpine) {
     const held = surface.heldSpine();
     model = held.spine ?? unread();
     spineReady = held.ready;
+    revision = held.revision;
   } else {
     model = surface.spine() ?? unread();
     spineReady = true;
@@ -385,6 +389,7 @@ function openCycle(
     key: row.key,
     title: row.title,
     spineReady,
+    ...(revision !== undefined ? {revision} : {}),
     spine: model,
     layers: SPINE_LAYERS.map(layer => ({layer, act: layerAct(layer, model, action)})),
     blocks: surface.sidebar(),

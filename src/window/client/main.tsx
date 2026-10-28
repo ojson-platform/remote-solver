@@ -17,6 +17,7 @@ import {
   endRead,
   holdGesture,
   paintFrame,
+  reuseOpenedSpine,
   releaseHold,
   settingsAct,
   type ReadSlot,
@@ -325,11 +326,12 @@ function boot(): void {
       return;
     }
     const opening = hold.open?.key;
-    const frame = paintFrame(
+    const painted = paintFrame(
       base,
       hold,
       typeof opening === 'string' ? keptDrawers.get(opening) : undefined,
     );
+    const frame = reuseOpenedSpine(painted, painted.opened && keptDrawers.get(painted.opened.key));
     if (frame.opened && frame.opened.spineReady !== false) {
       keptDrawers.set(frame.opened.key, frame.opened);
     }

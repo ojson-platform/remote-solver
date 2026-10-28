@@ -17,12 +17,17 @@ Choosing a cycle SHALL paint a drawer with that ticket's key and title before th
 
 ### Requirement: Opening the same ticket keeps the spine already read
 
-Choosing a cycle whose spine was already shown SHALL paint that spine before the server answers. That spine SHALL stay ready.
+Choosing a cycle whose spine was already shown SHALL paint that spine before the server answers. That spine SHALL stay ready. A later snapshot that names the same revision SHALL keep that painted spine.
 
 #### Scenario: Opening the same ticket shows the spine already read
 
 - **WHEN** the person opens a cycle whose spine was already read
 - **THEN** the drawer shows that spine before the response, and the spine stays ready
+
+#### Scenario: A later snapshot with the same revision keeps the painted spine
+
+- **WHEN** a snapshot arrives for a spine the person already sees and names the same revision
+- **THEN** the drawer keeps the spine already painted
 
 ### Requirement: A hold outranks a snapshot that has not caught up
 
@@ -89,12 +94,12 @@ The response SHALL include the drawer blocks and the last spine built for that t
 #### Scenario: Opening the same ticket again keeps the ready spine
 
 - **WHEN** a cycle's spine is ready and the person closes it and opens it again
-- **THEN** that response has the same spine and `spineReady` true
+- **THEN** that response has the same spine, the same revision, and `spineReady` true
 
 #### Scenario: Switching back to a ticket keeps the spine already read
 
 - **WHEN** a cycle's spine is ready and the person opens another cycle and then the first again
-- **THEN** that response has the first cycle's spine and `spineReady` true
+- **THEN** that response has the first cycle's spine, the same revision, and `spineReady` true
 
 #### Scenario: An unchanged fingerprint leaves the open spine ready
 

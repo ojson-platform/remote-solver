@@ -12,6 +12,7 @@ import {
   holdGesture,
   paintFrame,
   releaseHold,
+  reuseOpenedSpine,
   settingsAct,
   type FrameHold,
   type ReadSlot,
@@ -261,6 +262,28 @@ spec('live-frame', () => {
       assert.equal(opened.spine.diff, true);
       assert.equal(opened.spine.pull, true);
       assert.equal(spineReady(opened), true);
+    });
+
+    scenario('A later snapshot with the same revision keeps the painted spine', () => {
+      const open = openedShot();
+      const painted = open.opened?.spine;
+      assert.ok(painted);
+      const kept = {...open.opened, revision: 'same', spine: painted};
+      const arrived = {
+        ...open,
+        opened: {
+          ...open.opened,
+          revision: 'same',
+          spine: {...painted, accept: 'другая'},
+        },
+      };
+      const next = reuseOpenedSpine(arrived, kept);
+      assert.equal(next.opened?.spine, painted);
+      const moved = {
+        ...arrived,
+        opened: {...arrived.opened, revision: 'next'},
+      };
+      assert.equal(reuseOpenedSpine(moved, kept).opened?.spine.accept, 'другая');
     });
   });
 

@@ -3345,6 +3345,7 @@ spec('plaque-key', () => {
       );
     });
   });
+});
 
 spec('drawer', () => {
   requirement('The drawer holds one open cycle', () => {

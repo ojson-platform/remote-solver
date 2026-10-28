@@ -97,7 +97,7 @@ test('the page shows the pool, the columns, and Take writes the assignee', async
       assert.equal(response.status, 200);
       const html = await pageHtml(page.url);
       assert.equal(html.includes('<h1>'), false);
-      assert.match(html, /<span class="key">#1<\/span>/);
+      assert.match(html, /<span class="key">1<\/span>/);
       assert.match(html, /Take me/);
       assert.equal(html.includes('github.com'), false);
       for (const name of COLUMN_NAMES) {
@@ -6068,8 +6068,8 @@ spec('ticket-heading', () => {
           const html = await pageHtml(page.url);
           const article = articleOf(html, '1');
           const href = 'href="https://github.com/acme/billing/issues/1"';
-          assert.match(article, new RegExp(`<a class="key" ${href}>#1</a>`));
-          assert.match(article, /: Take me/);
+          assert.match(article, new RegExp(`<a class="key" ${href}>1</a>`));
+          assert.match(article, /<h2 class="title">Take me<\/h2>/);
           const face = article.slice(
             article.indexOf('<button class="face"'),
             article.indexOf('</button>'),
@@ -6118,7 +6118,7 @@ spec('ticket-heading', () => {
           window.chooseAgent('cursor');
           const article = articleOf(await pageHtml(page.url), '1');
           const text = article.replace(/>\s+</g, '><').replace(/<[^>]+>/g, '');
-          assert.match(text, /#1: Take me/);
+          assert.match(text, /1Take me/);
           assert.equal(article.includes('github.com'), false);
         },
       );

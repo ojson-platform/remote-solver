@@ -3158,6 +3158,194 @@ spec('board-command', () => {
   });
 });
 
+spec('plaque-key', () => {
+  requirement('The key is a link to the issue', () => {
+    scenario('A named repository makes the key a link to the issue', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            ticket({
+              key: '7',
+              repo: 'acme/billing',
+              queue: 'alpha',
+              sddService: 'services/billing',
+              title: 'From GitHub',
+            }),
+            held('9', 'implementing', {repo: 'acme/other', title: 'On station'}),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          const pool = articleOf(html, '7');
+          assert.match(
+            pool,
+            /<a class="key" href="https:\/\/github\.com\/acme\/billing\/issues\/7">7<\/a>/,
+          );
+          const column = articleOf(html, '9');
+          assert.match(
+            column,
+            /<a class="key" href="https:\/\/github\.com\/acme\/other\/issues\/9">9<\/a>/,
+          );
+        },
+      );
+    });
+    scenario('No repository leaves the key as text', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [bare('1', 'No repo')]},
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const article = articleOf(await pageHtml(page.url), '1');
+          assert.match(article, /<button class="face" type="submit">[\s\S]*<span class="key">1<\/span>/);
+          assert.equal(article.includes('<a class="key"'), false);
+        },
+      );
+    });
+  });
+  requirement('Activating the key follows the link and does not take the cycle', () => {
+    scenario('Activating the key follows the link and does not open the sidebar', async () => {
+      const assignees: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('7', 'implementing', {repo: 'acme/billing', title: 'Issue link'}),
+          ],
+          writeAssignee: (key, login) => {
+            assignees.push(`${key}:${login}`);
+          },
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const before = await readSnapshot(page.url);
+          assert.equal(before.opened, undefined);
+          const article = articleOf(await pageHtml(page.url), '7');
+          const openForm = article.match(/<form class="open"[\s\S]*?<\/form>/)?.[0] ?? '';
+          const key = article.match(/<a class="key" href="([^"]+)">7<\/a>/)?.[1];
+          assert.ok(key);
+          assert.equal(openForm.includes('<a class="key"'), false);
+          assert.equal(key, 'https://github.com/acme/billing/issues/7');
+          const nav = await fetch(key, {redirect: 'manual'});
+          assert.ok(nav.status >= 200);
+          const after = await readSnapshot(page.url);
+          assert.equal(after.opened, undefined);
+          assert.deepEqual(assignees, []);
+        },
+      );
+    });
+    scenario('Activating the key follows the link and does not close the sidebar', async () => {
+      const assignees: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('7', 'implementing', {repo: 'acme/billing', title: 'Issue link'}),
+          ],
+          writeAssignee: (key, login) => {
+            assignees.push(`${key}:${login}`);
+          },
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '7'}).toString()))
+              .status,
+            200,
+          );
+          const opened = await readSnapshot(page.url);
+          assert.equal(opened.opened?.key, '7');
+          const article = articleOf(await pageHtml(page.url), '7');
+          const openForm = article.match(/<form class="open"[\s\S]*?<\/form>/)?.[0] ?? '';
+          const key = article.match(/<a class="key" href="([^"]+)">7<\/a>/)?.[1];
+          assert.ok(key);
+          assert.equal(openForm.includes('<a class="key"'), false);
+          assert.equal(key, 'https://github.com/acme/billing/issues/7');
+          const nav = await fetch(key, {redirect: 'manual'});
+          assert.ok(nav.status >= 200);
+          const after = await readSnapshot(page.url);
+          assert.equal(after.opened?.key, '7');
+          assert.deepEqual(assignees, []);
+        },
+      );
+    });
+    scenario('The first activation of the title opens the sidebar', async () => {
+      const assignees: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('7', 'implementing', {repo: 'acme/billing', title: 'Title opens sidebar'}),
+          ],
+          writeAssignee: (key, login) => {
+            assignees.push(`${key}:${login}`);
+          },
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const before = await readSnapshot(page.url);
+          assert.equal(before.opened, undefined);
+          const article = articleOf(await pageHtml(page.url), '7');
+          const gutter =
+            article.match(/<div class="gutter[^"]*">([\s\S]*?)<\/div>\s*<div class="station"/)?.[1] ??
+            '';
+          assert.match(gutter, /^[\s\S]*<a class="key" href="[^"]+">7<\/a>[\s\S]*<form class="open"/);
+          const titleForm =
+            gutter.match(/<form class="open"[\s\S]*?<\/form>/g)?.find(form => form.includes('class="title"')) ??
+            '';
+          assert.ok(titleForm);
+          assert.equal(titleForm.includes('<a class="key"'), false);
+          assert.match(titleForm, /<button class="face" type="submit">\s*<h2 class="title">Title opens sidebar<\/h2>/);
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '7'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          assert.match(articleOf(html, '7'), /class="ticket is-open"/);
+          assert.match(html, /<aside class="sidebar" data-key="7"/);
+          const after = await readSnapshot(page.url);
+          assert.equal(after.opened?.key, '7');
+          assert.deepEqual(assignees, []);
+        },
+      );
+    });
+    scenario('A second activation of the title closes the sidebar', async () => {
+      const assignees: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('7', 'implementing', {repo: 'acme/billing', title: 'Title closes sidebar'}),
+          ],
+          writeAssignee: (key, login) => {
+            assignees.push(`${key}:${login}`);
+          },
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '7'}).toString()))
+              .status,
+            200,
+          );
+          assert.equal((await readSnapshot(page.url)).opened?.key, '7');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '7'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          assert.equal(articleOf(html, '7').includes('is-open'), false);
+          assert.equal(html.includes('<aside class="sidebar" data-key="7"'), false);
+          const after = await readSnapshot(page.url);
+          assert.equal(after.opened, undefined);
+          assert.deepEqual(assignees, []);
+        },
+      );
+    });
+  });
+
 spec('drawer', () => {
   requirement('The drawer holds one open cycle', () => {
     scenario('Opening another row closes the previous', async () => {

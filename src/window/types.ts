@@ -258,6 +258,8 @@ export type CardState = {
 export type PoolCard = {
   key: string;
   title: string;
+  /** Issue page when the ticket names a repository. */
+  issueHref?: string;
   take: true;
   takeDisabled?: true;
   /** This ticket's break silences Take: a checkout break or several pull requests. */
@@ -337,6 +339,8 @@ export type StationDoor = {
 export type CycleCard = {
   key: string;
   title: string;
+  /** Issue page when the ticket names a repository. */
+  issueHref?: string;
   icon?: true;
   /** An icon occasion, even when the mark is hidden. */
   occasion?: true;

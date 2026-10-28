@@ -169,23 +169,29 @@ export function Ticket({row, open}: {row: SnapshotRow; open: boolean}): ReactNod
     >
       <div className="stations">
         <div className={row.pool ? 'gutter pool' : 'gutter'}>
-          <div className="ident">
-            <div className="name">
-              {row.issue ? (
-                <a className="key" href={row.issue}>
-                  #{row.key}
-                </a>
-              ) : (
-                <span className="key">#{row.key}</span>
-              )}
+          {row.issueHref === undefined ? (
+            <ActForm act="open" className="open">
+              <Hidden name="key" value={row.key} />
+              <button className="face" type="submit">
+                <span className="ident">
+                  <span className="key">{row.key}</span>
+                  <h2 className="title">{row.title}</h2>
+                </span>
+              </button>
+            </ActForm>
+          ) : (
+            <>
+              <a className="key" href={row.issueHref}>
+                {row.key}
+              </a>
               <ActForm act="open" className="open">
                 <Hidden name="key" value={row.key} />
                 <button className="face" type="submit">
-                  <h2 className="title">: {row.title}</h2>
+                  <h2 className="title">{row.title}</h2>
                 </button>
               </ActForm>
-            </div>
-          </div>
+            </>
+          )}
           {row.pool ? <Corner row={row} /> : null}
         </div>
         <Stations row={row} />

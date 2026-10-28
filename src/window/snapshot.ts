@@ -42,6 +42,8 @@ export type SnapshotRow = {
   issue?: string;
   pull?: {id: string; href: string};
   project?: {name: string; href: string};
+  /** Issue page when the ticket names a repository. */
+  issueHref?: string;
   pool: boolean;
   station?: ColumnName;
   /** Action token while a worker is on a turn for this cycle. */
@@ -126,6 +128,7 @@ type SnapshotView = {
 type Fact = {
   key: string;
   title: string;
+  issueHref?: string;
   pool: boolean;
   station?: ColumnName;
   phaseRow?: PhaseRow;
@@ -225,6 +228,7 @@ function facts(board: BoardState): Fact[] {
     column.cards.map(card => ({
       key: card.key,
       title: card.title,
+      ...(card.issueHref !== undefined ? {issueHref: card.issueHref} : {}),
       pool: false,
       station: column.name,
       phaseRow: card.phaseRow,
@@ -251,6 +255,7 @@ function facts(board: BoardState): Fact[] {
   const pool = board.pool.map(card => ({
     key: card.key,
     title: card.title,
+    ...(card.issueHref !== undefined ? {issueHref: card.issueHref} : {}),
     pool: true,
     station: card.station,
     phaseRow: card.phaseRow,
@@ -307,6 +312,7 @@ function publish(
     pool: row.pool,
     choices: row.choices,
     ...ticketLinks({key: row.key, repo: row.repo, service: row.service, pull: row.pull}),
+    ...(row.issueHref !== undefined ? {issueHref: row.issueHref} : {}),
     ...(row.station !== undefined ? {station: row.station} : {}),
     ...(shown !== undefined ? {action: shown} : {}),
     ...(row.phaseRow !== undefined ? {phaseRow: row.phaseRow} : {}),

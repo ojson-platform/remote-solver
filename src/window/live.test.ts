@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import {chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {homedir, tmpdir} from 'node:os';
 import path from 'node:path';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
@@ -1517,5 +1518,75 @@ spec('live-frame', () => {
         rmSync(staged.dir, {recursive: true, force: true});
       }
     });
+
+    scenario('A failed branch read keeps the stored spine', async () => {
+      const staged = yard();
+      const checkout = path.join(staged.github, 'acme', 'billing');
+      const proposal = path.join(checkout, 'openspec', 'changes', 'issue-6', 'proposal.md');
+      mkdirSync(path.dirname(proposal), {recursive: true});
+      writeFileSync(proposal, '## Outcome\n\nС ветки тикета.\n');
+      execFileSync('git', ['init', '-b', 'master'], {cwd: checkout, stdio: 'ignore'});
+      execFileSync('git', ['config', 'user.email', 'test@example.com'], {cwd: checkout, stdio: 'ignore'});
+      execFileSync('git', ['config', 'user.name', 'Test'], {cwd: checkout, stdio: 'ignore'});
+      execFileSync('git', ['add', 'openspec'], {cwd: checkout, stdio: 'ignore'});
+      execFileSync('git', ['commit', '-m', 'plan'], {cwd: checkout, stdio: 'ignore'});
+      execFileSync('git', ['checkout', '-b', 'sdd/6'], {cwd: checkout, stdio: 'ignore'});
+      execFileSync('git', ['checkout', 'master'], {cwd: checkout, stdio: 'ignore'});
+      writeFileSync(proposal, '## Outcome\n\nС рабочего дерева.\n');
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      const restoreGit = failCatFile();
+      try {
+        assert.equal(await post(page.url, '/act', 'act=open&key=6'), 200);
+        await settle();
+        const ready = await readSnapshot(page.url);
+        assert.equal(ready.opened?.spineReady, true);
+        assert.equal(ready.opened?.spine.proposal.excerpt, 'С ветки тикета.');
+        await page.refresh();
+        const stayed = await readSnapshot(page.url);
+        assert.equal(stayed.opened?.spineReady, true);
+        assert.equal(stayed.opened?.spine.proposal.excerpt, 'С ветки тикета.');
+        assert.equal(stayed.opened?.revision, ready.opened?.revision);
+      } finally {
+        restoreGit();
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
   });
 });
+
+/** `git cat-file --batch` fails. Rev-parse and ls-tree still reach the real git. */
+function failCatFile(): () => void {
+  const real = execFileSync('/usr/bin/which', ['git'], {encoding: 'utf8'}).trim();
+  const dir = mkdtempSync(path.join(tmpdir(), 'spine-git-'));
+  const bin = path.join(dir, 'git');
+  writeFileSync(
+    bin,
+    [
+      '#!/bin/sh',
+      'if [ "$1" = "cat-file" ] && [ "$2" = "--batch" ]; then',
+      '  echo "fatal: not a git repository (or any of the parent directories): .git" >&2',
+      '  exit 128',
+      'fi',
+      `exec ${JSON.stringify(real)} "$@"`,
+      '',
+    ].join('\n'),
+  );
+  chmodSync(bin, 0o755);
+  const saved = process.env.PATH;
+  process.env.PATH = `${dir}${path.delimiter}${saved ?? ''}`;
+  return () => {
+    if (saved === undefined) {
+      delete process.env.PATH;
+    } else {
+      process.env.PATH = saved;
+    }
+    rmSync(dir, {recursive: true, force: true});
+  };
+}

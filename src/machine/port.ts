@@ -122,6 +122,8 @@ export type FileSource = {
   read(rel: string): string;
   /** Paths relative to the repo root. Empty when nothing is there. */
   list(rel: string): string[];
+  /** True when this read failed and the bytes are not the branch. */
+  failed?: () => boolean;
 };
 
 /** A path in this package, linked as `.sandcastle/<to>` inside a checkout. */

@@ -69,7 +69,7 @@ The window SHALL show one strip while a gesture response, a snapshot read, or a 
 
 ### Requirement: The snapshot does not wait to read the spine
 
-The response SHALL include the drawer blocks and the last spine built for that ticket. A spine read SHALL stay stored when another cycle is opened. Opening a cycle whose stored spine is still current SHALL return it with `spineReady` true and SHALL NOT read it again. When the open cycle's branch fingerprint is known, the spine SHALL be read again only when that fingerprint changes, and an unchanged fingerprint SHALL leave `spineReady` true. When the fingerprint is not known and that spine is missing or older than the latest content epoch, `spineReady` SHALL be false and the read SHALL run after the response. When the fingerprint is not known and the spine is already ready for the current content epoch, the response SHALL include that spine with `spineReady` true and SHALL NOT read it again. A finished read SHALL publish a new generation without counting as new content. Opening or closing a cycle SHALL NOT count as new content. A failed read SHALL leave the previous spine, or a drawer without a diff, and SHALL set `spineReady` true. The open key SHALL stay, and that snapshot SHALL NOT set `status`. When the fingerprint changes, or the fingerprint is not known and a later content generation is published, the response SHALL keep the previous spine visible with `spineReady` false until the new spine is ready, and SHALL replace rows immediately.
+The response SHALL include the drawer blocks and the last spine built for that ticket. A spine read SHALL stay stored when another cycle is opened. Opening a cycle whose stored spine is still current SHALL return it with `spineReady` true and SHALL NOT read it again. When the open cycle's branch fingerprint is known, the spine SHALL be read again only when that fingerprint changes, and an unchanged fingerprint SHALL leave `spineReady` true. When the fingerprint is not known and that spine is missing or older than the latest content epoch, `spineReady` SHALL be false and the read SHALL run after the response. When the fingerprint is not known and the spine is already ready for the current content epoch, the response SHALL include that spine with `spineReady` true and SHALL NOT read it again. A finished read SHALL publish a new generation without counting as new content. Opening or closing a cycle SHALL NOT count as new content. A failed read SHALL leave the previous spine, or a drawer without a diff, and SHALL set `spineReady` true. A later branch read that fails SHALL leave the spine already stored from that branch and SHALL leave `spineReady` true. The open key SHALL stay, and that snapshot SHALL NOT set `status`. When the fingerprint changes, or the fingerprint is not known and a later content generation is published, the response SHALL keep the previous spine visible with `spineReady` false until the new spine is ready, and SHALL replace rows immediately.
 
 #### Scenario: The next frame fills the spine in the same drawer
 
@@ -85,6 +85,11 @@ The response SHALL include the drawer blocks and the last spine built for that t
 
 - **WHEN** a spine is ready and the next read fails
 - **THEN** the following snapshot has the same capability, `spineReady` true, the same drawer key, and no status
+
+#### Scenario: A failed branch read keeps the stored spine
+
+- **WHEN** a spine was read from the branch and the next branch read fails
+- **THEN** the snapshot still has that spine and `spineReady` true
 
 #### Scenario: A fatal ref lookup keeps the previous spine
 

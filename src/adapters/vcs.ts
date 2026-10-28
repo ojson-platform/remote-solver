@@ -200,15 +200,19 @@ function emptyTree(): RefTree {
 }
 
 /** One `ls-tree` and one `cat-file --batch` for the change and spec trees. */
-function readTree(root: string, ref: string, strict: boolean): RefTree {
-  const listed = git(
-    root,
-    ['ls-tree', '-r', '-t', '--name-only', ref, '--', ...TREE_ROOTS],
-    !strict,
-  );
+function readTree(root: string, ref: string, strict: boolean): {tree: RefTree; failed: boolean} {
+  let listed: string;
+  try {
+    listed = git(root, ['ls-tree', '-r', '-t', '--name-only', ref, '--', ...TREE_ROOTS]);
+  } catch (error) {
+    if (!strict) {
+      return {tree: emptyTree(), failed: true};
+    }
+    throw error;
+  }
   const names = listed.split('\n').filter(line => line.length > 0);
   if (names.length === 0) {
-    return emptyTree();
+    return {tree: emptyTree(), failed: false};
   }
   const input = Buffer.from(`${names.map(name => `${ref}:${name}`).join('\n')}\n`);
   let buf: Buffer;
@@ -221,7 +225,7 @@ function readTree(root: string, ref: string, strict: boolean): RefTree {
     }) as Buffer;
   } catch (error) {
     if (!strict) {
-      return emptyTree();
+      return {tree: emptyTree(), failed: true};
     }
     throw error;
   }
@@ -257,7 +261,7 @@ function readTree(root: string, ref: string, strict: boolean): RefTree {
   if (strict && index !== names.length) {
     throw new Error(`git cat-file --batch stopped at ${index} of ${names.length}`);
   }
-  return {files, dirs};
+  return {tree: {files, dirs}, failed: false};
 }
 
 function treeHas(tree: RefTree, rel: string): boolean {
@@ -277,16 +281,16 @@ function treeHas(tree: RefTree, rel: string): boolean {
 /**
  * Files on one ref.
  * `openspec/changes` and `openspec/specs` are read once per source.
- * Lenient: a git failure is an empty file or an empty list.
+ * Lenient: a git failure is an empty tree, and `failed` is true.
  * Strict: a missing path on that ref is empty. Any other git failure throws.
  */
 function filesOfRef(root: string, ref: string | null, strict: boolean): FileSource {
-  let cached: RefTree | undefined;
-  const tree = (): RefTree => {
+  let cached: {tree: RefTree; failed: boolean} | undefined;
+  const load = (): {tree: RefTree; failed: boolean} => {
     if (cached) {
       return cached;
     }
-    cached = ref ? readTree(root, ref, strict) : emptyTree();
+    cached = ref ? readTree(root, ref, strict) : {tree: emptyTree(), failed: false};
     return cached;
   };
   return {
@@ -295,7 +299,7 @@ function filesOfRef(root: string, ref: string | null, strict: boolean): FileSour
         return false;
       }
       if (covered(rel)) {
-        return treeHas(tree(), rel);
+        return treeHas(load().tree, rel);
       }
       return existsOnRef(root, ref, rel);
     },
@@ -304,7 +308,7 @@ function filesOfRef(root: string, ref: string | null, strict: boolean): FileSour
         return '';
       }
       if (covered(rel)) {
-        return tree().files.get(slash(rel)) ?? '';
+        return load().tree.files.get(slash(rel)) ?? '';
       }
       return showFile(root, ref, rel, strict);
     },
@@ -314,7 +318,7 @@ function filesOfRef(root: string, ref: string | null, strict: boolean): FileSour
       }
       const prefix = slash(rel);
       if (covered(prefix)) {
-        const loaded = tree();
+        const loaded = load().tree;
         if (loaded.files.has(prefix)) {
           return [prefix];
         }
@@ -330,6 +334,9 @@ function filesOfRef(root: string, ref: string | null, strict: boolean): FileSour
       return git(root, ['ls-tree', '-r', '--name-only', ref, rel], !strict)
         .split('\n')
         .filter(line => line.length > 0);
+    },
+    failed() {
+      return load().failed;
     },
   };
 }

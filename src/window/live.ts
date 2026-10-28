@@ -339,7 +339,19 @@ export function openLiveBoard(options: LiveBoardOptions) {
           continue;
         }
       }
-      const read = readBranch(ticket.key, changeFiles(gatheredOf(ticket), ticket.key));
+      const files = changeFiles(gatheredOf(ticket), ticket.key);
+      const read = readBranch(ticket.key, files);
+      if (files.failed?.()) {
+        const held = store.factsOf(ticket.key);
+        const heldText = store.textOf(ticket.key);
+        if (held && heldText) {
+          next.set(ticket.key, held);
+          nextText.set(ticket.key, heldText);
+          continue;
+        }
+        next.set(ticket.key, read.facts);
+        continue;
+      }
       next.set(ticket.key, read.facts);
       nextText.set(ticket.key, read.text);
     }

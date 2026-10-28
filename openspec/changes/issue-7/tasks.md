@@ -1,0 +1,3 @@
+- [ ] `key-link-or-text` — A named repository makes the key a link to the issue; No repository leaves the key as text
+- [ ] `key-activation` — Activating the key follows the link and does not open the sidebar; Activating the key follows the link and does not close the sidebar
+- [ ] `title-sidebar` — The first activation of the title opens the sidebar; A second activation of the title closes the sidebar

@@ -41,6 +41,13 @@ function byKey<T extends {key: string}>(left: T, right: T): number {
   return keyOrder(left.key, right.key);
 }
 
+function issuePageHref(repo: string | undefined, key: string): string | undefined {
+  if (repo === undefined || repo === '') {
+    return undefined;
+  }
+  return `https://github.com/${repo}/issues/${key}`;
+}
+
 /** `sdd:cancelled` removes the card. `phaseOf` leaves an earlier phase in place. */
 export function slotOf(
   item: WindowTicket,
@@ -510,6 +517,10 @@ function buildCycle(
   const parts = reasonParts(item, phase, breakReason, reading, questions, decisions);
   const occasion = parts.length > 0;
   const card: CycleCard = {key: item.key, title: item.title};
+  const href = issuePageHref(item.repo, item.key);
+  if (href !== undefined) {
+    card.issueHref = href;
+  }
   if (occasion) {
     card.occasion = true;
   }
@@ -578,6 +589,10 @@ function poolCard(
     queue: checkout.queue,
     choices: checkout.choices,
   };
+  const href = issuePageHref(item.repo, item.key);
+  if (href !== undefined) {
+    card.issueHref = href;
+  }
   if (checkout.checkout) {
     card.checkout = checkout.checkout;
   }

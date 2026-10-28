@@ -36,6 +36,7 @@ import {openRoleEditor, runRole, shelfOf} from './role.ts';
 import {openServiceGroup} from './service-group.ts';
 import {blocksFor} from './sidebar.ts';
 import {buildSpine, projectSpine, reviewGateForPhase, type Spine} from './spine.ts';
+import {createBoardStore, type BoardStore} from './store.ts';
 import {runSpy} from './spy.ts';
 import {COLUMN_NAMES, GATE_LABEL, GATE_STATIONS, isGateStation} from './types.ts';
 
@@ -89,7 +90,11 @@ function quotedLine(source: string, reply: string): string {
 }
 
 /** The window for one launch. Another launch has its own home path. */
-export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
+export function openWindow(
+  launch: Launch = {},
+  outside: WindowOutside = {},
+  store: BoardStore = createBoardStore(),
+) {
   const offered = launch.agents ?? FACTORY_AGENTS;
   const home = openHome(launch.homePath, offered);
   const roles = openRoleEditor(
@@ -242,10 +247,6 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     return COLUMN_NAMES.indexOf(station) > COLUMN_NAMES.indexOf(plaque);
   }
 
-  const shelf = new Map<string, {spine?: Spine; revision: string; state: 'ready' | 'failed'}>();
-  let spineKey = '';
-  let spineState: 'idle' | 'due' | 'ready' | 'failed' = 'idle';
-
   function spineRevision(key: string, epoch: number): string {
     const token = outside.spineToken?.(key);
     const source = token !== undefined ? token : `epoch:${epoch}`;
@@ -285,7 +286,11 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     if (text) {
       return projectSpine(text, chrome);
     }
-    return buildSpine({...chrome, checkout: checkout.gathered(item)});
+    const located = checkout.gathered(item);
+    if (outside.branchFacts && located) {
+      return buildSpine({...chrome, checkout: located, files: store.files(located, item.key, true)});
+    }
+    return buildSpine({...chrome, checkout: located});
   }
 
   return {
@@ -343,48 +348,18 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       if (openKey === '') {
         return false;
       }
-      const revision = spineRevision(openKey, epoch);
-      const saved = shelf.get(openKey);
-      if (saved !== undefined && saved.revision === revision) {
-        spineKey = openKey;
-        spineState = saved.state;
-        return false;
-      }
-      spineKey = openKey;
-      spineState = 'due';
-      return true;
+      return store.arm(openKey, spineRevision(openKey, epoch));
     },
     warmSpine(epoch: number): void {
       const key = openKey;
-      const revision = spineRevision(key, epoch);
-      const built = readOpenSpine();
-      if (openKey !== key || !built) {
-        return;
-      }
-      shelf.set(key, {spine: built, revision, state: 'ready'});
-      spineKey = key;
-      spineState = 'ready';
+      store.warm(key, spineRevision(key, epoch), readOpenSpine());
     },
     failSpine(epoch: number): void {
       const key = openKey;
-      const previous = shelf.get(key);
-      shelf.set(key, {
-        spine: previous?.spine,
-        revision: spineRevision(key, epoch),
-        state: 'failed',
-      });
-      spineKey = key;
-      spineState = 'failed';
+      store.fail(key, spineRevision(key, epoch));
     },
     heldSpine(): {spine?: Spine; ready: boolean; revision?: string} {
-      if (openKey === '') {
-        return {ready: true};
-      }
-      const saved = shelf.get(openKey);
-      if (spineKey === openKey && spineState === 'due') {
-        return {spine: saved?.spine, ready: false, revision: saved?.revision};
-      }
-      return {spine: saved?.spine, ready: true, revision: saved?.revision};
+      return store.held(openKey);
     },
     async answer(
       key: string,

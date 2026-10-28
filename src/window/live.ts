@@ -16,6 +16,7 @@ import {modelFor, type SkillMode} from '../machine/skill.ts';
 import {runSpy, type RunningTurn} from '../main.ts';
 
 import {changeFiles} from './change-files.ts';
+import {createBoardStore} from './store.ts';
 import {FACTORY_AGENTS, mergeFactory, readOverlayDoc} from './factory.ts';
 import {serveBoard} from './page.ts';
 import {isDoc, type WindowReview, type WindowTicket} from './types.ts';
@@ -191,39 +192,6 @@ function ticketFrom(issue: IssueRecord, repo: string, service: string | undefine
   };
 }
 
-function ticketSign(ticket: WindowTicket): string {
-  return JSON.stringify({
-    key: ticket.key,
-    title: ticket.title,
-    body: ticket.body ?? '',
-    labels: ticket.labels,
-    assignee: ticket.assignee ?? '',
-    repo: ticket.repo ?? '',
-    sddService: ticket.sddService ?? '',
-    open: ticket.open !== false,
-    parent: ticket.parent ?? '',
-    dependsOn: ticket.dependsOn ?? [],
-    sddHooks: ticket.sddHooks ?? null,
-    comments: ticket.comments ?? [],
-    openPullRequests: ticket.openPullRequests ?? null,
-    checks: ticket.checks ?? null,
-    diff: ticket.diff === true,
-    pull: ticket.pull ?? '',
-    mergeAhead: ticket.mergeAhead === true,
-  });
-}
-
-function signTickets(tickets: readonly WindowTicket[]): string {
-  return tickets.map(ticketSign).sort().join('\n');
-}
-
-function signMap<T>(map: ReadonlyMap<string, T>, value: (item: T) => string): string {
-  return [...map.keys()]
-    .sort()
-    .map(key => `${key}=${value(map.get(key) as T)}`)
-    .join('\n');
-}
-
 function reviewOf(threads: readonly ThreadRecord[], notes: readonly Conversation[]): WindowReview {
   const last = [...notes].reverse().find(note => !note.robot);
   return {
@@ -245,16 +213,9 @@ function reviewOf(threads: readonly ThreadRecord[], notes: readonly Conversation
  */
 export function openLiveBoard(options: LiveBoardOptions) {
   const {tracker, review, vcs, repo} = options;
+  const store = createBoardStore();
   let generation = 0;
-  let loginName: string | undefined;
-  let cache: WindowTicket[] = [];
-  let pullByKey = new Map<string, string>();
-  let reviews = new Map<string, WindowReview>();
-  let spyThreadPull = new Map<string, string>();
   const services = new Map<string, string>();
-  let facts = new Map<string, BranchFacts>();
-  let texts = new Map<string, BranchText>();
-  let spyKeys = new Set<string>();
   let gatheredOf: (ticket: WindowTicket) => string | undefined = () => undefined;
 
   function bump(): void {
@@ -262,7 +223,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
   }
 
   function patch(key: string, change: (ticket: WindowTicket) => WindowTicket): void {
-    cache = cache.map(ticket => (ticket.key === key ? change(ticket) : ticket));
+    store.patch(key, change);
   }
 
   function changeLabels(key: string, add: readonly string[], remove: readonly string[]): void {
@@ -317,8 +278,8 @@ export function openLiveBoard(options: LiveBoardOptions) {
               console.error(error);
             }
           }
-          const seen = spyThreadPull.get(issue.key);
-          const held = seen === pull.id ? reviews.get(issue.key) : undefined;
+          const seen = store.spyPull(issue.key);
+          const held = seen === pull.id ? store.review(issue.key) : undefined;
           if (held) {
             reading.set(issue.key, held);
           } else {
@@ -367,11 +328,11 @@ export function openLiveBoard(options: LiveBoardOptions) {
         }
         continue;
       }
-      if (spyKeys.has(ticket.key)) {
-        const held = facts.get(ticket.key);
+      if (store.hasSpy(ticket.key)) {
+        const held = store.factsOf(ticket.key);
         if (held) {
           next.set(ticket.key, held);
-          const heldText = texts.get(ticket.key);
+          const heldText = store.textOf(ticket.key);
           if (heldText) {
             nextText.set(ticket.key, heldText);
           }
@@ -385,33 +346,27 @@ export function openLiveBoard(options: LiveBoardOptions) {
     return {facts: next, texts: nextText};
   }
 
-  function boardChanged(
-    tickets: readonly WindowTicket[],
-    nextReviews: ReadonlyMap<string, WindowReview>,
-    nextFacts: ReadonlyMap<string, BranchFacts>,
-    nextLogin: string | undefined,
-  ): boolean {
-    return (
-      signTickets(tickets) !== signTickets(cache) ||
-      signMap(nextReviews, item => JSON.stringify(item)) !== signMap(reviews, item => JSON.stringify(item)) ||
-      signMap(nextFacts, item => JSON.stringify(item)) !== signMap(facts, item => JSON.stringify(item)) ||
-      nextLogin !== loginName
+  function remember(
+    tickets: WindowTicket[],
+    nextPulls: Map<string, string>,
+    nextReviews: Map<string, WindowReview>,
+    nextSpy: Map<string, string>,
+    read: {facts: Map<string, BranchFacts>; texts: Map<string, BranchText>},
+    login: string | undefined,
+  ): void {
+    store.commit(
+      {
+        tickets,
+        pulls: nextPulls,
+        reviews: nextReviews,
+        spyPulls: nextSpy,
+        facts: read.facts,
+        texts: read.texts,
+        spyKeys: store.copySpyKeys(),
+        ...(login ? {login} : {}),
+      },
+      gatheredOf,
     );
-  }
-
-  function tokenOf(key: string): string {
-    const ticket = cache.find(item => item.key === key);
-    const mark = facts.get(key);
-    return JSON.stringify({
-      fingerprint: mark?.fingerprint ?? null,
-      body: ticket?.body ?? '',
-      comments: ticket?.comments ?? [],
-      labels: ticket?.labels ?? [],
-      checks: ticket?.checks ?? null,
-      diff: ticket?.diff === true,
-      pull: ticket?.pull ?? '',
-      openPullRequests: ticket?.openPullRequests ?? null,
-    });
   }
 
   async function refresh(): Promise<boolean> {
@@ -437,24 +392,17 @@ export function openLiveBoard(options: LiveBoardOptions) {
       return false;
     }
     const read = factsFor(tickets);
-    const nextLogin = login ?? loginName;
-    const changed = boardChanged(tickets, nextReviews, read.facts, nextLogin);
-    cache = tickets;
-    pullByKey = nextPulls;
-    reviews = nextReviews;
-    facts = read.facts;
-    texts = read.texts;
-    if (login) {
-      loginName = login;
-    }
+    const nextLogin = login ?? store.login();
+    const changed = store.changed(tickets, nextReviews, read.facts, nextLogin);
+    remember(tickets, nextPulls, nextReviews, store.copySpyPulls(), read, login);
     return changed;
   }
 
   function apply(snapshot: CycleSnapshot): boolean {
-    const prior = new Map(cache.map(ticket => [ticket.key, ticket]));
-    const nextPulls = new Map(pullByKey);
-    const nextReviews = new Map(reviews);
-    const nextSpy = new Map(spyThreadPull);
+    const prior = new Map(store.tickets().map(ticket => [ticket.key, ticket]));
+    const nextPulls = store.copyPulls();
+    const nextReviews = store.copyReviews();
+    const nextSpy = store.copySpyPulls();
     const tickets: WindowTicket[] = [];
     for (const issue of snapshot.issues) {
       if (!issue.labels.includes('sdd:cycle')) {
@@ -505,21 +453,16 @@ export function openLiveBoard(options: LiveBoardOptions) {
           used.add(ticket.key);
         }
       }
-      spyKeys = used;
+      store.setSpyKeys(used);
     }
     const read = factsFor(tickets, snapshot.facts, snapshot.texts);
-    const changed = boardChanged(tickets, nextReviews, read.facts, loginName);
-    cache = tickets;
-    pullByKey = nextPulls;
-    reviews = nextReviews;
-    spyThreadPull = nextSpy;
-    facts = read.facts;
-    texts = read.texts;
+    const changed = store.changed(tickets, nextReviews, read.facts, store.login());
+    remember(tickets, nextPulls, nextReviews, nextSpy, read, undefined);
     return changed;
   }
 
   function pullPage(file: string, line: number): string {
-    const ids = [...new Set(pullByKey.values())];
+    const ids = [...new Set(store.pullIds())];
     const id = ids.length === 1 ? ids[0] : undefined;
     if (!id) {
       return `https://github.com/${repo}/pulls`;
@@ -545,8 +488,8 @@ export function openLiveBoard(options: LiveBoardOptions) {
       repoDir: options.checkout ? {repo, dir: options.checkout} : undefined,
     },
     {
-      tickets: () => cache,
-      login: () => loginName,
+      tickets: () => store.tickets(),
+      login: () => store.login(),
       leading: options.leading,
       spyNote: options.spyNote,
       turn: options.turn,
@@ -567,14 +510,14 @@ export function openLiveBoard(options: LiveBoardOptions) {
         patch(key, ticket => ({...ticket, sddService: service}));
       },
       commentPull(key, body) {
-        const pull = pullByKey.get(key);
+        const pull = store.pull(key);
         if (!pull) {
           return;
         }
         forget(review.speak(pull, body));
       },
       async threadPull(key, body, place) {
-        const pull = pullByKey.get(key);
+        const pull = store.pull(key);
         if (!pull) {
           throw new Error('pull is missing');
         }
@@ -592,18 +535,19 @@ export function openLiveBoard(options: LiveBoardOptions) {
         });
       },
       async speakPull(key, body) {
-        const pull = pullByKey.get(key);
+        const pull = store.pull(key);
         if (!pull) {
           throw new Error('pull is missing');
         }
         await review.speak(pull, body);
       },
-      review: key => reviews.get(key),
-      branchFacts: key => facts.get(key),
-      branchText: key => texts.get(key),
-      spineToken: key => tokenOf(key),
+      review: key => store.review(key),
+      branchFacts: key => store.factsOf(key),
+      branchText: key => store.textOf(key),
+      spineToken: key => store.token(key),
       reviewPlace: place => pullPage(place.file, place.line),
     },
+    store,
   );
   if (fresh) {
     view.leaveWatch([repo]);

@@ -28,7 +28,7 @@ import {changeDir} from '../machine/naming.ts';
 import {openWindow, type WindowTicket} from './window.ts';
 import {focusStaysInForm, gesture, payload, SHEET_FIELD_KEY, SHEET_SCROLL_KEY} from './client/gesture.ts';
 import {renderWindow} from './client/render.ts';
-import {draftsAfterClick, headClickToggles, lineFieldClosesOnEscape, serveBoard} from './page.ts';
+import {draftsAfterClick, headClickToggles, lineFieldClosesOnEscape, plaqueClickOpens, rowHeadOpens, serveBoard} from './page.ts';
 import type {WindowSnapshot} from './snapshot.ts';
 
 const MANAGER = 'ada';
@@ -220,9 +220,9 @@ function spineOf(html: string, key: string, layer: string): string {
   const marker = `id="spine-${layer}"`;
   const at = band.indexOf(marker);
   assert.ok(at >= 0, marker);
-  const start = band.lastIndexOf('<section>', at);
+  const start = band.lastIndexOf('<section', at);
   const next = band.indexOf('class="spine-pick"', at + marker.length);
-  return band.slice(start, next === -1 ? band.length : band.lastIndexOf('<section>', next));
+  return band.slice(start, next === -1 ? band.length : band.lastIndexOf('<section', next));
 }
 
 function stationOf(html: string, key: string, name: string): string {
@@ -663,7 +663,7 @@ async function proveAnUnnamedServiceIsAField(): Promise<void> {
       const popup = await pageHtml(page.url);
       const dialog = between(popup, '<div class="popup repair"', '</div></div>');
       assert.match(dialog, /aria-label="Поломка"/);
-      assert.equal(popup.includes('aria-label="Настройки"'), false);
+      assert.equal(popup.includes('role="dialog" aria-label="Настройки"'), false);
       assert.match(dialog, /<option disabled(?:="")?>—<\/option>/);
       assert.equal(/<option disabled(?:="")? value=/.test(dialog), false);
       assert.match(dialog, /<option value="" selected="">/);
@@ -1630,7 +1630,7 @@ test('a code place in focus opens the review url', async () => {
       const html = await paint(opened);
       const focus = bandOf(html, '1');
       assert.match(focus, /<a href="https:\/\/arcanum\.example\/review\/42">src\/a\.ts:4<\/a>/);
-      assert.match(focus, /Code solid/);
+      assert.equal(focus.includes('Code solid'), false);
       assert.match(focus, /src\/b\.ts:9/);
       assert.equal(focus.includes('https://arcanum.example/other'), false);
       assert.equal(/<a\b[^>]*>[^<]*solid/.test(focus), false);
@@ -2385,6 +2385,9 @@ spec('board', () => {
       );
     });
   });
+});
+
+spec('auto-gate', () => {
   requirement('A future gate sets or clears one auto label', () => {
     scenario('Gandalf writes one auto label and does not write a phase', async () => {
       const phases: string[] = [];
@@ -2729,6 +2732,9 @@ spec('board', () => {
       );
     });
   });
+});
+
+spec('board', () => {
   requirement('A plaque shows the top and the bottom in order', () => {
     scenario('Ask is the top while the cycle waits', async () => {
       const tickets = [
@@ -2954,7 +2960,7 @@ spec('board', () => {
           assert.match(dialog, /каталога нет/);
           assert.equal(dialog.includes('<select'), false);
           assert.equal(dialog.includes('name="name"'), false);
-          assert.equal(html.includes('aria-label="Настройки"'), false);
+          assert.equal(html.includes('role="dialog" aria-label="Настройки"'), false);
           assert.equal(existsSync(catalog), false);
         },
       );
@@ -3019,6 +3025,9 @@ spec('board', () => {
     });
   });
 
+});
+
+spec('board-command', () => {
   requirement('The board command serves this repository', () => {
     scenario('The snapshot names the current turn', async () => {
       await hosted(
@@ -3149,8 +3158,8 @@ spec('board', () => {
   });
 });
 
-spec('sidebar', () => {
-  requirement('The open row shows only the blocks the cycle has', () => {
+spec('drawer', () => {
+  requirement('The drawer holds one open cycle', () => {
     scenario('Opening another row closes the previous', async () => {
       await hosted(
         {
@@ -3176,23 +3185,6 @@ spec('sidebar', () => {
           assert.match(articleOf(second, '2'), /class="ticket is-open"/);
           assert.equal(articleOf(second, '1').includes('is-open'), false);
           assert.equal(second.match(/class="ticket is-open"/g)?.length, 1);
-        },
-      );
-    });
-    scenario('The Change row stays out', async () => {
-      await hosted(
-        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
-        async (page, window) => {
-          window.chooseAgent('cursor');
-          assert.equal(
-            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
-              .status,
-            200,
-          );
-          const side = bandOf(await pageHtml(page.url), '1');
-          assert.equal(side.includes('id="spine-Change"'), false);
-          assert.equal(side.includes('Двери читают'), false);
-          assert.match(side, /id="spine-Plan"[^>]*checked/);
         },
       );
     });
@@ -3226,28 +3218,6 @@ spec('sidebar', () => {
         },
       );
     });
-    scenario('The settings sheet has one close button', async () => {
-      await hosted(
-        {login: () => MANAGER, tickets: () => [bare('1', 'Quiet')]},
-        async (page, window) => {
-          window.chooseAgent('cursor');
-          const closed = await pageHtml(page.url);
-          assert.equal(closed.includes('role="dialog"'), false);
-          assert.match(closed, /name="act" value="open-settings"/);
-          assert.equal(
-            (await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString()))
-              .status,
-            200,
-          );
-          const sheet = await pageHtml(page.url);
-          assert.match(sheet, /role="dialog" aria-label="Настройки"/);
-          assert.equal(sheet.match(/value="close-settings"/g)?.length, 1);
-          assert.match(sheet, /aria-label="Закрыть"/);
-          assert.equal(/>\s*Закрыть\s*</.test(sheet), false);
-          assert.match(sheet, /name="act" value="open-settings"/);
-        },
-      );
-    });
     scenario('A second click closes the cycle', async () => {
       await hosted(
         {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
@@ -3272,6 +3242,157 @@ spec('sidebar', () => {
         },
       );
     });
+    scenario('The sidebar is a wide drawer', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          assert.match(html, /<aside class="sidebar" data-key="1"/);
+          assert.match(
+            html,
+            /\.sidebar\s*\{[^}]*position:\s*fixed[^}]*right:\s*0[^}]*width:\s*min\(560px, 92vw\)/,
+          );
+          assert.match(
+            html,
+            /\.stations\s*\{[^}]*grid-template-columns:\s*252px repeat\(7, minmax\(0, 1fr\)\)/,
+          );
+        },
+      );
+    });
+  });
+});
+
+spec('spine', () => {
+  requirement('The spine lists the document rows', () => {
+    scenario('The Change row stays out', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const side = bandOf(await pageHtml(page.url), '1');
+          assert.equal(side.includes('id="spine-Change"'), false);
+          assert.equal(side.includes('Двери читают'), false);
+          const planPick = side.match(/id="spine-Plan"[^>]*/)?.[0] ?? '';
+          assert.equal(planPick.includes('checked'), false);
+        },
+      );
+    });
+  });
+  requirement('A document row keeps its focus sentence', () => {
+    scenario('A solid sentence stays off the row', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'specifying', {
+              comments: [{body: 'sdd:focus\nPlan solid\nSpecify thread 4\nCode solid\n'}],
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          const planHead = spineOf(html, '1', 'Plan').split('<div class="fold">')[0] ?? '';
+          const specifyHead = spineOf(html, '1', 'Specify').split('<div class="fold">')[0] ?? '';
+          const codeHead = spineOf(html, '1', 'Code').split('<div class="fold">')[0] ?? '';
+          assert.equal(planHead.includes('class="sentence"'), false);
+          assert.equal(planHead.includes('solid'), false);
+          assert.match(specifyHead, /<span class="sentence">thread 4<\/span>/);
+          assert.equal(codeHead.includes('class="sentence"'), false);
+          assert.equal(codeHead.includes('solid'), false);
+        },
+      );
+    });
+  });
+  requirement('A row opens only when it has a fold', () => {
+    scenario('An empty row stays closed', async () => {
+      const quiet = {getAttribute: (name: string) => (name === 'class' ? 'is-quiet' : null)};
+      const openRow = {getAttribute: () => null};
+      assert.equal(rowHeadOpens(quiet), false);
+      assert.equal(rowHeadOpens(openRow), true);
+      assert.equal(rowHeadOpens(null), false);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          const plan = spineOf(html, '1', 'Plan');
+          assert.match(plan, /<section class="is-quiet">/);
+          assert.equal(/id="spine-Plan"[^>]*checked/.test(plan), false);
+          assert.equal(plan.includes('for="spine-Plan"'), false);
+          assert.match(
+            html,
+            /\.spine > section\.is-quiet \.row,\s*\.spine > section\.is-quiet \.layer,\s*\.spine > section\.is-quiet \.rest\s*\{[^}]*cursor:\s*default/,
+          );
+        },
+      );
+    });
+    scenario('The row head toggles outside its control', async () => {
+      const label = {closest: (selector: string) => (selector === 'label' ? label : null)};
+      const acts = {closest: (selector: string) => (selector === '.acts' ? acts : null)};
+      assert.equal(headClickToggles(label), false);
+      assert.equal(headClickToggles(acts), false);
+      assert.equal(headClickToggles({closest: () => null}), true);
+      assert.equal(headClickToggles(null), false);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          assert.match(html, /\.spine \.row\s*\{[^}]*cursor:\s*pointer/);
+          assert.match(html, /\.spine \.layer\s*\{[^}]*display:\s*flex[^}]*align-items:\s*center/);
+        },
+      );
+    });
+    scenario('The open row head sticks', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          assert.match(
+            html,
+            /\.spine > section:has\(\.spine-pick:checked\) \.row\s*\{[^}]*position:\s*sticky[^}]*top:\s*0[^}]*width:\s*auto[^}]*max-width:\s*none/,
+          );
+          assert.match(html, /<div class="side-scroll">/);
+          assert.equal(bandOf(html, '1').includes('class="top"'), false);
+          assert.match(html, /\.spine \.lead\s*\{[^}]*padding:\s*0/);
+        },
+      );
+    });
+  });
+  requirement('A document row shows its file', () => {
     scenario('The Plan row shows the outcome', async () => {
       await hosted(
         {login: () => MANAGER, tickets: () => [held('1', 'verifying')]},
@@ -3293,7 +3414,8 @@ spec('sidebar', () => {
           assert.match(side, /id="spine-Plan"/);
           assert.match(side, /Годность или список проблем/);
           assert.match(side, /- \[ \] Писать ли имя проверки\?/);
-          assert.match(side, /id="spine-Code"[^>]*checked/);
+          const codePick = side.match(/id="spine-Code"[^>]*/)?.[0] ?? '';
+          assert.equal(codePick.includes('checked'), false);
           assert.equal(
             window.sidebar().some(block => JSON.stringify(block).includes('Годность')),
             false,
@@ -3392,108 +3514,6 @@ spec('sidebar', () => {
         },
       );
     });
-    scenario('A plan line opens a thread', async () => {
-      const line = 'Сайдбар читает ветку.';
-      const reply = 'Здесь узко.';
-      const proposal = '## Scope\n\nСайдбар читает ветку.\n';
-      const threads: {key: string; body: string; place: ThreadPlace}[] = [];
-      const comments: string[] = [];
-      await hosted(
-        {
-          login: () => MANAGER,
-          tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
-          commentPull: (_key, body) => {
-            comments.push(body);
-          },
-          threadPull: async (key, body, place) => {
-            threads.push({key, body, place});
-          },
-        },
-        async (page, window, paths) => {
-          writeChange(paths.arcadia, '1', 'proposal.md', proposal);
-          await showCard(page, window);
-          const html = await pageHtml(page.url);
-          const button = lineButton(html, line);
-          const at = sourceLine(proposal, line);
-          assert.equal(at, 3);
-          assert.equal(button.includes(`data-path="${PROPOSAL_PATH}"`), true);
-          assert.equal(button.includes(`data-at="${at}"`), true);
-          assert.equal(button.includes('data-side="right"'), true);
-          assert.match(html, /\.spine button\.line:hover/);
-          assert.equal(
-            (
-              await post(
-                page.url,
-                'act',
-                answerFields({
-                  line,
-                  reply,
-                  path: PROPOSAL_PATH,
-                  at: String(at),
-                  side: 'right',
-                }),
-              )
-            ).status,
-            200,
-          );
-          assert.deepEqual(threads, [
-            {key: '1', body: reply, place: {path: PROPOSAL_PATH, line: at, side: 'right'}},
-          ]);
-          assert.deepEqual(comments, []);
-        },
-      );
-    });
-    scenario('A design line opens a thread', async () => {
-      const line = 'Один модуль.';
-      const reply = 'Здесь узко.';
-      const design = '## Approach\n\nОдин модуль.\n';
-      const threads: {key: string; body: string; place: ThreadPlace}[] = [];
-      const comments: string[] = [];
-      await hosted(
-        {
-          login: () => MANAGER,
-          tickets: () => [held('1', 'designing', {openPullRequests: 1})],
-          commentPull: (_key, body) => {
-            comments.push(body);
-          },
-          threadPull: async (key, body, place) => {
-            threads.push({key, body, place});
-          },
-        },
-        async (page, window, paths) => {
-          writeChange(paths.arcadia, '1', 'design.md', design);
-          await showCard(page, window);
-          const html = await pageHtml(page.url);
-          const button = lineButton(html, line);
-          const at = sourceLine(design, line);
-          assert.equal(at, 3);
-          assert.equal(button.includes(`data-path="${DESIGN_PATH}"`), true);
-          assert.equal(button.includes(`data-at="${at}"`), true);
-          assert.equal(button.includes('data-side="right"'), true);
-          assert.equal(
-            (
-              await post(
-                page.url,
-                'act',
-                answerFields({
-                  line,
-                  reply,
-                  path: DESIGN_PATH,
-                  at: String(at),
-                  side: 'right',
-                }),
-              )
-            ).status,
-            200,
-          );
-          assert.equal(threads[0]?.place.path, DESIGN_PATH);
-          assert.deepEqual(threads, [
-            {key: '1', body: reply, place: {path: DESIGN_PATH, line: at, side: 'right'}},
-          ]);
-          assert.deepEqual(comments, []);
-        },
-      );
-    });
     scenario('An empty plan section stays out', async () => {
       await hosted(
         {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
@@ -3587,107 +3607,6 @@ spec('sidebar', () => {
         },
       );
     });
-    scenario('A typed line comment stays when another line opens', () => {
-      assert.deepEqual(draftsAfterClick([{line: 'первая', text: 'черновик'}], 'вторая'), [
-        {line: 'первая', text: 'черновик'},
-        {line: 'вторая', text: ''},
-      ]);
-    });
-    scenario('An empty line field closes when another line opens', () => {
-      assert.deepEqual(draftsAfterClick([{line: 'первая', text: '   '}], 'вторая'), [
-        {line: 'вторая', text: ''},
-      ]);
-    });
-    scenario('An empty line field closes when its line is clicked again', () => {
-      assert.deepEqual(draftsAfterClick([{line: 'первая', text: ''}], 'первая'), []);
-      assert.deepEqual(draftsAfterClick([{line: 'первая', text: '  '}], 'первая'), []);
-    });
-    scenario('A typed line comment stays when its line is clicked again', () => {
-      assert.deepEqual(draftsAfterClick([{line: 'первая', text: 'черновик'}], 'первая'), [
-        {line: 'первая', text: 'черновик'},
-      ]);
-    });
-    scenario('A line field uses the pool frame', async () => {
-      await hosted(
-        {login: () => MANAGER, tickets: () => [held('1', 'proposing', {openPullRequests: 1})]},
-        async (page, window, paths) => {
-          writeChange(paths.arcadia, '1', 'proposal.md', '## Scope\n\nСтрока.\n');
-          window.chooseAgent('cursor');
-          assert.equal(
-            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
-              .status,
-            200,
-          );
-          const html = await pageHtml(page.url);
-          assert.match(html, /\.spine form\.line-note\s*\{[^}]*margin:\s*18px 10px 8px/);
-          assert.match(html, /\.spine \.plan-foot\s*\{[^}]*margin:\s*10px 10px 8px/);
-          assert.match(html, /\.spine \.plan-foot form\s*\{[^}]*margin:\s*0/);
-          assert.match(
-            html,
-            /\.spine button\.line\s*\{[^}]*margin:\s*-4px -8px[^}]*padding:\s*4px 8px[^}]*border-radius:\s*8px/,
-          );
-          assert.match(
-            html,
-            /\.spine form\.line-note textarea,\s*\.spine \.plan-foot textarea\s*\{[^}]*padding:\s*8px 8px 28px[^}]*border-radius:\s*8px/,
-          );
-          assert.match(
-            html,
-            /\.spine form\.line-note textarea:focus,\s*\.spine \.plan-foot textarea:focus\s*\{[^}]*rgba\(230, 179, 90, 0\.45\)/,
-          );
-          assert.match(html, /\.spine \.shut\s*\{[^}]*border-radius:\s*50%/);
-          assert.match(bandOf(html, '1'), /class="shut"[^>]*aria-label="Закрыть"/);
-          assert.match(bandOf(html, '1'), /class="send"[^>]*aria-label="Записать"/);
-        },
-      );
-    });
-    scenario('The row head toggles outside its control', async () => {
-      const label = {closest: (selector: string) => (selector === 'label' ? label : null)};
-      const acts = {closest: (selector: string) => (selector === '.acts' ? acts : null)};
-      assert.equal(headClickToggles(label), false);
-      assert.equal(headClickToggles(acts), false);
-      assert.equal(headClickToggles({closest: () => null}), true);
-      assert.equal(headClickToggles(null), false);
-      await hosted(
-        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
-        async (page, window) => {
-          window.chooseAgent('cursor');
-          assert.equal(
-            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
-              .status,
-            200,
-          );
-          const html = await pageHtml(page.url);
-          assert.match(html, /\.spine \.row\s*\{[^}]*cursor:\s*pointer/);
-          assert.match(html, /\.spine \.layer\s*\{[^}]*display:\s*flex[^}]*align-items:\s*center/);
-        },
-      );
-    });
-    scenario('The open row head sticks', async () => {
-      await hosted(
-        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
-        async (page, window) => {
-          window.chooseAgent('cursor');
-          assert.equal(
-            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
-              .status,
-            200,
-          );
-          const html = await pageHtml(page.url);
-          assert.match(
-            html,
-            /\.spine > section:has\(\.spine-pick:checked\) \.row\s*\{[^}]*position:\s*sticky[^}]*top:\s*0[^}]*width:\s*auto[^}]*max-width:\s*none/,
-          );
-          assert.match(html, /<div class="side-scroll">/);
-          assert.equal(bandOf(html, '1').includes('class="top"'), false);
-          assert.match(html, /\.spine \.lead\s*\{[^}]*padding:\s*0/);
-        },
-      );
-    });
-    scenario('Escape closes the line field', () => {
-      assert.equal(lineFieldClosesOnEscape('Escape', true), true);
-      assert.equal(lineFieldClosesOnEscape('Escape', false), false);
-      assert.equal(lineFieldClosesOnEscape('Enter', true), false);
-    });
     scenario('The Design row shows every section', async () => {
       await hosted(
         {login: () => MANAGER, tickets: () => [held('1', 'designing')]},
@@ -3753,29 +3672,6 @@ spec('sidebar', () => {
           const side = bandOf(await pageHtml(page.url), '1');
           assert.match(side, /Diff есть/);
           assert.equal(side.includes('diff --git'), false);
-        },
-      );
-    });
-    scenario('The sidebar is a wide drawer', async () => {
-      await hosted(
-        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
-        async (page, window) => {
-          window.chooseAgent('cursor');
-          assert.equal(
-            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
-              .status,
-            200,
-          );
-          const html = await pageHtml(page.url);
-          assert.match(html, /<aside class="sidebar" data-key="1"/);
-          assert.match(
-            html,
-            /\.sidebar\s*\{[^}]*position:\s*fixed[^}]*right:\s*0[^}]*width:\s*min\(560px, 92vw\)/,
-          );
-          assert.match(
-            html,
-            /\.stations\s*\{[^}]*grid-template-columns:\s*252px repeat\(7, minmax\(0, 1fr\)\)/,
-          );
         },
       );
     });
@@ -3873,6 +3769,82 @@ spec('sidebar', () => {
         },
       );
     });
+  });
+});
+
+spec('line-field', () => {
+  requirement('A line field opens on a document line', () => {
+    scenario('A typed line comment stays when another line opens', () => {
+      assert.deepEqual(draftsAfterClick([{line: 'первая', text: 'черновик'}], 'вторая'), [
+        {line: 'первая', text: 'черновик'},
+        {line: 'вторая', text: ''},
+      ]);
+    });
+    scenario('An empty line field closes when another line opens', () => {
+      assert.deepEqual(draftsAfterClick([{line: 'первая', text: '   '}], 'вторая'), [
+        {line: 'вторая', text: ''},
+      ]);
+    });
+    scenario('An empty line field closes when its line is clicked again', () => {
+      assert.deepEqual(draftsAfterClick([{line: 'первая', text: ''}], 'первая'), []);
+      assert.deepEqual(draftsAfterClick([{line: 'первая', text: '  '}], 'первая'), []);
+    });
+    scenario('A typed line comment stays when its line is clicked again', () => {
+      assert.deepEqual(draftsAfterClick([{line: 'первая', text: 'черновик'}], 'первая'), [
+        {line: 'первая', text: 'черновик'},
+      ]);
+    });
+    scenario('A line field uses the pool frame', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing', {openPullRequests: 1})]},
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'proposal.md', '## Scope\n\nСтрока.\n');
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          assert.match(html, /\.spine form\.line-note\s*\{[^}]*margin:\s*18px 10px 8px/);
+          assert.match(html, /\.spine \.plan-foot\s*\{[^}]*margin:\s*10px 10px 8px/);
+          assert.match(html, /\.spine \.plan-foot form\s*\{[^}]*margin:\s*0/);
+          assert.match(
+            html,
+            /\.spine button\.line\s*\{[^}]*margin:\s*-4px -8px[^}]*padding:\s*4px 8px[^}]*border-radius:\s*8px/,
+          );
+          assert.match(
+            html,
+            /\.spine form\.line-note textarea,\s*\.spine \.plan-foot textarea\s*\{[^}]*padding:\s*8px 8px 28px[^}]*border-radius:\s*8px/,
+          );
+          assert.match(
+            html,
+            /\.spine form\.line-note textarea:focus,\s*\.spine \.plan-foot textarea:focus\s*\{[^}]*rgba\(230, 179, 90, 0\.45\)/,
+          );
+          assert.match(html, /\.spine \.shut\s*\{[^}]*border-radius:\s*50%/);
+          assert.match(bandOf(html, '1'), /class="shut"[^>]*aria-label="Закрыть"/);
+          assert.match(bandOf(html, '1'), /class="send"[^>]*aria-label="Записать"/);
+        },
+      );
+    });
+    scenario('A hovered line draws no bar on the left', () => {
+      const css = readFileSync(new URL('./face.css', import.meta.url), 'utf8');
+      assert.match(
+        css,
+        /\.spine button\.line:hover,\s*\.spine button\.line\.is-on\s*\{[^}]*background-image:/,
+      );
+      assert.doesNotMatch(
+        css,
+        /\.spine button\.line:hover,\s*\.spine button\.line\.is-on\s*\{[^}]*inset\s+3px/,
+      );
+    });
+    scenario('Escape closes the line field', () => {
+      assert.equal(lineFieldClosesOnEscape('Escape', true), true);
+      assert.equal(lineFieldClosesOnEscape('Escape', false), false);
+      assert.equal(lineFieldClosesOnEscape('Enter', true), false);
+    });
+  });
+  requirement('A document remark is a review comment', () => {
     scenario('A remark on the plan is a review comment', async () => {
       const comments: string[] = [];
       await hosted(
@@ -3918,233 +3890,11 @@ spec('sidebar', () => {
         },
       );
     });
-    scenario('Accepting the plan adds proposed', async () => {
-      const tickets = [held('1', 'proposing', {openPullRequests: 1})];
-      const phases: string[] = [];
-      await hosted(
-        {
-          login: () => MANAGER,
-          tickets: () => tickets,
-          writePhase: (_key, phase) => {
-            phases.push(phase);
-          },
-          editLabels: (_key, add, remove) => {
-            const item = tickets[0];
-            if (!item) {
-              return;
-            }
-            item.labels = item.labels.filter(label => !remove?.includes(label));
-            for (const label of add) {
-              if (!item.labels.includes(label)) {
-                item.labels = [...item.labels, label];
-              }
-            }
-          },
-        },
-        async (page, window, paths) => {
-          writeChange(
-            paths.arcadia,
-            '1',
-            'proposal.md',
-            '## Open questions\n\n- [ ] Писать ли имя проверки?\n',
-          );
-          window.chooseAgent('cursor');
-          assert.equal(
-            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
-              .status,
-            200,
-          );
-          const asking = bandOf(await pageHtml(page.url), '1');
-          assert.match(asking, /<label class="draft">Комментарий/);
-          assert.equal(asking.includes('Принять Plan'), false);
-          writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
-          page.note();
-          const side = bandOf(await pageHtml(page.url), '1');
-          assert.match(side, /aria-label="Принять Plan"/);
-          assert.equal(
-            (
-              await post(
-                page.url,
-                'act',
-                new URLSearchParams({act: 'accept-review', key: '1'}).toString(),
-              )
-            ).status,
-            200,
-          );
-          assert.ok(tickets[0]?.labels.includes('sdd:proposed'));
-          assert.ok(tickets[0]?.labels.includes('sdd:proposing'));
-          assert.deepEqual(phases, []);
-          assert.equal((await pageHtml(page.url)).includes('role="status"'), false);
-        },
-      );
-    });
-    scenario('Accepting the spec adds specified', async () => {
-      const tickets = [held('1', 'specifying', {openPullRequests: 1})];
-      await hosted(
-        {
-          login: () => MANAGER,
-          tickets: () => tickets,
-          editLabels: (_key, add, remove) => {
-            const item = tickets[0];
-            if (!item) {
-              return;
-            }
-            item.labels = item.labels.filter(label => !remove?.includes(label));
-            for (const label of add) {
-              if (!item.labels.includes(label)) {
-                item.labels = [...item.labels, label];
-              }
-            }
-          },
-        },
-        async (page, window, paths) => {
-          writeChange(paths.arcadia, '1', 'specs/section-text/spec.md', deltaRequirement());
-          window.chooseAgent('cursor');
-          assert.equal(
-            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
-              .status,
-            200,
-          );
-          assert.match(bandOf(await pageHtml(page.url), '1'), /Принять Specify/);
-          assert.equal(
-            (
-              await post(
-                page.url,
-                'act',
-                new URLSearchParams({act: 'accept-review', key: '1'}).toString(),
-              )
-            ).status,
-            200,
-          );
-          assert.ok(tickets[0]?.labels.includes('sdd:specified'));
-          assert.ok(tickets[0]?.labels.includes('sdd:specifying'));
-        },
-      );
-    });
-    scenario('Accepting the design adds designed', async () => {
-      const tickets = [held('1', 'designing', {openPullRequests: 1})];
-      await hosted(
-        {
-          login: () => MANAGER,
-          tickets: () => tickets,
-          editLabels: (_key, add, remove) => {
-            const item = tickets[0];
-            if (!item) {
-              return;
-            }
-            item.labels = item.labels.filter(label => !remove?.includes(label));
-            for (const label of add) {
-              if (!item.labels.includes(label)) {
-                item.labels = [...item.labels, label];
-              }
-            }
-          },
-        },
-        async (page, window, paths) => {
-          writeChange(
-            paths.arcadia,
-            '1',
-            'design.md',
-            '## Approach\n\nОдин модуль.\n\n## Open decisions\n',
-          );
-          window.chooseAgent('cursor');
-          assert.equal(
-            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
-              .status,
-            200,
-          );
-          assert.match(bandOf(await pageHtml(page.url), '1'), /Принять Design/);
-          assert.equal(
-            (
-              await post(
-                page.url,
-                'act',
-                new URLSearchParams({act: 'accept-review', key: '1'}).toString(),
-              )
-            ).status,
-            200,
-          );
-          assert.ok(tickets[0]?.labels.includes('sdd:designed'));
-          assert.ok(tickets[0]?.labels.includes('sdd:designing'));
-        },
-      );
-    });
   });
-  requirement('The open row shows three gate lines', () => {
-    scenario('A passed gate is controlled from the sidebar', async () => {
-      const tickets = [
-        held('1', 'implementing', {
-          labels: ['sdd:cycle', 'sdd:implementing', 'sdd:auto-plan'],
-        }),
-      ];
-      await hosted(
-        {
-          login: () => MANAGER,
-          tickets: () => tickets,
-          editLabels: (_key, add, remove) => {
-            const item = tickets[0];
-            if (!item) {
-              return;
-            }
-            item.labels = item.labels.filter(label => !remove?.includes(label));
-            for (const label of add) {
-              if (!item.labels.includes(label)) {
-                item.labels = [...item.labels, label];
-              }
-            }
-          },
-        },
-        async (page, window) => {
-          window.chooseAgent('cursor');
-          const closed = await pageHtml(page.url);
-          assert.match(stationOf(closed, '1', 'proposing'), /<span class="dot"/);
-          assert.equal(
-            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
-              .status,
-            200,
-          );
-          const html = await pageHtml(page.url);
-          const line = glineOf(html, '1', 'proposing');
-          assert.match(line, /aria-label="Поставить гейт proposing"/);
-          assert.match(html, /\.tick\s*\{[^}]*width:\s*12px/);
-          assert.match(html, /\.stop\s*\{[^}]*width:\s*18px/);
-          assert.equal(line.includes('>Поставить'), false);
-          assert.equal(line.includes('>Снять'), false);
-          const posted = await post(
-            page.url,
-            'act',
-            new URLSearchParams({
-              act: 'gate',
-              key: '1',
-              station: 'proposing',
-              where: 'side',
-            }).toString(),
-          );
-          assert.equal(posted.status, 200);
-          assert.equal(tickets[0]?.labels.includes('sdd:auto-plan'), false);
-        },
-      );
-    });
-    scenario('A future gate repeats the station button', async () => {
-      await hosted(
-        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
-        async (page, window, paths) => {
-          writeChange(paths.arcadia, '1', 'design.md', '# design\n');
-          window.chooseAgent('cursor');
-          assert.equal(
-            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
-              .status,
-            200,
-          );
-          const html = await pageHtml(page.url);
-          assert.match(glineOf(html, '1', 'designing'), /гейт designing/);
-          assert.match(html, /\.stop\s*\{[^}]*width:\s*18px[^}]*height:\s*18px/);
-          assert.match(html, /\.stop svg\s*\{[^}]*width:\s*18px[^}]*height:\s*18px/);
-          assert.match(stationOf(html, '1', 'designing'), /aria-label="design"/);
-          assert.equal(stationOf(html, '1', 'designing').includes('гейт'), false);
-        },
-      );
-    });
+});
+
+spec('acceptance', () => {
+  requirement('The current phase offers acceptance in place of its gate', () => {
     scenario('The current phase shows acceptance instead of its gate', async () => {
       await hosted(
         {login: () => MANAGER, tickets: () => [held('1', 'proposing', {openPullRequests: 1})]},
@@ -4307,6 +4057,372 @@ spec('sidebar', () => {
           const specify = spineOf(await pageHtml(page.url), '1', 'Specify');
           assert.equal(specify.includes('Принять Specify'), false);
           assert.equal(specify.includes('data-gate="specifying"'), false);
+        },
+      );
+    });
+  });
+  requirement('Accepting a writing phase adds its label', () => {
+    scenario('Accepting the plan adds proposed', async () => {
+      const tickets = [held('1', 'proposing', {openPullRequests: 1})];
+      const phases: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => tickets,
+          writePhase: (_key, phase) => {
+            phases.push(phase);
+          },
+          editLabels: (_key, add, remove) => {
+            const item = tickets[0];
+            if (!item) {
+              return;
+            }
+            item.labels = item.labels.filter(label => !remove?.includes(label));
+            for (const label of add) {
+              if (!item.labels.includes(label)) {
+                item.labels = [...item.labels, label];
+              }
+            }
+          },
+        },
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'proposal.md',
+            '## Open questions\n\n- [ ] Писать ли имя проверки?\n',
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const asking = bandOf(await pageHtml(page.url), '1');
+          assert.match(asking, /<label class="draft">Комментарий/);
+          assert.equal(asking.includes('Принять Plan'), false);
+          writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+          page.note();
+          const side = bandOf(await pageHtml(page.url), '1');
+          assert.match(side, /aria-label="Принять Plan"/);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                new URLSearchParams({act: 'accept-review', key: '1'}).toString(),
+              )
+            ).status,
+            200,
+          );
+          assert.ok(tickets[0]?.labels.includes('sdd:proposed'));
+          assert.ok(tickets[0]?.labels.includes('sdd:proposing'));
+          assert.deepEqual(phases, []);
+          assert.equal((await pageHtml(page.url)).includes('role="status"'), false);
+        },
+      );
+    });
+    scenario('Accepting the spec adds specified', async () => {
+      const tickets = [held('1', 'specifying', {openPullRequests: 1})];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => tickets,
+          editLabels: (_key, add, remove) => {
+            const item = tickets[0];
+            if (!item) {
+              return;
+            }
+            item.labels = item.labels.filter(label => !remove?.includes(label));
+            for (const label of add) {
+              if (!item.labels.includes(label)) {
+                item.labels = [...item.labels, label];
+              }
+            }
+          },
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'specs/section-text/spec.md', deltaRequirement());
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          assert.match(bandOf(await pageHtml(page.url), '1'), /Принять Specify/);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                new URLSearchParams({act: 'accept-review', key: '1'}).toString(),
+              )
+            ).status,
+            200,
+          );
+          assert.ok(tickets[0]?.labels.includes('sdd:specified'));
+          assert.ok(tickets[0]?.labels.includes('sdd:specifying'));
+        },
+      );
+    });
+    scenario('Accepting the design adds designed', async () => {
+      const tickets = [held('1', 'designing', {openPullRequests: 1})];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => tickets,
+          editLabels: (_key, add, remove) => {
+            const item = tickets[0];
+            if (!item) {
+              return;
+            }
+            item.labels = item.labels.filter(label => !remove?.includes(label));
+            for (const label of add) {
+              if (!item.labels.includes(label)) {
+                item.labels = [...item.labels, label];
+              }
+            }
+          },
+        },
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'design.md',
+            '## Approach\n\nОдин модуль.\n\n## Open decisions\n',
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          assert.match(bandOf(await pageHtml(page.url), '1'), /Принять Design/);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                new URLSearchParams({act: 'accept-review', key: '1'}).toString(),
+              )
+            ).status,
+            200,
+          );
+          assert.ok(tickets[0]?.labels.includes('sdd:designed'));
+          assert.ok(tickets[0]?.labels.includes('sdd:designing'));
+        },
+      );
+    });
+  });
+});
+
+spec('auto-gate', () => {
+  requirement('The open row shows three gate lines', () => {
+    scenario('A passed gate is controlled from the sidebar', async () => {
+      const tickets = [
+        held('1', 'implementing', {
+          labels: ['sdd:cycle', 'sdd:implementing', 'sdd:auto-plan'],
+        }),
+      ];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => tickets,
+          editLabels: (_key, add, remove) => {
+            const item = tickets[0];
+            if (!item) {
+              return;
+            }
+            item.labels = item.labels.filter(label => !remove?.includes(label));
+            for (const label of add) {
+              if (!item.labels.includes(label)) {
+                item.labels = [...item.labels, label];
+              }
+            }
+          },
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const closed = await pageHtml(page.url);
+          assert.match(stationOf(closed, '1', 'proposing'), /<span class="dot"/);
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          const line = glineOf(html, '1', 'proposing');
+          assert.match(line, /aria-label="Поставить гейт proposing"/);
+          assert.match(html, /\.tick\s*\{[^}]*width:\s*12px/);
+          assert.match(html, /\.stop\s*\{[^}]*width:\s*18px/);
+          assert.equal(line.includes('>Поставить'), false);
+          assert.equal(line.includes('>Снять'), false);
+          const posted = await post(
+            page.url,
+            'act',
+            new URLSearchParams({
+              act: 'gate',
+              key: '1',
+              station: 'proposing',
+              where: 'side',
+            }).toString(),
+          );
+          assert.equal(posted.status, 200);
+          assert.equal(tickets[0]?.labels.includes('sdd:auto-plan'), false);
+        },
+      );
+    });
+    scenario('A future gate repeats the station button', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'design.md', '# design\n');
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          assert.match(glineOf(html, '1', 'designing'), /гейт designing/);
+          assert.match(html, /\.stop\s*\{[^}]*width:\s*18px[^}]*height:\s*18px/);
+          assert.match(html, /\.stop svg\s*\{[^}]*width:\s*18px[^}]*height:\s*18px/);
+          assert.match(stationOf(html, '1', 'designing'), /aria-label="design"/);
+          assert.equal(stationOf(html, '1', 'designing').includes('гейт'), false);
+        },
+      );
+    });
+  });
+});
+
+spec('settings', () => {
+  requirement('Settings are two blocks and do not open themselves', () => {
+    scenario('The settings sheet has one close button', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [bare('1', 'Quiet')]},
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const closed = await pageHtml(page.url);
+          assert.equal(closed.includes('role="dialog"'), false);
+          assert.match(closed, /name="act" value="open-settings"/);
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString()))
+              .status,
+            200,
+          );
+          const sheet = await pageHtml(page.url);
+          assert.match(sheet, /role="dialog" aria-label="Настройки"/);
+          assert.equal(sheet.match(/value="close-settings"/g)?.length, 1);
+          assert.match(sheet, /aria-label="Закрыть"/);
+          assert.equal(/>\s*Закрыть\s*</.test(sheet), false);
+          assert.match(sheet, /name="act" value="open-settings"/);
+        },
+      );
+    });
+  });
+});
+
+spec('spec-diff', () => {
+  requirement('A line comment uses a thread when the line has an anchor', () => {
+    scenario('A plan line opens a thread', async () => {
+      const line = 'Сайдбар читает ветку.';
+      const reply = 'Здесь узко.';
+      const proposal = '## Scope\n\nСайдбар читает ветку.\n';
+      const threads: {key: string; body: string; place: ThreadPlace}[] = [];
+      const comments: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
+          commentPull: (_key, body) => {
+            comments.push(body);
+          },
+          threadPull: async (key, body, place) => {
+            threads.push({key, body, place});
+          },
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'proposal.md', proposal);
+          await showCard(page, window);
+          const html = await pageHtml(page.url);
+          const button = lineButton(html, line);
+          const at = sourceLine(proposal, line);
+          assert.equal(at, 3);
+          assert.equal(button.includes(`data-path="${PROPOSAL_PATH}"`), true);
+          assert.equal(button.includes(`data-at="${at}"`), true);
+          assert.equal(button.includes('data-side="right"'), true);
+          assert.match(html, /\.spine button\.line:hover/);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                answerFields({
+                  line,
+                  reply,
+                  path: PROPOSAL_PATH,
+                  at: String(at),
+                  side: 'right',
+                }),
+              )
+            ).status,
+            200,
+          );
+          assert.deepEqual(threads, [
+            {key: '1', body: reply, place: {path: PROPOSAL_PATH, line: at, side: 'right'}},
+          ]);
+          assert.deepEqual(comments, []);
+        },
+      );
+    });
+    scenario('A design line opens a thread', async () => {
+      const line = 'Один модуль.';
+      const reply = 'Здесь узко.';
+      const design = '## Approach\n\nОдин модуль.\n';
+      const threads: {key: string; body: string; place: ThreadPlace}[] = [];
+      const comments: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'designing', {openPullRequests: 1})],
+          commentPull: (_key, body) => {
+            comments.push(body);
+          },
+          threadPull: async (key, body, place) => {
+            threads.push({key, body, place});
+          },
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'design.md', design);
+          await showCard(page, window);
+          const html = await pageHtml(page.url);
+          const button = lineButton(html, line);
+          const at = sourceLine(design, line);
+          assert.equal(at, 3);
+          assert.equal(button.includes(`data-path="${DESIGN_PATH}"`), true);
+          assert.equal(button.includes(`data-at="${at}"`), true);
+          assert.equal(button.includes('data-side="right"'), true);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                answerFields({
+                  line,
+                  reply,
+                  path: DESIGN_PATH,
+                  at: String(at),
+                  side: 'right',
+                }),
+              )
+            ).status,
+            200,
+          );
+          assert.equal(threads[0]?.place.path, DESIGN_PATH);
+          assert.deepEqual(threads, [
+            {key: '1', body: reply, place: {path: DESIGN_PATH, line: at, side: 'right'}},
+          ]);
+          assert.deepEqual(comments, []);
         },
       );
     });
@@ -4732,6 +4848,17 @@ spec('spec-diff', () => {
       assert.match(css, /\.spine button\.fold-bar \{[^}]*text-align: center/);
       assert.match(css, /\.spine \.fold > \.cap:first-child \{[^}]*border-top: 0/);
       assert.match(css, /\.spine button\.diff-row:hover/);
+    });
+    scenario('A diff row hover has no left bar', () => {
+      const css = readFileSync(new URL('./face.css', import.meta.url), 'utf8');
+      assert.match(
+        css,
+        /\.spine button\.diff-row:hover,\s*\.spine button\.diff-row\.is-on\s*\{[^}]*background-image:/,
+      );
+      assert.doesNotMatch(
+        css,
+        /\.spine button\.diff-row:hover,\s*\.spine button\.diff-row\.is-on\s*\{[^}]*inset\s+3px/,
+      );
     });
   });
 
@@ -5320,7 +5447,7 @@ function failGitRevParse(): () => void {
   };
 }
 
-/** Fail `git show` of `proposal.md`. The board still answers; the deferred spine read throws. */
+/** Fail the deferred spine read of `proposal.md`. The board still answers; that read throws. */
 function failGitShow(): () => void {
   const real = execFileSync('/usr/bin/which', ['git'], {encoding: 'utf8'}).trim();
   const dir = mkdtempSync(path.join(tmpdir(), 'spine-git-'));
@@ -5336,6 +5463,10 @@ function failGitShow(): () => void {
       '      exit 128',
       '      ;;',
       '  esac',
+      'fi',
+      'if [ "$1" = "cat-file" ] && [ "$2" = "--batch" ]; then',
+      '  echo "fatal: not a git repository (or any of the parent directories): .git" >&2',
+      '  exit 128',
       'fi',
       `exec ${JSON.stringify(real)} "$@"`,
       '',
@@ -5536,11 +5667,98 @@ spec('live-frame', () => {
         },
       );
     });
+
+    scenario('Opening the same ticket again keeps the ready spine', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          plantCaseRead(paths.arcadia);
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          await flushSpine();
+          const ready = await snapshotOnce(page.url);
+          assert.equal(ready.opened?.spineReady, true);
+          const ids = ready.opened?.spine.capabilities.map(item => item.id);
+          assert.ok(ids?.includes(SPEC_ID));
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'close-card'}).toString()))
+              .status,
+            200,
+          );
+          const again = await post(
+            page.url,
+            'act',
+            new URLSearchParams({act: 'open', key: '1'}).toString(),
+          );
+          assert.equal(again.status, 200);
+          const shot = JSON.parse(again.body) as WindowSnapshot;
+          assert.equal(shot.opened?.key, '1');
+          assert.equal(shot.opened?.spineReady, true);
+          assert.deepEqual(
+            shot.opened?.spine.capabilities.map(item => item.id),
+            ids,
+          );
+        },
+      );
+    });
+
+    scenario('Switching back to a ticket keeps the spine already read', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying'), held('2', 'specifying')],
+        },
+        async (page, window, paths) => {
+          plantCaseRead(paths.arcadia);
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          await flushSpine();
+          const ready = await snapshotOnce(page.url);
+          assert.equal(ready.opened?.spineReady, true);
+          const ids = ready.opened?.spine.capabilities.map(item => item.id);
+          assert.ok(ids?.includes(SPEC_ID));
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '2'}).toString()))
+              .status,
+            200,
+          );
+          await flushSpine();
+          const other = await snapshotOnce(page.url);
+          assert.equal(other.opened?.key, '2');
+          assert.equal(other.opened?.spineReady, true);
+          const again = await post(
+            page.url,
+            'act',
+            new URLSearchParams({act: 'open', key: '1'}).toString(),
+          );
+          assert.equal(again.status, 200);
+          const shot = JSON.parse(again.body) as WindowSnapshot;
+          assert.equal(shot.opened?.key, '1');
+          assert.equal(shot.opened?.spineReady, true);
+          assert.deepEqual(
+            shot.opened?.spine.capabilities.map(item => item.id),
+            ids,
+          );
+          await flushSpine();
+          const stayed = await snapshotOnce(page.url);
+          assert.equal(stayed.generation, shot.generation);
+          assert.equal(stayed.opened?.spineReady, true);
+        },
+      );
+    });
   });
 });
 
 spec('ticket-heading', () => {
-  requirement('The ticket heading is one line', () => {
+  requirement('The ticket heading names the issue', () => {
     scenario('The board shows the issue link beside the title', async () => {
       await hosted(
         {
@@ -5565,11 +5783,37 @@ spec('ticket-heading', () => {
             article.indexOf('</button>'),
           );
           assert.equal(face.includes(href), false);
-          assert.match(html, /\.ident > \.name[^{]*\{[^}]*display:\s*flex/);
-          assert.match(html, /\.sidebar header \.name[^{]*\{[^}]*display:\s*flex/);
-          assert.doesNotMatch(html, /(?:^|[{}])\s*\.name\s*\{\s*display:\s*flex/);
         },
       );
+    });
+
+    scenario('A long board title ends on the third line', () => {
+      const html = readFileSync(new URL('./face.css', import.meta.url), 'utf8');
+      assert.match(html, /\.ident > \.name\s*\{[^}]*-webkit-line-clamp:\s*3/);
+      assert.match(html, /\.ident > \.name \.open,\s*\.ident > \.name \.face\s*\{[^}]*display:\s*contents/);
+      assert.match(html, /\.ident > \.name \.title\s*\{[^}]*display:\s*inline/);
+      assert.match(html, /\.sidebar header \.name\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*wrap/);
+      assert.doesNotMatch(html, /\.ident > \.name \.title\s*\{[^}]*white-space:\s*nowrap/);
+      assert.doesNotMatch(html, /(?:^|[{}])\s*\.name\s*\{\s*display:\s*flex/);
+    });
+
+    scenario('The plaque opens outside the issue link', () => {
+      const gutter = {closest: (selector: string) => (selector === '.gutter' ? gutter : null)};
+      const link = {
+        closest: (selector: string) => (selector === 'a' || selector === '.gutter' ? link : null),
+      };
+      const corner = {
+        closest: (selector: string) =>
+          selector === '.corner' || selector === '.gutter' ? corner : null,
+      };
+      const button = {
+        closest: (selector: string) => (selector === 'button' || selector === '.gutter' ? button : null),
+      };
+      assert.equal(plaqueClickOpens(gutter), true);
+      assert.equal(plaqueClickOpens(link), false);
+      assert.equal(plaqueClickOpens(corner), false);
+      assert.equal(plaqueClickOpens(button), false);
+      assert.equal(plaqueClickOpens(null), false);
     });
 
     scenario('A ticket without a repo has no link', async () => {
@@ -5668,9 +5912,8 @@ spec('ticket-heading', () => {
           );
           const html = await pageHtml(page.url);
           const href = 'href="https://github.com/acme/billing/tree/HEAD/services/billing"';
-          for (const part of [articleOf(html, '1'), bandOf(html, '1')]) {
-            assert.match(part, new RegExp(`<a class="project" ${href}>billing</a>`));
-          }
+          assert.match(bandOf(html, '1'), new RegExp(`<a class="project" ${href}>billing</a>`));
+          assert.equal(articleOf(html, '1').includes('class="project"'), false);
         },
       );
     });
@@ -5683,11 +5926,18 @@ spec('ticket-heading', () => {
         },
         async (page, window) => {
           window.chooseAgent('cursor');
-          const article = articleOf(await pageHtml(page.url), '1');
-          const badge = article.match(/<a class="project" href="([^"]+)">billing<\/a>/);
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          const article = articleOf(html, '1');
+          const badge = bandOf(html, '1').match(/<a class="project" href="([^"]+)">billing<\/a>/);
           assert.ok(badge);
           assert.equal(badge[1], 'https://github.com/acme/billing');
           assert.equal(badge[1].includes('/issues/'), false);
+          assert.equal(article.includes('class="project"'), false);
           assert.match(article, /\/issues\//);
         },
       );

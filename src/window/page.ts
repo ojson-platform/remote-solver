@@ -15,10 +15,11 @@ import {createServer, type IncomingMessage, type ServerResponse} from 'node:http
 import {setImmediate} from 'node:timers';
 
 import {bundleClient} from './client/bundle.ts';
+import {factorySvg} from './mark.ts';
 import {snapshot} from './snapshot.ts';
 import {ROLE_OUTCOMES} from './types.ts';
 
-export {draftsAfterClick, headClickToggles, lineFieldClosesOnEscape} from './client/gesture.ts';
+export {draftsAfterClick, headClickToggles, lineFieldClosesOnEscape, plaqueClickOpens, rowHeadOpens} from './client/gesture.ts';
 
 /** The window this page draws and drives. */
 type Surface = {
@@ -623,7 +624,11 @@ function json(res: ServerResponse, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-function written(view: PageView, listeners: Set<ServerResponse>, kind: 'content' | 'spine'): void {
+function written(
+  view: PageView,
+  listeners: Set<ServerResponse>,
+  kind: 'content' | 'spine' | 'frame',
+): void {
   view.generation += 1;
   if (kind === 'content') {
     view.contentEpoch += 1;
@@ -648,7 +653,7 @@ function liveSnapshot(
 }
 
 const SHELL =
-  '<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ai-factory</title><link rel="stylesheet" href="/face.css"><body><div id="root"></div><script src="/client.js"></script></body></html>';
+  '<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>AI FACTORY</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/face.css"><body><div id="root"></div><script src="/client.js"></script></body></html>';
 
 function faceCss(): string {
   return readFileSync(new URL('./face.css', import.meta.url), 'utf8');
@@ -712,7 +717,8 @@ async function handle(
       text(res, 409, 'не записано');
       return;
     }
-    written(view, listeners, 'content');
+    const act = params.get('act');
+    written(view, listeners, act === 'open' || act === 'close-card' ? 'frame' : 'content');
     json(res, liveSnapshot(surface, view, listeners, schedule));
     return;
   }
@@ -730,6 +736,11 @@ async function handle(
   if (req.method === 'GET' && url.pathname === '/face.css') {
     res.writeHead(200, {'content-type': 'text/css; charset=utf-8'});
     res.end(css);
+    return;
+  }
+  if (req.method === 'GET' && url.pathname === '/favicon.svg') {
+    res.writeHead(200, {'content-type': 'image/svg+xml; charset=utf-8'});
+    res.end(factorySvg('#f4f0e6'));
     return;
   }
   if (req.method === 'GET' && url.pathname === '/events') {

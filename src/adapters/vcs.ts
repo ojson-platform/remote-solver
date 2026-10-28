@@ -90,10 +90,16 @@ function issueRef(root: string, key: string, prefix: string): string | null {
 }
 
 function exitStatus(error: unknown): number | undefined {
-  if (typeof error !== 'object' || error === null || !('status' in error)) {
+  if (typeof error !== 'object' || error === null) {
     return undefined;
   }
-  return typeof error.status === 'number' ? error.status : undefined;
+  if ('status' in error && typeof error.status === 'number') {
+    return error.status;
+  }
+  if ('code' in error && typeof error.code === 'number') {
+    return error.code;
+  }
+  return undefined;
 }
 
 /** `root` or a parent holds `.git`. No such directory means the issue branch is absent. */
@@ -176,25 +182,150 @@ function showFile(root: string, ref: string, rel: string, strict: boolean): stri
   }
 }
 
+const TREE_ROOTS = ['openspec/changes', 'openspec/specs'];
+
+type RefTree = {files: Map<string, string>; dirs: Set<string>};
+
+function slash(rel: string): string {
+  return rel.split('\\').join('/');
+}
+
+function covered(rel: string): boolean {
+  const name = slash(rel);
+  return TREE_ROOTS.some(root => name === root || name.startsWith(`${root}/`));
+}
+
+function emptyTree(): RefTree {
+  return {files: new Map(), dirs: new Set()};
+}
+
+/** One `ls-tree` and one `cat-file --batch` for the change and spec trees. */
+function readTree(root: string, ref: string, strict: boolean): RefTree {
+  const listed = git(
+    root,
+    ['ls-tree', '-r', '-t', '--name-only', ref, '--', ...TREE_ROOTS],
+    !strict,
+  );
+  const names = listed.split('\n').filter(line => line.length > 0);
+  if (names.length === 0) {
+    return emptyTree();
+  }
+  const input = Buffer.from(`${names.map(name => `${ref}:${name}`).join('\n')}\n`);
+  let buf: Buffer;
+  try {
+    buf = execFileSync('git', ['cat-file', '--batch'], {
+      cwd: root,
+      input,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      maxBuffer: 64 * 1024 * 1024,
+    }) as Buffer;
+  } catch (error) {
+    if (!strict) {
+      return emptyTree();
+    }
+    throw error;
+  }
+  const files = new Map<string, string>();
+  const dirs = new Set<string>();
+  let offset = 0;
+  let index = 0;
+  while (index < names.length && offset < buf.length) {
+    const nl = buf.indexOf(0x0a, offset);
+    if (nl < 0) {
+      break;
+    }
+    const header = buf.toString('utf8', offset, nl);
+    offset = nl + 1;
+    const name = names[index];
+    index += 1;
+    if (header.endsWith(' missing') || !name) {
+      continue;
+    }
+    const blob = / blob (\d+)$/.exec(header);
+    const tree = / tree (\d+)$/.exec(header);
+    const size = Number((blob ?? tree)?.[1]);
+    if (!Number.isFinite(size)) {
+      break;
+    }
+    if (blob) {
+      files.set(name, buf.toString('utf8', offset, offset + size));
+    } else if (tree) {
+      dirs.add(name);
+    }
+    offset += size + 1;
+  }
+  if (strict && index !== names.length) {
+    throw new Error(`git cat-file --batch stopped at ${index} of ${names.length}`);
+  }
+  return {files, dirs};
+}
+
+function treeHas(tree: RefTree, rel: string): boolean {
+  const name = slash(rel);
+  if (tree.files.has(name) || tree.dirs.has(name)) {
+    return true;
+  }
+  const prefix = name.endsWith('/') ? name : `${name}/`;
+  for (const file of tree.files.keys()) {
+    if (file.startsWith(prefix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Files on one ref.
+ * `openspec/changes` and `openspec/specs` are read once per source.
  * Lenient: a git failure is an empty file or an empty list.
  * Strict: a missing path on that ref is empty. Any other git failure throws.
  */
 function filesOfRef(root: string, ref: string | null, strict: boolean): FileSource {
+  let cached: RefTree | undefined;
+  const tree = (): RefTree => {
+    if (cached) {
+      return cached;
+    }
+    cached = ref ? readTree(root, ref, strict) : emptyTree();
+    return cached;
+  };
   return {
     exists(rel) {
-      return ref !== null && existsOnRef(root, ref, rel);
+      if (!ref) {
+        return false;
+      }
+      if (covered(rel)) {
+        return treeHas(tree(), rel);
+      }
+      return existsOnRef(root, ref, rel);
     },
     read(rel) {
       if (!ref) {
         return '';
+      }
+      if (covered(rel)) {
+        return tree().files.get(slash(rel)) ?? '';
       }
       return showFile(root, ref, rel, strict);
     },
     list(rel) {
       if (!ref) {
         return [];
+      }
+      const prefix = slash(rel);
+      if (covered(prefix)) {
+        const loaded = tree();
+        if (loaded.files.has(prefix)) {
+          return [prefix];
+        }
+        const start = prefix.endsWith('/') ? prefix : `${prefix}/`;
+        const out: string[] = [];
+        for (const name of loaded.files.keys()) {
+          if (name.startsWith(start)) {
+            out.push(name);
+          }
+        }
+        return out;
       }
       return git(root, ['ls-tree', '-r', '--name-only', ref, rel], !strict)
         .split('\n')
@@ -334,6 +465,14 @@ export function gitVcs(root: string, config: GitVcsConfig = {}): Vcs {
         return {commits, diff};
       } catch {
         return null;
+      }
+    },
+    async changed(base, head) {
+      try {
+        await gitAsync(root, ['diff', '--quiet', `${base}...${head}`]);
+        return false;
+      } catch (error) {
+        return exitStatus(error) === 1;
       }
     },
     async head() {

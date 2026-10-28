@@ -3944,12 +3944,17 @@ spec('settings', () => {
   });
 });
 
-spec('sidebar', () => {
-  requirement('The open row shows only the blocks the cycle has', () => {
-    scenario('A cycle with only focus shows focus', () => {
+spec('spine', () => {
+  requirement('The spine lists the document rows', () => {
+    scenario('Change bodies stay out', () => {
       proveAnOpenCycleWhoseOnlySidebarBlockIsFocusShowsThatBlock113();
     });
-    scenario('Change bodies stay out', () => {
+  });
+});
+
+spec('sidebar', () => {
+  requirement('The open row shows only the blocks that exist', () => {
+    scenario('A cycle with only focus shows focus', () => {
       proveAnOpenCycleWhoseOnlySidebarBlockIsFocusShowsThatBlock113();
     });
   });

@@ -6,6 +6,7 @@ import type {
   RoleRecord,
   SkillMode,
   WindowOutside,
+  WindowTicket,
 } from './types.ts';
 
 import {existsSync, mkdirSync, writeFileSync} from 'node:fs';
@@ -163,6 +164,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       cardOf: item => checkout.cardOf(item),
       leading: key => outside.leading?.(key) === true,
       review: key => outside.review?.(key),
+      facts: key => outside.branchFacts?.(key),
       takeBlock: located => {
         const factory = factoryFor(located);
         return takeBlock(factory, rejectedOf(factory).length > 0);
@@ -202,6 +204,7 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       gathered: ticket => checkout.gathered(ticket),
       serviceBroken: located => checkout.serviceBroken(located),
       cardOf: ticket => checkout.cardOf(ticket),
+      branchFacts: key => outside.branchFacts?.(key),
     });
   }
 
@@ -238,9 +241,11 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
     return COLUMN_NAMES.indexOf(station) > COLUMN_NAMES.indexOf(plaque);
   }
 
-  let held: {key: string; spine: Spine} | undefined;
+  const shelf = new Map<
+    string,
+    {spine?: Spine; epoch: number; mark: string | undefined; state: 'ready' | 'failed'}
+  >();
   let spineKey = '';
-  let spineEpoch = -1;
   let spineState: 'idle' | 'due' | 'ready' | 'failed' = 'idle';
 
   function readOpenSpine(): Spine | undefined {
@@ -330,43 +335,56 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       if (openKey === '') {
         return false;
       }
-      if (spineKey === openKey && spineEpoch === epoch && spineState === 'ready') {
+      const token = outside.spineToken?.(openKey);
+      const saved = shelf.get(openKey);
+      const settled = saved !== undefined;
+      if (token !== undefined) {
+        if (settled && saved.mark === token) {
+          spineKey = openKey;
+          spineState = saved.state;
+          return false;
+        }
+      } else if (settled && saved.epoch === epoch) {
+        spineKey = openKey;
+        spineState = saved.state;
         return false;
       }
-      if (spineKey === openKey && spineEpoch === epoch && spineState === 'failed') {
-        return false;
-      }
-      if (spineKey !== openKey) {
-        held = undefined;
-      }
+      spineKey = openKey;
       spineState = 'due';
       return true;
     },
     warmSpine(epoch: number): void {
       const key = openKey;
+      const mark = outside.spineToken?.(key);
       const built = readOpenSpine();
       if (openKey !== key || !built) {
         return;
       }
-      held = {key, spine: built};
+      shelf.set(key, {spine: built, epoch, mark, state: 'ready'});
       spineKey = key;
-      spineEpoch = epoch;
       spineState = 'ready';
     },
     failSpine(epoch: number): void {
-      spineKey = openKey;
-      spineEpoch = epoch;
+      const key = openKey;
+      const previous = shelf.get(key);
+      shelf.set(key, {
+        spine: previous?.spine,
+        epoch,
+        mark: outside.spineToken?.(key),
+        state: 'failed',
+      });
+      spineKey = key;
       spineState = 'failed';
     },
     heldSpine(): {spine?: Spine; ready: boolean} {
       if (openKey === '') {
         return {ready: true};
       }
-      const spine = held?.key === openKey ? held.spine : undefined;
-      if (spineState === 'due') {
-        return {spine, ready: false};
+      const saved = shelf.get(openKey);
+      if (spineKey === openKey && spineState === 'due') {
+        return {spine: saved?.spine, ready: false};
       }
-      return {spine, ready: true};
+      return {spine: saved?.spine, ready: true};
     },
     async answer(
       key: string,
@@ -570,6 +588,9 @@ export function openWindow(launch: Launch = {}, outside: WindowOutside = {}) {
       const label = GATE_LABEL[station];
       const present = item.labels.includes(label);
       outside.editLabels?.(key, present ? [] : [label], present ? [label] : []);
+    },
+    gatheredOf(item: WindowTicket): string | undefined {
+      return checkout.gathered(item);
     },
     take(key?: string): boolean {
       if (!key || !answers()) {

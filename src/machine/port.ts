@@ -139,6 +139,8 @@ export type Vcs = {
    * A missing object is a failed range, not an empty diff.
    */
   compare(base: string, head: string): Promise<{commits: string; diff: string} | null>;
+  /** Whether `base...head` has any diff text. Absent when the adapter only offers `compare`. */
+  changed?(base: string, head: string): Promise<boolean>;
   /** Push the issue branch `sdd/<key>` and set its upstream. */
   push(key: IssueKey): Promise<void>;
   /** HEAD of the checkout this adapter was opened on. */

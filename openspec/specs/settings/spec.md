@@ -8,7 +8,7 @@ Settings is the window's editor in two blocks. The user block writes the home co
 
 ### Requirement: Settings are two blocks and do not open themselves
 
-Settings SHALL be two blocks. They SHALL NOT open themselves when the home config is missing, when the recorded agent does not answer, or when a service config on disk does not read. The user block SHALL write the launch file immediately: the agent and that agent's fields, the roles, the watch list, and the checkout roots. The service block SHALL have two groups. The overlay group SHALL show `.aifactory/config.yaml`. The service-config group SHALL show `openspec/config.yaml`.
+Settings SHALL be two blocks. They SHALL NOT open themselves when the home config is missing, when the recorded agent does not answer, or when a service config on disk does not read. The user block SHALL write the launch file immediately: the agent and that agent's fields, the roles, the watch list, and the checkout roots. The service block SHALL have two groups. The overlay group SHALL show `.aifactory/config.yaml`. The service-config group SHALL show `openspec/config.yaml`. The sheet SHALL have one close control. That control SHALL be a cross.
 
 #### Scenario: A missing home file leaves settings closed
 
@@ -19,6 +19,11 @@ Settings SHALL be two blocks. They SHALL NOT open themselves when the home confi
 
 - **WHEN** the manager opens settings on a card
 - **THEN** the overlay group shows `.aifactory/config.yaml` and the service-config group shows `openspec/config.yaml`
+
+#### Scenario: The settings sheet has one close button
+
+- **WHEN** the manager opens settings
+- **THEN** the sheet has one close control, that control is a cross, and the sheet did not open itself
 
 ### Requirement: Service groups write the open card's checkout
 

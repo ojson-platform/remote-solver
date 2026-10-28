@@ -5,13 +5,16 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
 
 import {
+  beginRead,
   busyEdges,
   emptyHold,
+  endRead,
   holdGesture,
   paintFrame,
   releaseHold,
   settingsAct,
   type FrameHold,
+  type ReadSlot,
 } from './frame.ts';
 
 const SETTINGS_ACTS = [
@@ -240,6 +243,27 @@ spec('live-frame', () => {
     });
   });
 
+  requirement('Opening the same ticket keeps the spine already read', () => {
+    scenario('Opening the same ticket shows the spine already read', () => {
+      const base = shot();
+      const previous = openedShot().opened;
+      assert.ok(previous);
+      const kept = {
+        ...previous,
+        spineReady: true,
+        spine: {...previous.spine, diff: true, pull: true},
+      };
+      const hold = holdGesture(emptyHold(), 2, 'open', new URLSearchParams('key=7'), base);
+      const opened = paintFrame(base, hold, kept).opened;
+      assert.ok(opened);
+      assert.equal(opened.key, '7');
+      assert.equal(opened.title, 'Заголовок');
+      assert.equal(opened.spine.diff, true);
+      assert.equal(opened.spine.pull, true);
+      assert.equal(spineReady(opened), true);
+    });
+  });
+
   requirement('A hold outranks a snapshot that has not caught up', () => {
     scenario('Closing hides the drawer before the response', () => {
       const open = openedShot();
@@ -340,6 +364,37 @@ spec('live-frame', () => {
         drawer: false,
         settings: false,
       });
+    });
+  });
+
+  requirement('The client reads one snapshot at a time', () => {
+    scenario('Two changes during one read become one follow-up', () => {
+      let slot: ReadSlot = {flying: false, again: false};
+      let starts = 0;
+      const change = () => {
+        const begun = beginRead(slot);
+        slot = begun.slot;
+        if (begun.start) {
+          starts += 1;
+        }
+      };
+      change();
+      change();
+      change();
+      assert.equal(starts, 1);
+      assert.equal(slot.again, true);
+      const follow = endRead(slot);
+      slot = follow.slot;
+      if (follow.start) {
+        starts += 1;
+      }
+      assert.equal(starts, 2);
+      assert.equal(slot.flying, true);
+      assert.equal(slot.again, false);
+      const done = endRead(slot);
+      assert.equal(done.start, false);
+      assert.equal(done.slot.flying, false);
+      assert.equal(starts, 2);
     });
   });
 });

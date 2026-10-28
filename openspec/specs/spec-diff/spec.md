@@ -75,16 +75,21 @@ Choosing a gap SHALL show its lines. Choosing that gap again SHALL leave the lin
 
 ### Requirement: The fold control sits apart from the spec text
 
-The fold control SHALL be centered. The first capability SHALL NOT have a rule above it. A commentable diff row SHALL be one control, so the line numbers and the text highlight and receive the comment together.
+The fold control SHALL be centered. The first capability SHALL NOT have a rule above it. A commentable diff row SHALL be one control, so the line numbers and the text highlight and receive the comment together. A hovered diff row SHALL change its background and SHALL NOT draw a bar on the left.
 
 #### Scenario: The fold control is centered and the list has no rule above it
 
 - **WHEN** the drawer shows a capability diff
 - **THEN** the fold control is centered and the first capability has no top rule
 
+#### Scenario: A diff row hover has no left bar
+
+- **WHEN** the pointer is over a diff row, or that row's field is open
+- **THEN** the row changes its background and draws no bar on the left
+
 ### Requirement: A line comment uses a thread when the line has an anchor
 
-A row copied from the delta SHALL carry an anchor: the delta path, the line number in that file, and side `right`. Choosing that row and sending text SHALL call `openThread` with the person's text only. A row without an anchor SHALL call `speak` with the visible line quoted above the text. A refused thread SHALL call `speak` with the same quote and SHALL NOT put the host error in the snapshot. Both calls failing SHALL yield `комментарий не записан`. A Plan body line SHALL carry an anchor to that line of `proposal.md`. An open question SHALL stay a conversation reply. A Design body line SHALL carry an anchor to that line of `design.md`. An open question of the design SHALL stay a conversation reply. A `- [ ]` line of the design outside Open questions SHALL open a thread. A `- [ ]` line outside Open questions SHALL open a thread even when its text equals an open question.
+A row copied from the delta SHALL carry an anchor: the delta path, the line number in that file, and side `right`. Choosing that row and sending text SHALL call `openThread` with the person's text only. A row without an anchor SHALL call `speak` with the visible line quoted above the text. A refused thread SHALL call `speak` with the same quote and SHALL NOT put the host error in the snapshot. Both calls failing SHALL yield `комментарий не записан`. A Plan body line SHALL carry an anchor to that line of `proposal.md`. An open question SHALL stay a conversation reply. A Design body line SHALL carry an anchor to that line of `design.md`. That plan thread SHALL be on `openspec/changes/issue-<key>/proposal.md`, that design thread SHALL be on `openspec/changes/issue-<key>/design.md`, and the pull-request conversation SHALL receive no quote for either thread. An open question of the design SHALL stay a conversation reply. A `- [ ]` line of the design outside Open questions SHALL open a thread. A `- [ ]` line outside Open questions SHALL open a thread even when its text equals an open question.
 
 #### Scenario: A line copied from the delta opens a thread
 
@@ -115,6 +120,16 @@ A row copied from the delta SHALL carry an anchor: the delta path, the line numb
 
 - **WHEN** the person comments a body line of the design and one pull request is open
 - **THEN** the review thread is opened on `design.md` at that file line
+
+#### Scenario: A plan line opens a thread
+
+- **WHEN** one pull request is open and the manager comments on a plan line
+- **THEN** the review thread is opened on `openspec/changes/issue-<key>/proposal.md` at that file line with only the manager's text, and the pull-request conversation receives no quote
+
+#### Scenario: A design line opens a thread
+
+- **WHEN** one pull request is open and the manager comments on a design line
+- **THEN** the review thread is opened on `openspec/changes/issue-<key>/design.md` at that file line with only the manager's text, and the pull-request conversation receives no quote
 
 #### Scenario: An open question stays a conversation reply
 

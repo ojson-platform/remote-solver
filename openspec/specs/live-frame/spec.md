@@ -119,3 +119,41 @@ While one snapshot read is in flight, a further change SHALL NOT start another r
 
 - **WHEN** two further changes arrive while a snapshot read is in flight
 - **THEN** the client starts one follow-up read and does not start a third
+
+### Requirement: A matching revision omits the spine
+
+An open request or a snapshot request that carries `have` equal to the open cycle's stored revision SHALL name that revision and SHALL NOT include the spine. The same request without `have` SHALL include the spine. A change event SHALL name its generation, its kind, and the open cycle's stored revision when one exists.
+
+#### Scenario: A matching revision omits the spine
+
+- **WHEN** a cycle's spine is ready and the open request carries that revision
+- **THEN** the response names that revision and has no spine, a snapshot read carrying that revision has no spine, and a snapshot read without it has the spine
+
+#### Scenario: A change event names the open spine revision
+
+- **WHEN** a cycle's spine is ready and a client listens for changes
+- **THEN** the event names that key and that revision
+
+### Requirement: A held revision does not read the snapshot again
+
+A frame change SHALL NOT start a snapshot read while a gesture is open. A spine change SHALL NOT start a snapshot read when the client already holds every named revision. A content change SHALL start a snapshot read. A snapshot read SHALL carry the revision the client holds.
+
+#### Scenario: A frame change during a gesture does not read the snapshot
+
+- **WHEN** a frame change arrives while a gesture is open
+- **THEN** the client does not start a snapshot read
+
+#### Scenario: A spine change for a held revision does not read the snapshot
+
+- **WHEN** a spine change names a revision the client already holds
+- **THEN** the client does not start a snapshot read, and a spine change that names another revision does
+
+#### Scenario: A content change reads the snapshot
+
+- **WHEN** a content change names a revision the client already holds
+- **THEN** the client starts a snapshot read
+
+#### Scenario: A snapshot read carries the held revision
+
+- **WHEN** the client holds a revision
+- **THEN** the snapshot path names that revision

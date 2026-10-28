@@ -396,7 +396,15 @@ function openCycle(
   };
 }
 
-/** Header, rows, and the open spine. No HTML. */
+/** Drop the spine when the caller already holds this revision. JSON omits the undefined spine. */
+export function omitHeldSpine(body: WindowSnapshot, have: string | null): WindowSnapshot {
+  const opened = body.opened;
+  if (!have || opened?.revision !== have) {
+    return body;
+  }
+  return {...body, opened: {...opened, spine: undefined as unknown as Spine}};
+}
+
 export function snapshot(surface: SnapshotSurface, view: SnapshotView): WindowSnapshot {
   const board = surface.board();
   const drawn = facts(board);

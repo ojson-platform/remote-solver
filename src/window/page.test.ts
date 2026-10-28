@@ -5485,6 +5485,39 @@ function failGitShow(): () => void {
   };
 }
 
+async function firstChange(url: string): Promise<{
+  generation: number;
+  kind: string;
+  changed: {key: string; revision: string}[];
+}> {
+  const controller = new AbortController();
+  const response = await fetch(new URL('/events', url), {signal: controller.signal});
+  assert.equal(response.status, 200);
+  const reader = response.body?.getReader();
+  assert.ok(reader);
+  const decoder = new TextDecoder();
+  let text = '';
+  try {
+    while (!text.includes('\n\n')) {
+      const chunk = await reader.read();
+      if (chunk.done) {
+        break;
+      }
+      text += decoder.decode(chunk.value, {stream: true});
+    }
+  } finally {
+    controller.abort();
+    await reader?.cancel().catch(() => undefined);
+  }
+  const line = text.split('\n').find(item => item.startsWith('data: '));
+  assert.ok(line);
+  return JSON.parse(line.slice('data: '.length)) as {
+    generation: number;
+    kind: string;
+    changed: {key: string; revision: string}[];
+  };
+}
+
 async function snapshotOnce(url: string): Promise<WindowSnapshot> {
   const response = await fetch(new URL('/snapshot', url));
   assert.equal(response.status, 200);
@@ -5754,6 +5787,73 @@ spec('live-frame', () => {
           const stayed = await snapshotOnce(page.url);
           assert.equal(stayed.generation, shot.generation);
           assert.equal(stayed.opened?.spineReady, true);
+        },
+      );
+    });
+  });
+
+  requirement('A matching revision omits the spine', () => {
+    scenario('A matching revision omits the spine', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          plantCaseRead(paths.arcadia);
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          await flushSpine();
+          const ready = await snapshotOnce(page.url);
+          const revision = ready.opened?.revision;
+          assert.equal(typeof revision, 'string');
+          assert.ok(ready.opened?.spine);
+          const heldShot = await fetch(new URL(`/snapshot?have=${revision}`, page.url));
+          const thin = (await heldShot.json()) as WindowSnapshot;
+          assert.equal(thin.opened?.revision, revision);
+          assert.equal(thin.opened !== undefined && 'spine' in thin.opened, false);
+          const full = await snapshotOnce(page.url);
+          assert.ok(full.opened?.spine.capabilities.length !== undefined);
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'close-card'}).toString()))
+              .status,
+            200,
+          );
+          const again = await post(
+            page.url,
+            'act',
+            new URLSearchParams({act: 'open', key: '1', have: revision ?? ''}).toString(),
+          );
+          assert.equal(again.status, 200);
+          const shot = JSON.parse(again.body) as WindowSnapshot;
+          assert.equal(shot.opened?.revision, revision);
+          assert.equal(shot.opened?.spineReady, true);
+          assert.equal(shot.opened !== undefined && 'spine' in shot.opened, false);
+          assert.ok(Array.isArray(shot.opened?.blocks));
+        },
+      );
+    });
+
+    scenario('A change event names the open spine revision', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          plantCaseRead(paths.arcadia);
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          await flushSpine();
+          const ready = await snapshotOnce(page.url);
+          const revision = ready.opened?.revision;
+          assert.equal(typeof revision, 'string');
+          const note = await firstChange(page.url);
+          assert.equal(note.kind, 'frame');
+          assert.equal(typeof note.generation, 'number');
+          assert.deepEqual(note.changed, [{key: '1', revision}]);
         },
       );
     });

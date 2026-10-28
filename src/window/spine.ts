@@ -1,3 +1,4 @@
+import type {FileSource} from '../machine/port.ts';
 import type {SpecBadge, SpecEntry} from './spec-diff.ts';
 import type {GateStation} from './types.ts';
 
@@ -360,7 +361,9 @@ export function buildSpine(input: {
   pull?: boolean;
   reviewGate?: Spine['reviewGate'];
   gateOff?: Partial<Record<GateStation, true>>;
+  /** A tree the store already holds for this checkout and ref. */
+  files?: FileSource;
 }): Spine {
-  const text = readBranch(input.key, strictChangeFiles(input.checkout, input.key)).text;
+  const text = readBranch(input.key, input.files ?? strictChangeFiles(input.checkout, input.key)).text;
   return projectSpine(text, input);
 }

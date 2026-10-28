@@ -185,11 +185,6 @@ export function Ticket({row, open}: {row: SnapshotRow; open: boolean}): ReactNod
                 </button>
               </ActForm>
             </div>
-            {row.project ? (
-              <a className="project" href={row.project.href}>
-                {row.project.name}
-              </a>
-            ) : null}
           </div>
           {row.pool ? <Corner row={row} /> : null}
         </div>

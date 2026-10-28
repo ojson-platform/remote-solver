@@ -1,6 +1,8 @@
 import type {ReactNode} from 'react';
 import type {DoorKind} from '../types.ts';
 
+import {FACTORY_PATH} from '../mark.ts';
+
 export function Cross(): ReactNode {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -112,6 +114,27 @@ export function Glyph({name}: {name: 'play' | 'bang' | DoorKind}): ReactNode {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true">
       {body}
+    </svg>
+  );
+}
+
+/** Eight teeth, square hole. Straight cuts and 45° only. */
+const GEAR_PATH =
+  'M13 2 H19 V7 H21 L21.8 7.8 L25 4.6 L27.4 7 L24.2 10.2 L25 11 V13 H30 V19 H25 V21 L24.2 21.8 L27.4 25 L25 27.4 L21.8 24.2 L21 25 H19 V30 H13 V25 H11 L10.2 24.2 L7 27.4 L4.6 25 L7.8 21.8 L7 21 V19 H2 V13 H7 V11 L7.8 10.2 L4.6 7 L7 4.6 L10.2 7.8 L11 7 H13 Z' +
+  'M11 11 V21 H21 V11 Z';
+
+export function Gear(): ReactNode {
+  return (
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <path fill="currentColor" fillRule="evenodd" d={GEAR_PATH} />
+    </svg>
+  );
+}
+
+export function Factory(): ReactNode {
+  return (
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <path fill="currentColor" fillRule="evenodd" d={FACTORY_PATH} />
     </svg>
   );
 }

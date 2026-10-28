@@ -1,5 +1,5 @@
 import type {SpecEntry} from '../spec-diff.ts';
-import type {SpineLayer} from '../spine.ts';
+import type {ReviewGate, Spine, SpineLayer, SpineSection, SpineSourceLine} from '../spine.ts';
 
 export type LineDraft = {line: string; text: string; question: string};
 
@@ -167,6 +167,84 @@ export function headClickToggles(target: {closest: (selector: string) => unknown
     return false;
   }
   return !target.closest('.acts') && !target.closest('label');
+}
+
+/** An empty spine row does not open. Any other row head does. */
+export function rowHeadOpens(
+  section: {getAttribute: (name: string) => string | null} | null,
+): boolean {
+  if (!section) {
+    return false;
+  }
+  const className = section.getAttribute('class') ?? '';
+  return !className.split(/\s+/).includes('is-quiet');
+}
+
+function lineHasBody(line: SpineSourceLine): boolean {
+  const text = line.text.trim();
+  return text !== '' && !/^###\s+\S/.test(text);
+}
+
+/** A document section the drawer can show. A heading with no body does not count. */
+export function documentHasText(sections: readonly SpineSection[]): boolean {
+  return sections.some(section => {
+    if (section.heading === 'Open questions') {
+      return section.lines.some(line => line.text.trim() !== '');
+    }
+    return section.lines.some(lineHasBody);
+  });
+}
+
+function remarkShown(model: Spine, gate: ReviewGate, present: boolean): boolean {
+  return model.pull && (present || model.reviewGate === gate);
+}
+
+/** The row has something to reveal. An empty row stays closed. */
+export function layerHasFold(
+  layer: SpineLayer,
+  model: Spine,
+  code: {unanswered: boolean; hook: boolean},
+): boolean {
+  switch (layer) {
+    case 'Change':
+      return false;
+    case 'Plan':
+      return (
+        documentHasText(model.proposal.sections) ||
+        remarkShown(model, 'proposed', model.proposal.present)
+      );
+    case 'Specify':
+      return (
+        model.capabilities.length > 0 ||
+        remarkShown(model, 'specified', model.capabilities.length > 0)
+      );
+    case 'Design':
+      return (
+        documentHasText(model.design.sections) ||
+        remarkShown(model, 'designed', model.design.present)
+      );
+    case 'Tasks':
+      return model.tasks.length > 0;
+    case 'Code':
+      return (
+        model.checks !== undefined ||
+        model.diff ||
+        model.rest.length > 0 ||
+        model.pull ||
+        code.unanswered ||
+        code.hook
+      );
+    case 'Accept':
+      return true;
+  }
+}
+
+/** Empty plaque space opens the drawer. The issue link, Take, and the title button already do. */
+export function plaqueClickOpens(target: {closest: (selector: string) => unknown} | null): boolean {
+  if (!target?.closest || !target.closest('.gutter')) {
+    return false;
+  }
+  return !target.closest('a') && !target.closest('.corner') && !target.closest('button');
 }
 
 /** Keys the settings sheet uses to put the caret back after a redraw. */

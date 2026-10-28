@@ -1,3 +1,5 @@
+import type {BranchFacts} from '../machine/change.ts';
+
 export type Doc = Record<string, unknown>;
 
 export type SkillMode = 'mechanical' | 'judgment';
@@ -122,6 +124,13 @@ export type WindowOutside = {
   speakPull?: (key: string, body: string) => Promise<void>;
   /** Threads and the conversation for this key. The window does not call a review host. */
   review?: (key: string) => WindowReview | undefined;
+  /** Branch summary already stored for this key. Absent until a poll or a refresh has read it. */
+  branchFacts?: (key: string) => BranchFacts | undefined;
+  /**
+   * Mark of one cycle's files and the ticket fields the spine draws.
+   * When this is present, the spine is read again only when the mark changes.
+   */
+  spineToken?: (key: string) => string | undefined;
   /**
    * URL for a file and line on the pull request.
    * Arcanum on Tracker, the pull request page on GitHub. The window does not build it.

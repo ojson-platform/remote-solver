@@ -1,5 +1,6 @@
 import type {FileSource} from './port.ts';
 
+import {createHash} from 'node:crypto';
 import path from 'node:path';
 
 import {archiveDir, changeDir} from './naming.ts';
@@ -126,5 +127,110 @@ export function readChange(key: string, files: FileSource): ChangeView {
       .filter(line => line.trimStart().startsWith('- [ ]')).length,
     capabilities: namedCapabilities(proposal),
     missingBaseline: missing,
+  };
+}
+
+/** What a plaque and an open spine need from one branch, plus a mark of its text. */
+export type BranchFacts = {
+  fingerprint: string;
+  questions: number;
+  decisions: number;
+  tasks?: {done: number; open: number};
+  proposal?: string;
+  design?: string;
+  tasksFile?: string;
+  specs: {id: string; file: string}[];
+};
+
+function slash(rel: string): string {
+  return rel.split(path.sep).join('/');
+}
+
+function taskCounts(text: string, present: boolean): {done: number; open: number} | undefined {
+  if (!present) {
+    return undefined;
+  }
+  let done = 0;
+  let open = 0;
+  for (const line of text.split('\n')) {
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith('- [x]')) {
+      done += 1;
+    } else if (trimmed.startsWith('- [ ]')) {
+      open += 1;
+    }
+  }
+  return {done, open};
+}
+
+function specEntries(files: FileSource, key: string): {id: string; file: string}[] {
+  const dir = slash(path.join(changeDir(key), 'specs'));
+  const prefix = `${dir}/`;
+  const found: {id: string; file: string}[] = [];
+  for (const raw of files.list(dir)) {
+    const rel = slash(raw);
+    if (!rel.startsWith(prefix) || !rel.endsWith('/spec.md')) {
+      continue;
+    }
+    const id = rel.slice(prefix.length, -'/spec.md'.length);
+    if (id === '' || id === '.') {
+      continue;
+    }
+    found.push({id, file: rel});
+  }
+  found.sort((left, right) => left.id.localeCompare(right.id));
+  return found;
+}
+
+function markOf(pairs: readonly [string, string][]): string {
+  const hash = createHash('sha256');
+  for (const [rel, text] of [...pairs].sort((left, right) => left[0].localeCompare(right[0]))) {
+    hash.update(rel);
+    hash.update('\0');
+    hash.update(text);
+    hash.update('\0');
+  }
+  return hash.digest('hex');
+}
+
+/** The change view and the plaque summary from one file source. */
+export function readBranch(key: string, files: FileSource): {change: ChangeView; facts: BranchFacts} {
+  const change = readChange(key, files);
+  const proposalPath = path.join(changeDir(key), 'proposal.md');
+  const designPath = path.join(changeDir(key), 'design.md');
+  const tasksPath = path.join(changeDir(key), 'tasks.md');
+  const proposal = files.exists(proposalPath) ? slash(proposalPath) : undefined;
+  const design = files.exists(designPath) ? slash(designPath) : undefined;
+  const tasksFile = files.exists(tasksPath) ? slash(tasksPath) : undefined;
+  const specs = specEntries(files, key);
+  const pairs: [string, string][] = [];
+  const take = (rel: string | undefined) => {
+    if (!rel) {
+      return;
+    }
+    pairs.push([rel, files.read(rel)]);
+  };
+  take(proposal);
+  take(design);
+  take(tasksFile);
+  for (const spec of specs) {
+    take(spec.file);
+    const baseline = `openspec/specs/${spec.id}/spec.md`;
+    if (files.exists(baseline)) {
+      take(baseline);
+    }
+  }
+  return {
+    change,
+    facts: {
+      fingerprint: markOf(pairs),
+      questions: change.openQuestions,
+      decisions: change.openDecisions,
+      ...(tasksFile ? {tasks: taskCounts(files.read(tasksFile), true)} : {}),
+      ...(proposal ? {proposal} : {}),
+      ...(design ? {design} : {}),
+      ...(tasksFile ? {tasksFile} : {}),
+      specs,
+    },
   };
 }

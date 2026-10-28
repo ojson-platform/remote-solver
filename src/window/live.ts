@@ -9,11 +9,13 @@ import path from 'node:path';
 import {parse} from 'yaml';
 
 import {githubPauseRemaining} from '../adapters/github.ts';
+import {readBranch, type BranchFacts} from '../machine/change.ts';
 import {markerName, parseMarker} from '../machine/marker.ts';
 import {phaseOf} from '../machine/phase.ts';
 import {modelFor, type SkillMode} from '../machine/skill.ts';
 import {runSpy, type RunningTurn} from '../main.ts';
 
+import {changeFiles} from './change-files.ts';
 import {FACTORY_AGENTS, mergeFactory, readOverlayDoc} from './factory.ts';
 import {serveBoard} from './page.ts';
 import {isDoc, type WindowReview, type WindowTicket} from './types.ts';
@@ -144,6 +146,8 @@ export type LiveReview = {
 
 export type LiveVcs = {
   compare(base: string, head: string): Promise<{commits: string; diff: string} | null>;
+  /** Whether the range differs. When present, a refresh does not read the diff text. */
+  changed?(base: string, head: string): Promise<boolean>;
 };
 
 export type LiveBoardOptions = {
@@ -187,6 +191,39 @@ function ticketFrom(issue: IssueRecord, repo: string, service: string | undefine
   };
 }
 
+function ticketSign(ticket: WindowTicket): string {
+  return JSON.stringify({
+    key: ticket.key,
+    title: ticket.title,
+    body: ticket.body ?? '',
+    labels: ticket.labels,
+    assignee: ticket.assignee ?? '',
+    repo: ticket.repo ?? '',
+    sddService: ticket.sddService ?? '',
+    open: ticket.open !== false,
+    parent: ticket.parent ?? '',
+    dependsOn: ticket.dependsOn ?? [],
+    sddHooks: ticket.sddHooks ?? null,
+    comments: ticket.comments ?? [],
+    openPullRequests: ticket.openPullRequests ?? null,
+    checks: ticket.checks ?? null,
+    diff: ticket.diff === true,
+    pull: ticket.pull ?? '',
+    mergeAhead: ticket.mergeAhead === true,
+  });
+}
+
+function signTickets(tickets: readonly WindowTicket[]): string {
+  return tickets.map(ticketSign).sort().join('\n');
+}
+
+function signMap<T>(map: ReadonlyMap<string, T>, value: (item: T) => string): string {
+  return [...map.keys()]
+    .sort()
+    .map(key => `${key}=${value(map.get(key) as T)}`)
+    .join('\n');
+}
+
 function reviewOf(threads: readonly ThreadRecord[], notes: readonly Conversation[]): WindowReview {
   const last = [...notes].reverse().find(note => !note.robot);
   return {
@@ -213,8 +250,11 @@ export function openLiveBoard(options: LiveBoardOptions) {
   let cache: WindowTicket[] = [];
   let pullByKey = new Map<string, string>();
   let reviews = new Map<string, WindowReview>();
-  const spyThreadPull = new Map<string, string>();
+  let spyThreadPull = new Map<string, string>();
   const services = new Map<string, string>();
+  let facts = new Map<string, BranchFacts>();
+  let spyKeys = new Set<string>();
+  let gatheredOf: (ticket: WindowTicket) => string | undefined = () => undefined;
 
   function bump(): void {
     generation += 1;
@@ -265,8 +305,12 @@ export function openLiveBoard(options: LiveBoardOptions) {
             try {
               const range = await review.range(pull.id);
               if (range.base) {
-                const compared = await vcs.compare(range.base, range.head);
-                diff = Boolean(compared && compared.diff !== '');
+                if (vcs.changed) {
+                  diff = await vcs.changed(range.base, range.head);
+                } else {
+                  const compared = await vcs.compare(range.base, range.head);
+                  diff = Boolean(compared && compared.diff !== '');
+                }
               }
             } catch (error) {
               console.error(error);
@@ -298,6 +342,65 @@ export function openLiveBoard(options: LiveBoardOptions) {
     };
   }
 
+  function sameCheckout(dir: string | undefined): boolean {
+    if (!options.checkout || !dir) {
+      return false;
+    }
+    return path.resolve(dir) === path.resolve(options.checkout);
+  }
+
+  function factsFor(
+    tickets: readonly WindowTicket[],
+    incoming?: Map<string, BranchFacts>,
+  ): Map<string, BranchFacts> {
+    const next = new Map<string, BranchFacts>();
+    for (const ticket of tickets) {
+      const fromSpy = incoming?.get(ticket.key);
+      if (fromSpy && sameCheckout(gatheredOf(ticket))) {
+        next.set(ticket.key, fromSpy);
+        continue;
+      }
+      if (spyKeys.has(ticket.key)) {
+        const held = facts.get(ticket.key);
+        if (held) {
+          next.set(ticket.key, held);
+          continue;
+        }
+      }
+      next.set(ticket.key, readBranch(ticket.key, changeFiles(gatheredOf(ticket), ticket.key)).facts);
+    }
+    return next;
+  }
+
+  function boardChanged(
+    tickets: readonly WindowTicket[],
+    nextReviews: ReadonlyMap<string, WindowReview>,
+    nextFacts: ReadonlyMap<string, BranchFacts>,
+    nextLogin: string | undefined,
+  ): boolean {
+    return (
+      signTickets(tickets) !== signTickets(cache) ||
+      signMap(nextReviews, item => JSON.stringify(item)) !== signMap(reviews, item => JSON.stringify(item)) ||
+      signMap(nextFacts, item => JSON.stringify(item)) !== signMap(facts, item => JSON.stringify(item)) ||
+      nextLogin !== loginName
+    );
+  }
+
+  function tokenOf(key: string): string {
+    const ticket = cache.find(item => item.key === key);
+    const mark = facts.get(key);
+    return JSON.stringify({
+      fingerprint: mark?.fingerprint ?? null,
+      body: ticket?.body ?? '',
+      comments: ticket?.comments ?? [],
+      labels: ticket?.labels ?? [],
+      checks: ticket?.checks ?? null,
+      diff: ticket?.diff === true,
+      pull: ticket?.pull ?? '',
+      openPullRequests: ticket?.openPullRequests ?? null,
+    });
+  }
+
   async function refresh(): Promise<boolean> {
     if (githubPauseRemaining() > 0) {
       return false;
@@ -320,17 +423,24 @@ export function openLiveBoard(options: LiveBoardOptions) {
     if (gen !== generation) {
       return false;
     }
+    const nextFacts = factsFor(tickets);
+    const nextLogin = login ?? loginName;
+    const changed = boardChanged(tickets, nextReviews, nextFacts, nextLogin);
     cache = tickets;
     pullByKey = nextPulls;
     reviews = nextReviews;
+    facts = nextFacts;
     if (login) {
       loginName = login;
     }
-    return true;
+    return changed;
   }
 
   function apply(snapshot: CycleSnapshot): boolean {
     const prior = new Map(cache.map(ticket => [ticket.key, ticket]));
+    const nextPulls = new Map(pullByKey);
+    const nextReviews = new Map(reviews);
+    const nextSpy = new Map(spyThreadPull);
     const tickets: WindowTicket[] = [];
     for (const issue of snapshot.issues) {
       if (!issue.labels.includes('sdd:cycle')) {
@@ -350,18 +460,18 @@ export function openLiveBoard(options: LiveBoardOptions) {
         if (only) {
           checks = only.checks;
           onlyId = only.id;
-          pullByKey.set(issue.key, only.id);
+          nextPulls.set(issue.key, only.id);
           if (only.reading) {
-            reviews.set(issue.key, reviewOf(only.reading.threads, only.reading.notes));
-            spyThreadPull.set(issue.key, only.id);
+            nextReviews.set(issue.key, reviewOf(only.reading.threads, only.reading.notes));
+            nextSpy.set(issue.key, only.id);
           } else {
-            reviews.delete(issue.key);
-            spyThreadPull.delete(issue.key);
+            nextReviews.delete(issue.key);
+            nextSpy.delete(issue.key);
           }
         } else {
-          pullByKey.delete(issue.key);
-          reviews.delete(issue.key);
-          spyThreadPull.delete(issue.key);
+          nextPulls.delete(issue.key);
+          nextReviews.delete(issue.key);
+          nextSpy.delete(issue.key);
         }
       }
       tickets.push({
@@ -374,8 +484,23 @@ export function openLiveBoard(options: LiveBoardOptions) {
         ...(phaseOf(issue.labels) === 'accepting' && openCount === 1 ? {mergeAhead: true} : {}),
       });
     }
+    if (snapshot.facts) {
+      const used = new Set<string>();
+      for (const ticket of tickets) {
+        if (sameCheckout(gatheredOf(ticket)) && snapshot.facts.has(ticket.key)) {
+          used.add(ticket.key);
+        }
+      }
+      spyKeys = used;
+    }
+    const nextFacts = factsFor(tickets, snapshot.facts);
+    const changed = boardChanged(tickets, nextReviews, nextFacts, loginName);
     cache = tickets;
-    return true;
+    pullByKey = nextPulls;
+    reviews = nextReviews;
+    spyThreadPull = nextSpy;
+    facts = nextFacts;
+    return changed;
   }
 
   function pullPage(file: string, line: number): string {
@@ -459,6 +584,8 @@ export function openLiveBoard(options: LiveBoardOptions) {
         await review.speak(pull, body);
       },
       review: key => reviews.get(key),
+      branchFacts: key => facts.get(key),
+      spineToken: key => tokenOf(key),
       reviewPlace: place => pullPage(place.file, place.line),
     },
   );
@@ -468,6 +595,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
   if (options.githubRoot) {
     view.leaveRoots({github: options.githubRoot});
   }
+  gatheredOf = ticket => view.gatheredOf(ticket);
   return {window: view, refresh, apply};
 }
 

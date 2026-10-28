@@ -10,7 +10,17 @@ import {createRoot} from 'react-dom/client';
 
 import {App} from './app.tsx';
 import {postForm} from './forms.tsx';
-import {busyEdges, emptyHold, holdGesture, paintFrame, releaseHold, settingsAct} from './frame.ts';
+import {
+  beginRead,
+  busyEdges,
+  emptyHold,
+  endRead,
+  holdGesture,
+  paintFrame,
+  releaseHold,
+  settingsAct,
+  type ReadSlot,
+} from './frame.ts';
 import {
   draftsAfterClick,
   foldsAfterSpec,
@@ -21,7 +31,9 @@ import {
   keptSpineLayer,
   lineFieldClosesOnEscape,
   payload,
+  plaqueClickOpens,
   rememberedSpec,
+  rowHeadOpens,
   revealFold,
   scenarioTarget,
   toggledSpineLayer,
@@ -295,6 +307,7 @@ function boot(): void {
   const view = createRoot(root);
   let shot: WindowSnapshot | undefined;
   let base: WindowSnapshot | undefined;
+  const keptDrawers = new Map<string, NonNullable<WindowSnapshot['opened']>>();
   let hold = emptyHold();
   let seq = 0;
   let gestures = 0;
@@ -311,7 +324,15 @@ function boot(): void {
     if (base === undefined) {
       return;
     }
-    const frame = paintFrame(base, hold);
+    const opening = hold.open?.key;
+    const frame = paintFrame(
+      base,
+      hold,
+      typeof opening === 'string' ? keptDrawers.get(opening) : undefined,
+    );
+    if (frame.opened && frame.opened.spineReady !== false) {
+      keptDrawers.set(frame.opened.key, frame.opened);
+    }
     shot = frame;
     const layer = keptLayer(memory, frame);
     memory.key = frame.opened?.key;
@@ -471,6 +492,16 @@ function boot(): void {
     event.dataTransfer.setData('application/x-ai-factory', raw);
     event.dataTransfer.setData('text/plain', raw);
   });
+  document.addEventListener('click', event => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!plaqueClickOpens(target)) {
+      return;
+    }
+    const face = target?.closest('.gutter')?.querySelector('button.face');
+    if (face instanceof HTMLButtonElement) {
+      face.click();
+    }
+  });
   document.addEventListener('dragover', event => {
     const station = event.target instanceof Element ? event.target.closest('.station') : null;
     if (!station) {
@@ -566,7 +597,13 @@ function boot(): void {
     const row = target?.closest('.spine .row');
     const toggles =
       target !== null && (headClickToggles(target) || target.closest('label') !== null);
-    if (row && toggles && target?.closest('.acts') === null && shot?.opened) {
+    if (
+      row &&
+      toggles &&
+      rowHeadOpens(row.parentElement) &&
+      target?.closest('.acts') === null &&
+      shot?.opened
+    ) {
       const pick = row.parentElement?.querySelector('.spine-pick');
       const next = toggledSpineLayer(memory.layer ?? '', pick?.getAttribute('value') ?? '');
       if (next !== undefined) {
@@ -626,7 +663,8 @@ function boot(): void {
   });
   const source = new EventSource('/events');
   let reads = 0;
-  source.addEventListener('change', () => {
+  let slot: ReadSlot = {flying: false, again: false};
+  const pull = () => {
     reads += 1;
     reading = true;
     draw();
@@ -637,9 +675,22 @@ function boot(): void {
       .catch(() => undefined)
       .finally(() => {
         reads -= 1;
+        const ended = endRead(slot);
+        slot = ended.slot;
+        if (ended.start) {
+          pull();
+          return;
+        }
         reading = reads > 0;
         draw();
       });
+  };
+  source.addEventListener('change', () => {
+    const begun = beginRead(slot);
+    slot = begun.slot;
+    if (begun.start) {
+      pull();
+    }
   });
   void readSnapshot().then(take);
 }

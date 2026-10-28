@@ -104,8 +104,8 @@ spec('spec-diff', () => {
   });
 });
 
-spec('sidebar', () => {
-  requirement('The open row shows only the blocks the cycle has', () => {
+spec('spine', () => {
+  requirement('A row opens only when it has a fold', () => {
     scenario('A second click closes the open row', () => {
       const opened = {key: '1', station: 'proposing', open: 'Plan' as const};
       assert.equal(keptSpineLayer({key: '1', station: 'proposing', layer: 'Plan'}, opened), 'Plan');

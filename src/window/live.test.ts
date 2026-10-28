@@ -257,7 +257,7 @@ function yard(): {
   return {dir, github, homePath: path.join(dir, 'home.yaml'), cycle, tracker, review};
 }
 
-spec('board', () => {
+spec('board-command', () => {
   requirement('The board command serves this repository', () => {
     scenario('The home file is the factory file when the command names none', () => {
       assert.equal(defaultHomePath(), path.join(homedir(), '.aifactory', 'config.yaml'));
@@ -358,28 +358,10 @@ spec('board', () => {
       });
       try {
         const afterOpen = reads;
-        const before = await (await fetch(new URL('/snapshot', page.url))).json() as {generation: number};
-        const events = await fetch(new URL('/events', page.url));
-        const reader = events.body?.getReader();
-        assert.ok(reader);
-        const decoder = new TextDecoder();
-        let opened = '';
-        while (!opened.includes('\n\n')) {
-          const chunk = await reader.read();
-          opened += decoder.decode(chunk.value, {stream: true});
-        }
+        const before = (await readSnapshot(page.url)).generation;
         await vi.advanceTimersByTimeAsync(REFRESH_MS);
-        let changed = '';
-        while (!changed.includes('\n\n')) {
-          const chunk = await reader.read();
-          if (chunk.done) {
-            break;
-          }
-          changed += decoder.decode(chunk.value, {stream: true});
-        }
-        await reader.cancel();
         assert.ok(reads > afterOpen);
-        assert.match(changed, new RegExp(`"generation":${before.generation + 1}`));
+        assert.equal((await readSnapshot(page.url)).generation, before);
       } finally {
         await page.close();
         vi.useRealTimers();
@@ -984,15 +966,121 @@ spec('board', () => {
         await new Promise(resolve => setImmediate(resolve));
         assert.equal((await read()).generation, 3);
         await page.refresh();
+        assert.equal((await read()).generation, 3);
+        staged.cycle.title = 'Renamed plan';
+        await page.refresh();
         assert.equal((await read()).generation, 4);
         await new Promise(resolve => setImmediate(resolve));
         await new Promise(resolve => setImmediate(resolve));
+        assert.equal((await read()).generation, 4);
         noteTurn(turns, '6', undefined, () => {
           page.note();
         });
         const gone = await read();
-        assert.equal(gone.generation, 6);
+        assert.equal(gone.generation, 5);
         assert.equal(gone.spy, '');
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('An unchanged spy poll leaves the generation', async () => {
+      const staged = yard();
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+        checkout: path.join(staged.github, 'acme', 'billing'),
+      });
+      try {
+        const snapshot = {
+          issues: [{...staged.cycle, title: 'From the spy'}],
+          cycles: [staged.cycle],
+          pulls: new Map(),
+          changes: new Map(),
+          facts: new Map([
+            ['6', {fingerprint: 'same', questions: 0, decisions: 0, specs: []}],
+          ]),
+        };
+        page.apply(snapshot);
+        const once = (await readSnapshot(page.url)).generation;
+        assert.ok(once > 0);
+        page.apply(snapshot);
+        assert.equal((await readSnapshot(page.url)).generation, once);
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('A stored branch summary fills the plaque', async () => {
+      const staged = yard();
+      staged.cycle.labels = ['sdd:cycle', 'remote-solver', 'sdd:proposing'];
+      staged.cycle.assignee = MANAGER;
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+        checkout: path.join(staged.github, 'acme', 'billing'),
+      });
+      try {
+        page.apply({
+          issues: [staged.cycle],
+          cycles: [staged.cycle],
+          pulls: new Map(),
+          changes: new Map(),
+          facts: new Map([
+            ['6', {fingerprint: 'stored', questions: 4, decisions: 1, specs: []}],
+          ]),
+        });
+        const shot = await readSnapshot(page.url);
+        const row = shot.rows.find(item => item.key === '6');
+        assert.ok(row);
+        assert.equal(row.phaseRow, 4);
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('The minute read asks only whether the diff is empty', async () => {
+      const staged = yard();
+      staged.cycle.labels = ['sdd:cycle', 'remote-solver', 'sdd:proposing'];
+      staged.cycle.assignee = MANAGER;
+      let compared = 0;
+      let asked = 0;
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: {
+          ...staged.review,
+          pulls: async () => [{id: '11', title: 'pull', state: 'OPEN', checks: 'green'}],
+          range: async () => ({head: 'bbb', base: 'aaa'}),
+        },
+        vcs: {
+          async compare() {
+            compared += 1;
+            return {commits: '', diff: 'diff --git a/a b/a\n'};
+          },
+          async changed() {
+            asked += 1;
+            return true;
+          },
+        },
+        githubRoot: staged.github,
+      });
+      try {
+        assert.equal(compared, 0);
+        assert.equal(asked, 1);
+        const shot = await readSnapshot(page.url);
+        const row = shot.rows.find(item => item.key === '6');
+        assert.equal(row?.doors?.implementing?.kind, 'code');
       } finally {
         await page.close();
         rmSync(staged.dir, {recursive: true, force: true});
@@ -1000,6 +1088,66 @@ spec('board', () => {
     });
   });
 
+  requirement('The header shows the factory mark', () => {
+    scenario('The factory mark leads the name', async () => {
+      const staged = yard();
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        const html = await (await fetch(page.url)).text();
+        assert.match(html, /<link rel="icon" href="\/favicon\.svg"/);
+        const icon = await (await fetch(new URL('/favicon.svg', page.url))).text();
+        const drawn = icon.match(/d="([^"]+)"/)?.[1];
+        assert.ok(drawn);
+        assert.match(icon, /#f4f0e6/);
+        const shot = (await (await fetch(new URL('/snapshot', page.url))).json()) as WindowSnapshot;
+        const view = renderWindow(shot);
+        const wordAt = view.indexOf('class="word"');
+        const word = view.slice(wordAt, view.indexOf('</p>', wordAt));
+        assert.ok(word.includes(drawn));
+        assert.ok(word.indexOf('<svg') < word.indexOf('AI FACTORY'));
+        const client = await (await fetch(new URL('/client.js', page.url))).text();
+        assert.ok(client.includes(drawn));
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+  });
+
+  requirement('The header opens settings with a gear', () => {
+    scenario('The header control is a gear', async () => {
+      const staged = yard();
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        const shot = (await (await fetch(new URL('/snapshot', page.url))).json()) as WindowSnapshot;
+        const view = renderWindow(shot);
+        const header = view.slice(view.indexOf('<header class="top"'), view.indexOf('</header>'));
+        assert.match(header, /name="act" value="open-settings"/);
+        assert.match(header, /<button class="gear"[^>]*aria-label="Настройки"/);
+        assert.equal(header.includes('>Настройки<'), false);
+        const client = await (await fetch(new URL('/client.js', page.url))).text();
+        assert.ok(client.includes('M13 2 H19 V7'));
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+  });
+});
+
+spec('board', () => {
   requirement("A column shows this manager's cycles", () => {
     scenario('One open pull request leaves proposing in place', async () => {
       const staged = yard();
@@ -1276,6 +1424,96 @@ spec('github-read', () => {
         clearGithubPause();
         await page.close();
         vi.useRealTimers();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+  });
+});
+
+async function settle(): Promise<void> {
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+}
+
+spec('live-frame', () => {
+  requirement('The snapshot does not wait to read the spine', () => {
+    scenario('An unchanged fingerprint leaves the open spine ready', async () => {
+      const staged = yard();
+      const second: IssueRecord = {
+        key: '7',
+        title: 'Other cycle',
+        body: '',
+        state: 'OPEN',
+        labels: ['sdd:cycle', 'remote-solver'],
+        assignee: '',
+        dependsOn: [],
+      };
+      staged.tracker.listOpen = async () => [staged.cycle, second];
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        assert.equal(await post(page.url, '/act', 'act=open&key=6'), 200);
+        await settle();
+        const ready = await readSnapshot(page.url);
+        assert.equal(ready.opened?.key, '6');
+        assert.equal(ready.opened?.spineReady, true);
+        second.title = 'Renamed other';
+        await page.refresh();
+        const next = await readSnapshot(page.url);
+        assert.equal(next.generation, ready.generation + 1);
+        assert.equal(next.opened?.key, '6');
+        assert.equal(next.opened?.spineReady, true);
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('A changed fingerprint reads the spine again', async () => {
+      const staged = yard();
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        assert.equal(await post(page.url, '/act', 'act=open&key=6'), 200);
+        await settle();
+        const ready = await readSnapshot(page.url);
+        assert.equal(ready.opened?.spineReady, true);
+        assert.equal(ready.opened?.spine.proposal.present, false);
+        const file = path.join(
+          staged.github,
+          'acme',
+          'billing',
+          'openspec',
+          'changes',
+          'issue-6',
+          'proposal.md',
+        );
+        mkdirSync(path.dirname(file), {recursive: true});
+        writeFileSync(file, '## Open questions\n\n- [ ] later question\n');
+        await page.refresh();
+        const due = await readSnapshot(page.url);
+        assert.equal(due.opened?.spineReady, false);
+        assert.equal(due.opened?.spine.proposal.present, false);
+        await settle();
+        const filled = await readSnapshot(page.url);
+        assert.equal(filled.opened?.spineReady, true);
+        assert.equal(filled.opened?.spine.proposal.present, true);
+        assert.equal(
+          filled.opened?.spine.proposal.questions.some(question => question.text === 'later question'),
+          true,
+        );
+      } finally {
+        await page.close();
         rmSync(staged.dir, {recursive: true, force: true});
       }
     });

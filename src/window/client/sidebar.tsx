@@ -13,7 +13,7 @@ import {unchangedLabel} from '../spec-diff.ts';
 import {Gate} from './board.tsx';
 import {BusyEdge} from './busy.tsx';
 import {ActForm, Hidden} from './forms.tsx';
-import {capIsOpen} from './gesture.ts';
+import {capIsOpen, layerHasFold} from './gesture.ts';
 import {Cross, SendMark} from './marks.tsx';
 
 function codeLine(line: string, places: Record<string, string>): ReactNode {
@@ -62,7 +62,7 @@ function sentence(
   layer: Exclude<SpineLayer, 'Accept'>,
   places: Record<string, string>,
 ): ReactNode {
-  const own = model.lines.filter(line => line.layer === layer);
+  const own = model.lines.filter(line => line.layer === layer && line.text.trim() !== 'solid');
   if (own.length === 0) {
     return null;
   }
@@ -106,6 +106,7 @@ function SpineRow({
   layer,
   model,
   open,
+  quiet,
   sentenceNode,
   excerpt,
   control,
@@ -114,6 +115,7 @@ function SpineRow({
   layer: SpineLayer;
   model: Spine;
   open: boolean;
+  quiet: boolean;
   sentenceNode?: ReactNode;
   excerpt?: string;
   control?: ReactNode;
@@ -128,26 +130,27 @@ function SpineRow({
     ) : null;
   const preview =
     excerpt === undefined || excerpt === '' ? null : <span className="excerpt">{excerpt}</span>;
+  const headFor = quiet ? undefined : `spine-${layer}`;
   const rest =
     sentenceNode == null && preview == null ? null : (
-      <label className="rest" htmlFor={`spine-${layer}`}>
+      <label className="rest" htmlFor={headFor}>
         {sentenceNode}
         {preview}
       </label>
     );
   return (
-    <section>
+    <section className={quiet ? 'is-quiet' : undefined}>
       <input
         className="spine-pick"
         type="checkbox"
         id={`spine-${layer}`}
         value={layer}
-        checked={open}
+        checked={open && !quiet}
         readOnly
       />
       <div className="row">
         <div className="lead">
-          <label className="layer" htmlFor={`spine-${layer}`}>
+          <label className="layer" htmlFor={headFor}>
             <span className="name">
               {layer}
               {here}
@@ -749,6 +752,8 @@ export function Sidebar({
   const designAct = opened.layers.find(item => item.layer === 'Design')?.act ?? 'none';
   const acceptAct = opened.layers.find(item => item.layer === 'Accept')?.act ?? 'gate';
   const unanswered = opened.blocks.some(block => block.kind === 'unanswered');
+  const hook = opened.blocks.some(block => block.kind === 'hook');
+  const quiet = (name: SpineLayer): boolean => !layerHasFold(name, model, {unanswered, hook});
   const acceptNote = model.accept.startsWith('На приёмке машина')
     ? 'Метка sdd:auto-merge стоит. Машина мержит сама, когда проверки зелёные.'
     : 'Метки sdd:auto-merge нет. Машина мержит только с этой меткой.';
@@ -806,6 +811,7 @@ export function Sidebar({
             layer="Plan"
             model={model}
             open={open === 'Plan'}
+            quiet={quiet('Plan')}
             sentenceNode={
               model.proposal.excerpt === '' ? sentence(model, 'Plan', places) : undefined
             }
@@ -821,6 +827,7 @@ export function Sidebar({
             layer="Specify"
             model={model}
             open={open === 'Specify'}
+            quiet={quiet('Specify')}
             sentenceNode={sentence(model, 'Specify', places)}
             control={hereControl('Specify', 'specifying', specifyAct)}
           >
@@ -851,6 +858,7 @@ export function Sidebar({
             layer="Design"
             model={model}
             open={open === 'Design'}
+            quiet={quiet('Design')}
             sentenceNode={sentence(model, 'Design', places)}
             control={hereControl('Design', 'designing', designAct)}
           >
@@ -863,6 +871,7 @@ export function Sidebar({
             layer="Tasks"
             model={model}
             open={open === 'Tasks'}
+            quiet={quiet('Tasks')}
             sentenceNode={sentence(model, 'Tasks', places)}
           >
             {model.tasks.map(task => (
@@ -887,6 +896,7 @@ export function Sidebar({
             layer="Code"
             model={model}
             open={open === 'Code'}
+            quiet={quiet('Code')}
             sentenceNode={sentence(model, 'Code', places)}
           >
             {model.checks === undefined ? null : (
@@ -913,6 +923,7 @@ export function Sidebar({
             layer="Accept"
             model={model}
             open={open === 'Accept'}
+            quiet={quiet('Accept')}
             sentenceNode={<span className="sentence">{model.accept}</span>}
             control={hereControl('Accept', 'accepting', acceptAct)}
           >

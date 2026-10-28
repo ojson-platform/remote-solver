@@ -8,7 +8,7 @@ import type {LineDraft, OpenFold, SpecOpen} from './gesture.ts';
 import {Board} from './board.tsx';
 import {BusyEdge} from './busy.tsx';
 import {ActForm, Hidden} from './forms.tsx';
-import {Cross, Pill} from './marks.tsx';
+import {Cross, Factory, Gear, Pill} from './marks.tsx';
 import {Settings} from './settings.tsx';
 import {Sidebar, type DocumentRemark} from './sidebar.tsx';
 
@@ -144,11 +144,16 @@ export function App({
       <div className="app">
         <BusyEdge on={busy?.window ?? false} />
         <header className="top">
-          <p className="word">ai-factory</p>
+          <p className="word">
+            <Factory />
+            <span className="brand">AI FACTORY</span>
+          </p>
           {lamp}
           {snapshot.spy === '' ? null : <p className="spy">{snapshot.spy}</p>}
           <ActForm act="open-settings">
-            <Pill label="Настройки" />
+            <button className="gear" type="submit" aria-label="Настройки">
+              <Gear />
+            </button>
           </ActForm>
         </header>
         {snapshot.banners.length === 0 ? null : (
@@ -199,7 +204,8 @@ export function WindowView({
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>ai-factory</title>
+        <title>AI FACTORY</title>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <style>{css}</style>
       </head>
       <body data-show={snapshot.show}>

@@ -2,7 +2,7 @@ import type {FileSource} from '../machine/port.ts';
 
 import path from 'node:path';
 
-import {HEADINGS} from '../machine/change.ts';
+import {HEADINGS, type BranchFacts} from '../machine/change.ts';
 import {isFocusRecord} from '../machine/marker.ts';
 import {GATE_CLOSES, GATE_PHASES, phaseOf, type Phase} from '../machine/phase.ts';
 
@@ -149,9 +149,9 @@ function taskRow(files: FileSource, key: string): {done: number; open: number} |
 function phaseRowOf(
   column: ColumnName,
   item: WindowTicket,
-  files: FileSource,
   questions: number,
   decisions: number,
+  tasks: {done: number; open: number} | undefined,
 ): PhaseRow | undefined {
   if (column === 'proposing') {
     return questions;
@@ -160,7 +160,7 @@ function phaseRowOf(
     return decisions;
   }
   if (column === 'implementing') {
-    return taskRow(files, item.key);
+    return tasks;
   }
   if (
     (column === 'verifying' || column === 'accepting') &&
@@ -294,6 +294,50 @@ function markedStations(
 function presentFile(files: FileSource, key: string, name: string): string | undefined {
   const rel = changeRel(key, name);
   return files.exists(rel) ? rel : undefined;
+}
+
+function doorsFromFacts(
+  item: WindowTicket,
+  column: ColumnName,
+  facts: BranchFacts,
+  parts: readonly string[],
+  marked: ReadonlySet<ColumnName>,
+): Partial<Record<ColumnName, StationDoor>> | undefined {
+  const doors: Partial<Record<ColumnName, StationDoor>> = {};
+  const put = (name: ColumnName, door: StationDoor) => {
+    if (name === column) {
+      return;
+    }
+    if (marked.has(name)) {
+      door.dot = true;
+    }
+    doors[name] = door;
+  };
+  if (facts.proposal) {
+    put('proposing', {kind: 'plan', file: facts.proposal});
+  }
+  const specs = facts.specs;
+  if (specs.length === 1) {
+    put('specifying', {kind: 'spec', file: specs[0]?.file});
+  } else if (specs.length > 1) {
+    put('specifying', {kind: 'spec', specs});
+  }
+  if (facts.design) {
+    put('designing', {kind: 'design', file: facts.design});
+  }
+  if (facts.tasksFile) {
+    put('tasking', {kind: 'tasks', file: facts.tasksFile});
+  }
+  if (item.openPullRequests === 1 && item.diff === true) {
+    put('implementing', {kind: 'code'});
+  }
+  if (item.checks === 'green' || item.checks === 'red' || item.checks === 'pending') {
+    put('verifying', {kind: 'check', ...(item.checks === 'red' ? {bad: true as const} : {})});
+  }
+  if (item.open !== false && parts.some(part => part.includes('мерж'))) {
+    put('accepting', {kind: 'check'});
+  }
+  return Object.keys(doors).length > 0 ? doors : undefined;
 }
 
 /** Doors on every station except the plaque. The current station stays the plaque. */
@@ -452,14 +496,17 @@ function buildCycle(
   reading: readonly WindowTicket[],
   hideIcon: boolean,
   review: WindowReview | undefined,
+  known?: BranchFacts,
 ): Placed {
-  const files = changeFiles(checkout, item.key);
-  const questions = unchecked(
-    files.read(changeRel(item.key, 'proposal.md')),
-    HEADINGS.openQuestions,
-  );
-  const decisions = unchecked(files.read(changeRel(item.key, 'design.md')), HEADINGS.openDecisions);
-  const phaseRow = phaseRowOf(column, item, files, questions, decisions);
+  const files = known ? undefined : changeFiles(checkout, item.key);
+  const questions = known
+    ? known.questions
+    : unchecked(files!.read(changeRel(item.key, 'proposal.md')), HEADINGS.openQuestions);
+  const decisions = known
+    ? known.decisions
+    : unchecked(files!.read(changeRel(item.key, 'design.md')), HEADINGS.openDecisions);
+  const tasks = known ? known.tasks : taskRow(files!, item.key);
+  const phaseRow = phaseRowOf(column, item, questions, decisions, tasks);
   const parts = reasonParts(item, phase, breakReason, reading, questions, decisions);
   const occasion = parts.length > 0;
   const card: CycleCard = {key: item.key, title: item.title};
@@ -487,7 +534,10 @@ function buildCycle(
   if (unanswered !== undefined) {
     card.unanswered = unanswered;
   }
-  const doors = stationDoors(item, column, files, parts, markedStations(review?.threads));
+  const marked = markedStations(review?.threads);
+  const doors = known
+    ? doorsFromFacts(item, column, known, parts, marked)
+    : stationDoors(item, column, files!, parts, marked);
   if (doors) {
     card.doors = doors;
   }
@@ -517,6 +567,7 @@ function poolCard(
   live: boolean,
   hideIcon: boolean,
   review: WindowReview | undefined,
+  known?: BranchFacts,
 ): PoolCard {
   const several = (item.openPullRequests ?? 0) > 1;
   const broken = checkout.reason !== '';
@@ -555,6 +606,7 @@ function poolCard(
       reading,
       hideIcon,
       review,
+      known,
     );
     if (placed.card.icon) {
       card.icon = true;
@@ -633,6 +685,7 @@ export function lay(input: {
   leading: (key: string) => boolean;
   takeBlock: (checkout: string | undefined) => {emptyModel: boolean; rejected: boolean};
   review?: (key: string) => WindowReview | undefined;
+  facts?: (key: string) => BranchFacts | undefined;
 }): {
   taken: Set<string>;
   pool: PoolCard[];
@@ -665,6 +718,7 @@ export function lay(input: {
     const checkout = input.cardOf(item);
     const hideIcon = input.leading(item.key) || item.checks === 'pending';
     const review = input.review?.(item.key);
+    const known = input.facts?.(item.key);
     if (!phase) {
       taken.add(item.key);
       pool.push(
@@ -677,6 +731,7 @@ export function lay(input: {
           live,
           hideIcon,
           review,
+          known,
         ),
       );
       continue;
@@ -697,6 +752,7 @@ export function lay(input: {
           live,
           hideIcon,
           review,
+          known,
         ),
       );
       continue;
@@ -710,6 +766,7 @@ export function lay(input: {
       reading,
       hideIcon,
       review,
+      known,
     );
     const list = buckets.get(column) ?? [];
     list.push(placed);

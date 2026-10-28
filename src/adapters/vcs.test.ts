@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {test} from 'vitest';
 
-import {ensureIssueBranch, gitVcs, packageLinks} from './vcs.ts';
+import {ensureIssueBranch, gitFiles, gitVcs, packageLinks} from './vcs.ts';
 
 function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, {cwd, encoding: 'utf8'}).trim();
@@ -125,6 +125,33 @@ test('prepare checks out sdd/<key> once and links the package files', async () =
   assert.equal(await vcs.prepare('7', {worktreesDir: '.worktrees', links: []}), dir);
   assert.equal(await vcs.tip('7'), git(root, ['rev-parse', 'sdd/7']));
   await assert.rejects(vcs.tip('nope'), /no branch sdd\/nope/);
+});
+
+test('files under openspec are read in one pass and an empty range is not a diff', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'sdd-vcs-'));
+  execFileSync('git', ['init'], {cwd: root, stdio: 'ignore'});
+  execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/master'], {cwd: root});
+  mkdirSync(path.join(root, 'openspec', 'changes', 'issue-4'), {recursive: true});
+  mkdirSync(path.join(root, 'openspec', 'specs', 'demo'), {recursive: true});
+  writeFileSync(path.join(root, 'openspec', 'changes', 'issue-4', 'proposal.md'), 'hello\n');
+  writeFileSync(path.join(root, 'openspec', 'specs', 'demo', 'spec.md'), 'spec\n');
+  writeFileSync(path.join(root, 'README.md'), 'readme\n');
+  git(root, ['add', '.']);
+  git(root, ['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-m', 'base']);
+  git(root, ['branch', 'sdd/4']);
+  const files = gitFiles(root, '4', 'sdd');
+  assert.equal(files.read('openspec/changes/issue-4/proposal.md'), 'hello\n');
+  assert.equal(files.exists('openspec/changes/issue-4/proposal.md'), true);
+  assert.equal(files.read('openspec/changes/issue-4/missing.md'), '');
+  assert.equal(files.exists('openspec/changes/archive/issue-4'), false);
+  assert.ok(files.list('openspec/changes/issue-4').includes('openspec/changes/issue-4/proposal.md'));
+  assert.equal(files.read('README.md'), 'readme\n');
+  const vcs = gitVcs(root);
+  assert.equal(await vcs.changed?.('HEAD', 'HEAD'), false);
+  writeFileSync(path.join(root, 'README.md'), 'changed\n');
+  git(root, ['add', 'README.md']);
+  git(root, ['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-m', 'next']);
+  assert.equal(await vcs.changed?.('HEAD~1', 'HEAD'), true);
 });
 
 test('packageLinks keeps the directories that exist', () => {

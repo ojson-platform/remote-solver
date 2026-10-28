@@ -110,6 +110,7 @@ function reasonLine(
     gathered: (item: WindowTicket) => string | undefined;
     serviceBroken: (checkout: string) => boolean;
     cardOf: (item: WindowTicket) => CardState;
+    branchFacts?: (key: string) => {questions: number; decisions: number} | undefined;
   },
 ): string | undefined {
   const phase = phaseOf([...item.labels]);
@@ -127,8 +128,9 @@ function reasonLine(
   if (where === 'pool' && !broken && !several) {
     return undefined;
   }
-  const questions = questionCount(checkout.checkout, item.key);
-  const decisions = decisionCount(checkout.checkout, item.key);
+  const known = ctx.branchFacts?.(item.key);
+  const questions = known ? known.questions : questionCount(checkout.checkout, item.key);
+  const decisions = known ? known.decisions : decisionCount(checkout.checkout, item.key);
   const parts = reasonParts(
     item,
     phase ?? 'implementing',
@@ -152,6 +154,7 @@ export function blocksFor(
     gathered: (item: WindowTicket) => string | undefined;
     serviceBroken: (checkout: string) => boolean;
     cardOf: (item: WindowTicket) => CardState;
+    branchFacts?: (key: string) => {questions: number; decisions: number} | undefined;
   },
 ): SidebarBlock[] {
   const blocks: SidebarBlock[] = [];

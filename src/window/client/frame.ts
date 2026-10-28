@@ -257,7 +257,11 @@ function paintRows(rows: readonly SnapshotRow[], gates: FrameHold['gates']): Sna
 }
 
 /** Paint the hold over a snapshot. A later snapshot does not undo the hold. */
-export function paintFrame(shot: WindowSnapshot, hold: FrameHold): WindowSnapshot {
+export function paintFrame(
+  shot: WindowSnapshot,
+  hold: FrameHold,
+  kept?: WindowSnapshot['opened'],
+): WindowSnapshot {
   const next: WindowSnapshot = {...shot, rows: paintRows(shot.rows, hold.gates)};
   if (hold.settings) {
     next.settings = {...shot.settings, open: hold.settings.open};
@@ -268,10 +272,29 @@ export function paintFrame(shot: WindowSnapshot, hold: FrameHold): WindowSnapsho
   } else if (key !== undefined && shot.opened?.key !== key) {
     const row = shot.rows.find(item => item.key === key);
     if (row) {
-      next.opened = shellDrawer(row);
+      next.opened = kept?.key === key ? {...kept, title: row.title} : shellDrawer(row);
     }
   }
   return next;
+}
+
+/** One snapshot read, plus a single follow-up when another change arrives while it flies. */
+export type ReadSlot = {flying: boolean; again: boolean};
+
+/** Start a read, or remember that one more is needed when one is already flying. */
+export function beginRead(slot: ReadSlot): {slot: ReadSlot; start: boolean} {
+  if (slot.flying) {
+    return {slot: {flying: true, again: true}, start: false};
+  }
+  return {slot: {flying: true, again: false}, start: true};
+}
+
+/** Finish a read. A change that arrived during it starts exactly one follow-up. */
+export function endRead(slot: ReadSlot): {slot: ReadSlot; start: boolean} {
+  if (slot.again) {
+    return {slot: {flying: true, again: false}, start: true};
+  }
+  return {slot: {flying: false, again: false}, start: false};
 }
 
 export type BusyEdges = {window: boolean; drawer: boolean; settings: boolean};

@@ -2,7 +2,7 @@ import type {PullSnapshot} from './policy.ts';
 import type {FileSource, IssueRecord, Review, Tracker} from './port.ts';
 import type {QueueConfig} from './service-config.ts';
 
-import {readChange, type ChangeView} from './change.ts';
+import {readBranch, type BranchFacts, type ChangeView} from './change.ts';
 import {queueOf} from './queues.ts';
 import {emptyReview, reviewOf} from './review.ts';
 
@@ -11,6 +11,8 @@ export type CycleSnapshot = {
   cycles: IssueRecord[];
   pulls: Map<string, PullSnapshot[]>;
   changes: Map<string, ChangeView>;
+  /** Branch summary for the cycles this poll read. Absent when the caller did not read branches. */
+  facts?: Map<string, BranchFacts>;
 };
 
 /** Pulls of one issue, each open pull carrying the one review reading. */
@@ -51,9 +53,12 @@ export async function loadCycle(
     .sort((a, b) => a.key.localeCompare(b.key, undefined, {numeric: true}));
   const pulls = new Map<string, PullSnapshot[]>();
   const changes = new Map<string, ChangeView>();
+  const facts = new Map<string, BranchFacts>();
   for (const issue of cycles) {
+    const read = readBranch(issue.key, filesAt(issue.key));
     pulls.set(issue.key, await pullSnapshots(review, issue.key));
-    changes.set(issue.key, readChange(issue.key, filesAt(issue.key)));
+    changes.set(issue.key, read.change);
+    facts.set(issue.key, read.facts);
   }
-  return {issues, cycles, pulls, changes};
+  return {issues, cycles, pulls, changes, facts};
 }

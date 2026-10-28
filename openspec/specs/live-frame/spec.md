@@ -157,3 +157,17 @@ A frame change SHALL NOT start a snapshot read while a gesture is open. A spine 
 
 - **WHEN** the client holds a revision
 - **THEN** the snapshot path names that revision
+
+### Requirement: A comment leaves the plan section
+
+A new focus text SHALL name a new focus revision and SHALL leave the plan revision in place when the proposal bytes are unchanged. The plan section already built SHALL be that same section. A later snapshot that names the same plan revision and a new focus revision SHALL keep the plan section the person already sees.
+
+#### Scenario: A new focus keeps the plan revision
+
+- **WHEN** the proposal bytes are unchanged and the focus text changes
+- **THEN** the plan revision stays and the plan section is the one already built
+
+#### Scenario: A comment leaves the plan section
+
+- **WHEN** a snapshot arrives with that same plan revision and a new focus revision
+- **THEN** the drawer keeps the plan section already painted

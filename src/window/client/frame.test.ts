@@ -13,6 +13,7 @@ import {
   paintFrame,
   releaseHold,
   reuseOpenedSpine,
+  reuseSpineSections,
   snapshotPath,
   wantsSnapshot,
   settingsAct,
@@ -459,6 +460,30 @@ spec('live-frame', () => {
     scenario('A snapshot read carries the held revision', () => {
       assert.equal(snapshotPath('abc'), '/snapshot?have=abc');
       assert.equal(snapshotPath(undefined), '/snapshot');
+    });
+  });
+
+  requirement('A comment leaves the plan section', () => {
+    scenario('A comment leaves the plan section', () => {
+      const open = openedShot();
+      const painted = open.opened?.spine;
+      assert.ok(painted);
+      const plan = {present: true, excerpt: 'Итог', sections: [], questions: []};
+      const sections = {focus: 'focus-1', plan: 'plan-1', specify: 'spec-1', design: 'design-1', tasks: 'tasks-1'};
+      const kept = {...open.opened, spine: {...painted, sections, proposal: plan}};
+      const arrived = {
+        ...open,
+        opened: {
+          ...open.opened,
+          revision: 'next',
+          spine: {
+            ...painted,
+            sections: {...sections, focus: 'focus-2'},
+            proposal: {present: false, excerpt: '', sections: [], questions: []},
+          },
+        },
+      };
+      assert.equal(reuseSpineSections(arrived, kept).opened?.spine.proposal, plan);
     });
   });
 });

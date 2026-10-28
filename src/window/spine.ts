@@ -1,3 +1,5 @@
+import {createHash} from 'node:crypto';
+
 import type {FileSource} from '../machine/port.ts';
 import type {SpecBadge, SpecEntry} from './spec-diff.ts';
 import type {GateStation} from './types.ts';
@@ -71,7 +73,21 @@ export type Spine = {
   reviewGate?: ReviewGate;
   readPath: string;
   accept: string;
+  /** Revisions of the parts. A comment changes focus and leaves plan. */
+  sections: SpinePartRevisions;
 };
+
+export type SpinePartRevisions = {
+  focus: string;
+  plan: string;
+  specify: string;
+  design: string;
+  tasks: string;
+};
+
+function partRevision(source: string): string {
+  return createHash('sha256').update(source).digest('hex');
+}
 
 const LAYER_NAMES = ['Change', 'Plan', 'Specify', 'Design', 'Tasks', 'Code'] as const;
 
@@ -303,41 +319,81 @@ export function projectSpine(
     reviewGate?: Spine['reviewGate'];
     gateOff?: Partial<Record<GateStation, true>>;
   },
+  previous?: Spine,
 ): Spine {
+  const sections: SpinePartRevisions = {
+    focus: partRevision(`${input.focusBody ?? ''}\0${input.issueBody ?? ''}`),
+    plan: partRevision(text.proposal),
+    specify: partRevision(
+      JSON.stringify({proposal: text.proposal, specs: text.specs, baselines: text.baselines}),
+    ),
+    design: partRevision(text.design),
+    tasks: partRevision(JSON.stringify({tasks: text.tasks, deltas: text.specs.map(spec => spec.delta)})),
+  };
+  const kept = previous?.sections;
   const focus = linesFromFocus(input.focusBody ?? '');
-  const lines = mergeLines(linesFromIssue(input.issueBody ?? ''), focus.lines);
-  const proposal = text.proposal;
-  const design = text.design;
-  const capabilities: SpineCapability[] = [];
+  const lines =
+    kept?.focus === sections.focus && previous ? previous.lines : mergeLines(linesFromIssue(input.issueBody ?? ''), focus.lines);
+  const rest =
+    kept?.focus === sections.focus && previous
+      ? previous.rest
+      : focus.rest.filter(line => !line.includes('sdd:begin') && !line.includes('sdd:end'));
+  const proposalText = text.proposal;
+  const proposal =
+    kept?.plan === sections.plan && previous
+      ? previous.proposal
+      : {
+          present: proposalText.trim() !== '',
+          excerpt: oneLine(section(proposalText, 'Outcome')),
+          sections: sectionsOf(proposalText),
+          questions: questionsOf(proposalText),
+        };
+  const designText = text.design;
+  const design =
+    kept?.design === sections.design && previous
+      ? previous.design
+      : {
+          present: designText.trim() !== '',
+          sections: sectionsOf(designText),
+          questions: questionsOf(designText),
+        };
+  let capabilities: SpineCapability[];
+  let named: string[];
+  let missingBaseline: string[];
+  if (kept?.specify === sections.specify && previous) {
+    capabilities = previous.capabilities;
+    named = previous.named;
+    missingBaseline = previous.missingBaseline;
+  } else {
+    capabilities = [];
+    for (const spec of text.specs) {
+      capabilities.push({id: spec.id, ...specDiff(spec.baseline, spec.delta, spec.rel)});
+    }
+    named = namedCapabilities(proposalText);
+    missingBaseline = missingBaselineIds(proposalText, rel => baselineListed(rel, text.baselines));
+  }
   const owner = new Map<string, string>();
-  for (const spec of text.specs) {
-    for (const name of scenarioNames(spec.delta)) {
-      if (!owner.has(name)) {
-        owner.set(name, spec.id);
+  if (!(kept?.tasks === sections.tasks && previous)) {
+    for (const spec of text.specs) {
+      for (const name of scenarioNames(spec.delta)) {
+        if (!owner.has(name)) {
+          owner.set(name, spec.id);
+        }
       }
     }
-    capabilities.push({id: spec.id, ...specDiff(spec.baseline, spec.delta, spec.rel)});
   }
+  const tasks = kept?.tasks === sections.tasks && previous ? previous.tasks : tasksOf(text.tasks, owner);
   return {
     open: layerForStation(input.station),
     station: input.station,
     lines,
-    rest: focus.rest.filter(line => !line.includes('sdd:begin') && !line.includes('sdd:end')),
-    proposal: {
-      present: proposal.trim() !== '',
-      excerpt: oneLine(section(proposal, 'Outcome')),
-      sections: sectionsOf(proposal),
-      questions: questionsOf(proposal),
-    },
+    rest,
+    proposal,
     capabilities,
-    named: namedCapabilities(proposal),
-    missingBaseline: missingBaselineIds(proposal, rel => baselineListed(rel, text.baselines)),
-    design: {
-      present: design.trim() !== '',
-      sections: sectionsOf(design),
-      questions: questionsOf(design),
-    },
-    tasks: tasksOf(text.tasks, owner),
+    named,
+    missingBaseline,
+    design,
+    tasks,
     checks: checksLine(input.checks),
     diff: input.diff === true,
     pull: input.pull === true,
@@ -346,6 +402,7 @@ export function projectSpine(
     accept: input.gateOff?.accepting
       ? 'На приёмке машина мержит сама.'
       : 'На приёмке мерж ждёт человека.',
+    sections,
   };
 }
 
@@ -363,7 +420,8 @@ export function buildSpine(input: {
   gateOff?: Partial<Record<GateStation, true>>;
   /** A tree the store already holds for this checkout and ref. */
   files?: FileSource;
+  previous?: Spine;
 }): Spine {
   const text = readBranch(input.key, input.files ?? strictChangeFiles(input.checkout, input.key)).text;
-  return projectSpine(text, input);
+  return projectSpine(text, input, input.previous);
 }

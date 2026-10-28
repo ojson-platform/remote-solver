@@ -208,6 +208,7 @@ function shellSpine(row: SnapshotRow): Spine {
     pull: false,
     readPath: '',
     accept: 'На приёмке мерж ждёт человека.',
+    sections: {focus: '', plan: '', specify: '', design: '', tasks: ''},
   };
 }
 
@@ -254,6 +255,48 @@ function paintRows(rows: readonly SnapshotRow[], gates: FrameHold['gates']): Sna
       gates.filter(gate => gate.key === row.key),
     ),
   );
+}
+
+/** Keep each part whose revision is unchanged when a newer spine arrives. */
+export function reuseSpineSections(
+  shot: WindowSnapshot,
+  kept: WindowSnapshot['opened'],
+): WindowSnapshot {
+  const opened = shot.opened;
+  if (!opened || kept?.key !== opened.key || kept.spine === opened.spine) {
+    return shot;
+  }
+  const next = opened.spine.sections;
+  const prev = kept.spine.sections;
+  const spine = {...opened.spine};
+  let used = false;
+  if (next.focus === prev.focus) {
+    spine.lines = kept.spine.lines;
+    spine.rest = kept.spine.rest;
+    used = true;
+  }
+  if (next.plan === prev.plan) {
+    spine.proposal = kept.spine.proposal;
+    used = true;
+  }
+  if (next.specify === prev.specify) {
+    spine.capabilities = kept.spine.capabilities;
+    spine.named = kept.spine.named;
+    spine.missingBaseline = kept.spine.missingBaseline;
+    used = true;
+  }
+  if (next.design === prev.design) {
+    spine.design = kept.spine.design;
+    used = true;
+  }
+  if (next.tasks === prev.tasks) {
+    spine.tasks = kept.spine.tasks;
+    used = true;
+  }
+  if (!used) {
+    return shot;
+  }
+  return {...shot, opened: {...opened, spine}};
 }
 
 /** Keep the spine the client already painted when the snapshot names the same revision. */

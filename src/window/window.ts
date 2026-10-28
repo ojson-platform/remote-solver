@@ -282,15 +282,21 @@ export function openWindow(
       reviewGate: reviewGateForPhase(phase),
       gateOff,
     };
+    const previous = store.held(openKey).spine;
     const text = outside.branchText?.(item.key);
     if (text) {
-      return projectSpine(text, chrome);
+      return projectSpine(text, chrome, previous);
     }
     const located = checkout.gathered(item);
     if (outside.branchFacts && located) {
-      return buildSpine({...chrome, checkout: located, files: store.files(located, item.key, true)});
+      return buildSpine({
+        ...chrome,
+        checkout: located,
+        files: store.files(located, item.key, true),
+        previous,
+      });
     }
-    return buildSpine({...chrome, checkout: located});
+    return buildSpine({...chrome, checkout: located, previous});
   }
 
   return {

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync, mkdirSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
+import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
 
 import {readBranch} from '../machine/change.ts';
@@ -166,6 +167,26 @@ test('a removed scenario does not name the capability', () => {
   assert.equal(spine.tasks.find(task => task.id === 'gone')?.scenarios[0]?.capability, '');
   assert.equal(spine.tasks.find(task => task.id === 'kept')?.scenarios[0]?.capability, 'case-read');
   rmSync(dir, {recursive: true, force: true});
+});
+
+spec('live-frame', () => {
+  requirement('A comment leaves the plan section', () => {
+    scenario('A new focus keeps the plan revision', () => {
+      const text = {
+        proposal: '## Outcome\n\nИтог одного чтения.\n',
+        design: '',
+        tasks: '',
+        specs: [],
+        baselines: [],
+      };
+      const first = projectSpine(text, {key: '1', focusBody: 'Plan: было'});
+      const second = projectSpine(text, {key: '1', focusBody: 'Plan: стало'}, first);
+      assert.equal(second.proposal, first.proposal);
+      assert.equal(second.sections.plan, first.sections.plan);
+      assert.notEqual(second.sections.focus, first.sections.focus);
+      assert.notEqual(second.lines, first.lines);
+    });
+  });
 });
 
 test('the spine is a projection of the branch read', () => {

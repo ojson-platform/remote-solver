@@ -19,6 +19,7 @@ import {
   paintFrame,
   parseChange,
   reuseOpenedSpine,
+  reuseSpineSections,
   releaseHold,
   settingsAct,
   snapshotPath,
@@ -334,7 +335,8 @@ function boot(): void {
       hold,
       typeof opening === 'string' ? keptDrawers.get(opening) : undefined,
     );
-    const frame = reuseOpenedSpine(painted, painted.opened && keptDrawers.get(painted.opened.key));
+    const reused = reuseOpenedSpine(painted, painted.opened && keptDrawers.get(painted.opened.key));
+    const frame = reuseSpineSections(reused, reused.opened && keptDrawers.get(reused.opened.key));
     if (frame.opened && frame.opened.spineReady !== false) {
       keptDrawers.set(frame.opened.key, frame.opened);
     }

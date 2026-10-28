@@ -17,9 +17,12 @@ import {
   endRead,
   holdGesture,
   paintFrame,
+  parseChange,
   reuseOpenedSpine,
   releaseHold,
   settingsAct,
+  snapshotPath,
+  wantsSnapshot,
   type ReadSlot,
 } from './frame.ts';
 import {
@@ -287,8 +290,8 @@ function keptLayer(memory: Memory, next: WindowSnapshot): SpineLayer | '' | unde
   );
 }
 
-async function readSnapshot(): Promise<WindowSnapshot> {
-  const response = await fetch('/snapshot');
+async function readSnapshot(revision: string | undefined): Promise<WindowSnapshot> {
+  const response = await fetch(snapshotPath(revision));
   return response.json() as Promise<WindowSnapshot>;
 }
 
@@ -462,6 +465,11 @@ function boot(): void {
       }
       draw();
     };
+    const haveKey = act === 'open' || path === '/take' ? (params.get('key') ?? '') : (base?.opened?.key ?? '');
+    const have = haveKey ? keptDrawers.get(haveKey)?.revision : undefined;
+    if (have) {
+      params.set('have', have);
+    }
     void fetch(path, {
       method: 'POST',
       headers: {'content-type': 'application/x-www-form-urlencoded'},
@@ -670,7 +678,9 @@ function boot(): void {
     reads += 1;
     reading = true;
     draw();
-    void readSnapshot()
+    const openKey = base?.opened?.key;
+    const heldRevision = openKey ? (keptDrawers.get(openKey)?.revision ?? base?.opened?.revision) : undefined;
+    void readSnapshot(heldRevision)
       .then(body => {
         keep(body);
       })
@@ -687,14 +697,28 @@ function boot(): void {
         draw();
       });
   };
-  source.addEventListener('change', () => {
+  source.addEventListener('change', event => {
+    const data = event instanceof MessageEvent && typeof event.data === 'string' ? event.data : '';
+    const note = parseChange(data);
+    const revisions = new Map<string, string>();
+    for (const [key, drawer] of keptDrawers) {
+      if (drawer.revision) {
+        revisions.set(key, drawer.revision);
+      }
+    }
+    if (
+      note &&
+      !wantsSnapshot(note, {generation: base?.generation ?? -1, gesture: gestures > 0, revisions})
+    ) {
+      return;
+    }
     const begun = beginRead(slot);
     slot = begun.slot;
     if (begun.start) {
       pull();
     }
   });
-  void readSnapshot().then(take);
+  void readSnapshot(undefined).then(take);
 }
 
 boot();

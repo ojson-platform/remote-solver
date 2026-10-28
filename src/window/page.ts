@@ -16,7 +16,7 @@ import {setImmediate} from 'node:timers';
 
 import {bundleClient} from './client/bundle.ts';
 import {factorySvg} from './mark.ts';
-import {snapshot} from './snapshot.ts';
+import {omitHeldSpine, snapshot, type WindowSnapshot} from './snapshot.ts';
 import {ROLE_OUTCOMES} from './types.ts';
 
 export {draftsAfterClick, headClickToggles, lineFieldClosesOnEscape, plaqueClickOpens, rowHeadOpens} from './client/gesture.ts';
@@ -624,7 +624,28 @@ function json(res: ServerResponse, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
+function changedSpines(
+  surface: Surface,
+  view: PageView,
+): {key: string; revision: string}[] {
+  const key = view.opened;
+  if (key === '' || !surface.heldSpine) {
+    return [];
+  }
+  const revision = surface.heldSpine().revision;
+  return revision ? [{key, revision}] : [];
+}
+
+function changeFrame(surface: Surface, view: PageView, kind: 'content' | 'spine' | 'frame'): string {
+  return `event: change\ndata: ${JSON.stringify({
+    generation: view.generation,
+    kind,
+    changed: changedSpines(surface, view),
+  })}\n\n`;
+}
+
 function written(
+  surface: Surface,
   view: PageView,
   listeners: Set<ServerResponse>,
   kind: 'content' | 'spine' | 'frame',
@@ -633,7 +654,7 @@ function written(
   if (kind === 'content') {
     view.contentEpoch += 1;
   }
-  const frame = `event: change\ndata: ${JSON.stringify({generation: view.generation})}\n\n`;
+  const frame = changeFrame(surface, view, kind);
   for (const client of listeners) {
     client.write(frame);
   }
@@ -644,10 +665,11 @@ function liveSnapshot(
   view: PageView,
   listeners: Set<ServerResponse>,
   schedule: (surface: Surface, view: PageView, listeners: Set<ServerResponse>) => void,
-) {
+  have: string | null,
+): WindowSnapshot {
   settleOpened(surface, view);
   schedule(surface, view, listeners);
-  const body = snapshot(surface, view);
+  const body = omitHeldSpine(snapshot(surface, view), have);
   view.status = undefined;
   return body;
 }
@@ -700,8 +722,8 @@ async function handle(
         view.show = taken;
       }
       surface.spy();
-      written(view, listeners, 'content');
-      json(res, liveSnapshot(surface, view, listeners, schedule));
+      written(surface, view, listeners, 'content');
+      json(res, liveSnapshot(surface, view, listeners, schedule, params.get('have')));
       return;
     }
     const result = await apply(surface, params, view, mine, epoch);
@@ -718,8 +740,8 @@ async function handle(
       return;
     }
     const act = params.get('act');
-    written(view, listeners, act === 'open' || act === 'close-card' ? 'frame' : 'content');
-    json(res, liveSnapshot(surface, view, listeners, schedule));
+    written(surface, view, listeners, act === 'open' || act === 'close-card' ? 'frame' : 'content');
+    json(res, liveSnapshot(surface, view, listeners, schedule, params.get('have')));
     return;
   }
   if (req.method === 'GET' && url.pathname === '/') {
@@ -749,13 +771,13 @@ async function handle(
       'cache-control': 'no-cache',
       connection: 'keep-alive',
     });
-    res.write(`event: change\ndata: ${JSON.stringify({generation: view.generation})}\n\n`);
+    res.write(changeFrame(surface, view, 'frame'));
     listeners.add(res);
     req.on('close', () => listeners.delete(res));
     return;
   }
   if (req.method === 'GET' && url.pathname === '/snapshot') {
-    json(res, liveSnapshot(surface, view, listeners, schedule));
+    json(res, liveSnapshot(surface, view, listeners, schedule, url.searchParams.get('have')));
     return;
   }
   res.writeHead(404);
@@ -797,7 +819,7 @@ export async function serveBoard(surface: Surface): Promise<{
         surface.failSpine?.(epoch);
       }
       if (view.opened === key && view.contentEpoch === epoch) {
-        written(view, listeners, 'spine');
+        written(surface, view, listeners, 'spine');
       }
     });
   }
@@ -824,7 +846,7 @@ export async function serveBoard(surface: Surface): Promise<{
       resolve({
         url: `http://127.0.0.1:${address.port}/`,
         note() {
-          written(view, listeners, 'content');
+          written(surface, view, listeners, 'content');
         },
         close: () =>
           new Promise((done, fail) => {

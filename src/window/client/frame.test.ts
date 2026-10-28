@@ -13,6 +13,8 @@ import {
   paintFrame,
   releaseHold,
   reuseOpenedSpine,
+  snapshotPath,
+  wantsSnapshot,
   settingsAct,
   type FrameHold,
   type ReadSlot,
@@ -284,6 +286,8 @@ spec('live-frame', () => {
         opened: {...arrived.opened, revision: 'next'},
       };
       assert.equal(reuseOpenedSpine(moved, kept).opened?.spine.accept, 'другая');
+      const omitted = {...arrived, opened: {...arrived.opened, spine: undefined as unknown as typeof painted}};
+      assert.equal(reuseOpenedSpine(omitted, kept).opened?.spine, painted);
     });
   });
 
@@ -418,6 +422,43 @@ spec('live-frame', () => {
       assert.equal(done.start, false);
       assert.equal(done.slot.flying, false);
       assert.equal(starts, 2);
+    });
+  });
+
+  requirement('A held revision does not read the snapshot again', () => {
+    const held = {generation: 1, gesture: false, revisions: new Map([['1', 'abc']])};
+
+    scenario('A frame change during a gesture does not read the snapshot', () => {
+      assert.equal(
+        wantsSnapshot(
+          {generation: 2, kind: 'frame', changed: [{key: '1', revision: 'abc'}]},
+          {...held, gesture: true},
+        ),
+        false,
+      );
+    });
+
+    scenario('A spine change for a held revision does not read the snapshot', () => {
+      assert.equal(
+        wantsSnapshot({generation: 2, kind: 'spine', changed: [{key: '1', revision: 'abc'}]}, held),
+        false,
+      );
+      assert.equal(
+        wantsSnapshot({generation: 2, kind: 'spine', changed: [{key: '1', revision: 'next'}]}, held),
+        true,
+      );
+    });
+
+    scenario('A content change reads the snapshot', () => {
+      assert.equal(
+        wantsSnapshot({generation: 2, kind: 'content', changed: [{key: '1', revision: 'abc'}]}, held),
+        true,
+      );
+    });
+
+    scenario('A snapshot read carries the held revision', () => {
+      assert.equal(snapshotPath('abc'), '/snapshot?have=abc');
+      assert.equal(snapshotPath(undefined), '/snapshot');
     });
   });
 });

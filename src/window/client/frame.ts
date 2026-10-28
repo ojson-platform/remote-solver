@@ -293,6 +293,73 @@ export function paintFrame(
   return next;
 }
 
+export type ChangeNote = {
+  generation: number;
+  kind: 'content' | 'spine' | 'frame';
+  changed: {key: string; revision: string}[];
+};
+
+/** The change event, or nothing when the payload is not one. */
+export function parseChange(data: string): ChangeNote | undefined {
+  try {
+    const parsed: unknown = JSON.parse(data);
+    if (!parsed || typeof parsed !== 'object') {
+      return undefined;
+    }
+    if (!('generation' in parsed) || !('kind' in parsed) || !('changed' in parsed)) {
+      return undefined;
+    }
+    const {generation, kind, changed} = parsed;
+    if (typeof generation !== 'number' || !Array.isArray(changed)) {
+      return undefined;
+    }
+    if (kind !== 'content' && kind !== 'spine' && kind !== 'frame') {
+      return undefined;
+    }
+    const spines: {key: string; revision: string}[] = [];
+    for (const item of changed) {
+      if (!item || typeof item !== 'object' || !('key' in item) || !('revision' in item)) {
+        return undefined;
+      }
+      if (typeof item.key !== 'string' || typeof item.revision !== 'string') {
+        return undefined;
+      }
+      spines.push({key: item.key, revision: item.revision});
+    }
+    return {generation, kind, changed: spines};
+  } catch {
+    return undefined;
+  }
+}
+
+/** A snapshot path that names the revision the client already holds. */
+export function snapshotPath(revision: string | undefined): string {
+  if (!revision) {
+    return '/snapshot';
+  }
+  return `/snapshot?have=${encodeURIComponent(revision)}`;
+}
+
+/** True when this change can carry rows or a spine the client does not hold. */
+export function wantsSnapshot(
+  note: ChangeNote,
+  held: {generation: number; gesture: boolean; revisions: ReadonlyMap<string, string>},
+): boolean {
+  if (note.generation <= held.generation) {
+    return false;
+  }
+  if (note.kind === 'content') {
+    return true;
+  }
+  if (note.kind === 'frame') {
+    return !held.gesture;
+  }
+  const heldSpines =
+    note.changed.length > 0 &&
+    note.changed.every(item => held.revisions.get(item.key) === item.revision);
+  return !heldSpines;
+}
+
 /** One snapshot read, plus a single follow-up when another change arrives while it flies. */
 export type ReadSlot = {flying: boolean; again: boolean};
 

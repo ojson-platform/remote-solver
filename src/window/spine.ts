@@ -1,10 +1,10 @@
 import type {SpecBadge, SpecEntry} from './spec-diff.ts';
 import type {GateStation} from './types.ts';
 
-import {missingBaselineIds, namedCapabilities} from '../machine/change.ts';
+import {missingBaselineIds, namedCapabilities, readBranch, type BranchText} from '../machine/change.ts';
 import {changeDir} from '../machine/naming.ts';
 
-import {changeRel, listedSpecs, strictChangeFiles} from './change-files.ts';
+import {strictChangeFiles} from './change-files.ts';
 import {specDiff} from './spec-diff.ts';
 
 export const SPINE_LAYERS = [
@@ -283,36 +283,39 @@ function mergeLines(issue: SpineLine[], focus: SpineLine[]): SpineLine[] {
   return [...issue.filter(line => !replaced.has(line.layer)), ...focus];
 }
 
-/** The spine of the open ticket: mirror lines, and the change files on the issue branch. */
-export function buildSpine(input: {
-  key: string;
-  checkout?: string;
-  station?: string;
-  focusBody?: string;
-  issueBody?: string;
-  checks?: 'green' | 'red' | 'pending' | 'none';
-  diff?: boolean;
-  pull?: boolean;
-  reviewGate?: Spine['reviewGate'];
-  gateOff?: Partial<Record<GateStation, true>>;
-}): Spine {
+function baselineListed(rel: string, baselines: readonly string[]): boolean {
+  const match = rel.split('\\').join('/').match(/^openspec\/specs\/(.+)\/spec\.md$/);
+  return match !== null && baselines.includes(match[1] ?? '');
+}
+
+/** The spine of one ticket from branch bytes already read, plus the ticket fields the row shows. */
+export function projectSpine(
+  text: BranchText,
+  input: {
+    key: string;
+    station?: string;
+    focusBody?: string;
+    issueBody?: string;
+    checks?: 'green' | 'red' | 'pending' | 'none';
+    diff?: boolean;
+    pull?: boolean;
+    reviewGate?: Spine['reviewGate'];
+    gateOff?: Partial<Record<GateStation, true>>;
+  },
+): Spine {
   const focus = linesFromFocus(input.focusBody ?? '');
   const lines = mergeLines(linesFromIssue(input.issueBody ?? ''), focus.lines);
-  const files = strictChangeFiles(input.checkout, input.key);
-  const proposal = files.read(changeRel(input.key, 'proposal.md'));
-  const design = files.read(changeRel(input.key, 'design.md'));
-  const taskText = files.read(changeRel(input.key, 'tasks.md'));
+  const proposal = text.proposal;
+  const design = text.design;
   const capabilities: SpineCapability[] = [];
   const owner = new Map<string, string>();
-  for (const spec of listedSpecs(files, input.key)) {
-    const baseline = files.read(`openspec/specs/${spec.id}/spec.md`);
-    const delta = files.read(spec.rel);
-    for (const name of scenarioNames(delta)) {
+  for (const spec of text.specs) {
+    for (const name of scenarioNames(spec.delta)) {
       if (!owner.has(name)) {
         owner.set(name, spec.id);
       }
     }
-    capabilities.push({id: spec.id, ...specDiff(baseline, delta, spec.rel)});
+    capabilities.push({id: spec.id, ...specDiff(spec.baseline, spec.delta, spec.rel)});
   }
   return {
     open: layerForStation(input.station),
@@ -327,13 +330,13 @@ export function buildSpine(input: {
     },
     capabilities,
     named: namedCapabilities(proposal),
-    missingBaseline: missingBaselineIds(proposal, rel => files.exists(rel)),
+    missingBaseline: missingBaselineIds(proposal, rel => baselineListed(rel, text.baselines)),
     design: {
       present: design.trim() !== '',
       sections: sectionsOf(design),
       questions: questionsOf(design),
     },
-    tasks: tasksOf(taskText, owner),
+    tasks: tasksOf(text.tasks, owner),
     checks: checksLine(input.checks),
     diff: input.diff === true,
     pull: input.pull === true,
@@ -343,4 +346,21 @@ export function buildSpine(input: {
       ? 'На приёмке машина мержит сама.'
       : 'На приёмке мерж ждёт человека.',
   };
+}
+
+/** The spine of the open ticket: mirror lines, and the change files on the issue branch. */
+export function buildSpine(input: {
+  key: string;
+  checkout?: string;
+  station?: string;
+  focusBody?: string;
+  issueBody?: string;
+  checks?: 'green' | 'red' | 'pending' | 'none';
+  diff?: boolean;
+  pull?: boolean;
+  reviewGate?: Spine['reviewGate'];
+  gateOff?: Partial<Record<GateStation, true>>;
+}): Spine {
+  const text = readBranch(input.key, strictChangeFiles(input.checkout, input.key)).text;
+  return projectSpine(text, input);
 }

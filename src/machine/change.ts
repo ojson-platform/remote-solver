@@ -142,6 +142,27 @@ export type BranchFacts = {
   specs: {id: string; file: string}[];
 };
 
+/** One delta spec and its baseline, as read for the plaque and the spine. */
+export type BranchSpecText = {
+  id: string;
+  rel: string;
+  delta: string;
+  baseline: string;
+};
+
+/**
+ * The branch bytes one read produced.
+ * The plaque summary and the spine are projections of this text.
+ * `baselines` lists capability ids whose `openspec/specs/<id>/spec.md` exists.
+ */
+export type BranchText = {
+  proposal: string;
+  design: string;
+  tasks: string;
+  specs: BranchSpecText[];
+  baselines: string[];
+};
+
 function slash(rel: string): string {
   return rel.split(path.sep).join('/');
 }
@@ -193,8 +214,15 @@ function markOf(pairs: readonly [string, string][]): string {
   return hash.digest('hex');
 }
 
-/** The change view and the plaque summary from one file source. */
-export function readBranch(key: string, files: FileSource): {change: ChangeView; facts: BranchFacts} {
+function baselineRel(id: string): string {
+  return `openspec/specs/${id}/spec.md`;
+}
+
+/** The change view, the plaque summary, and the bytes both projections share. */
+export function readBranch(
+  key: string,
+  files: FileSource,
+): {change: ChangeView; facts: BranchFacts; text: BranchText} {
   const change = readChange(key, files);
   const proposalPath = path.join(changeDir(key), 'proposal.md');
   const designPath = path.join(changeDir(key), 'design.md');
@@ -204,29 +232,53 @@ export function readBranch(key: string, files: FileSource): {change: ChangeView;
   const tasksFile = files.exists(tasksPath) ? slash(tasksPath) : undefined;
   const specs = specEntries(files, key);
   const pairs: [string, string][] = [];
+  const body = new Map<string, string>();
   const take = (rel: string | undefined) => {
-    if (!rel) {
+    if (!rel || body.has(rel)) {
       return;
     }
-    pairs.push([rel, files.read(rel)]);
+    const text = files.read(rel);
+    body.set(rel, text);
+    pairs.push([rel, text]);
   };
   take(proposal);
   take(design);
   take(tasksFile);
+  const specText: BranchSpecText[] = [];
   for (const spec of specs) {
     take(spec.file);
-    const baseline = `openspec/specs/${spec.id}/spec.md`;
+    const baseline = baselineRel(spec.id);
     if (files.exists(baseline)) {
       take(baseline);
+    }
+    specText.push({
+      id: spec.id,
+      rel: spec.file,
+      delta: body.get(spec.file) ?? '',
+      baseline: body.get(baseline) ?? '',
+    });
+  }
+  const proposalText = proposal ? (body.get(proposal) ?? '') : '';
+  const baselines: string[] = [];
+  for (const id of [...namedCapabilities(proposalText), ...specText.map(spec => spec.id)]) {
+    if (files.exists(baselineRel(id)) && !baselines.includes(id)) {
+      baselines.push(id);
     }
   }
   return {
     change,
+    text: {
+      proposal: proposalText,
+      design: design ? (body.get(design) ?? '') : '',
+      tasks: tasksFile ? (body.get(tasksFile) ?? '') : '',
+      specs: specText,
+      baselines,
+    },
     facts: {
       fingerprint: markOf(pairs),
       questions: change.openQuestions,
       decisions: change.openDecisions,
-      ...(tasksFile ? {tasks: taskCounts(files.read(tasksFile), true)} : {}),
+      ...(tasksFile ? {tasks: taskCounts(body.get(tasksFile) ?? '', true)} : {}),
       ...(proposal ? {proposal} : {}),
       ...(design ? {design} : {}),
       ...(tasksFile ? {tasksFile} : {}),

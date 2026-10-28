@@ -9,7 +9,7 @@ import path from 'node:path';
 import {parse} from 'yaml';
 
 import {githubPauseRemaining} from '../adapters/github.ts';
-import {readBranch, type BranchFacts} from '../machine/change.ts';
+import {readBranch, type BranchFacts, type BranchText} from '../machine/change.ts';
 import {markerName, parseMarker} from '../machine/marker.ts';
 import {phaseOf} from '../machine/phase.ts';
 import {modelFor, type SkillMode} from '../machine/skill.ts';
@@ -253,6 +253,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
   let spyThreadPull = new Map<string, string>();
   const services = new Map<string, string>();
   let facts = new Map<string, BranchFacts>();
+  let texts = new Map<string, BranchText>();
   let spyKeys = new Set<string>();
   let gatheredOf: (ticket: WindowTicket) => string | undefined = () => undefined;
 
@@ -352,24 +353,36 @@ export function openLiveBoard(options: LiveBoardOptions) {
   function factsFor(
     tickets: readonly WindowTicket[],
     incoming?: Map<string, BranchFacts>,
-  ): Map<string, BranchFacts> {
+    incomingText?: Map<string, BranchText>,
+  ): {facts: Map<string, BranchFacts>; texts: Map<string, BranchText>} {
     const next = new Map<string, BranchFacts>();
+    const nextText = new Map<string, BranchText>();
     for (const ticket of tickets) {
       const fromSpy = incoming?.get(ticket.key);
       if (fromSpy && sameCheckout(gatheredOf(ticket))) {
         next.set(ticket.key, fromSpy);
+        const stored = incomingText?.get(ticket.key);
+        if (stored) {
+          nextText.set(ticket.key, stored);
+        }
         continue;
       }
       if (spyKeys.has(ticket.key)) {
         const held = facts.get(ticket.key);
         if (held) {
           next.set(ticket.key, held);
+          const heldText = texts.get(ticket.key);
+          if (heldText) {
+            nextText.set(ticket.key, heldText);
+          }
           continue;
         }
       }
-      next.set(ticket.key, readBranch(ticket.key, changeFiles(gatheredOf(ticket), ticket.key)).facts);
+      const read = readBranch(ticket.key, changeFiles(gatheredOf(ticket), ticket.key));
+      next.set(ticket.key, read.facts);
+      nextText.set(ticket.key, read.text);
     }
-    return next;
+    return {facts: next, texts: nextText};
   }
 
   function boardChanged(
@@ -423,13 +436,14 @@ export function openLiveBoard(options: LiveBoardOptions) {
     if (gen !== generation) {
       return false;
     }
-    const nextFacts = factsFor(tickets);
+    const read = factsFor(tickets);
     const nextLogin = login ?? loginName;
-    const changed = boardChanged(tickets, nextReviews, nextFacts, nextLogin);
+    const changed = boardChanged(tickets, nextReviews, read.facts, nextLogin);
     cache = tickets;
     pullByKey = nextPulls;
     reviews = nextReviews;
-    facts = nextFacts;
+    facts = read.facts;
+    texts = read.texts;
     if (login) {
       loginName = login;
     }
@@ -493,13 +507,14 @@ export function openLiveBoard(options: LiveBoardOptions) {
       }
       spyKeys = used;
     }
-    const nextFacts = factsFor(tickets, snapshot.facts);
-    const changed = boardChanged(tickets, nextReviews, nextFacts, loginName);
+    const read = factsFor(tickets, snapshot.facts, snapshot.texts);
+    const changed = boardChanged(tickets, nextReviews, read.facts, loginName);
     cache = tickets;
     pullByKey = nextPulls;
     reviews = nextReviews;
     spyThreadPull = nextSpy;
-    facts = nextFacts;
+    facts = read.facts;
+    texts = read.texts;
     return changed;
   }
 
@@ -585,6 +600,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
       },
       review: key => reviews.get(key),
       branchFacts: key => facts.get(key),
+      branchText: key => texts.get(key),
       spineToken: key => tokenOf(key),
       reviewPlace: place => pullPage(place.file, place.line),
     },

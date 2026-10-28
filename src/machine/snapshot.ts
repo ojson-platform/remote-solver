@@ -58,11 +58,14 @@ export async function loadCycle(
   const facts = new Map<string, BranchFacts>();
   const texts = new Map<string, BranchText>();
   for (const issue of cycles) {
-    const read = readBranch(issue.key, filesAt(issue.key));
+    const files = filesAt(issue.key);
+    const read = readBranch(issue.key, files);
     pulls.set(issue.key, await pullSnapshots(review, issue.key));
     changes.set(issue.key, read.change);
-    facts.set(issue.key, read.facts);
-    texts.set(issue.key, read.text);
+    if (!files.failed?.()) {
+      facts.set(issue.key, read.facts);
+      texts.set(issue.key, read.text);
+    }
   }
   return {issues, cycles, pulls, changes, facts, texts};
 }

@@ -193,6 +193,14 @@ function formsOf(html: string): string[] {
   return html.match(/<form\b[^>]*>[\s\S]*?<\/form>/g) ?? [];
 }
 
+function domHomeOf(sheet: string): string {
+  const start = sheet.indexOf('<h3>Дом</h3>');
+  assert.ok(start >= 0);
+  const roles = sheet.indexOf('<div class="roles">', start);
+  assert.ok(roles > start);
+  return sheet.slice(start, roles);
+}
+
 function articleOf(html: string, key: string): string {
   const at = html.indexOf(`data-key="${key}"`);
   assert.ok(at >= 0);
@@ -879,12 +887,24 @@ test('a neighbor submit keeps the role draft and the hook draft', async () => {
       assert.equal(empty.status, 200);
       assert.deepEqual(agents, ['cursor']);
       assert.deepEqual(roles, []);
-      const drafted = await post(
+      const stray = await post(
         page.url,
         'act',
         new URLSearchParams({
           act: 'choose-agent',
           agent: 'cursor',
+          name: 'editor',
+          outcome: 'html',
+          text: 'черновик',
+        }).toString(),
+      );
+      assert.equal(stray.status, 200);
+      assert.deepEqual(roles, []);
+      const drafted = await post(
+        page.url,
+        'act',
+        new URLSearchParams({
+          act: 'add-role',
           name: 'editor',
           outcome: 'html',
           text: 'черновик',
@@ -4423,6 +4443,95 @@ spec('spec-diff', () => {
             {key: '1', body: reply, place: {path: DESIGN_PATH, line: at, side: 'right'}},
           ]);
           assert.deepEqual(comments, []);
+        },
+      );
+    });
+  });
+});
+
+spec('settings', () => {
+  requirement('Choosing an agent writes at once', () => {
+    scenario('The agent field sits above the models', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [bare('1', 'Quiet')]},
+        async page => {
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString()))
+              .status,
+            200,
+          );
+          const home = domHomeOf(await pageHtml(page.url));
+          const agentForm = formsOf(home).find(form => form.includes('value="choose-agent"'));
+          assert.ok(agentForm);
+          assert.match(agentForm, />агент</);
+          const agentAt = home.indexOf('value="choose-agent"');
+          const modelsAt = home.indexOf('>mechanical<');
+          assert.ok(agentAt >= 0 && modelsAt > agentAt);
+          assert.match(home, />список наблюдения</);
+          assert.match(home, />arcadia</);
+          assert.match(home, />github</);
+        },
+      );
+    });
+    scenario('The new-role form has no agent field', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [bare('1', 'Quiet')]},
+        async page => {
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString()))
+              .status,
+            200,
+          );
+          const addForm = formsOf(await pageHtml(page.url)).find(form => form.includes('class="add"'));
+          assert.ok(addForm);
+          assert.match(addForm, /value="add-role"/);
+          assert.equal(addForm.includes('value="choose-agent"'), false);
+          assert.equal(addForm.includes('name="agent"'), false);
+        },
+      );
+    });
+    scenario('An unsaved agent field is empty', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [bare('1', 'Quiet')]},
+        async page => {
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString()))
+              .status,
+            200,
+          );
+          const home = domHomeOf(await pageHtml(page.url));
+          const agentForm = formsOf(home).find(form => form.includes('value="choose-agent"'));
+          assert.ok(agentForm);
+          assert.match(agentForm, /<option[^>]*value=""[^>]*>/);
+          assert.equal(agentForm.includes('value="cursor" selected'), false);
+          const snapshot = await readSnapshot(page.url);
+          assert.equal(snapshot.settings.agent, '');
+        },
+      );
+    });
+    scenario('Leaving a model empty writes the empty field', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [bare('1', 'Quiet')]},
+        async (page, window, paths) => {
+          window.chooseAgent('cursor');
+          window.leaveModel('judgment', '');
+          const doc = parse(readFileSync(paths.home, 'utf8')) as {models?: {judgment?: string}};
+          assert.equal(doc.models?.judgment, '');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString()))
+              .status,
+            200,
+          );
+          const home = domHomeOf(await pageHtml(page.url));
+          const judgmentForm = formsOf(home).find(
+            form => form.includes('value="leave-model"') && form.includes('value="judgment"'),
+          );
+          assert.ok(judgmentForm);
+          assert.match(judgmentForm, /class="warn"/);
+          assert.match(judgmentForm, /нужна модель/);
+          const snapshot = await readSnapshot(page.url);
+          assert.equal(snapshot.settings.models.judgment.needsValue, true);
+          assert.equal(snapshot.settings.models.judgment.value, '');
         },
       );
     });

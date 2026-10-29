@@ -1,0 +1,4 @@
+- [x] `home-agent-settings-sheet` The agent field sits above the models; The new-role form has no agent field; An unsaved agent field is empty
+- [x] `choose-agent-home-write` Choosing cursor writes the home file; Choosing the saved agent again changes nothing; An empty agent list writes nothing
+- [x] `overlay-vs-home-agent` An empty overlay agent means the home agent; The overlay agent does not write the home file; Overlay models, effort, and speed follow the merged factory
+- [x] `home-model-empty-write` Leaving a model empty writes the empty field

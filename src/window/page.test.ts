@@ -4509,6 +4509,32 @@ spec('settings', () => {
         },
       );
     });
+    scenario('Leaving a model empty writes the empty field', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [bare('1', 'Quiet')]},
+        async (page, window, paths) => {
+          window.chooseAgent('cursor');
+          window.leaveModel('judgment', '');
+          const doc = parse(readFileSync(paths.home, 'utf8')) as {models?: {judgment?: string}};
+          assert.equal(doc.models?.judgment, '');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString()))
+              .status,
+            200,
+          );
+          const home = domHomeOf(await pageHtml(page.url));
+          const judgmentForm = formsOf(home).find(
+            form => form.includes('value="leave-model"') && form.includes('value="judgment"'),
+          );
+          assert.ok(judgmentForm);
+          assert.match(judgmentForm, /class="warn"/);
+          assert.match(judgmentForm, /нужна модель/);
+          const snapshot = await readSnapshot(page.url);
+          assert.equal(snapshot.settings.models.judgment.needsValue, true);
+          assert.equal(snapshot.settings.models.judgment.value, '');
+        },
+      );
+    });
   });
 });
 

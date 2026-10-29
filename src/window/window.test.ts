@@ -423,6 +423,114 @@ function proveLeavingAModelEmptyWritesThatField10(): void {
   rmSync(dir, {recursive: true, force: true});
 }
 
+function proveAnEmptyOverlayAgentMeansTheHomeAgent(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  writeOverlay(checkout, ['alpha']);
+  let answered = '';
+  let started = 0;
+  let assignees = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      answers: agent => {
+        answered = agent;
+        return true;
+      },
+      startStep: () => {
+        started += 1;
+      },
+      writeAssignee: () => {
+        assignees += 1;
+      },
+      login: () => MANAGER,
+      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
+    },
+  );
+  window.chooseAgent('cursor');
+  window.openSettings();
+  assert.equal(window.overlay().agent, 'cursor');
+  const board = window.board();
+  assert.deepEqual(board.rows, []);
+  assert.equal(board.stepsStart, true);
+  assert.equal(board.takeDisabled, false);
+  window.spy();
+  assert.equal(answered, 'cursor');
+  assert.equal(started, 1);
+  window.take('1');
+  assert.equal(assignees, 1);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheOverlayAgentDoesNotWriteTheHomeFile(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  assert.equal(existsSync(home), true);
+  assert.equal(readHome(home).agent, undefined);
+  window.openSettings();
+  window.chooseOverlayAgent('codex');
+  assert.equal(readHome(home).agent, undefined);
+  const overlayFile = path.join(checkout, '.aifactory', 'config.yaml');
+  assert.equal(readHome(overlayFile).agent, 'codex');
+  const board = window.board();
+  assert.deepEqual(board.rows, [{text: 'фабрике ещё нужен агент'}]);
+  assert.equal(board.stepsStart, false);
+  assert.equal(board.takeDisabled, true);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveOverlayModelsEffortAndSpeedFollowTheMergedFactory(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeFileSync(
+    home,
+    [
+      'agent: codex',
+      'models:',
+      '  mechanical: gpt-6-luna',
+      '  judgment: gpt-6.1-sol',
+      'effort:',
+      '  mechanical: high',
+      '  judgment: low',
+      'watch:',
+      '  - alpha',
+      'roots:',
+      `  arcadia: ${arcadia}`,
+      '',
+    ].join('\n'),
+  );
+  writeOverlay(
+    checkout,
+    ['alpha'],
+    ['models:', '  mechanical: overlay-mechanical', ''].join('\n'),
+  );
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.openSettings();
+  assert.equal(window.overlay().file, '.aifactory/config.yaml');
+  assert.equal(window.overlay().checkout, checkout);
+  assert.equal(window.overlay().agent, 'codex');
+  assert.equal(window.overlay().models.mechanical.value, 'overlay-mechanical');
+  assert.equal(window.overlay().models.judgment.value, 'gpt-6.1-sol');
+  assert.deepEqual(window.overlay().effort, {mechanical: 'high', judgment: 'low'});
+  assert.equal(readHome(path.join(checkout, '.aifactory', 'config.yaml')).agent, undefined);
+  rmSync(dir, {recursive: true, force: true});
+}
+
 function proveEmptyEffortAndSpeedAreTheAgentDefaultAndDoNotStopAStep12(): void {
   const {dir, home} = scratch();
   let started = 0;
@@ -3971,6 +4079,15 @@ spec('settings', () => {
     });
     scenario('Leaving a model empty writes the empty field', () => {
       proveLeavingAModelEmptyWritesThatField10();
+    });
+    scenario('An empty overlay agent means the home agent', () => {
+      proveAnEmptyOverlayAgentMeansTheHomeAgent();
+    });
+    scenario('The overlay agent does not write the home file', () => {
+      proveTheOverlayAgentDoesNotWriteTheHomeFile();
+    });
+    scenario('Overlay models, effort, and speed follow the merged factory', () => {
+      proveOverlayModelsEffortAndSpeedFollowTheMergedFactory();
     });
   });
 });

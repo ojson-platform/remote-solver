@@ -193,6 +193,14 @@ function formsOf(html: string): string[] {
   return html.match(/<form\b[^>]*>[\s\S]*?<\/form>/g) ?? [];
 }
 
+function domHomeOf(sheet: string): string {
+  const start = sheet.indexOf('<h3>Дом</h3>');
+  assert.ok(start >= 0);
+  const roles = sheet.indexOf('<div class="roles">', start);
+  assert.ok(roles > start);
+  return sheet.slice(start, roles);
+}
+
 function articleOf(html: string, key: string): string {
   const at = html.indexOf(`data-key="${key}"`);
   assert.ok(at >= 0);
@@ -4423,6 +4431,69 @@ spec('spec-diff', () => {
             {key: '1', body: reply, place: {path: DESIGN_PATH, line: at, side: 'right'}},
           ]);
           assert.deepEqual(comments, []);
+        },
+      );
+    });
+  });
+});
+
+spec('settings', () => {
+  requirement('Choosing an agent writes at once', () => {
+    scenario('The agent field sits above the models', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [bare('1', 'Quiet')]},
+        async page => {
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString()))
+              .status,
+            200,
+          );
+          const home = domHomeOf(await pageHtml(page.url));
+          const agentForm = formsOf(home).find(form => form.includes('value="choose-agent"'));
+          assert.ok(agentForm);
+          assert.match(agentForm, />агент</);
+          const agentAt = home.indexOf('value="choose-agent"');
+          const modelsAt = home.indexOf('>mechanical<');
+          assert.ok(agentAt >= 0 && modelsAt > agentAt);
+          assert.match(home, />список наблюдения</);
+          assert.match(home, />arcadia</);
+          assert.match(home, />github</);
+        },
+      );
+    });
+    scenario('The new-role form has no agent field', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [bare('1', 'Quiet')]},
+        async page => {
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString()))
+              .status,
+            200,
+          );
+          const addForm = formsOf(await pageHtml(page.url)).find(form => form.includes('class="add"'));
+          assert.ok(addForm);
+          assert.match(addForm, /value="add-role"/);
+          assert.equal(addForm.includes('value="choose-agent"'), false);
+          assert.equal(addForm.includes('name="agent"'), false);
+        },
+      );
+    });
+    scenario('An unsaved agent field is empty', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [bare('1', 'Quiet')]},
+        async page => {
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString()))
+              .status,
+            200,
+          );
+          const home = domHomeOf(await pageHtml(page.url));
+          const agentForm = formsOf(home).find(form => form.includes('value="choose-agent"'));
+          assert.ok(agentForm);
+          assert.match(agentForm, /<option[^>]*value=""[^>]*>/);
+          assert.equal(agentForm.includes('value="cursor" selected'), false);
+          const snapshot = await readSnapshot(page.url);
+          assert.equal(snapshot.settings.agent, '');
         },
       );
     });

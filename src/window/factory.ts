@@ -439,6 +439,9 @@ export function openHome(homePath: string | undefined, offered: readonly string[
     if (!homePath || offered.length === 0 || !offered.includes(agentId)) {
       return;
     }
+    if (agentOf(doc) === agentId) {
+      return;
+    }
     if (!canWrite()) {
       return;
     }

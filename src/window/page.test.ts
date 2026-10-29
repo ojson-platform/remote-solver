@@ -887,12 +887,24 @@ test('a neighbor submit keeps the role draft and the hook draft', async () => {
       assert.equal(empty.status, 200);
       assert.deepEqual(agents, ['cursor']);
       assert.deepEqual(roles, []);
-      const drafted = await post(
+      const stray = await post(
         page.url,
         'act',
         new URLSearchParams({
           act: 'choose-agent',
           agent: 'cursor',
+          name: 'editor',
+          outcome: 'html',
+          text: 'черновик',
+        }).toString(),
+      );
+      assert.equal(stray.status, 200);
+      assert.deepEqual(roles, []);
+      const drafted = await post(
+        page.url,
+        'act',
+        new URLSearchParams({
+          act: 'add-role',
           name: 'editor',
           outcome: 'html',
           text: 'черновик',

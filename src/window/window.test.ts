@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
-import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import {homedir, tmpdir} from 'node:os';
 import path from 'node:path';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
@@ -290,7 +298,24 @@ function proveChoosingCursorWritesItsPairAndOmitsEffortAndSpeed2(): void {
   assert.equal(window.settings().speed, undefined);
   assert.equal(window.board().settingsOpen, false);
   assert.equal(window.board().stepsStart, true);
+  assert.equal(window.board().takeDisabled, false);
   assert.deepEqual(window.board().rows, []);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveChoosingTheSavedAgentAgainChangesNothing(): void {
+  const {dir, home} = scratch();
+  const window = openWindow({homePath: home});
+  window.chooseAgent('cursor');
+  const afterFirst = readFileSync(home, 'utf8');
+  const mtime = statSync(home).mtimeMs;
+  window.chooseAgent('cursor');
+  assert.equal(readFileSync(home, 'utf8'), afterFirst);
+  assert.equal(statSync(home).mtimeMs, mtime);
+  const board = window.board();
+  assert.equal(board.stepsStart, true);
+  assert.equal(board.takeDisabled, false);
+  assert.deepEqual(board.rows, []);
   rmSync(dir, {recursive: true, force: true});
 }
 
@@ -368,7 +393,10 @@ function proveAnEmptyAgentListWritesNoHomeFile9(): void {
   window.chooseAgent('cursor');
   window.chooseAgent('codex');
   assert.equal(existsSync(home), false);
-  assert.deepEqual(window.board().rows, [{text: 'фабрике ещё нужен агент'}]);
+  const board = window.board();
+  assert.deepEqual(board.rows, [{text: 'фабрике ещё нужен агент'}]);
+  assert.equal(board.stepsStart, false);
+  assert.equal(board.takeDisabled, true);
   rmSync(dir, {recursive: true, force: true});
 }
 
@@ -3934,6 +3962,9 @@ spec('settings', () => {
   requirement('Choosing an agent writes at once', () => {
     scenario('Choosing cursor writes the home file', () => {
       proveChoosingCursorWritesItsPairAndOmitsEffortAndSpeed2();
+    });
+    scenario('Choosing the saved agent again changes nothing', () => {
+      proveChoosingTheSavedAgentAgainChangesNothing();
     });
     scenario('An empty agent list writes nothing', () => {
       proveAnEmptyAgentListWritesNoHomeFile9();

@@ -7,7 +7,8 @@ import {test} from 'vitest';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
-import {changeText, HEADINGS, readChange} from './change.ts';
+import {changeText, HEADINGS, readBranch, readChange} from './change.ts';
+import {archiveDir} from './naming.ts';
 import type {FileSource} from './port.ts';
 import {gitFiles} from '../adapters/vcs.ts';
 
@@ -131,6 +132,23 @@ test('change text prefers the active directory and otherwise reads the archive',
   );
 });
 
+spec('change', () => {
+  requirement('The active change wins over the archive', () => {
+    scenario('Only the archive is present, the archive text is read', () => {
+      const proposal = path.join(archiveDir('7'), 'proposal.md');
+      const files: FileSource = {
+        exists: rel => rel === proposal || rel === archiveDir('7'),
+        read: rel => (rel === proposal ? '## Outcome\n\nИз архива.\n' : ''),
+        list: () => [],
+      };
+      const read = readBranch('7', files);
+      assert.match(read.text.proposal, /Из архива/);
+      assert.equal(read.change.proposal, false);
+      assert.equal(read.change.archived, true);
+    });
+  });
+});
+
 test('names capabilities under Added and Modified', () => {
   const files: FileSource = {
     exists: rel => rel.endsWith('proposal.md'),
@@ -182,3 +200,37 @@ function existsOnMaster(root: string, rel: string): boolean {
     return false;
   }
 }
+
+spec('change', () => {
+  requirement('The change directory is issue-<key>', () => {
+    scenario('A numeric directory is not the change', () => {
+      const source: FileSource = {
+        exists: rel => rel === 'openspec/changes/7/proposal.md',
+        read: () => '## Open questions\n- [ ] no\n',
+        list: () => [],
+      };
+      assert.equal(readChange('7', source).proposal, false);
+    });
+    scenario('The change is read from the issue branch', () => {
+      const source: FileSource = {
+        exists: rel => rel === 'openspec/changes/issue-7/proposal.md',
+        read: () => '## Open questions\n- [ ] still open\n',
+        list: () => [],
+      };
+      assert.equal(readChange('7', source).proposal, true);
+    });
+  });
+
+  requirement('The active change wins over the archive', () => {
+    scenario('Both copies present, the active text is read', () => {
+      const source: FileSource = {
+        exists: rel =>
+          rel === 'openspec/changes/issue-11/proposal.md' ||
+          rel === 'openspec/changes/archive/issue-11/proposal.md',
+        read: rel => (rel.startsWith('openspec/changes/issue-11/') ? 'active\n' : 'archived\n'),
+        list: () => [],
+      };
+      assert.match(changeText('11', source) ?? '', /active/);
+    });
+  });
+});

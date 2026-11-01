@@ -17,12 +17,17 @@ GitHub reads for the board and the spy stay inside the rate limit.
 
 ### Requirement: One pull view carries checks and commits
 
-An open pull request's checks and its head and base commits SHALL come from one `pr view`. A range read after that view SHALL NOT ask GitHub again when the view included both commits. When the view omits the commits, the range SHALL fall back to one REST read of the pull request. When the client rejects the base commit field, the pull request SHALL still be read from a view without that field, and the base commit SHALL come from one REST read.
+An open pull request's checks, whether it conflicts with its base, and its head and base commits SHALL come from one `pr view`. A range read after that view SHALL NOT ask GitHub again when the view included both commits. When the view omits the commits, the range SHALL fall back to one REST read of the pull request. When the client rejects the base commit field, the pull request SHALL still be read from a view without that field, and the base commit SHALL come from one REST read. A view whose mergeability is `CONFLICTING` SHALL mark the pull request as conflicting. Any other mergeability, including a view that omits it, SHALL NOT.
 
 #### Scenario: Checks and the two commits come from one view
 
 - **WHEN** the review reads an open pull request and then its range
 - **THEN** one view asks for the checks and both commits, the range does not ask again, and a view that omits the commits is followed by one REST read
+
+#### Scenario: A conflicting pull request is named from that view
+
+- **WHEN** the one view reports mergeability `CONFLICTING`
+- **THEN** the open pull request is conflicting and no second view is requested
 
 #### Scenario: A client without the base field still reads the pull request
 

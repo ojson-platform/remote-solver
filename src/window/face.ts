@@ -1,4 +1,4 @@
-/** The window face. Shapes and names are in `CONTEXT.md`. */
+/** The window face. Names are in `CONTEXT.md`. Roles are in `FACE.md`. */
 
 export const FACE = {
   bg: '#0e0d0b',

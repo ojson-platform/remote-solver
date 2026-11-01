@@ -57,7 +57,7 @@ A human gate exists on `proposing`, `specifying`, `designing`, and `accepting`. 
 
 ### Requirement: The open row shows three gate lines
 
-The spine SHALL show a gate button on Plan, Specify, Design, and Accept, for `proposing`, `specifying`, `designing`, and `accepting`, except on the row of the phase the plaque is standing on when that phase is `proposing`, `specifying`, or `designing`. That row SHALL NOT show its gate button. Acceptance stands in that place when `openspec/specs/acceptance/spec.md` offers it, and that place SHALL be empty when it does not. The Accept row SHALL keep its gate while the plaque is `accepting`. Every other gate SHALL stay, including when the board station is a door, a plaque, or a dot. The button face SHALL be the sign alone. The set sign SHALL be 18px. The empty sign SHALL be the smaller circle. Its accessible name SHALL stay «Поставить гейт …» or «Снять гейт …». A click in the sidebar SHALL write or remove that one label even when the board would not.
+The spine SHALL show a gate button on Plan, Specify, Design, and Accept, for `proposing`, `specifying`, `designing`, and `accepting`, except on the row of the phase the plaque is standing on when that phase is `proposing`, `specifying`, or `designing`. That row SHALL NOT show its gate button. Acceptance stands in that place when `openspec/specs/acceptance/spec.md` offers it, and that place SHALL be empty when it does not. The Accept row SHALL keep its gate while the plaque is `accepting`. Every other gate SHALL stay, including when the board station is a door, a plaque, or a dot. The button face SHALL be the sign alone. The empty sign SHALL be the smaller circle. The set sign SHALL be the larger circle. Its accessible name SHALL stay «Поставить гейт …» or «Снять гейт …». A click in the sidebar SHALL write or remove that one label even when the board would not.
 
 #### Scenario: A passed gate is controlled from the sidebar
 
@@ -67,4 +67,4 @@ The spine SHALL show a gate button on Plan, Specify, Design, and Accept, for `pr
 #### Scenario: A future gate repeats the station button
 
 - **WHEN** the plaque is on `proposing` and `designing` has a door
-- **THEN** the `designing` line in the sidebar has the gate button, and that sign is 18px
+- **THEN** the `designing` line in the sidebar has the gate button, and that sign is the set sign

@@ -46,6 +46,8 @@ export type PullSnapshot = {
   state: string;
   review: ReviewView;
   checks: CheckState;
+  /** The head does not apply onto the base. Absent when the host did not say. */
+  conflict?: boolean;
   /** Threads and conversation from the one read. The board paints them without asking again. */
   reading?: {threads: ThreadRecord[]; notes: Conversation[]};
 };
@@ -406,6 +408,9 @@ export function decide(
     if (!change.tasks) {
       return {kind: 'advance', issue: issue.key, to: 'tasking', reason: 'tasks.md is missing'};
     }
+    if (pr?.conflict) {
+      return agent(issue.key, 'fix-implementation', phase, String(pr.id), 'rebase onto the base');
+    }
     if (change.openTasks > 0) {
       return agent(
         issue.key,
@@ -437,6 +442,14 @@ export function decide(
   if (phase === 'verifying') {
     if (!pr) {
       return {kind: 'wait', issue: issue.key, reason: 'verifying needs an open pull request'};
+    }
+    if (pr.conflict) {
+      return {
+        kind: 'advance',
+        issue: issue.key,
+        to: 'implementing',
+        reason: 'pull request conflicts with the base',
+      };
     }
     const back = pr.review.rollback;
     if (pr.checks === 'red') {

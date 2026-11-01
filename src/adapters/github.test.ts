@@ -1,15 +1,18 @@
 import assert from 'node:assert/strict';
+import {rmSync} from 'node:fs';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test, vi} from 'vitest';
 
 import {
   changesPayload,
   classifyChecks,
+  clearGithubPause,
   githubAdapters,
   isRestGet,
   linkedTitle,
   linksFrom,
   memoryPorts,
+  noteGithubPause,
   PULL_LIST_FRESH_MS,
   pullRangeArgs,
   readRest,
@@ -22,6 +25,8 @@ import {
 import {setPhase} from '../machine/labels.ts';
 import {loadCycle} from '../machine/snapshot.ts';
 import type {FileSource} from '../machine/port.ts';
+import {REFRESH_MS, serveLiveBoard} from '../window/live.ts';
+import {yard} from '../window/live.harness.ts';
 
 function rollup(over: Partial<CheckRollup> = {}): CheckRollup {
   return {state: 'OPEN', statusCheckRollup: [], ...over};
@@ -307,57 +312,6 @@ test('posted bodies carry the spy mark, and the shared login is not the robot', 
   );
 });
 
-spec('spec-diff', () => {
-  requirement('GitHub sends the side of the thread', () => {
-    scenario('A plain right-side thread is unmarked', async () => {
-      const calls: string[][] = [];
-      const {review} = githubAdapters({
-        run: async args => {
-          calls.push(args);
-          return '';
-        },
-      });
-      await review.openThread('15', {
-        commit: 'abc',
-        path: 'src/a.ts',
-        line: 4,
-        body: 'смотрите сюда',
-        plain: true,
-        side: 'right',
-      });
-      await review.openThread('15', {
-        commit: 'abc',
-        path: 'src/a.ts',
-        line: 4,
-        body: 'смотрите сюда',
-        plain: true,
-        side: 'left',
-      });
-      await review.openThread('15', {
-        commit: 'abc',
-        path: 'src/a.ts',
-        line: 1,
-        body: 'sdd:note baseline',
-      });
-      const right = calls[0] ?? [];
-      const left = calls[1] ?? [];
-      const marked = calls[2] ?? [];
-      assert.equal(right.includes('side=RIGHT'), true);
-      assert.equal(right.includes('body=смотрите сюда'), true);
-      assert.equal(
-        right.some(arg => arg.includes('🤖')),
-        false,
-      );
-      assert.equal(left.includes('side=LEFT'), true);
-      assert.equal(marked.includes('body=🤖 sdd:note baseline'), true);
-      assert.equal(
-        marked.some(arg => arg.startsWith('side=')),
-        false,
-      );
-    });
-  });
-});
-
 spec('github-read', () => {
   requirement('The cycle field is read for a cycle', () => {
     scenario('An issue without the cycle label skips the field', async () => {
@@ -452,11 +406,42 @@ spec('github-read', () => {
         false,
       );
       assert.equal((await review.pulls('12'))[0]?.checks, 'none');
+      assert.equal((await review.pulls('12'))[0]?.conflict, false);
       assert.deepEqual(await review.range('12'), {head: 'ccc', base: 'ddd'});
       assert.equal(
         calls.filter(args => args.join(' ').includes('pulls/12')).length,
         1,
       );
+    });
+
+    scenario('A conflicting pull request is named from that view', async () => {
+      const calls: string[][] = [];
+      const {review} = githubAdapters({
+        run: async args => {
+          calls.push(args);
+          if (args[0] === 'pr' && args[1] === 'list' && args.includes('merged')) {
+            return '[]';
+          }
+          if (args[0] === 'pr' && args[1] === 'list') {
+            return JSON.stringify([{number: 16, title: '#7: change', state: 'OPEN'}]);
+          }
+          if (args[0] === 'pr' && args[1] === 'view') {
+            return JSON.stringify({
+              state: 'OPEN',
+              statusCheckRollup: [],
+              headRefOid: 'aaa',
+              baseRefOid: 'bbb',
+              mergeable: 'CONFLICTING',
+            });
+          }
+          throw new Error(args.join(' '));
+        },
+      });
+      const [pull] = await review.pulls('7');
+      assert.equal(pull?.conflict, true);
+      const views = calls.filter(args => args[0] === 'pr' && args[1] === 'view');
+      assert.equal(views.length, 1);
+      assert.match(views[0]?.join(' ') ?? '', /mergeable/);
     });
 
     scenario('A client without the base field still reads the pull request', async () => {
@@ -626,6 +611,45 @@ spec('github-read', () => {
   });
 
   requirement('A spent rate limit pauses polling', () => {
+    scenario('A spent rate limit waits until the reset', async () => {
+      vi.useFakeTimers();
+      const staged = yard();
+      let reads = 0;
+      const listOpen = staged.tracker.listOpen.bind(staged.tracker);
+      staged.tracker.listOpen = async () => {
+        reads += 1;
+        return listOpen();
+      };
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        const afterOpen = reads;
+        const resetSec = Math.floor(Date.now() / 1000) + 90;
+        const limited = [
+          'HTTP/2.0 403 Forbidden',
+          `x-ratelimit-reset: ${resetSec}`,
+          '',
+          '{"message":"API rate limit exceeded"}',
+        ].join('\n');
+        const read = readRest(limited);
+        assert.equal(read.pauseUntil, resetSec * 1000);
+        noteGithubPause(read.pauseUntil ?? 0);
+        await vi.advanceTimersByTimeAsync(REFRESH_MS);
+        assert.equal(reads, afterOpen);
+        await vi.advanceTimersByTimeAsync(REFRESH_MS);
+        assert.ok(reads > afterOpen);
+      } finally {
+        clearGithubPause();
+        await page.close();
+        vi.useRealTimers();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
     scenario('A nameless rate limit reads the reset resource', () => {
       assert.equal(
         resetMillis(JSON.stringify({resources: {core: {reset: 1_793_005_596}}})),

@@ -8,7 +8,7 @@ The drawer is the one open cycle over the board.
 
 ### Requirement: The drawer holds one open cycle
 
-The open cycle SHALL open a sidebar over the board, from the right, at `min(560px, 92vw)`, and SHALL NOT narrow the stations. There SHALL be no rail and no shelf. One cycle SHALL be open: opening another SHALL close the previous, and a second click on the open cycle SHALL close it.
+The open cycle SHALL open a sidebar over the board, from the right, and SHALL NOT narrow the stations. There SHALL be no rail and no shelf. One cycle SHALL be open: opening another SHALL close the previous, and a second click on the open cycle SHALL close it.
 
 #### Scenario: Opening another row closes the previous
 
@@ -23,7 +23,7 @@ The open cycle SHALL open a sidebar over the board, from the right, at `min(560p
 #### Scenario: The sidebar is a wide drawer
 
 - **WHEN** a cycle is open
-- **THEN** the sidebar is a fixed drawer on the right, `min(560px, 92vw)` wide, and the stations keep their width
+- **THEN** the sidebar is a fixed drawer on the right and the stations keep their width
 
 #### Scenario: A second click closes the cycle
 

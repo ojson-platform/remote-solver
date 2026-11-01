@@ -159,8 +159,12 @@ export type BranchText = {
   proposal: string;
   design: string;
   tasks: string;
+  /** Bodies of `tasks/<id>.md` for the ids listed in `tasks.md`, in that order. */
+  taskFiles?: {id: string; body: string}[];
   specs: BranchSpecText[];
   baselines: string[];
+  /** Active change directory, or the archive when that is the only copy. */
+  root?: string;
 };
 
 function slash(rel: string): string {
@@ -184,11 +188,28 @@ function taskCounts(text: string, present: boolean): {done: number; open: number
   return {done, open};
 }
 
-function specEntries(files: FileSource, key: string): {id: string; file: string}[] {
-  const dir = slash(path.join(changeDir(key), 'specs'));
-  const prefix = `${dir}/`;
+/**
+ * Where the documents sit.
+ * The active directory when it has any file. The archive when it is the only copy.
+ * `readChange` stays on the active directory, so accepting still sees no open change.
+ */
+function documentDir(key: string, files: FileSource): string {
+  const active = changeDir(key);
+  if (changeDocuments(active, files).length > 0) {
+    return active;
+  }
+  const archived = archiveDir(key);
+  if (changeDocuments(archived, files).length > 0) {
+    return archived;
+  }
+  return active;
+}
+
+function specEntries(files: FileSource, dir: string): {id: string; file: string}[] {
+  const specs = slash(path.join(dir, 'specs'));
+  const prefix = `${specs}/`;
   const found: {id: string; file: string}[] = [];
-  for (const raw of files.list(dir)) {
+  for (const raw of files.list(specs)) {
     const rel = slash(raw);
     if (!rel.startsWith(prefix) || !rel.endsWith('/spec.md')) {
       continue;
@@ -224,13 +245,14 @@ export function readBranch(
   files: FileSource,
 ): {change: ChangeView; facts: BranchFacts; text: BranchText} {
   const change = readChange(key, files);
-  const proposalPath = path.join(changeDir(key), 'proposal.md');
-  const designPath = path.join(changeDir(key), 'design.md');
-  const tasksPath = path.join(changeDir(key), 'tasks.md');
+  const dir = documentDir(key, files);
+  const proposalPath = path.join(dir, 'proposal.md');
+  const designPath = path.join(dir, 'design.md');
+  const tasksPath = path.join(dir, 'tasks.md');
   const proposal = files.exists(proposalPath) ? slash(proposalPath) : undefined;
   const design = files.exists(designPath) ? slash(designPath) : undefined;
   const tasksFile = files.exists(tasksPath) ? slash(tasksPath) : undefined;
-  const specs = specEntries(files, key);
+  const specs = specEntries(files, dir);
   const pairs: [string, string][] = [];
   const body = new Map<string, string>();
   const take = (rel: string | undefined) => {
@@ -259,6 +281,20 @@ export function readBranch(
     });
   }
   const proposalText = proposal ? (body.get(proposal) ?? '') : '';
+  const tasksText = tasksFile ? (body.get(tasksFile) ?? '') : '';
+  const taskFiles: {id: string; body: string}[] = [];
+  for (const line of tasksText.split('\n')) {
+    const id = /^- \[[ x]\] `([^`]+)`/.exec(line.trim())?.[1];
+    if (!id || /[/\\]|\.\./.test(id)) {
+      continue;
+    }
+    const rel = slash(path.join(dir, 'tasks', `${id}.md`));
+    if (!files.exists(rel)) {
+      continue;
+    }
+    take(rel);
+    taskFiles.push({id, body: body.get(rel) ?? ''});
+  }
   const baselines: string[] = [];
   for (const id of [...namedCapabilities(proposalText), ...specText.map(spec => spec.id)]) {
     if (files.exists(baselineRel(id)) && !baselines.includes(id)) {
@@ -270,9 +306,11 @@ export function readBranch(
     text: {
       proposal: proposalText,
       design: design ? (body.get(design) ?? '') : '',
-      tasks: tasksFile ? (body.get(tasksFile) ?? '') : '',
+      tasks: tasksText,
+      taskFiles,
       specs: specText,
       baselines,
+      root: slash(dir),
     },
     facts: {
       fingerprint: markOf(pairs),

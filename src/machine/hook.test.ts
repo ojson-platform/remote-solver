@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync, rmSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {test} from 'vitest';
@@ -7,6 +7,8 @@ import {test} from 'vitest';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {cycleHooks, stepPrompt} from './hook.ts';
+import {ACTION_SKILL} from './route.ts';
+import {hookQueues, openHookGroup, readServiceYaml} from '../window/window.harness.ts';
 
 const plan = ['# plan', '', '## Steps', '', '1. go', '', '## Check', '', '- done', ''].join('\n');
 
@@ -348,10 +350,122 @@ test('the step file the runtime sends is the package step with the hooks inserte
   assert.ok(result.indexOf('## archive') < result.indexOf('UN-BEFORE'));
 });
 
+function proveABlankStringDoesNotCreateAPoint(): void {
+  const {dir, file, window} = openHookGroup(hookQueues);
+  const choices = window.serviceConfig().hookChoices ?? [];
+  assert.deepEqual([...new Set(choices.map(item => item.action))], Object.keys(ACTION_SKILL));
+  assert.deepEqual(
+    choices.filter(item => item.action === 'archive').map(item => item.point),
+    ['before', 'after'],
+  );
+  window.chooseServiceHook('archive', 'before', '');
+  window.chooseServiceHook('archive', 'before', '   ');
+  window.chooseServiceHook('custom', 'before', 'no');
+  window.chooseServiceHook('archive', 'during', 'no');
+  window.saveServiceConfig();
+  assert.equal(readServiceYaml(file).sdd?.hooks, undefined);
+  assert.equal(
+    window
+      .serviceConfig()
+      .hookChoices?.some(item => item.action === 'archive' && item.point === 'before'),
+    true,
+  );
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheLastStringRemovesThePoint(): void {
+  const {dir, file, window} = openHookGroup(
+    [
+      'sdd:',
+      '  queues:',
+      '    - name: alpha',
+      '  hooks:',
+      '    archive:',
+      '      before:',
+      '        - only',
+      '      after:',
+      '        - stay',
+      '',
+    ].join('\n'),
+  );
+  assert.equal(
+    window.serviceConfig().hookChoices?.some(item => item.action === 'archive'),
+    false,
+  );
+  window.setServiceHook('archive', 'before', []);
+  window.saveServiceConfig();
+  const hooks = readServiceYaml(file).sdd?.hooks;
+  assert.equal(hooks?.archive?.before, undefined);
+  assert.deepEqual(hooks?.archive?.after, ['stay']);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveASingleStringIsWrittenBackAsAList(): void {
+  const {dir, file, window} = openHookGroup(
+    [
+      'sdd:',
+      '  queues:',
+      '    - name: alpha',
+      '  hooks:',
+      '    review:',
+      '      before: keep me',
+      '      after: 4',
+      '    other:',
+      '      before:',
+      '        - one',
+      '        - two',
+      '',
+    ].join('\n'),
+  );
+  assert.deepEqual(window.serviceConfig().hooks, [
+    {action: 'review', point: 'before', values: ['keep me']},
+    {action: 'other', point: 'before', values: ['one', 'two']},
+  ]);
+  window.saveServiceConfig();
+  const hooks = readServiceYaml(file).sdd?.hooks;
+  assert.deepEqual(hooks?.review?.before, ['keep me']);
+  assert.equal(hooks?.review?.after, 4);
+  assert.deepEqual(hooks?.other?.before, ['one', 'two']);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheWindowDoesNotWriteTheField(): void {
+  const {dir, window, item} = openHookGroup(hookQueues, {
+    sddHooks: {archive: {before: 'keep the cycle'}},
+  });
+  window.chooseServiceHook('archive', 'before', 'service line');
+  window.saveServiceConfig();
+  assert.deepEqual(item.sddHooks, {archive: {before: 'keep the cycle'}});
+  assert.deepEqual(window.sidebar(), [
+    {
+      kind: 'hook',
+      points: [{action: 'archive', point: 'before', paragraph: 'keep the cycle'}],
+    },
+  ]);
+  rmSync(dir, {recursive: true, force: true});
+}
+
 spec('hook', () => {
+  requirement('A service hook is a list of strings at sdd.hooks', () => {
+    scenario('A blank string does not create a point', () => {
+      proveABlankStringDoesNotCreateAPoint();
+    });
+    scenario('The last string removes the point', () => {
+      proveTheLastStringRemovesThePoint();
+    });
+    scenario('A single string is written back as a list', () => {
+      proveASingleStringIsWrittenBackAsAList();
+    });
+    scenario('A non-string hook value is left in place', () => {
+      proveASingleStringIsWrittenBackAsAList();
+    });
+  });
   requirement('The cycle keeps one sddHooks map', () => {
     scenario('Spaces are not a point', () => {
       proveSpacesAreNotAPoint();
+    });
+    scenario('The window does not write the field', () => {
+      proveTheWindowDoesNotWriteTheField();
     });
   });
   requirement('The prompt inserts service lines and then the cycle paragraph', () => {

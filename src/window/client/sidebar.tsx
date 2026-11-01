@@ -1,7 +1,7 @@
 import type {ReactNode} from 'react';
 
 import type {SpecEntry, SpecRow} from '../spec-diff.ts';
-import type {Spine, SpineLayer, SpineSourceLine} from '../spine.ts';
+import type {Spine, SpineLayer, SpineSourceLine, SpineTask} from '../spine.ts';
 import type {WindowSnapshot} from '../snapshot.ts';
 import type {GateStation, SidebarBlock} from '../types.ts';
 import type {LineDraft, OpenFold, SpecOpen} from './gesture.ts';
@@ -263,6 +263,7 @@ function PlanLines({
   drafts,
   keyName,
   file,
+  root,
 }: {
   lines: readonly SpineSourceLine[];
   pull: boolean;
@@ -270,6 +271,7 @@ function PlanLines({
   drafts: readonly LineDraft[];
   keyName: string;
   file: 'proposal.md' | 'design.md';
+  root: string;
 }): ReactNode {
   let gap = false;
   const out: ReactNode[] = [];
@@ -295,7 +297,7 @@ function PlanLines({
       return;
     }
     const draft = drafts.find(item => item.line === line.text.trimEnd());
-    const path = `openspec/changes/issue-${keyName}/${file}`;
+    const path = `${root}/${file}`;
     out.push(
       <span key={index}>
         <button
@@ -354,6 +356,7 @@ function PlanDocument({
             questions={model.proposal.questions}
             drafts={drafts}
             keyName={keyName}
+            root={model.readPath}
             file="proposal.md"
           />
         </section>
@@ -375,6 +378,7 @@ function PlanDocument({
               questions={model.proposal.questions}
               drafts={drafts}
               keyName={keyName}
+              root={model.readPath}
               file="proposal.md"
             />
           </div>
@@ -387,6 +391,31 @@ function PlanDocument({
       <div className="doc">{body}</div>
       {model.pull ? lineTemplate(keyName) : null}
     </>
+  );
+}
+
+function TaskFile({task}: {task: SpineTask}): ReactNode {
+  const sections = task.sections.filter(section => section.lines.some(line => line.text.trim() !== ''));
+  if (sections.length === 0) {
+    return null;
+  }
+  return (
+    <div className="doc">
+      {sections.map(section => (
+        <section className="plan-section" key={section.heading}>
+          <h3>{section.heading}</h3>
+          {section.lines.map(line =>
+            line.text.trim() === '' ? (
+              <span className="gap" key={line.line} />
+            ) : (
+              <p className="line" key={line.line}>
+                {line.text}
+              </p>
+            ),
+          )}
+        </section>
+      ))}
+    </div>
   );
 }
 
@@ -414,6 +443,7 @@ function DesignDocument({
             questions={model.design.questions}
             drafts={drafts}
             keyName={keyName}
+            root={model.readPath}
             file="design.md"
           />
         </section>
@@ -435,6 +465,7 @@ function DesignDocument({
               questions={[]}
               drafts={drafts}
               keyName={keyName}
+              root={model.readPath}
               file="design.md"
             />
           </div>
@@ -583,16 +614,33 @@ function noteAnchor(row: SpecRow): {path: string; at: string; side: string} | un
   return {path: anchor.path, at: String(anchor.line), side: 'right'};
 }
 
+function specIsPlain(rows: readonly SpecEntry[]): boolean {
+  for (const entry of rows) {
+    if (entry.kind === 'gap') {
+      if (entry.hidden.some(row => row.kind !== 'ctx')) {
+        return false;
+      }
+      continue;
+    }
+    if (entry.kind !== 'ctx') {
+      return false;
+    }
+  }
+  return true;
+}
+
 function DiffRow({
   row,
   pull,
   drafts,
   keyName,
+  plain = false,
 }: {
   row: SpecRow;
   pull: boolean;
   drafts: readonly LineDraft[];
   keyName: string;
+  plain?: boolean;
 }): ReactNode {
   const scene = scenarioOf(row.text);
   const anchor = noteAnchor(row);
@@ -611,11 +659,19 @@ function DiffRow({
         side={anchor?.side}
       />
     ) : null;
+  const numbers = plain ? (
+    numberCell(row.right ?? row.left)
+  ) : (
+    <>
+      {numberCell(row.left)}
+      {numberCell(row.right)}
+    </>
+  );
+  const rowClass = `diff-row${plain ? ' plain' : ''} ${row.kind}`;
   if (!showButton) {
     return (
-      <div className={`diff-row ${row.kind}`}>
-        {numberCell(row.left)}
-        {numberCell(row.right)}
+      <div className={rowClass}>
+        {numbers}
         <div className="diff-text">
           <span className="line" data-scenario={scene}>
             {body}
@@ -624,7 +680,7 @@ function DiffRow({
       </div>
     );
   }
-  const pressed = draft === undefined ? `diff-row ${row.kind}` : `diff-row is-on ${row.kind}`;
+  const pressed = draft === undefined ? rowClass : `${rowClass} is-on`;
   return (
     <>
       <button
@@ -636,8 +692,7 @@ function DiffRow({
         data-side={anchor?.side}
         data-scenario={scene}
       >
-        {numberCell(row.left)}
-        {numberCell(row.right)}
+        {numbers}
         <span className="diff-text">{body}</span>
       </button>
       {note}
@@ -661,9 +716,12 @@ function SpecRows({
   keyName: string;
 }): ReactNode {
   const open = gaps.find(item => item.id === id)?.open ?? [];
+  const plain = specIsPlain(rows);
   return rows.map((entry, index) => {
     if (entry.kind !== 'gap') {
-      return <DiffRow key={index} row={entry} pull={pull} drafts={drafts} keyName={keyName} />;
+      return (
+        <DiffRow key={index} row={entry} pull={pull} drafts={drafts} keyName={keyName} plain={plain} />
+      );
     }
     const shown = open.includes(index);
     return (
@@ -679,6 +737,7 @@ function SpecRows({
                 pull={pull}
                 drafts={drafts}
                 keyName={keyName}
+                plain={plain}
               />
             ))
           : null}
@@ -877,7 +936,10 @@ export function Sidebar({
             {model.tasks.map(task => (
               <details className="task" key={task.id}>
                 <summary>
-                  {task.id} <span className="quiet">{task.done ? 'готово' : 'открыто'}</span>
+                  {task.id}{' '}
+                  <span className={task.done ? 'state done' : 'state'}>
+                    {task.done ? 'готово' : 'открыто'}
+                  </span>
                 </summary>
                 {task.scenarios.map(scene => (
                   <button
@@ -889,6 +951,7 @@ export function Sidebar({
                     {scene.name}
                   </button>
                 ))}
+                <TaskFile task={task} />
               </details>
             ))}
           </SpineRow>
@@ -906,7 +969,9 @@ export function Sidebar({
                     ? 'wait'
                     : model.checks === 'обязательные проверки зелёные'
                       ? 'ok'
-                      : undefined
+                      : model.checks === 'проверок нет'
+                        ? 'none'
+                        : undefined
                 }
               >
                 {model.checks}

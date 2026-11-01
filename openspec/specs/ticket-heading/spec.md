@@ -28,12 +28,12 @@ The board and the sidebar SHALL show `#<key>: <title>`. On the board the title S
 
 ### Requirement: The sidebar names the one open pull request
 
-When exactly one pull request is open and its id is known, the sidebar SHALL append ` (PR: #<id>)` in muted color. `#<id>` SHALL link to `https://github.com/<owner>/<repo>/pull/<id>`. Zero or several pull requests SHALL omit that parenthesis. The board SHALL NOT show it.
+When exactly one pull request is open and its id is known, the sidebar SHALL append ` (PR: #<id>)` in muted. `#<id>` SHALL link to `https://github.com/<owner>/<repo>/pull/<id>`. Zero or several pull requests SHALL omit that parenthesis. The board SHALL NOT show it.
 
 #### Scenario: One pull request is a muted link in the sidebar
 
 - **WHEN** a cycle with repo `acme/billing` has one open pull request `11` and the drawer is open
-- **THEN** the sidebar shows `(PR: #11)` in muted color, `#11` links to `https://github.com/acme/billing/pull/11`, and the board row does not show that parenthesis
+- **THEN** the sidebar shows `(PR: #11)` in muted, `#11` links to `https://github.com/acme/billing/pull/11`, and the board row does not show that parenthesis
 
 #### Scenario: Several pull requests omit the parenthesis
 

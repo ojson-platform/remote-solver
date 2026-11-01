@@ -1,6 +1,6 @@
 # Window
 
-What the window draws. Shared words — cycle, phase, gate, layer — stay in the root glossary. The page is one document. These names are the controls it draws. A control with another shape is named here. Colour roles and the ground are in `FACE.md`.
+What the window draws. Shared words — cycle, phase, gate, layer — stay in the root glossary. The page is one document. These names are the controls it draws. A control with another shape is named here. The room, the type, the colour roles, and the ground are in `FACE.md`.
 
 ## Language
 

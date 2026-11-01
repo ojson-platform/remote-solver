@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
+import {requirement, scenario, spec} from '@ojson/spec-coverage';
+
 import {updateMirror} from './mirror.ts';
 
 test('a missing block is appended and the author text stays', () => {
@@ -14,4 +16,31 @@ test('an existing layer line is replaced and the others stay', () => {
   assert.match(next, /Plan: new/);
   assert.match(next, /Specify: kept/);
   assert.match(next, /^intro/);
+});
+
+spec('mirror', () => {
+  requirement("Mirror keeps the author's text", () => {
+    scenario('A missing block is appended', () => {
+      const next = updateMirror('Please look at cache.\n', 'Plan', 'one line');
+      assert.match(
+        next,
+        /^Please look at cache\.\n\n<!-- sdd:begin -->\nPlan: one line\n<!-- sdd:end -->\n$/,
+      );
+    });
+    scenario('An existing layer line is replaced', () => {
+      const body = [
+        'intro',
+        '',
+        '<!-- sdd:begin -->',
+        'Plan: old',
+        'Specify: kept',
+        '<!-- sdd:end -->',
+        '',
+      ].join('\n');
+      const next = updateMirror(body, 'Plan', 'new');
+      assert.match(next, /Plan: new/);
+      assert.match(next, /Specify: kept/);
+      assert.match(next, /^intro/);
+    });
+  });
 });

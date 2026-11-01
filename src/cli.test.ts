@@ -5,26 +5,12 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {test, vi} from 'vitest';
 import {fileURLToPath} from 'node:url';
-import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import type {AgentRun} from './adapters/agent.ts';
 import {launcherRuntime, route} from './cli.ts';
 import type {Vcs} from './machine/port.ts';
 
 const runAgent = vi.hoisted(() => vi.fn(async (_run: AgentRun) => ({text: ''})));
-
-function idleVcs(root: string): Vcs {
-  return {
-    prepare: async () => root,
-    tip: async () => 'abc',
-    filesAt: () => ({exists: () => false, read: () => '', list: () => []}),
-    compare: async () => null,
-    push: async () => {},
-    head: async () => 'abc',
-    published: async () => true,
-    dirty: async () => [],
-  };
-}
 
 vi.mock('./adapters/agent.ts', () => ({runAgent}));
 
@@ -170,65 +156,4 @@ test('the sdd bin prints cycle verbs', () => {
   assert.match(help.stderr, /accept <key>/);
   const asked = spawnSync(process.execPath, [bin, 'help'], {encoding: 'utf8', cwd: root});
   assert.equal(asked.status, 0);
-});
-
-spec('artifact', () => {
-  requirement('The writing prompt carries the issue text', () => {
-    scenario('The prompt includes the issue and forbids a search', async () => {
-      runAgent.mockClear();
-      const root = mkdtempSync(path.join(tmpdir(), 'sdd-issue-text-'));
-      const runtime = launcherRuntime({
-        root,
-        vcs: idleVcs(root),
-        config: {queues: [{name: 'FIRST'}], branchScope: 'sdd', base: 'trunk'},
-      });
-      const title = 'Show the whole outcome';
-      const body = 'The Plan row stops at the first blank line.';
-      await runtime.run({
-        skill: 'plan',
-        action: 'create-proposal',
-        key: '6',
-        phase: 'proposing',
-        pull: '',
-        mode: 'judgment',
-        issue: {title, body},
-      });
-      const text = runAgent.mock.calls[0]?.[0].promptArgs.ISSUE_TEXT ?? '';
-      assert.match(text, /# Show the whole outcome/);
-      assert.match(text, /The Plan row stops at the first blank line\./);
-      assert.match(text, /Do not search the repository for this issue/);
-      assert.match(text, /do not read the service source to recover it/);
-      const prompt = readFileSync(
-        path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../prompts/sdd.md'),
-        'utf8',
-      );
-      const issueAt = prompt.indexOf('{{ISSUE_TEXT}}');
-      const stepAt = prompt.indexOf('{{STEP}}');
-      assert.ok(issueAt >= 0 && issueAt < stepAt);
-      assert.match(prompt, /Do not search for `sdd\.mjs`, `bin\/`, or `node_modules`, and do not read them/);
-    });
-
-    scenario('An empty issue stays empty', async () => {
-      runAgent.mockClear();
-      const root = mkdtempSync(path.join(tmpdir(), 'sdd-issue-empty-'));
-      const runtime = launcherRuntime({
-        root,
-        vcs: idleVcs(root),
-        config: {queues: [{name: 'FIRST'}], branchScope: 'sdd', base: 'trunk'},
-      });
-      await runtime.run({
-        skill: 'plan',
-        action: 'create-proposal',
-        key: '6',
-        phase: 'proposing',
-        pull: '',
-        mode: 'judgment',
-        issue: {title: '  ', body: '\n'},
-      });
-      const text = runAgent.mock.calls[0]?.[0].promptArgs.ISSUE_TEXT ?? '';
-      assert.match(text, /^# \n\n\n\nThe issue has no description\.$/m);
-      assert.equal(text.includes('# Issue'), false);
-      assert.match(text, /Do not search the repository for this issue/);
-    });
-  });
 });

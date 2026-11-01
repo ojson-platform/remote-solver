@@ -31,7 +31,7 @@ When the checks are red and a layer marker names a phase, the machine SHALL move
 
 ### Requirement: Only green checks without a marker reach accepting
 
-Checks that are neither red nor green SHALL wait. Green checks with a layer marker SHALL move to that phase. Green checks with no layer marker SHALL move to `accepting`.
+Checks that are neither red nor green SHALL wait, unless the open pull request conflicts with its base. Green checks with a layer marker SHALL move to that phase. Green checks with no layer marker SHALL move to `accepting`.
 
 #### Scenario: Pending checks wait
 
@@ -47,3 +47,17 @@ Checks that are neither red nor green SHALL wait. Green checks with a layer mark
 
 - **WHEN** `verifying` has green checks and no layer marker
 - **THEN** the machine moves the issue to `accepting`
+
+### Requirement: A merge conflict returns to implementing for a rebase
+
+When the open pull request conflicts with its base, `verifying` SHALL move the issue to `implementing` and SHALL NOT wait on checks. On `implementing`, that conflict SHALL run the fix that rebases onto the base, before an open task and before the move to `verifying`.
+
+#### Scenario: A conflicting pull request leaves verifying for a rebase
+
+- **WHEN** the phase is `verifying`, no check is reported, and the open pull request conflicts with its base
+- **THEN** the machine moves the issue to `implementing` and asks for the rebase
+
+#### Scenario: Implementing rebases a conflicting pull request
+
+- **WHEN** the phase is `implementing` and the open pull request conflicts with its base
+- **THEN** the machine runs the fix that rebases and does not move to `verifying`

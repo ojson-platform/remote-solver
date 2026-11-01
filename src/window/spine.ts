@@ -37,6 +37,8 @@ export type SpineTask = {
   id: string;
   done: boolean;
   scenarios: {name: string; capability: string}[];
+  /** `##` sections of `tasks/<id>.md`. Empty when that file is absent. */
+  sections: SpineSection[];
 };
 
 export type SpineQuestion = {text: string; open: boolean};
@@ -238,6 +240,9 @@ function checksLine(checks: string | undefined): string | undefined {
   if (checks === 'pending') {
     return 'проверки идут';
   }
+  if (checks === 'none') {
+    return 'проверок нет';
+  }
   return undefined;
 }
 
@@ -276,20 +281,41 @@ function scenarioNames(delta: string): string[] {
   return names;
 }
 
-function tasksOf(text: string, owner: Map<string, string>): SpineTask[] {
+function taskNames(line: string): string[] {
+  const quoted = [...line.matchAll(/«([^»]+)»/g)]
+    .map(item => (item[1] ?? '').trim())
+    .filter(name => name !== '');
+  if (quoted.length > 0) {
+    return quoted;
+  }
+  const marked = /^- \[[ x]\] `[^`]+`\s*(.*)$/.exec(line.trim());
+  if (!marked) {
+    return [];
+  }
+  return (marked[1] ?? '')
+    .replace(/^[—–-]\s*/, '')
+    .split(';')
+    .map(name => name.trim())
+    .filter(name => name !== '');
+}
+
+function tasksOf(
+  text: string,
+  owner: Map<string, string>,
+  files: readonly {id: string; body: string}[],
+): SpineTask[] {
+  const bodies = new Map(files.map(file => [file.id, file.body]));
   const out: SpineTask[] = [];
   for (const line of text.split('\n')) {
     const match = /^- \[([ x])\] `([^`]+)`/.exec(line.trim());
     if (!match?.[2]) {
       continue;
     }
-    const names = [...line.matchAll(/«([^»]+)»/g)]
-      .map(item => item[1] ?? '')
-      .filter(name => name !== '');
     out.push({
       id: match[2],
       done: match[1] === 'x',
-      scenarios: names.map(name => ({name, capability: owner.get(name) ?? ''})),
+      scenarios: taskNames(line).map(name => ({name, capability: owner.get(name) ?? ''})),
+      sections: sectionsOf(bodies.get(match[2]) ?? ''),
     });
   }
   return out;
@@ -328,7 +354,13 @@ export function projectSpine(
       JSON.stringify({proposal: text.proposal, specs: text.specs, baselines: text.baselines}),
     ),
     design: partRevision(text.design),
-    tasks: partRevision(JSON.stringify({tasks: text.tasks, deltas: text.specs.map(spec => spec.delta)})),
+    tasks: partRevision(
+      JSON.stringify({
+        tasks: text.tasks,
+        files: text.taskFiles ?? [],
+        deltas: text.specs.map(spec => spec.delta),
+      }),
+    ),
   };
   const kept = previous?.sections;
   const focus = linesFromFocus(input.focusBody ?? '');
@@ -382,7 +414,10 @@ export function projectSpine(
       }
     }
   }
-  const tasks = kept?.tasks === sections.tasks && previous ? previous.tasks : tasksOf(text.tasks, owner);
+  const tasks =
+    kept?.tasks === sections.tasks && previous
+      ? previous.tasks
+      : tasksOf(text.tasks, owner, text.taskFiles ?? []);
   return {
     open: layerForStation(input.station),
     station: input.station,
@@ -398,7 +433,7 @@ export function projectSpine(
     diff: input.diff === true,
     pull: input.pull === true,
     ...(input.reviewGate ? {reviewGate: input.reviewGate} : {}),
-    readPath: changeDir(input.key),
+    readPath: (text.root && text.root !== '' ? text.root : changeDir(input.key)).split('\\').join('/'),
     accept: input.gateOff?.accepting
       ? 'На приёмке машина мержит сама.'
       : 'На приёмке мерж ждёт человека.',

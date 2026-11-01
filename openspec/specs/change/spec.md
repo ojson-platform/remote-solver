@@ -38,3 +38,8 @@ When both the active directory and the archive contain the change, the machine S
 
 - **WHEN** the active change and the archive both contain a proposal
 - **THEN** the machine reads the active proposal
+
+#### Scenario: Only the archive is present, the archive text is read
+
+- **WHEN** the active directory has no change documents and the archive has a proposal
+- **THEN** the machine reads the archived proposal and reports no active proposal

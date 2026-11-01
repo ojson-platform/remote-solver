@@ -1,0 +1,1081 @@
+import assert from 'node:assert/strict';
+import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {homedir, tmpdir} from 'node:os';
+import path from 'node:path';
+
+import {requirement, scenario, spec} from '@ojson/spec-coverage';
+import {vi} from 'vitest';
+
+import {machine} from '../adapters/compose.ts';
+import {memoryPorts} from '../adapters/github.ts';
+import type {RunningTurn} from '../main.ts';
+import type {IssueRecord, Review, Runtime, Vcs} from '../machine/port.ts';
+import {pullSnapshots} from '../machine/snapshot.ts';
+import {modelFor} from '../machine/skill.ts';
+import {
+  applyTurn,
+  boardModel,
+  defaultHomePath,
+  noteTurn,
+  openLiveBoard,
+  REFRESH_MS,
+  serveLiveBoard,
+  turnsLine,
+  watchSpy,
+  type LiveReview,
+} from './live.ts';
+import {renderWindow} from './client/render.ts';
+import type {WindowSnapshot} from './snapshot.ts';
+import {openWindow, type WindowTicket} from './window.ts';
+import {laterTurn, post, readSnapshot, yard} from './live.harness.ts';
+import {
+  deltaRequirement,
+  held,
+  hosted,
+  MANAGER,
+  post as pagePost,
+  readSnapshot as pageSnapshot,
+  writeChange,
+} from './page.harness.ts';
+
+async function pageHtml(url: string): Promise<string> {
+  const response = await fetch(new URL('/snapshot', url));
+  assert.equal(response.status, 200);
+  return renderWindow((await response.json()) as WindowSnapshot);
+}
+
+function articleOf(html: string, key: string): string {
+  const at = html.indexOf(`data-key="${key}"`);
+  assert.ok(at >= 0, key);
+  return html.slice(html.lastIndexOf('<article', at), html.indexOf('</article>', at));
+}
+
+function stationOf(html: string, key: string, name: string): string {
+  const article = articleOf(html, key);
+  const marker = `data-station="${name}"`;
+  const at = article.indexOf(marker);
+  assert.ok(at >= 0, name);
+  const next = article.indexOf('data-station="', at + marker.length);
+  return article.slice(at, next === -1 ? article.length : next);
+}
+
+spec('board-command', () => {
+  requirement('The board command serves this repository', () => {
+    scenario('The home file is the factory file when the command names none', () => {
+      assert.equal(defaultHomePath(), path.join(homedir(), '.aifactory', 'config.yaml'));
+    });
+
+    scenario('The served page answers at its URL', async () => {
+      const staged = yard();
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        assert.match(page.url, /^http:\/\/127\.0\.0\.1:\d+\/$/);
+        assert.equal((await fetch(page.url)).status, 200);
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('Another repository stays under the GitHub root', () => {
+      const staged = yard();
+      const here = path.join(staged.dir, 'here');
+      const other = path.join(staged.github, 'acme', 'other');
+      mkdirSync(here, {recursive: true});
+      mkdirSync(path.join(other, 'openspec'), {recursive: true});
+      writeFileSync(
+        path.join(other, 'openspec', 'config.yaml'),
+        ['sdd:', '  queues:', '    - name: remote-solver', ''].join('\n'),
+      );
+      writeFileSync(
+        staged.homePath,
+        [
+          'watch:',
+          '  - acme/billing',
+          '  - acme/other',
+          'roots:',
+          `  github: ${staged.github}`,
+          '',
+        ].join('\n'),
+      );
+      const tickets: WindowTicket[] = [
+        {
+          key: '6',
+          title: 'Here',
+          labels: ['sdd:cycle', 'remote-solver'],
+          assignee: '',
+          repo: 'acme/billing',
+          sddService: '',
+        },
+        {
+          key: '7',
+          title: 'Other',
+          labels: ['sdd:cycle', 'remote-solver'],
+          assignee: '',
+          repo: 'acme/other',
+          sddService: '',
+        },
+      ];
+      try {
+        const window = openWindow(
+          {
+            homePath: staged.homePath,
+            adapter: 'github',
+            repoDir: {repo: 'acme/billing', dir: here},
+          },
+          {tickets: () => tickets, login: () => MANAGER},
+        );
+        const cards = [
+          ...window.board().pool,
+          ...window.board().columns.flatMap(column => column.cards),
+        ];
+        assert.equal(cards.find(card => card.key === '6')?.checkout, here);
+        assert.equal(cards.find(card => card.key === '7')?.checkout, other);
+      } finally {
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('The page reads the tracker again while it stays open', async () => {
+      vi.useFakeTimers();
+      const staged = yard();
+      let reads = 0;
+      const listOpen = staged.tracker.listOpen;
+      staged.tracker.listOpen = async () => {
+        reads += 1;
+        return listOpen();
+      };
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        const afterOpen = reads;
+        const before = (await readSnapshot(page.url)).generation;
+        await vi.advanceTimersByTimeAsync(REFRESH_MS);
+        assert.ok(reads > afterOpen);
+        assert.equal((await readSnapshot(page.url)).generation, before);
+      } finally {
+        await page.close();
+        vi.useRealTimers();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('A spy poll paints from the reading it already has', async () => {
+      const staged = yard();
+      const ports = memoryPorts({
+        user: MANAGER,
+        issues: [
+          {
+            key: '6',
+            title: 'Show the whole Plan',
+            body: '',
+            state: 'OPEN',
+            labels: ['sdd:cycle', 'remote-solver'],
+            assignee: '',
+          },
+        ],
+      });
+      let lists = 0;
+      let refreshes = 0;
+      const listOpen = ports.tracker.listOpen.bind(ports.tracker);
+      ports.tracker.listOpen = async () => {
+        lists += 1;
+        return listOpen();
+      };
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: ports.tracker,
+        review: ports.review,
+        githubRoot: staged.github,
+      });
+      const vcs: Vcs = {
+        prepare: async () => '',
+        tip: async () => 'abc',
+        filesAt: () => ({exists: () => false, read: () => '', list: () => []}),
+        compare: async () => null,
+        push: async () => {},
+        head: async () => 'abc',
+        published: async () => true,
+        dirty: async () => [],
+      };
+      const runtime: Runtime = {
+        async run() {
+          return {commits: 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
+      };
+      const box = machine(staged.dir, {
+        config: {
+          queues: [{name: 'remote-solver'}],
+          base: 'master',
+          branchScope: 'sdd',
+          ignoreComments: [],
+        },
+        tracker: ports.tracker,
+        review: ports.review,
+        vcs,
+        runtime,
+      });
+      const controller = new AbortController();
+      const done = watchSpy(
+        box,
+        {
+          running: new Set<string>(),
+          refresh: async () => {
+            refreshes += 1;
+          },
+          apply(snapshot) {
+            live.apply(snapshot);
+          },
+        },
+        controller.signal,
+      );
+      try {
+        const deadline = Date.now() + 3000;
+        let painted = false;
+        while (Date.now() < deadline) {
+          const cards = [
+            ...live.window.board().pool,
+            ...live.window.board().columns.flatMap(column => column.cards),
+          ];
+          painted = cards.some(card => card.title === 'Show the whole Plan');
+          if (painted) {
+            break;
+          }
+          await new Promise(resolve => {
+            setTimeout(resolve, 20);
+          });
+        }
+        assert.equal(painted, true);
+        assert.equal(refreshes, 0);
+        assert.equal(lists, 1);
+      } finally {
+        controller.abort();
+        await done;
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('The board keeps the spy\'s threads', async () => {
+      const staged = yard();
+      staged.cycle.assignee = MANAGER;
+      staged.cycle.labels = ['sdd:cycle', 'remote-solver', 'sdd:proposing'];
+      const seen: string[] = [];
+      const review: LiveReview = {
+        pulls: async () => [{id: '11', title: '#6: Show the whole Plan', state: 'OPEN', checks: 'green'}],
+        async threadList(pull) {
+          seen.push(`thread:${pull}`);
+          return [];
+        },
+        async comments(pull) {
+          seen.push(`note:${pull}`);
+          return [];
+        },
+        range: async () => ({head: 'abc', base: null}),
+        speak: async () => {},
+        openThread: async () => {},
+      };
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review,
+        githubRoot: staged.github,
+      });
+      try {
+        await live.refresh();
+        seen.length = 0;
+        live.apply({
+          issues: [staged.cycle],
+          cycles: [staged.cycle],
+          pulls: new Map([
+            [
+              '6',
+              [
+                {
+                  id: '11',
+                  title: '#6: Show the whole Plan',
+                  state: 'OPEN',
+                  checks: 'green',
+                  review: {unanswered: true, rollback: null, layers: []},
+                  reading: {
+                    threads: [
+                      {
+                        id: 'T1',
+                        comment: 'C1',
+                        path: 'src/a.ts',
+                        line: 4,
+                        resolved: false,
+                        body: 'смотрите',
+                      },
+                    ],
+                    notes: [{body: 'раз', robot: false}],
+                  },
+                },
+              ],
+            ],
+          ]),
+          changes: new Map(),
+        });
+        const board = live.window.board();
+        const card = board.columns.flatMap(column => column.cards).find(item => item.key === '6');
+        assert.equal(card?.unanswered, 'смотрите');
+        await live.refresh();
+        assert.deepEqual(seen, []);
+        const again = live.window.board().columns.flatMap(column => column.cards).find(item => item.key === '6');
+        assert.equal(again?.unanswered, 'смотрите');
+      } finally {
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('A cycle outside the spy still reads threads', async () => {
+      const staged = yard();
+      staged.cycle.assignee = MANAGER;
+      staged.cycle.labels = ['sdd:cycle', 'remote-solver', 'sdd:proposing'];
+      const nine: IssueRecord = {
+        key: '9',
+        title: 'Other cycle',
+        body: '',
+        state: 'OPEN',
+        labels: ['sdd:cycle', 'remote-solver', 'sdd:proposing'],
+        assignee: MANAGER,
+        dependsOn: [],
+      };
+      staged.tracker.listOpen = async () => [staged.cycle, nine];
+      const seen: string[] = [];
+      const review: LiveReview = {
+        pulls: async key => [
+          {
+            id: key === '6' ? '11' : '19',
+            title: `#${key}: plan`,
+            state: 'OPEN',
+            checks: 'none',
+          },
+        ],
+        async threadList(pull) {
+          seen.push(`thread:${pull}`);
+          return [
+            {
+              id: 'T9',
+              comment: 'C9',
+              path: 'src/b.ts',
+              line: 2,
+              resolved: false,
+              body: 'чужой',
+            },
+          ];
+        },
+        async comments(pull) {
+          seen.push(`note:${pull}`);
+          return [];
+        },
+        range: async () => ({head: 'abc', base: null}),
+        speak: async () => {},
+        openThread: async () => {},
+      };
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review,
+        githubRoot: staged.github,
+      });
+      try {
+        live.apply({
+          issues: [staged.cycle, nine],
+          cycles: [staged.cycle],
+          pulls: new Map([
+            [
+              '6',
+              [
+                {
+                  id: '11',
+                  title: '#6: plan',
+                  state: 'OPEN',
+                  checks: 'none',
+                  review: {unanswered: true, rollback: null, layers: []},
+                  reading: {
+                    threads: [
+                      {
+                        id: 'T1',
+                        comment: 'C1',
+                        path: 'src/a.ts',
+                        line: 4,
+                        resolved: false,
+                        body: 'смотрите',
+                      },
+                    ],
+                    notes: [],
+                  },
+                },
+              ],
+            ],
+          ]),
+          changes: new Map(),
+        });
+        await live.refresh();
+        assert.deepEqual(seen, ['thread:19', 'note:19']);
+      } finally {
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('The spy reads a pull request\'s threads once', async () => {
+      const calls: string[] = [];
+      const review: Review = {
+        pulls: async () => {
+          calls.push('pulls');
+          return [{id: '11', title: '#6: plan', state: 'OPEN', checks: 'none'}];
+        },
+        threads: async () => {
+          calls.push('threads');
+          return [];
+        },
+        threadList: async () => {
+          calls.push('threadList');
+          return [
+            {
+              id: 'T1',
+              comment: 'C1',
+              path: 'src/a.ts',
+              line: 4,
+              resolved: false,
+              body: 'смотрите',
+            },
+          ];
+        },
+        comments: async () => {
+          calls.push('comments');
+          return [{body: 'раз', robot: false}];
+        },
+        ensurePull: async () => '',
+        openThread: async () => {},
+        reply: async () => {},
+        say: async () => {},
+        speak: async () => {},
+        flag: async () => {},
+        range: async () => ({head: '', base: null}),
+        resolveThread: async () => {},
+        checksText: async () => '',
+        merge: async () => {},
+      };
+      const snaps = await pullSnapshots(review, '6');
+      assert.deepEqual(calls, ['pulls', 'threadList', 'comments']);
+      assert.equal(snaps[0]?.reading?.threads[0]?.body, 'смотрите');
+      assert.equal(snaps[0]?.review.unanswered, true);
+    });
+
+    scenario('The page pool lists a cycle in this repository', async () => {
+      const staged = yard();
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        const html = await pageHtml(page.url);
+        assert.match(articleOf(html, '6'), /class="ticket pool"/);
+        assert.match(html, /Show the whole Plan/);
+        assert.equal(html.includes('data-key="9"'), false);
+        assert.match(readFileSync(staged.homePath, 'utf8'), /acme\/billing/);
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('A taken cycle gains proposing on the page', async () => {
+      const staged = yard();
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        assert.equal(await post(page.url, '/act', 'act=choose-agent&agent=cursor'), 200);
+        assert.equal(await post(page.url, '/take', 'key=6'), 200);
+        const html = await pageHtml(page.url);
+        assert.equal(staged.cycle.assignee, MANAGER);
+        assert.ok(staged.cycle.labels.includes('sdd:proposing'));
+        assert.match(stationOf(html, '6', 'proposing'), /class="plaque"/);
+        assert.doesNotMatch(articleOf(html, '6'), /class="ticket pool"/);
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('The working directory is the gathered checkout', async () => {
+      const staged = yard();
+      const service = path.join(staged.github, 'acme', 'billing');
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: path.join(staged.dir, 'empty-root'),
+        checkout: service,
+      });
+      try {
+        await live.refresh();
+        const card = live.window.board().pool.find(item => item.key === '6');
+        assert.equal(card?.checkout, service);
+        assert.equal(card?.reason ?? '', '');
+      } finally {
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('The spy starts an agent for a proposing cycle', async () => {
+      const {tracker, review} = memoryPorts({
+        user: MANAGER,
+        issues: [
+          {
+            key: '6',
+            title: 'Show the whole Plan',
+            body: '',
+            state: 'OPEN',
+            labels: ['remote-solver', 'sdd:cycle', 'sdd:proposing'],
+            assignee: MANAGER,
+          },
+        ],
+      });
+      const vcs: Vcs = {
+        prepare: async () => '',
+        tip: async () => 'abc',
+        filesAt: () => ({exists: () => false, read: () => '', list: () => []}),
+        compare: async () => null,
+        push: async () => {},
+        head: async () => 'abc',
+        published: async () => true,
+        dirty: async () => [],
+      };
+      const notes: string[] = [];
+      const turns = new Map<string, RunningTurn>();
+      const sink = {
+        running: new Set<string>(),
+        setNote(line: string) {
+          notes.push(line);
+        },
+        setTurn(issue: string, turn: RunningTurn | undefined) {
+          applyTurn(turns, issue, turn);
+        },
+        refresh: async () => {},
+      };
+      let leading = false;
+      const runs: string[] = [];
+      let release: () => void = () => {};
+      const started = new Promise<void>(resolve => {
+        release = resolve;
+      });
+      const runtime: Runtime = {
+        async run(skill) {
+          runs.push(`${skill.key} ${skill.action}`);
+          leading = sink.running.has(skill.key);
+          assert.equal(turnsLine([...turns.values()]), '#6 proposing → create-proposal');
+          release();
+          return {commits: 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
+      };
+      const box = machine(tmpdir(), {
+        config: {
+          queues: [{name: 'remote-solver'}],
+          base: 'master',
+          branchScope: 'sdd',
+          ignoreComments: [],
+        },
+        tracker,
+        review,
+        vcs,
+        runtime,
+      });
+      const controller = new AbortController();
+      const done = watchSpy(box, sink, controller.signal);
+      await started;
+      controller.abort();
+      await done;
+      assert.deepEqual(runs, ['6 create-proposal']);
+      assert.equal(leading, true);
+      assert.ok(notes.some(line => line.includes('#6 start proposing → create-proposal')));
+    });
+
+    scenario('The spy line follows the next turn and then goes', async () => {
+      const {lines} = await laterTurn();
+      assert.ok(lines.includes('#6 specifying → restore-baseline'));
+      assert.equal(lines.at(-1), '');
+    });
+
+    scenario("Another worker's line stays", () => {
+      const turns = new Map<string, RunningTurn>();
+      applyTurn(turns, '6', {issue: '6', phase: 'specifying', action: 'restore-baseline'});
+      applyTurn(turns, '7', {issue: '7', phase: 'proposing', action: 'create-proposal'});
+      applyTurn(turns, '6', undefined);
+      assert.equal(turnsLine([...turns.values()]), '#7 proposing → create-proposal');
+    });
+
+    scenario('The page shows the spy line', async () => {
+      const staged = yard();
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+        spyNote: () => '#6 start proposing → create-proposal',
+      });
+      try {
+        const html = await pageHtml(page.url);
+        assert.match(html, /#6 start proposing → create-proposal/);
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('A cursor home model is the step model', () => {
+      const dir = mkdtempSync(path.join(tmpdir(), 'board-model-'));
+      const home = path.join(dir, 'home.yaml');
+      const checkout = path.join(dir, 'repo');
+      mkdirSync(checkout);
+      writeFileSync(
+        home,
+        [
+          'agent: cursor',
+          'models:',
+          '  mechanical: custom-mechanical',
+          '  judgment: grok-4.7-high-fast',
+          '',
+        ].join('\n'),
+      );
+      try {
+        assert.equal(boardModel(home, checkout, 'mechanical'), 'custom-mechanical');
+        assert.equal(boardModel(home, checkout, 'judgment'), 'grok-4.7-high-fast');
+      } finally {
+        rmSync(dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('An empty home agent keeps the built-in model', () => {
+      const dir = mkdtempSync(path.join(tmpdir(), 'board-model-empty-'));
+      const home = path.join(dir, 'home.yaml');
+      const checkout = path.join(dir, 'repo');
+      mkdirSync(checkout);
+      writeFileSync(home, ['models:', '  mechanical: custom-mechanical', ''].join('\n'));
+      try {
+        assert.equal(boardModel(home, checkout, 'mechanical'), modelFor('mechanical'));
+      } finally {
+        rmSync(dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('A home agent other than cursor keeps the built-in model', () => {
+      const dir = mkdtempSync(path.join(tmpdir(), 'board-model-other-'));
+      const home = path.join(dir, 'home.yaml');
+      const checkout = path.join(dir, 'repo');
+      mkdirSync(checkout);
+      writeFileSync(
+        home,
+        ['agent: codex', 'models:', '  mechanical: custom-mechanical', ''].join('\n'),
+      );
+      try {
+        assert.equal(boardModel(home, checkout, 'mechanical'), modelFor('mechanical'));
+      } finally {
+        rmSync(dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('The snapshot is JSON beside the page', async () => {
+      const staged = yard();
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        const html = await fetch(page.url);
+        assert.equal(html.status, 200);
+        assert.match(html.headers.get('content-type') ?? '', /^text\/html/);
+        assert.match(await html.text(), /<!doctype html>/);
+        const shot = await readSnapshot(page.url);
+        assert.equal(shot.generation, 0);
+        assert.equal(typeof shot.lamp, 'boolean');
+        assert.equal(shot.spy, '');
+        assert.ok(shot.rows.some(row => row.key === '6'));
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('The snapshot generation moves', async () => {
+      const staged = yard();
+      const turns = new Map<string, RunningTurn>();
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+        spyNote: () => turnsLine([...turns.values()]),
+        turn: key => turns.get(key)?.action,
+      });
+      try {
+        const read = () => readSnapshot(page.url);
+        assert.equal((await read()).generation, 0);
+        assert.equal((await read()).spy, '');
+        const html = await fetch(page.url);
+        assert.match(await html.text(), /<!doctype html>/);
+        assert.equal((await read()).generation, 0);
+        assert.equal(await post(page.url, '/act', 'act=not-a-gesture'), 400);
+        assert.equal((await read()).generation, 0);
+        const turn = {issue: '6', phase: 'specifying', action: 'restore-baseline'};
+        noteTurn(turns, '6', turn, () => {
+          page.note();
+        });
+        const named = await read();
+        assert.equal(named.generation, 1);
+        assert.equal(named.spy, '#6 specifying → restore-baseline');
+        noteTurn(turns, '6', {...turn}, () => {
+          page.note();
+        });
+        assert.equal((await read()).generation, 1);
+        assert.equal(await post(page.url, '/act', 'act=open&key=6'), 200);
+        await new Promise(resolve => setImmediate(resolve));
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal((await read()).generation, 3);
+        await page.refresh();
+        assert.equal((await read()).generation, 3);
+        staged.cycle.title = 'Renamed plan';
+        await page.refresh();
+        assert.equal((await read()).generation, 4);
+        await new Promise(resolve => setImmediate(resolve));
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal((await read()).generation, 4);
+        noteTurn(turns, '6', undefined, () => {
+          page.note();
+        });
+        const gone = await read();
+        assert.equal(gone.generation, 5);
+        assert.equal(gone.spy, '');
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('An unchanged spy poll leaves the generation', async () => {
+      const staged = yard();
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+        checkout: path.join(staged.github, 'acme', 'billing'),
+      });
+      try {
+        const snapshot = {
+          issues: [{...staged.cycle, title: 'From the spy'}],
+          cycles: [staged.cycle],
+          pulls: new Map(),
+          changes: new Map(),
+          facts: new Map([
+            ['6', {fingerprint: 'same', questions: 0, decisions: 0, specs: []}],
+          ]),
+        };
+        page.apply(snapshot);
+        const once = (await readSnapshot(page.url)).generation;
+        assert.ok(once > 0);
+        page.apply(snapshot);
+        assert.equal((await readSnapshot(page.url)).generation, once);
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('A stored branch summary fills the plaque', async () => {
+      const staged = yard();
+      staged.cycle.labels = ['sdd:cycle', 'remote-solver', 'sdd:proposing'];
+      staged.cycle.assignee = MANAGER;
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+        checkout: path.join(staged.github, 'acme', 'billing'),
+      });
+      try {
+        page.apply({
+          issues: [staged.cycle],
+          cycles: [staged.cycle],
+          pulls: new Map(),
+          changes: new Map(),
+          facts: new Map([
+            ['6', {fingerprint: 'stored', questions: 4, decisions: 1, specs: []}],
+          ]),
+        });
+        const shot = await readSnapshot(page.url);
+        const row = shot.rows.find(item => item.key === '6');
+        assert.ok(row);
+        assert.equal(row.phaseRow, 4);
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('The minute read asks only whether the diff is empty', async () => {
+      const staged = yard();
+      staged.cycle.labels = ['sdd:cycle', 'remote-solver', 'sdd:proposing'];
+      staged.cycle.assignee = MANAGER;
+      let compared = 0;
+      let asked = 0;
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: {
+          ...staged.review,
+          pulls: async () => [{id: '11', title: 'pull', state: 'OPEN', checks: 'green'}],
+          range: async () => ({head: 'bbb', base: 'aaa'}),
+        },
+        vcs: {
+          async compare() {
+            compared += 1;
+            return {commits: '', diff: 'diff --git a/a b/a\n'};
+          },
+          async changed() {
+            asked += 1;
+            return true;
+          },
+        },
+        githubRoot: staged.github,
+      });
+      try {
+        assert.equal(compared, 0);
+        assert.equal(asked, 1);
+        const shot = await readSnapshot(page.url);
+        const row = shot.rows.find(item => item.key === '6');
+        assert.equal(row?.doors?.implementing?.kind, 'code');
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+  });
+
+  requirement('The header shows the factory mark', () => {
+    scenario('The factory mark leads the name', async () => {
+      const staged = yard();
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        const html = await (await fetch(page.url)).text();
+        assert.match(html, /<link rel="icon" href="\/favicon\.svg"/);
+        const icon = await (await fetch(new URL('/favicon.svg', page.url))).text();
+        const drawn = icon.match(/d="([^"]+)"/)?.[1];
+        assert.ok(drawn);
+        assert.match(icon, /#f4f0e6/);
+        const shot = (await (await fetch(new URL('/snapshot', page.url))).json()) as WindowSnapshot;
+        const view = renderWindow(shot);
+        const wordAt = view.indexOf('class="word"');
+        const word = view.slice(wordAt, view.indexOf('</p>', wordAt));
+        assert.ok(word.includes(drawn));
+        assert.ok(word.indexOf('<svg') < word.indexOf('AI FACTORY'));
+        const client = await (await fetch(new URL('/client.js', page.url))).text();
+        assert.ok(client.includes(drawn));
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+  });
+
+  requirement('The header opens settings with a gear', () => {
+    scenario('The header control is a gear', async () => {
+      const staged = yard();
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        const shot = (await (await fetch(new URL('/snapshot', page.url))).json()) as WindowSnapshot;
+        const view = renderWindow(shot);
+        const header = view.slice(view.indexOf('<header class="top"'), view.indexOf('</header>'));
+        assert.match(header, /name="act" value="open-settings"/);
+        assert.match(header, /<button class="gear"[^>]*aria-label="Настройки"/);
+        assert.equal(header.includes('>Настройки<'), false);
+        const client = await (await fetch(new URL('/client.js', page.url))).text();
+        assert.ok(client.includes('M13 2 H19 V7'));
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+  });
+});
+
+spec('board-command', () => {
+  requirement('The board command serves this repository', () => {
+    scenario('The snapshot names the current turn', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('6', 'specifying')],
+          spyNote: () => '#6 specifying → restore-baseline',
+          turn: key => {
+            if (key === '6') {
+              return 'restore-baseline';
+            }
+            return undefined;
+          },
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const shot = await pageSnapshot(page.url);
+          assert.equal(shot.spy, '#6 specifying → restore-baseline');
+          const row = shot.rows.find(item => item.key === '6');
+          assert.ok(row);
+          assert.equal(row.action, 'restore-baseline');
+        },
+      );
+    });
+    scenario('The snapshot shows the action on an empty plaque', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying'), held('2', 'tasking')],
+          turn: key => {
+            if (key === '1') {
+              return 'restore-baseline';
+            }
+            if (key === '2') {
+              return 'create-tasks';
+            }
+            return undefined;
+          },
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const shot = await pageSnapshot(page.url);
+          const specifying = shot.rows.find(item => item.key === '1');
+          const tasking = shot.rows.find(item => item.key === '2');
+          assert.ok(specifying);
+          assert.ok(tasking);
+          assert.equal(specifying.plaque.top, undefined);
+          assert.equal(specifying.plaque.bottom, 'restore-baseline');
+          assert.equal(tasking.plaque.top, undefined);
+          assert.equal(tasking.plaque.bottom, 'create-tasks');
+        },
+      );
+    });
+    scenario('The snapshot offers Specify acceptance for an empty delta', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying', {openPullRequests: 1})]},
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'specs/section-text/spec.md',
+            '## Purpose\n\nNo requirement yet.\n',
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await pagePost(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const shot = await pageSnapshot(page.url);
+          assert.ok(shot.opened);
+          assert.equal(shot.opened.spine.pull, true);
+          assert.ok(shot.opened.spine.capabilities.some(item => item.id === 'section-text'));
+          assert.equal(
+            shot.opened.spine.capabilities.every(item => item.rows.length === 0),
+            true,
+          );
+          const specify = shot.opened.layers.find(layer => layer.layer === 'Specify');
+          const plan = shot.opened.layers.find(layer => layer.layer === 'Plan');
+          assert.ok(specify);
+          assert.ok(plan);
+          assert.equal(specify.act, 'accept');
+          assert.equal(plan.act, 'gate');
+        },
+      );
+    });
+    scenario('The snapshot hides Specify acceptance during a spec turn', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1})],
+          turn: () => 'create-initial-specs',
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'specs/section-text/spec.md', deltaRequirement());
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await pagePost(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const shot = await pageSnapshot(page.url);
+          assert.ok(shot.opened);
+          const specify = shot.opened.layers.find(layer => layer.layer === 'Specify');
+          assert.ok(specify);
+          assert.equal(specify.act, 'none');
+        },
+      );
+    });
+    scenario('The snapshot shows an error once', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const posted = await pagePost(
+            page.url,
+            'act',
+            new URLSearchParams({act: 'answer', key: '1', reply: ''}).toString(),
+          );
+          assert.equal(posted.status, 200);
+          const first = JSON.parse(posted.body) as WindowSnapshot;
+          assert.equal(first.status, 'Комментарий пустой. Напишите его в поле.');
+          const second = await pageSnapshot(page.url);
+          assert.equal(second.status, undefined);
+        },
+      );
+    });
+  });
+});

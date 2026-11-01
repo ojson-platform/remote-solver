@@ -12,7 +12,7 @@ From the service repository: `remote-solver issue <key>` and `remote-solver spy`
 
 Secrets belong in `.env` and are not committed.
 
-`CONTEXT.md` is the shared glossary; `CONTEXT-MAP.md` lists the module glossaries under `src/`. Name things in code, skills, and prompts with those terms. `docs/adr/` records decisions; before changing how the machine, a skill, or a prompt behaves, read the ADRs that touch that area, and record a new hard-to-reverse decision as the next number there.
+`CONTEXT.md` is the shared glossary; `CONTEXT-MAP.md` lists the module glossaries under `src/`. Name things in code, skills, and prompts with those terms. `src/window/FACE.md` is the window's look: the ground, the colour roles, and which control wears them. A change to that look updates `FACE.md` in the same session. A spec names a control and what it does; a colour, the ground, or a measure belongs on the face. `docs/adr/` records decisions; before changing how the machine, a skill, or a prompt behaves, read the ADRs that touch that area, and record a new hard-to-reverse decision as the next number there.
 
 Skills under `skills/` share every procedure through `prompts/context.md` (Publish, Fix thread, Hand-off, Wait, Delta, Artifacts, Layers). A skill names the section; it does not restate it. `src/machine/skill.test.ts` checks that shape.
 

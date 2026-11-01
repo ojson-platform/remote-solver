@@ -372,7 +372,7 @@ A door SHALL stand where the artifact already exists, behind the plaque and ahea
 | `verifying`    | the cycle state is `green`, `red`, or `pending`        |
 | `accepting`    | the reason contains `мерж` and the issue is still open |
 
-The door SHALL be a circle with the artifact icon: `plan`, `spec`, `design`, `tasks`, `code`, or the check mark. Several capabilities SHALL be one `spec` circle. A click on one file SHALL open the port address for that path at line 1 and SHALL NOT write a phase. When the port returns nothing, the circle SHALL stay a button and SHALL NOT navigate. A click on several `spec.md` files SHALL open this row. The board SHALL NOT list the capability ids under the cycle. The station width SHALL NOT change. A `note` or `out` marker SHALL NOT move the phase. The named layer's circle SHALL keep a small brass dot, and the plaque SHALL stay. A marker that moves the phase SHALL move the plaque with it, and SHALL NOT leave a separate gap behind.
+The door SHALL be a circle with the artifact icon: `plan`, `spec`, `design`, `tasks`, `code`, or the check mark. Several capabilities SHALL be one `spec` circle. A click on one file SHALL open the port address for that path at line 1 and SHALL NOT write a phase. When the port returns nothing, the circle SHALL stay a button and SHALL NOT navigate. A click on several `spec.md` files SHALL open this row. The board SHALL NOT list the capability ids under the cycle. The station width SHALL NOT change. A `note` or `out` marker SHALL NOT move the phase. The named layer's circle SHALL keep a brass dot, and the plaque SHALL stay. A marker that moves the phase SHALL move the plaque with it, and SHALL NOT leave a separate gap behind.
 
 #### Scenario: A file ahead of the plaque is a door
 

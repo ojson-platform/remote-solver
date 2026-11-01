@@ -10,6 +10,14 @@ import type {FileSource, Review, Tracker, Vcs} from './port.ts';
 import {changeDir} from './naming.ts';
 import {endStep, observedSignal, type RunMarks} from './focus.ts';
 import {openWindow, type WindowComment} from '../window/window.ts';
+import {
+  MANAGER,
+  columnCards,
+  cycle,
+  prepare,
+  proveTheSidebarFocusPlaqueDoesNotIncludeTheMarkerLine121,
+  yard,
+} from '../window/window.harness.ts';
 
 const KEY = '1';
 
@@ -346,6 +354,45 @@ test('a commit is Publish, a new marker is Hand-off, a new wait is Wait, and a s
   );
 });
 
+async function proveAReviewPlaceOpensThePortUrl(): Promise<void> {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const body = ['sdd:focus', 'Change solid', 'Code src/a.ts:4', 'the check failed', ''].join('\n');
+  let asked: {file: string; line: number} | undefined;
+  let calls = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => [
+        cycle('1', 'implementing', {
+          comments: [{body}],
+        }),
+      ],
+      reviewPlace: place => {
+        calls += 1;
+        asked = place;
+        return 'https://arcanum.example/review/42';
+      },
+    },
+  );
+  window.openCard('1');
+  const card = columnCards(window.board(), 'implementing')?.[0];
+  assert.equal(card?.layers, 'Code');
+  assert.equal(JSON.stringify(card).includes('src/a.ts'), false);
+  assert.equal(JSON.stringify(card).includes('the check failed'), false);
+  assert.equal(window.openReviewPlace('src/a.ts', 4), 'https://arcanum.example/review/42');
+  assert.deepEqual(asked, {file: 'src/a.ts', line: 4});
+  assert.equal(window.openReviewPlace('src/b.ts', 4), undefined);
+  assert.equal(calls, 1);
+  const plaque = window.sidebar().find(block => block.kind === 'focus');
+  assert.deepEqual(plaque, {
+    kind: 'focus',
+    body: 'Change solid\nCode src/a.ts:4\nthe check failed\n',
+  });
+  rmSync(dir, {recursive: true, force: true});
+}
+
 spec('focus', () => {
   requirement('Focus is a new issue comment after a signal', () => {
     scenario('A signal with new text appends a comment', async () => {
@@ -359,6 +406,11 @@ spec('focus', () => {
     });
     scenario('No change file means no focus comment', async () => {
       await proveNoChangeFileMeansNoFocusComment();
+    });
+  });
+  requirement('The window shows the body after the marker line', () => {
+    scenario('A manager comment is not the plaque', () => {
+      proveTheSidebarFocusPlaqueDoesNotIncludeTheMarkerLine121();
     });
   });
   requirement('A layer is written when its file exists', () => {
@@ -380,6 +432,9 @@ spec('focus', () => {
   requirement('A gap is one pointer and a why line', () => {
     scenario('A requirement pointer names the requirement', async () => {
       await proveARequirementPointerNamesTheRequirement();
+    });
+    scenario('A review place opens the port URL', async () => {
+      await proveAReviewPlaceOpensThePortUrl();
     });
     scenario('The comment has no coverage count', async () => {
       await proveTheCommentHasNoCoverageCount();

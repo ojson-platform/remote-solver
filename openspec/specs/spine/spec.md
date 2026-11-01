@@ -55,7 +55,7 @@ When a cycle opens, the row of the plaque's layer SHALL be open when that row ha
 
 ### Requirement: A document row shows its file
 
-Plan SHALL show every `##` section of `proposal.md` that has text, including each later paragraph. A `##` section with no text SHALL NOT be shown. A `###` heading SHALL be a subsection heading. An Open questions section with no question SHALL NOT be shown. While a question is open, that section SHALL say that the plan is accepted only once no question is open. An answer to an open question SHALL be a review comment on the one open pull request, and the question line in `proposal.md` SHALL stay. When the issue branch exists, that file SHALL be the copy on the issue branch. When it does not, that file SHALL be the copy in the checkout. The collapsed Plan row SHALL show the first line of Outcome once, cut with an ellipsis, and SHALL NOT repeat the Plan sentence beside it. The open Plan row SHALL hide that line and SHALL NOT show the Plan sentence. When Outcome has no line, the Plan row SHALL keep its sentence, unless that sentence is `solid`. Specify SHALL show each capability's changed requirements. Design SHALL show every `##` section of `design.md` that has text, including each later paragraph. Tasks SHALL list the scenario names from `tasks.md`, and a scenario name SHALL name the capability that owns it. Code SHALL show the check and whether a diff is present, and, when they exist, the unanswered review and the hook.
+Plan SHALL show every `##` section of `proposal.md` that has text, including each later paragraph. A `##` section with no text SHALL NOT be shown. A `###` heading SHALL be a subsection heading. An Open questions section with no question SHALL NOT be shown. While a question is open, that section SHALL say that the plan is accepted only once no question is open. An answer to an open question SHALL be a review comment on the one open pull request, and the question line in `proposal.md` SHALL stay. When the issue branch exists, that file SHALL be the copy on the issue branch. When it does not, that file SHALL be the copy in the checkout. When the active change directory has no documents and the archive has them, Plan, Specify, Design, and Tasks SHALL show that archive copy, and a line comment SHALL name the archive path. The collapsed Plan row SHALL show the first line of Outcome once, cut with an ellipsis, and SHALL NOT repeat the Plan sentence beside it. The open Plan row SHALL hide that line and SHALL NOT show the Plan sentence. When Outcome has no line, the Plan row SHALL keep its sentence, unless that sentence is `solid`. Specify SHALL show each capability's changed requirements. Design SHALL show every `##` section of `design.md` that has text, including each later paragraph. Tasks SHALL list the scenario names from `tasks.md`, and a scenario name SHALL name the capability that owns it. Names wrapped in « » SHALL be those names. When a line has no « », the phrases after the task id, separated by `;`, SHALL be the names. When `tasks/<id>.md` exists, the task SHALL show each `##` section of that file that has text. The task's open or done mark SHALL be a short chip, and the first task SHALL have no rule above it. Code SHALL show the check. A check state `none` SHALL be named there. When a diff is present, Code SHALL say that a diff is present and SHALL NOT list the changed files or show the patch. When they exist, Code SHALL show the unanswered review and the hook.
 
 #### Scenario: The Plan row shows the outcome
 
@@ -92,6 +92,11 @@ Plan SHALL show every `##` section of `proposal.md` that has text, including eac
 - **WHEN** Open questions has an open item and the cycle is open
 - **THEN** the Plan row says the plan is accepted only once no question is open
 
+#### Scenario: An archived proposal shows on the Plan row
+
+- **WHEN** the cycle is accepting, the active change has no documents, and the archive proposal has an Outcome
+- **THEN** the Plan row shows that Outcome, and a line comment on it names the archive proposal
+
 #### Scenario: The Plan row reads the issue branch
 
 - **WHEN** `proposal.md` on `sdd/<key>` differs from `proposal.md` in the checkout working tree and the cycle is open
@@ -110,4 +115,19 @@ Plan SHALL show every `##` section of `proposal.md` that has text, including eac
 #### Scenario: The Code row shows that a diff is present
 
 - **WHEN** the cycle has a diff and is open
-- **THEN** the Code row says a diff is present and does not show the patch
+- **THEN** the Code row says a diff is present and does not list a changed file or show the patch
+
+#### Scenario: No reported check is named
+
+- **WHEN** the cycle is `verifying`, one pull request is open, and no check is reported
+- **THEN** the Code row says that no check is reported
+
+#### Scenario: An open task shows its file
+
+- **WHEN** `tasks.md` lists a task whose scenarios are phrases separated by `;`, `tasks/<id>.md` has Source and Proof, and the cycle is open
+- **THEN** the Tasks row shows both phrases, the Source text, and the Proof text
+
+#### Scenario: The open mark is a short chip
+
+- **WHEN** the Tasks row lists a task
+- **THEN** its open or done mark is a short chip, and the first task has no rule above it

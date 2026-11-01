@@ -6,7 +6,7 @@
 - [Machine](./src/machine/CONTEXT.md): what the machine concludes about a cycle
 - [Reviewer](./src/reviewer/CONTEXT.md): the accepting pass that can stand in for a person
 - [Adapters](./src/adapters/CONTEXT.md): the outsides the machine talks to
-- [Window](./src/window/CONTEXT.md): the face the window draws
+- [Window](./src/window/CONTEXT.md): the face the window draws. Look: [FACE.md](./src/window/FACE.md)
 
 `prompts/context.md` holds the procedures skills share. It is not a glossary.
 

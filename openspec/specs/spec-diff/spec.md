@@ -32,12 +32,17 @@ The collapsed capability summary SHALL show `new` when the baseline text is empt
 
 ### Requirement: The drawer shows the folded spec
 
-The drawer SHALL show a unified diff of the baseline against the folded spec. A row SHALL show the baseline line number on the left and the folded line number on the right. A changed word inside a one-line replacement SHALL be marked. A run of more than six unchanged lines between changes SHALL be one gap row whose hidden rows are in the snapshot. More than three unchanged lines before the first change, or after the last change, SHALL be a gap that keeps the three lines next to the change. When a changed line lies in a scenario, the drawer SHALL show that requirement's heading and that scenario's heading, and the lines between those headings SHALL be one gap. Context beside that change SHALL NOT include a line from an earlier scenario. The section headings of the delta SHALL NOT appear in the rows.
+The drawer SHALL show a unified diff of the baseline against the folded spec. A changed row SHALL show the baseline line number on the left and the folded line number on the right. When the folded spec has no addition and no deletion, a row SHALL show one line number. A changed word inside a one-line replacement SHALL be marked. A run of more than six unchanged lines between changes SHALL be one gap row whose hidden rows are in the snapshot. More than three unchanged lines before the first change, or after the last change, SHALL be a gap that keeps the three lines next to the change. When a changed line lies in a scenario, the drawer SHALL show that requirement's heading and that scenario's heading, and the lines between those headings SHALL be one gap. Context beside that change SHALL NOT include a line from an earlier scenario. The section headings of the delta SHALL NOT appear in the rows.
 
 #### Scenario: A changed line shows both numbers and the changed words
 
 - **WHEN** one line of a requirement is replaced by one line
 - **THEN** the deletion shows the baseline line number, the addition shows the folded line number, and the changed words are marked
+
+#### Scenario: An unchanged spec shows one line number
+
+- **WHEN** the baseline and the folded spec are the same text and the cycle is open
+- **THEN** each shown row has one line number
 
 #### Scenario: Unchanged lines between hunks sit in the gap
 

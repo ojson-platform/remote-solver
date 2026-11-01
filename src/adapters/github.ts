@@ -366,8 +366,10 @@ type RawIssue = {
   pull_request?: unknown;
 };
 
-const PULL_VIEW_FIELDS = 'statusCheckRollup,state,headRefOid,baseRefOid';
-const PULL_VIEW_FIELDS_HEAD = 'statusCheckRollup,state,headRefOid';
+const PULL_VIEW_FIELDS = 'statusCheckRollup,state,headRefOid,baseRefOid,mergeable';
+const PULL_VIEW_FIELDS_HEAD = 'statusCheckRollup,state,headRefOid,mergeable';
+const PULL_VIEW_FIELDS_NO_MERGE = 'statusCheckRollup,state,headRefOid,baseRefOid';
+const PULL_VIEW_FIELDS_HEAD_ONLY = 'statusCheckRollup,state,headRefOid';
 
 /** This `gh` exits when `--json` names a field it does not know. */
 export function rejectedViewField(error: unknown, field: string): boolean {
@@ -604,24 +606,41 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
 
   const viewPull = async (
     id: string,
-  ): Promise<{checks: CheckState; head: string; base: string}> => {
+  ): Promise<{checks: CheckState; head: string; base: string; conflict: boolean}> => {
     let raw: string;
     try {
       raw = await run(viewArgs(id, PULL_VIEW_FIELDS));
     } catch (error) {
-      if (!rejectedViewField(error, 'baseRefOid')) {
+      const unknownBase = rejectedViewField(error, 'baseRefOid');
+      const unknownMerge = rejectedViewField(error, 'mergeable');
+      if (!unknownBase && !unknownMerge) {
         throw error;
       }
-      raw = await run(viewArgs(id, PULL_VIEW_FIELDS_HEAD));
+      const fields = unknownBase ? PULL_VIEW_FIELDS_HEAD : PULL_VIEW_FIELDS_NO_MERGE;
+      try {
+        raw = await run(viewArgs(id, fields));
+      } catch (again) {
+        const againBase = rejectedViewField(again, 'baseRefOid');
+        const againMerge = rejectedViewField(again, 'mergeable');
+        if ((unknownBase && againMerge) || (unknownMerge && againBase)) {
+          raw = await run(viewArgs(id, PULL_VIEW_FIELDS_HEAD_ONLY));
+        } else {
+          throw again;
+        }
+      }
     }
-    const view = JSON.parse(raw) as CheckRollup & {headRefOid?: unknown; baseRefOid?: unknown};
+    const view = JSON.parse(raw) as CheckRollup & {
+      headRefOid?: unknown;
+      baseRefOid?: unknown;
+      mergeable?: unknown;
+    };
     const record = {
       checks: classifyChecks(view),
       head: typeof view.headRefOid === 'string' ? view.headRefOid : '',
       base: typeof view.baseRefOid === 'string' ? view.baseRefOid : '',
     };
     seenPull.set(id, record);
-    return record;
+    return {...record, conflict: view.mergeable === 'CONFLICTING'};
   };
 
   const readPullList = async (state: 'open' | 'merged') =>
@@ -678,7 +697,13 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
           continue;
         }
         const viewed = await viewPull(id);
-        found.push({id, title: pr.title, state: pr.state, checks: viewed.checks});
+        found.push({
+          id,
+          title: pr.title,
+          state: pr.state,
+          checks: viewed.checks,
+          conflict: viewed.conflict,
+        });
       }
       return found;
     },

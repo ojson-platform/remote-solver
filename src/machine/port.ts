@@ -38,6 +38,8 @@ export type Pull = {
   title: string;
   state: string;
   checks: CheckState;
+  /** The head does not apply onto the base. Absent when the host did not say. */
+  conflict?: boolean;
 };
 
 /** A review thread after the adapter has decided whether the machine wrote it. */

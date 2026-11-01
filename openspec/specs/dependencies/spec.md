@@ -27,7 +27,7 @@ A child is an open issue that carries the cycle label and names this issue as it
 
 ### Requirement: Implementing waits for children and blockers after the tasks
 
-While a task is open, the machine SHALL run that task and SHALL NOT wait on children. When no task is open, it SHALL wait until every child is `accepted`, then wait while any open issue listed as a dependency still exists. A closed issue SHALL NOT hold the parent. After those waits the machine SHALL move to `verifying`.
+While a task is open, the machine SHALL run that task and SHALL NOT wait on children, unless the open pull request conflicts with its base. A conflict SHALL be rebased first. When no task is open and the pull request does not conflict, it SHALL wait until every child is `accepted`, then wait while any open issue listed as a dependency still exists. A closed issue SHALL NOT hold the parent. After those waits the machine SHALL move to `verifying`.
 
 #### Scenario: An open task runs before the children are checked
 

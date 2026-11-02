@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {mkdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {mkdirSync, readFileSync, rmSync, statSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
@@ -599,6 +599,44 @@ function proveTheSameIdMayFillBothSlots136(): void {
   rmSync(dir, {recursive: true, force: true});
 }
 
+function proveChoosingCursorWritesTheKnownPair(): void {
+  const {dir, home} = scratch();
+  const window = openWindow({homePath: home});
+  window.chooseAgent('cursor');
+  const doc = readHome(home);
+  assert.equal(doc.agent, 'cursor');
+  assert.equal(doc.models?.mechanical, 'composer-2.5-fast');
+  assert.equal(doc.models?.judgment, 'grok-4.7-high-fast');
+  assertNoEmptyStrings(doc);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveChoosingAnotherAgentWritesThatPair(): void {
+  const {dir, home} = scratch();
+  const window = openWindow({homePath: home});
+  window.chooseAgent('cursor');
+  window.chooseAgent('codex');
+  const doc = readHome(home);
+  assert.equal(doc.agent, 'codex');
+  assert.equal(doc.models?.mechanical, 'gpt-6-luna');
+  assert.equal(doc.models?.judgment, 'gpt-6.1-sol');
+  assert.deepEqual(doc.effort, {mechanical: 'low', judgment: 'high'});
+  assertNoEmptyStrings(doc);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveChoosingTheSavedAgentAgainChangesNothing(): void {
+  const {dir, home} = scratch();
+  const window = openWindow({homePath: home});
+  window.chooseAgent('cursor');
+  const before = readFileSync(home, 'utf8');
+  const mtimeBefore = statSync(home).mtimeMs;
+  window.chooseAgent('cursor');
+  assert.equal(readFileSync(home, 'utf8'), before);
+  assert.equal(statSync(home).mtimeMs, mtimeBefore);
+  rmSync(dir, {recursive: true, force: true});
+}
+
 spec('factory-config', () => {
   requirement('The home config is the file the launch named', () => {
     scenario('No launch path writes no home file', () => {
@@ -675,6 +713,20 @@ spec('factory-config', () => {
     });
     scenario('A rejected id leaves the file', () => {
       proveACatalogThatRejectsTheRecordedJudgmentIdKeepsItAndStopsTheStep95();
+    });
+  });
+});
+
+spec('home-agent', () => {
+  requirement('Choosing an agent writes the home file at once', () => {
+    scenario('Choosing cursor writes the known pair', () => {
+      proveChoosingCursorWritesTheKnownPair();
+    });
+    scenario('Choosing another agent writes that pair', () => {
+      proveChoosingAnotherAgentWritesThatPair();
+    });
+    scenario('Choosing the saved agent again changes nothing', () => {
+      proveChoosingTheSavedAgentAgainChangesNothing();
     });
   });
 });

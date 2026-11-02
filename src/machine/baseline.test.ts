@@ -38,5 +38,38 @@ spec('baseline', () => {
       const decision = decide(issue(1, ['sdd:specifying']), [], [pull(9)], view);
       assert.notEqual(action(decision), 'restore-baseline');
     });
+    scenario('A fenced Modified id finds its baseline', () => {
+      const proposal = [
+        '## Capabilities',
+        '### Modified',
+        '- `cache-first` keep the first hit',
+        '- `board`: stations',
+        '',
+      ].join('\n');
+      const source: FileSource = {
+        exists: rel =>
+          rel === 'openspec/changes/issue-1/proposal.md' ||
+          rel === 'openspec/specs/cache-first/spec.md' ||
+          rel === 'openspec/specs/board/spec.md',
+        read: () => proposal,
+        list: () => [],
+      };
+      const view = readChange('1', source);
+      assert.deepEqual(view.capabilities, ['cache-first', 'board']);
+      assert.deepEqual(view.missingBaseline, []);
+      const decision = decide(issue(1, ['sdd:specifying']), [], [pull(9)], view);
+      assert.notEqual(action(decision), 'restore-baseline');
+    });
+    scenario('A fenced Modified id with no file is restored', () => {
+      const source: FileSource = {
+        exists: rel => rel === 'openspec/changes/issue-1/proposal.md',
+        read: () => '## Capabilities\n### Modified\n- `cache-first` keep the first hit\n',
+        list: () => [],
+      };
+      const view = readChange('1', source);
+      assert.deepEqual(view.missingBaseline, ['cache-first']);
+      const decision = decide(issue(1, ['sdd:specifying']), [], [pull(9)], view);
+      assert.equal(action(decision), 'restore-baseline');
+    });
   });
 });

@@ -77,7 +77,17 @@ function idsUnder(proposal: string, heading: string): string[] {
   return found[1]
     .split('\n')
     .map(line => line.match(/^-\s+(\S+)/)?.[1])
+    .map(token => (token ? capabilityId(token) : token))
     .filter((id): id is string => Boolean(id));
+}
+
+/** The bare id. `` `board`: `` and `` `cache-first` `` both name the spec directory. */
+function capabilityId(token: string): string {
+  const uncolon = token.endsWith(':') ? token.slice(0, -1) : token;
+  if (uncolon.length >= 2 && uncolon.startsWith('`') && uncolon.endsWith('`')) {
+    return uncolon.slice(1, -1);
+  }
+  return uncolon;
 }
 
 /** Added and Modified ids, in that order, without duplicates. */

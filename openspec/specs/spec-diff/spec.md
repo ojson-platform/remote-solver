@@ -30,6 +30,24 @@ The collapsed capability summary SHALL show `new` when the baseline text is empt
 - **WHEN** the baseline and the folded spec are the same text
 - **THEN** the capability summary has no badge and the rows have no additions and no deletions
 
+### Requirement: An archived change folds the baseline from before the archive commit
+
+When the tip commit contains a line `Sdd-Archive: issue-<key>`, the folded spec SHALL be the delta applied to the baseline at that commit's parent. An addition whose baseline file is absent on the parent SHALL show `new`, and the requirement SHALL appear once.
+
+#### Scenario: An archived addition is new once
+
+- **WHEN** the tip is the archive commit, the parent has no baseline file, and the parent delta adds one requirement
+- **THEN** the capability summary shows `new` and that requirement appears once
+
+### Requirement: An archived modification folds the parent baseline
+
+When the tip commit contains a line `Sdd-Archive: issue-<key>` and the parent baseline already contains the requirement, a modification SHALL show `changed`, and the requirement SHALL appear once.
+
+#### Scenario: An archived modification is changed once
+
+- **WHEN** the tip is the archive commit, the parent baseline contains the requirement, and the parent delta modifies it
+- **THEN** the capability summary shows `changed` and that requirement appears once
+
 ### Requirement: The drawer shows the folded spec
 
 The drawer SHALL show a unified diff of the baseline against the folded spec. A changed row SHALL show the baseline line number on the left and the folded line number on the right. When the folded spec has no addition and no deletion, a row SHALL show one line number. A changed word inside a one-line replacement SHALL be marked. A run of more than six unchanged lines between changes SHALL be one gap row whose hidden rows are in the snapshot. More than three unchanged lines before the first change, or after the last change, SHALL be a gap that keeps the three lines next to the change. When a changed line lies in a scenario, the drawer SHALL show that requirement's heading and that scenario's heading, and the lines between those headings SHALL be one gap. Context beside that change SHALL NOT include a line from an earlier scenario. The section headings of the delta SHALL NOT appear in the rows.

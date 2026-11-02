@@ -105,7 +105,7 @@ An empty answer, or an answer that is not `clean` and not a remark, SHALL post n
 
 ### Requirement: A remark lands on a diff line only when that line is in the diff
 
-A remark whose file and line are in the diff SHALL stay on that line. A line that is not in the diff SHALL keep the file and drop the line. A file that is not in the diff SHALL be left on the conversation.
+A remark whose file and line are in the diff SHALL stay on that line. A line that is not in the diff SHALL keep the file and drop the line. A file that is not in the diff SHALL be left on the conversation. When the head is the archive commit, the diff SHALL end at its parent, and a remark on a change file SHALL be posted on the archive path at the pull request head. That remark MAY name the file by its path in the parent diff or by its archive path. The change text in the dossier SHALL be the parent's.
 
 #### Scenario: A line in the diff stays on that line
 
@@ -121,6 +121,11 @@ A remark whose file and line are in the diff SHALL stay on that line. A line tha
 
 - **WHEN** a remark names a file the diff does not contain
 - **THEN** the remark keeps only its text
+
+#### Scenario: An archive commit posts the remark on the archive path
+
+- **WHEN** the pull request head is the archive commit and a remark names a line of the change file by its archive path
+- **THEN** the reviewer reads the diff at the parent and posts the remark on the archive path at the pull request head
 
 ### Requirement: A dossier that cannot be assembled waits
 

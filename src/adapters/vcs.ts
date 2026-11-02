@@ -354,6 +354,71 @@ function filesOnBranch(
   return filesOfRef(root, ref, strict);
 }
 
+function archiveMark(key: string): string {
+  return `Sdd-Archive: issue-${key}`;
+}
+
+function hasArchiveMark(message: string, key: string): boolean {
+  const mark = archiveMark(key);
+  return message.split('\n').some(line => line.trimEnd() === mark);
+}
+
+function messageOf(root: string, ref: string, strict: boolean): string | undefined {
+  try {
+    return git(root, ['log', '-1', '--format=%B', ref]);
+  } catch (error) {
+    if (!strict) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+/**
+ * The commit whose tree the plaque and the spine read.
+ * The parent when `tip`'s message contains `Sdd-Archive: issue-<key>`. Otherwise `tip`.
+ * A marked tip with no parent stays `tip` on a lenient read and throws on a strict one.
+ */
+function contentRef(root: string, tip: string, key: string, strict: boolean): string {
+  const message = messageOf(root, tip, strict);
+  if (message === undefined || !hasArchiveMark(message, key)) {
+    return tip;
+  }
+  const parent = git(root, ['rev-parse', '--verify', `${tip}^`], true).trim();
+  if (parent !== '') {
+    return parent;
+  }
+  if (strict) {
+    throw new Error(`archive commit ${tip} has no parent`);
+  }
+  return tip;
+}
+
+/**
+ * The commit a pull-request diff ends at.
+ * The parent when `head`'s message contains `Sdd-Archive: issue-<key>`. Otherwise `head`.
+ */
+export function parentOfArchive(root: string, head: string, key: string): string {
+  if (head.trim() === '') {
+    return head;
+  }
+  return contentRef(root, head, key, false);
+}
+
+/** The parent when the tip is this issue's archive commit. Otherwise the tip. */
+function filesOnContent(
+  root: string,
+  key: string,
+  prefix: string,
+  strict: boolean,
+): FileSource | null {
+  const tip = strict ? strictIssueRef(root, key, prefix) : issueRef(root, key, prefix);
+  if (tip === null) {
+    return null;
+  }
+  return filesOfRef(root, contentRef(root, tip, key, strict), strict);
+}
+
 /** The issue branch only. A file that exists only in the checkout is not the change. A git failure is empty. */
 export function gitFiles(root: string, key: string, prefix: string): FileSource {
   return filesOfRef(root, issueRef(root, key, prefix), false);
@@ -371,6 +436,24 @@ export function branchFiles(root: string, key: string, prefix: string): FileSour
  */
 export function strictBranchFiles(root: string, key: string, prefix: string): FileSource | null {
   return filesOnBranch(root, key, prefix, true);
+}
+
+/** The issue branch's content tree. Null when the branch is absent. A git failure is empty. The parent when the tip is this issue's archive commit. */
+export function contentBranchFiles(root: string, key: string, prefix: string): FileSource | null {
+  return filesOnContent(root, key, prefix, false);
+}
+
+/**
+ * The content tree for the deferred spine read.
+ * Null when the checkout is not a repository, or the ref is missing.
+ * A missing path is empty. Any other git failure throws.
+ */
+export function strictContentBranchFiles(
+  root: string,
+  key: string,
+  prefix: string,
+): FileSource | null {
+  return filesOnContent(root, key, prefix, true);
 }
 
 function existsOnRef(root: string, ref: string, rel: string): boolean {
@@ -465,6 +548,10 @@ export function gitVcs(root: string, config: GitVcsConfig = {}): Vcs {
       return found;
     },
     filesAt: key => gitFiles(root, key, prefix),
+    contentAt: key => contentBranchFiles(root, key, prefix) ?? gitFiles(root, key, prefix),
+    async contentCommit(key, head) {
+      return parentOfArchive(root, head, key);
+    },
     async compare(base, head) {
       try {
         const commits = await gitAsync(root, ['log', '--oneline', `${base}..${head}`]);

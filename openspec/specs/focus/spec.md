@@ -41,7 +41,7 @@ The window SHALL show the body after the line `sdd:focus` and SHALL NOT recomput
 
 ### Requirement: A layer is written when its file exists
 
-The record SHALL list a layer only when its file already exists, in this order: Change, Plan, Specify, Design, Tasks, Code. Change SHALL be written when the change directory exists, and it SHALL then be `solid`. Plan SHALL be written when `proposal.md` exists. Code SHALL be written when the pull request has a diff. A missing layer SHALL be omitted. A layer line SHALL be `solid` or a list of gaps. Change, Plan, and Tasks with no thread of their own SHALL be `solid`. A thread on a layer line SHALL be a gap of kind `thread`.
+The record SHALL list a layer only when its file already exists, in this order: Change, Plan, Specify, Design, Tasks, Code. Change SHALL be written when the change directory exists, and it SHALL then be `solid`. Plan SHALL be written when `proposal.md` exists. Code SHALL be written when the pull request has a diff. When the head commit contains a line `Sdd-Archive: issue-<key>` and the active change directory still has a file, that diff SHALL end at the parent of the head. A missing layer SHALL be omitted. A layer line SHALL be `solid` or a list of gaps. Change, Plan, and Tasks with no thread of their own SHALL be `solid`. A thread on a layer line SHALL be a gap of kind `thread`.
 
 #### Scenario: Change is solid when the directory exists
 
@@ -52,6 +52,11 @@ The record SHALL list a layer only when its file already exists, in this order: 
 
 - **WHEN** the pull request has no diff
 - **THEN** the record omits Code
+
+#### Scenario: Code uses the parent diff of an archive commit
+
+- **WHEN** the head is the archive commit, the active change directory still has a file, and the diff of its parent is non-empty
+- **THEN** the record lists Code and the diff is read at the parent
 
 ### Requirement: A marker lands on the mirror name
 

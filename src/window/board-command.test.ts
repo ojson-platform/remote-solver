@@ -888,6 +888,43 @@ spec('board-command', () => {
         rmSync(staged.dir, {recursive: true, force: true});
       }
     });
+
+    scenario('An archive commit asks about the parent diff', async () => {
+      const staged = yard();
+      staged.cycle.labels = ['sdd:cycle', 'remote-solver', 'sdd:proposing'];
+      staged.cycle.assignee = MANAGER;
+      let asked = '';
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: {
+          ...staged.review,
+          pulls: async () => [{id: '11', title: 'pull', state: 'OPEN', checks: 'green'}],
+          range: async () => ({head: 'bbb', base: 'aaa'}),
+        },
+        vcs: {
+          async compare() {
+            return {commits: '', diff: ''};
+          },
+          async contentCommit(_key: string, head: string) {
+            assert.equal(head, 'bbb');
+            return 'parentsha';
+          },
+          async changed(_base: string, head: string) {
+            asked = head;
+            return true;
+          },
+        },
+        githubRoot: staged.github,
+      });
+      try {
+        assert.equal(asked, 'parentsha');
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
   });
 
   requirement('The header shows the factory mark', () => {

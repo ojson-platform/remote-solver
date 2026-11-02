@@ -3,7 +3,7 @@ import type {FileSource} from '../machine/port.ts';
 import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 
-import {branchFiles, strictBranchFiles} from '../adapters/vcs.ts';
+import {branchFiles, contentBranchFiles, strictBranchFiles, strictContentBranchFiles} from '../adapters/vcs.ts';
 import {changeDir} from '../machine/naming.ts';
 
 const empty: FileSource = {
@@ -72,6 +72,25 @@ export function strictChangeFiles(checkout: string | undefined, key: string): Fi
     return empty;
   }
   return strictBranchFiles(checkout, key, 'sdd') ?? disk(checkout);
+}
+
+/**
+ * Documents and baselines for the plaque and the spine.
+ * The parent of the issue branch when its tip is the archive commit. Otherwise the same tree as `changeFiles`.
+ */
+export function contentChangeFiles(checkout: string | undefined, key: string): FileSource {
+  if (!checkout || checkout.trim() === '' || key.trim() === '') {
+    return empty;
+  }
+  return contentBranchFiles(checkout, key, 'sdd') ?? disk(checkout);
+}
+
+/** The content tree for the deferred spine read. A git failure throws. */
+export function strictContentChangeFiles(checkout: string | undefined, key: string): FileSource {
+  if (!checkout || checkout.trim() === '' || key.trim() === '') {
+    return empty;
+  }
+  return strictContentBranchFiles(checkout, key, 'sdd') ?? disk(checkout);
 }
 
 export function changeRel(key: string, name: string): string {

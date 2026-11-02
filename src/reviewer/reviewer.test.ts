@@ -345,6 +345,64 @@ spec('reviewer', () => {
         },
       );
     });
+    scenario('An archive commit posts the remark on the archive path', async () => {
+      const parentDiff = [
+        'diff --git a/openspec/changes/issue-11/proposal.md b/openspec/changes/issue-11/proposal.md',
+        '--- a/openspec/changes/issue-11/proposal.md',
+        '+++ b/openspec/changes/issue-11/proposal.md',
+        '@@ -0,0 +1 @@',
+        '+## Outcome',
+        '',
+      ].join('\n');
+      let compared = '';
+      const box = memoryPorts({
+        pulls: {'11': [{id: '15', title: '#11: title', state: 'OPEN'}]},
+        checks: {'15': {checks: 'green'}},
+        ranges: {'15': {head: reviewedHead, base: 'def'}},
+      });
+      const passed = await passReview(
+        {
+          review: box.review,
+          vcs: {
+            filesAt: () => namedFiles({'openspec/changes/archive/issue-11/proposal.md': 'why'}),
+            contentAt: () => namedFiles({'openspec/changes/issue-11/proposal.md': '## Outcome\n'}),
+            async contentCommit() {
+              return 'parentsha';
+            },
+            async compare(_base: string, head: string) {
+              compared = head;
+              return {commits: 'plan', diff: parentDiff};
+            },
+            async push() {},
+            async head() {
+              return '';
+            },
+            async published() {
+              return true;
+            },
+            async dirty() {
+              return [];
+            },
+          },
+          judge: dossier => {
+            assert.match(dossier.change, /# openspec\/changes\/issue-11\/proposal\.md/);
+            return {
+              kind: 'remarks',
+              items: [
+                {body: 'look', path: 'openspec/changes/archive/issue-11/proposal.md', line: 1},
+              ],
+            };
+          },
+        },
+        {issue: '11', pull: '15'},
+      );
+      assert.equal(compared, 'parentsha');
+      assert.equal(passed.action, 'remarks');
+      assert.ok(box.calls.includes('head:abc123'));
+      assert.ok(
+        box.calls.includes('at:openspec/changes/archive/issue-11/proposal.md:1:look'),
+      );
+    });
   });
 
   requirement('A dossier that cannot be assembled waits', () => {

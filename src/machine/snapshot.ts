@@ -42,6 +42,7 @@ export async function loadCycle(
   review: Review,
   filesAt: (key: string) => FileSource,
   queues: QueueConfig[],
+  contentAt: (key: string) => FileSource = filesAt,
 ): Promise<CycleSnapshot> {
   const issues = await tracker.listOpen();
   const me = await tracker.login();
@@ -59,7 +60,7 @@ export async function loadCycle(
   const texts = new Map<string, BranchText>();
   for (const issue of cycles) {
     const files = filesAt(issue.key);
-    const read = readBranch(issue.key, files);
+    const read = readBranch(issue.key, files, contentAt(issue.key));
     pulls.set(issue.key, await pullSnapshots(review, issue.key));
     changes.set(issue.key, read.change);
     if (!files.failed?.()) {

@@ -3,7 +3,7 @@ import type {FileSource} from './port.ts';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
 
-import {archiveDir, changeDir} from './naming.ts';
+import {archiveChangePath, archiveDir, changeDir} from './naming.ts';
 
 export type ChangeView = {
   proposal: boolean;
@@ -239,27 +239,43 @@ function baselineRel(id: string): string {
   return `openspec/specs/${id}/spec.md`;
 }
 
-/** The change view, the plaque summary, and the bytes both projections share. */
+/** True when `content` is the parent of an archive tip and `tip` is that archive. */
+function readsParent(key: string, tip: FileSource, content: FileSource): boolean {
+  if (tip === content) {
+    return false;
+  }
+  return (
+    changeDocuments(changeDir(key), tip).length === 0 &&
+    changeDocuments(archiveDir(key), tip).length > 0 &&
+    changeDocuments(changeDir(key), content).length > 0
+  );
+}
+
+/**
+ * The change view, the plaque summary, and the bytes both projections share.
+ * `files` is the tip. `content` is the parent when the tip is this issue's archive commit.
+ */
 export function readBranch(
   key: string,
   files: FileSource,
+  content: FileSource = files,
 ): {change: ChangeView; facts: BranchFacts; text: BranchText} {
   const change = readChange(key, files);
-  const dir = documentDir(key, files);
+  const dir = documentDir(key, content);
   const proposalPath = path.join(dir, 'proposal.md');
   const designPath = path.join(dir, 'design.md');
   const tasksPath = path.join(dir, 'tasks.md');
-  const proposal = files.exists(proposalPath) ? slash(proposalPath) : undefined;
-  const design = files.exists(designPath) ? slash(designPath) : undefined;
-  const tasksFile = files.exists(tasksPath) ? slash(tasksPath) : undefined;
-  const specs = specEntries(files, dir);
+  const proposal = content.exists(proposalPath) ? slash(proposalPath) : undefined;
+  const design = content.exists(designPath) ? slash(designPath) : undefined;
+  const tasksFile = content.exists(tasksPath) ? slash(tasksPath) : undefined;
+  const specs = specEntries(content, dir);
   const pairs: [string, string][] = [];
   const body = new Map<string, string>();
   const take = (rel: string | undefined) => {
     if (!rel || body.has(rel)) {
       return;
     }
-    const text = files.read(rel);
+    const text = content.read(rel);
     body.set(rel, text);
     pairs.push([rel, text]);
   };
@@ -270,7 +286,7 @@ export function readBranch(
   for (const spec of specs) {
     take(spec.file);
     const baseline = baselineRel(spec.id);
-    if (files.exists(baseline)) {
+    if (content.exists(baseline)) {
       take(baseline);
     }
     specText.push({
@@ -289,7 +305,7 @@ export function readBranch(
       continue;
     }
     const rel = slash(path.join(dir, 'tasks', `${id}.md`));
-    if (!files.exists(rel)) {
+    if (!content.exists(rel)) {
       continue;
     }
     take(rel);
@@ -297,10 +313,16 @@ export function readBranch(
   }
   const baselines: string[] = [];
   for (const id of [...namedCapabilities(proposalText), ...specText.map(spec => spec.id)]) {
-    if (files.exists(baselineRel(id)) && !baselines.includes(id)) {
+    if (content.exists(baselineRel(id)) && !baselines.includes(id)) {
       baselines.push(id);
     }
   }
+  const fromParent = readsParent(key, files, content);
+  const place = (rel: string): string => (fromParent ? archiveChangePath(key, rel) : rel);
+  const shownProposal = proposal ? place(proposal) : undefined;
+  const shownDesign = design ? place(design) : undefined;
+  const shownTasks = tasksFile ? place(tasksFile) : undefined;
+  const shownSpecs = specs.map(spec => ({...spec, file: place(spec.file)}));
   return {
     change,
     text: {
@@ -308,19 +330,19 @@ export function readBranch(
       design: design ? (body.get(design) ?? '') : '',
       tasks: tasksText,
       taskFiles,
-      specs: specText,
+      specs: specText.map(spec => ({...spec, rel: place(spec.rel)})),
       baselines,
-      root: slash(dir),
+      root: place(slash(dir)),
     },
     facts: {
-      fingerprint: markOf(pairs),
+      fingerprint: markOf(pairs.map(([rel, text]) => [place(rel), text])),
       questions: change.openQuestions,
       decisions: change.openDecisions,
-      ...(tasksFile ? {tasks: taskCounts(body.get(tasksFile) ?? '', true)} : {}),
-      ...(proposal ? {proposal} : {}),
-      ...(design ? {design} : {}),
-      ...(tasksFile ? {tasksFile} : {}),
-      specs,
+      ...(shownTasks ? {tasks: taskCounts(body.get(tasksFile ?? '') ?? '', true)} : {}),
+      ...(shownProposal ? {proposal: shownProposal} : {}),
+      ...(shownDesign ? {design: shownDesign} : {}),
+      ...(shownTasks ? {tasksFile: shownTasks} : {}),
+      specs: shownSpecs,
     },
   };
 }

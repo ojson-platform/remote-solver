@@ -1,4 +1,4 @@
-import type {FileSource, Review, Tracker, Vcs} from './port.ts';
+import {diffEnd, type FileSource, type Review, type Tracker, type Vcs} from './port.ts';
 
 import path from 'node:path';
 
@@ -41,7 +41,7 @@ type Gap = {token: string; why: string};
 type StepDeps = {
   tracker: Pick<Tracker, 'comments' | 'comment'>;
   review: Pick<Review, 'pulls' | 'range' | 'threadList'>;
-  vcs: Pick<Vcs, 'compare' | 'filesAt'>;
+  vcs: Pick<Vcs, 'compare' | 'filesAt' | 'contentCommit'>;
   requirements?: readonly RequirementGap[];
   boundaries?: readonly BoundaryGap[];
   places?: readonly ReviewPlace[];
@@ -204,7 +204,7 @@ async function onePull(review: Pick<Review, 'pulls'>, key: string): Promise<stri
 
 async function readDiff(
   review: Pick<Review, 'pulls' | 'range'>,
-  vcs: Pick<Vcs, 'compare'>,
+  vcs: Pick<Vcs, 'compare' | 'contentCommit'>,
   key: string,
 ): Promise<string> {
   const pull = await onePull(review, key);
@@ -215,7 +215,8 @@ async function readDiff(
   if (!range.base) {
     return '';
   }
-  const span = await vcs.compare(range.base, range.head);
+  const end = await diffEnd(vcs, key, range.head);
+  const span = await vcs.compare(range.base, end);
   return span?.diff ?? '';
 }
 

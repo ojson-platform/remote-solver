@@ -1,5 +1,12 @@
 import type {Machine} from '../adapters/compose.ts';
-import type {Conversation, IssueRecord, Pull, ThreadRecord, ThreadTarget} from '../machine/port.ts';
+import {
+  diffEnd,
+  type Conversation,
+  type IssueRecord,
+  type Pull,
+  type ThreadRecord,
+  type ThreadTarget,
+} from '../machine/port.ts';
 import type {CycleSnapshot} from '../machine/snapshot.ts';
 
 import {existsSync, mkdirSync, readFileSync} from 'node:fs';
@@ -15,7 +22,7 @@ import {phaseOf} from '../machine/phase.ts';
 import {modelFor, type SkillMode} from '../machine/skill.ts';
 import {runSpy, type RunningTurn} from '../main.ts';
 
-import {changeFiles} from './change-files.ts';
+import {changeFiles, contentChangeFiles} from './change-files.ts';
 import {createBoardStore} from './store.ts';
 import {FACTORY_AGENTS, mergeFactory, readOverlayDoc} from './factory.ts';
 import {serveBoard} from './page.ts';
@@ -149,6 +156,8 @@ export type LiveVcs = {
   compare(base: string, head: string): Promise<{commits: string; diff: string} | null>;
   /** Whether the range differs. When present, a refresh does not read the diff text. */
   changed?(base: string, head: string): Promise<boolean>;
+  /** The parent when `head` is this issue's archive commit. Otherwise `head`. */
+  contentCommit?(key: string, head: string): Promise<string>;
 };
 
 export type LiveBoardOptions = {
@@ -267,10 +276,11 @@ export function openLiveBoard(options: LiveBoardOptions) {
             try {
               const range = await review.range(pull.id);
               if (range.base) {
+                const end = await diffEnd(vcs, issue.key, range.head);
                 if (vcs.changed) {
-                  diff = await vcs.changed(range.base, range.head);
+                  diff = await vcs.changed(range.base, end);
                 } else {
-                  const compared = await vcs.compare(range.base, range.head);
+                  const compared = await vcs.compare(range.base, end);
                   diff = Boolean(compared && compared.diff !== '');
                 }
               }
@@ -340,7 +350,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
         }
       }
       const files = changeFiles(gatheredOf(ticket), ticket.key);
-      const read = readBranch(ticket.key, files);
+      const read = readBranch(ticket.key, files, contentChangeFiles(gatheredOf(ticket), ticket.key));
       if (files.failed?.()) {
         const held = store.factsOf(ticket.key);
         const heldText = store.textOf(ticket.key);

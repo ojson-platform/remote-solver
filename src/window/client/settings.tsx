@@ -18,6 +18,23 @@ function options(values: readonly string[], current: string, blank = false): Rea
   ));
 }
 
+function homeAgentOptions(current: string): ReactNode {
+  return (
+    <>
+      {current === '' ? (
+        <option value="" disabled hidden>
+          {' '}
+        </option>
+      ) : null}
+      {FACTORY_AGENTS.map(value => (
+        <option key={value} value={value}>
+          {value}
+        </option>
+      ))}
+    </>
+  );
+}
+
 function ModeFields({
   modelAct,
   effortAct,
@@ -114,6 +131,12 @@ export function Settings({snapshot, busy}: {snapshot: WindowSnapshot; busy?: boo
           <div className="blocks">
             <section className="group">
               <h3>Дом</h3>
+              <ActForm act="choose-agent" onChangeSubmit>
+                <label>агент</label>
+                <select name="agent" defaultValue={settings.agent}>
+                  {homeAgentOptions(settings.agent)}
+                </select>
+              </ActForm>
               <ModeFields
                 modelAct="leave-model"
                 effortAct="leave-effort"
@@ -180,11 +203,7 @@ export function Settings({snapshot, busy}: {snapshot: WindowSnapshot; busy?: boo
                     </ActForm>
                   </div>
                 ))}
-                <ActForm act="choose-agent" className="add" onChangeSubmit>
-                  <label>агент</label>
-                  <select name="agent" defaultValue={settings.agent}>
-                    {options(FACTORY_AGENTS, settings.agent)}
-                  </select>
+                <ActForm act="add-role" className="add">
                   <label>новая роль</label>
                   <input name="name" placeholder="имя" />
                   <select name="outcome" defaultValue="html">

@@ -304,7 +304,10 @@ export function openWindow(
     spyNote: () => outside.spyNote?.() ?? '',
     turn: (key: string) => outside.turn?.(key),
     shelf: () => shelfOf(roles.list()),
-    settings: () => home.settings(settingsOpen),
+    settings: () => {
+      const state = home.settings(settingsOpen);
+      return {...state, agent: home.recorded() ? home.agent() : ''};
+    },
     addRole: (role: RoleRecord) => roles.add(role),
     renameRole: (name: string, next: string) => roles.rename(name, next),
     chooseRoleOutcome: (name: string, outcome: RoleOutcome) => roles.choose(name, outcome),

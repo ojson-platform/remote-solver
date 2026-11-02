@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {execSync} from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -17,6 +18,7 @@ import {
   scratch,
   ticket,
   writeLaunch,
+  writeOverlay,
   writeServiceConfig,
   writeServiceYaml,
   yard,
@@ -241,6 +243,104 @@ function proveTheServiceConfigGroupShowsTheDiskCopyWhenTheFileChangedBeforeSave1
   rmSync(dir, {recursive: true, force: true});
 }
 
+function proveOverlayAgentRemainsTheOverrideWhenTheManagerSavesAHomeAgent(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  const overlayPath = path.join(checkout, '.aifactory', 'config.yaml');
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.openSettings();
+  window.chooseOverlayAgent('opencode');
+  window.chooseAgent('cursor');
+  assert.equal(readHome(home).agent, 'cursor');
+  assert.equal(readHome(overlayPath).agent, 'opencode');
+  assert.equal(window.overlay().agent, 'opencode');
+  assert.equal(window.settings().agent, 'cursor');
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveEmptyOverlayAgentMeansTheHomeAgentForThatCheckout(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  writeOverlay(checkout, ['alpha'], 'models:\n  judgment: custom-judgment\n');
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.chooseAgent('codex');
+  window.openSettings();
+  assert.equal(readHome(path.join(checkout, '.aifactory', 'config.yaml')).agent, undefined);
+  assert.equal(window.overlay().agent, 'codex');
+  assert.equal(window.overlay().models.judgment.value, 'custom-judgment');
+  assert.equal(window.overlay().models.mechanical.value, 'gpt-6-luna');
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveOverlayModelsEffortAndSpeedFollowTheMergedFactoryWhenChoosingAHomeAgent(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  writeOverlay(
+    checkout,
+    ['alpha'],
+    ['agent: codex', 'models:', '  mechanical: gpt-6-luna', '  judgment: gpt-6.1-sol', ''].join(
+      '\n',
+    ),
+  );
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.openSettings();
+  assert.equal(window.overlay().agent, 'codex');
+  window.chooseAgent('cursor');
+  assert.equal(readHome(home).agent, 'cursor');
+  assert.equal(window.overlay().agent, 'codex');
+  assert.equal(window.overlay().models.mechanical.value, 'gpt-6-luna');
+  assert.equal(window.overlay().models.judgment.value, 'gpt-6.1-sol');
+  assert.deepEqual(window.overlay().effort, {mechanical: 'low', judgment: 'high'});
+  assert.deepEqual(window.overlay().speed, {mechanical: '', judgment: ''});
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheCheckoutOverlayStaysOutOfTheRepositoryWhenChoosingAHomeAgent(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeFileSync(path.join(checkout, '.gitignore'), '.aifactory/\n');
+  execSync('git init', {cwd: checkout, stdio: 'ignore'});
+  writeLaunch(home, ['alpha'], {arcadia});
+  writeOverlay(checkout, ['alpha'], 'agent: opencode\n');
+  const overlayPath = path.join(checkout, '.aifactory', 'config.yaml');
+  const beforeOverlay = readFileSync(overlayPath, 'utf8');
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.openSettings();
+  window.chooseAgent('cursor');
+  assert.equal(readFileSync(overlayPath, 'utf8'), beforeOverlay);
+  assert.equal(readHome(home).agent, 'cursor');
+  assert.notEqual(path.dirname(home), checkout);
+  execSync('git check-ignore -q .aifactory/config.yaml', {cwd: checkout});
+  assert.equal(
+    execSync('git status --porcelain', {cwd: checkout, encoding: 'utf8'}).includes('.aifactory'),
+    false,
+  );
+  rmSync(dir, {recursive: true, force: true});
+}
+
 function proveEachGroupNamesItsFile137(): void {
   const {dir, home, arcadia} = yard();
   const checkout = path.join(arcadia, 'services', 'billing');
@@ -257,6 +357,23 @@ function proveEachGroupNamesItsFile137(): void {
   assert.equal(window.serviceConfig().file, 'openspec/config.yaml');
   rmSync(dir, {recursive: true, force: true});
 }
+
+spec('home-agent', () => {
+  requirement('The checkout overlay stays an override of the home agent', () => {
+    scenario('агент слоя remains the override for that one checkout', () => {
+      proveOverlayAgentRemainsTheOverrideWhenTheManagerSavesAHomeAgent();
+    });
+    scenario('Empty means the home agent', () => {
+      proveEmptyOverlayAgentMeansTheHomeAgentForThatCheckout();
+    });
+    scenario('The overlay models, effort, and speed follow the merged factory', () => {
+      proveOverlayModelsEffortAndSpeedFollowTheMergedFactoryWhenChoosingAHomeAgent();
+    });
+    scenario('The checkout overlay stays out of the repository', () => {
+      proveTheCheckoutOverlayStaysOutOfTheRepositoryWhenChoosingAHomeAgent();
+    });
+  });
+});
 
 spec('settings', () => {
   requirement('Settings are two blocks and do not open themselves', () => {

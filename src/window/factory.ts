@@ -184,14 +184,16 @@ export function mergeFactory(home: Doc, overlay: Doc | null): Factory {
     judgment: slotPresent(overlay?.models, 'judgment') ?? slot(home.models, 'judgment'),
   };
   const ownAgent = overlayAgent !== '';
-  if (pair?.effort) {
+  const overlayEffort = !ownAgent && hasKey(overlay, 'effort');
+  const overlaySpeed = !ownAgent && hasKey(overlay, 'speed');
+  if (pair?.effort || overlayEffort) {
     const source = modeValues(ownOrHome(overlay, ownAgent, 'effort', home));
     factory.effort = {
-      mechanical: source.mechanical ?? pair.effort.mechanical,
-      judgment: source.judgment ?? pair.effort.judgment,
+      mechanical: source.mechanical ?? pair?.effort?.mechanical ?? '',
+      judgment: source.judgment ?? pair?.effort?.judgment ?? '',
     };
   }
-  if (pair?.speed) {
+  if (pair?.speed || overlaySpeed) {
     const source = modeValues(ownOrHome(overlay, ownAgent, 'speed', home));
     factory.speed = {
       mechanical: source.mechanical ?? '',

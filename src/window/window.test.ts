@@ -6,6 +6,7 @@ import path from 'node:path';
 import {parse} from 'yaml';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
+import {mergeFactory, readOverlayDoc} from './factory.ts';
 import {openWindow} from './window.ts';
 import {
   MANAGER,
@@ -127,6 +128,91 @@ function proveTheLayerAgentLeavesTheFactoryRow(): void {
   window.take('1');
   assert.deepEqual(asked, []);
   assert.equal(started, 0);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveAnEmptyLayerAgentMeansTheHomeAgent(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  writeOverlay(checkout, ['alpha']);
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.chooseAgent('codex');
+  window.openCard('1');
+  window.openSettings();
+  const overlayPath = path.join(checkout, '.aifactory', 'config.yaml');
+  const overlayDoc = readHome(overlayPath);
+  assert.equal(overlayDoc.agent, undefined);
+  assert.equal(
+    mergeFactory(readHome(home), readOverlayDoc(checkout)).agent,
+    'codex',
+  );
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveALayerChoiceWritesTheOverlayOnly(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.chooseAgent('cursor');
+  const homeBefore = readFileSync(home, 'utf8');
+  window.openCard('1');
+  window.openSettings();
+  window.chooseOverlayAgent('codex');
+  assert.equal(readFileSync(home, 'utf8'), homeBefore);
+  const overlayPath = path.join(checkout, '.aifactory', 'config.yaml');
+  assert.equal(readHome(overlayPath).agent, 'codex');
+  assert.equal(overlayPath, path.join(checkout, '.aifactory', 'config.yaml'));
+  assert.notEqual(overlayPath, home);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheHomeAgentLeavesOverlayModelsOnTheMergedFactory(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  writeOverlay(
+    checkout,
+    ['alpha'],
+    [
+      'models:',
+      '  mechanical: overlay-mechanical',
+      'effort:',
+      '  mechanical: high',
+      '  judgment: low',
+      'speed:',
+      '  mechanical: fast',
+      '',
+    ].join('\n'),
+  );
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  window.chooseAgent('cursor');
+  window.openCard('1');
+  window.openSettings();
+  assert.equal(window.overlay().models.mechanical.value, 'overlay-mechanical');
+  assert.deepEqual(window.overlay().effort, {mechanical: 'high', judgment: 'low'});
+  assert.deepEqual(window.overlay().speed, {mechanical: 'fast', judgment: ''});
+  window.chooseAgent('codex');
+  assert.equal(window.overlay().models.mechanical.value, 'overlay-mechanical');
+  assert.equal(window.overlay().models.judgment.value, 'gpt-6.1-sol');
+  assert.deepEqual(window.overlay().effort, {mechanical: 'high', judgment: 'low'});
+  assert.deepEqual(window.overlay().speed, {mechanical: 'fast', judgment: ''});
   rmSync(dir, {recursive: true, force: true});
 }
 
@@ -1308,6 +1394,17 @@ spec('home-agent', () => {
     });
     scenario('The layer agent leaves the factory row', () => {
       proveTheLayerAgentLeavesTheFactoryRow();
+    });
+  });
+  requirement('The layer agent stays a checkout override', () => {
+    scenario('An empty layer agent means the home agent', () => {
+      proveAnEmptyLayerAgentMeansTheHomeAgent();
+    });
+    scenario('A layer choice writes the overlay only', () => {
+      proveALayerChoiceWritesTheOverlayOnly();
+    });
+    scenario('The home agent leaves overlay models on the merged factory', () => {
+      proveTheHomeAgentLeavesOverlayModelsOnTheMergedFactory();
     });
   });
 });

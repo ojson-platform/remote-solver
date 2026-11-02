@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {existsSync, rmSync} from 'node:fs';
+import {existsSync, readFileSync, rmSync} from 'node:fs';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
@@ -14,7 +14,12 @@ import {
 } from './page.harness.ts';
 import {FACTORY_AGENTS} from './types.ts';
 import {openWindow} from './window.ts';
-import {scratch} from './window.harness.ts';
+import {
+  assertNoEmptyStrings,
+  proveChoosingCursorWritesItsPairAndOmitsEffortAndSpeed2,
+  readHome,
+  scratch,
+} from './window.harness.ts';
 
 function homeBlock(html: string): string {
   return between(html, '<h3>Дом</h3>', '<div class="stack">');
@@ -102,6 +107,133 @@ spec('home-agent', () => {
       assert.equal(existsSync(home), false);
       assert.equal(window.settings().agent, '');
       rmSync(dir, {recursive: true, force: true});
+    });
+  });
+  requirement('Choosing an agent writes the known pair at once', () => {
+    scenario('Cursor writes its pair and the board turns on', async () => {
+      proveChoosingCursorWritesItsPairAndOmitsEffortAndSpeed2();
+      const {dir, home} = scratch();
+      const window = openWindow(
+        {homePath: home},
+        {login: () => MANAGER, tickets: () => [bare('1', 'Quiet')]},
+      );
+      assert.deepEqual(window.board().rows, [{text: 'фабрике ещё нужен агент'}]);
+      assert.equal(window.board().takeDisabled, true);
+      window.chooseAgent('cursor');
+      assert.equal(window.board().stepsStart, true);
+      assert.deepEqual(window.board().rows, []);
+      assert.equal(window.board().takeDisabled, false);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [bare('1', 'Quiet')]},
+        async page => {
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                new URLSearchParams({act: 'choose-agent', agent: 'cursor'}).toString(),
+              )
+            ).status,
+            200,
+          );
+        },
+      );
+      rmSync(dir, {recursive: true, force: true});
+    });
+    scenario('Codex writes its pair and effort', () => {
+      const {dir, home} = scratch();
+      const window = openWindow({homePath: home});
+      window.chooseAgent('codex');
+      const doc = readHome(home);
+      assert.equal(doc.agent, 'codex');
+      assert.equal(doc.models?.mechanical, 'gpt-6-luna');
+      assert.equal(doc.models?.judgment, 'gpt-6.1-sol');
+      assert.deepEqual(doc.effort, {mechanical: 'low', judgment: 'high'});
+      assert.equal(doc.speed, undefined);
+      assertNoEmptyStrings(doc);
+      rmSync(dir, {recursive: true, force: true});
+    });
+    scenario('Claude-code writes its pair and effort', () => {
+      const {dir, home} = scratch();
+      const window = openWindow({homePath: home});
+      window.chooseAgent('claude-code');
+      const doc = readHome(home);
+      assert.equal(doc.agent, 'claude-code');
+      assert.equal(doc.models?.mechanical, 'sonnet');
+      assert.equal(doc.models?.judgment, 'opus');
+      assert.deepEqual(doc.effort, {mechanical: 'medium', judgment: 'medium'});
+      assert.equal(doc.speed, undefined);
+      assertNoEmptyStrings(doc);
+      rmSync(dir, {recursive: true, force: true});
+    });
+    scenario('OpenCode writes its pair', () => {
+      const {dir, home} = scratch();
+      const window = openWindow({homePath: home});
+      window.chooseAgent('opencode');
+      const doc = readHome(home);
+      assert.equal(doc.agent, 'opencode');
+      assert.equal(doc.models?.mechanical, 'moonshotai/kimi-k2.7-code');
+      assert.equal(doc.models?.judgment, 'moonshotai/kimi-k3');
+      assert.equal(doc.effort, undefined);
+      assert.equal(doc.speed, undefined);
+      assertNoEmptyStrings(doc);
+      rmSync(dir, {recursive: true, force: true});
+    });
+    scenario('A catalog does not change the pair', () => {
+      const {dir, home} = scratch();
+      let reads = 0;
+      const window = openWindow(
+        {homePath: home},
+        {
+          catalog: () => {
+            reads += 1;
+            return {mechanical: 'other-mechanical', judgment: 'other-judgment'};
+          },
+        },
+      );
+      window.chooseAgent('cursor');
+      assert.equal(reads, 0);
+      const doc = readHome(home);
+      assert.equal(doc.models?.mechanical, 'composer-2.5-fast');
+      assert.equal(doc.models?.judgment, 'grok-4.7-high-fast');
+      rmSync(dir, {recursive: true, force: true});
+    });
+    scenario('Choosing the saved agent again changes nothing', () => {
+      const {dir, home} = scratch();
+      const window = openWindow({homePath: home});
+      window.chooseAgent('cursor');
+      window.leaveModel('mechanical', '');
+      const before = readFileSync(home, 'utf8');
+      window.chooseAgent('cursor');
+      assert.equal(readFileSync(home, 'utf8'), before);
+      assert.equal(readHome(home).models?.mechanical, '');
+      rmSync(dir, {recursive: true, force: true});
+    });
+    scenario('An empty offer writes nothing', () => {
+      const {dir, home} = scratch();
+      const window = openWindow({homePath: home, agents: []});
+      window.chooseAgent('cursor');
+      assert.equal(existsSync(home), false);
+      assert.deepEqual(window.board().rows, [{text: 'фабрике ещё нужен агент'}]);
+      rmSync(dir, {recursive: true, force: true});
+    });
+    scenario('No home file path writes nothing', () => {
+      let assignees = 0;
+      const window = openWindow(
+        {},
+        {
+          login: () => MANAGER,
+          tickets: () => [bare('1', 'Quiet')],
+          writeAssignee: () => {
+            assignees += 1;
+          },
+        },
+      );
+      window.chooseAgent('cursor');
+      assert.deepEqual(window.board().rows, [{text: 'фабрике ещё нужен агент'}]);
+      assert.equal(window.board().takeDisabled, true);
+      window.take('1');
+      assert.equal(assignees, 0);
     });
   });
 });

@@ -13,7 +13,7 @@ Records why and the scope. Zoom is context, not implementation. The commit and t
 
 ## Steps
 
-1. No `proposal.md` yet: write `openspec/changes/issue-<issue>/proposal.md` from the issue text in this prompt. Problem, Outcome, Scope, Out of scope, and Constraints keep the caller's words under the headings in `CONTEXT.md` § Artifacts. Capabilities is an id cut by § Capability. Read `openspec/specs/` only to reuse an id that is already this one rule, and to choose Added or Modified. A wider spec is not this id. Do not read implementation, tests, or ADRs. An empty description stays a scaffold with its open questions as `- [ ]` items. Several services: what this change needs from each, no contracts. No child issues.
+1. No `proposal.md` yet: write `openspec/changes/issue-<issue>/proposal.md` from the issue text in this prompt. Problem, Outcome, Scope, Out of scope, and Constraints keep the caller's words under the headings in `CONTEXT.md` § Artifacts. Capabilities is an id cut by § Capability. A behavior the issue says the caller already sees is Modified, even when `openspec/specs/<id>/spec.md` is absent. Read `openspec/specs/` only to reuse an id that is already this one rule. A wider spec is not this id. Do not read implementation, tests, or ADRs. An empty description stays a scaffold with its open questions as `- [ ]` items. Several services: what this change needs from each, no contracts. No child issues.
 2. `proposal.md` already exists: leave it.
 3. A question below the context zoom stays out of the proposal.
 4. `improve-proposal`: Fix thread (`CONTEXT.md`), layer `proposal`.

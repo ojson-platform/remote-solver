@@ -18,14 +18,14 @@ Writes observable behavior. Zoom is the black box. The delta grammar is `CONTEXT
 2. Run `openspec instructions specs --change issue-<issue> --json`. Write `openspec/changes/issue-<issue>/specs/<capability>/spec.md` from its `template`, sections by § Delta. A scenario is checked from outside, without reading code.
 3. A local proposal change: edit the requirements and scenarios it changes, including ones it drops.
 4. `improve-specs`: Fix thread (`CONTEXT.md`), layer `spec`. A thread that drops a requirement or scenario writes that drop in the delta. `proposal.md` stays.
-5. Run `openspec validate --all --strict --no-interactive`. Exit non-zero: fix every spec file the output names, then run it again. Do not publish while it fails.
+5. Run `openspec validate --all --strict --no-interactive`. Exit non-zero on a spec this change owns: fix that file and run it again. A failure in a spec this change does not own: do not edit it. Do not publish while a spec this change owns fails.
 6. Publish (`CONTEXT.md`). Mirror: `Specify`.
 
 ## Check
 
 - Every ADDED or MODIFIED Requirement has a Scenario. A dropped requirement is a name under `## REMOVED Requirements`. A dropped scenario is absent from the requirement that stays
 - No stack and no verification boundary
-- `openspec validate --all --strict --no-interactive` exits 0
+- The specs this change owns pass `openspec validate --all --strict --no-interactive`
 
 ## Stop
 

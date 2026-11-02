@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The spine is the document rows of the open cycle.
+The spine is the document rows of the open cycle, listed in focus order.
 
 ## Requirements
 

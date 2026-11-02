@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The drawer is the one open cycle over the board.
+The drawer is the one open cycle over the board and does not narrow the stations.
 
 ## Requirements
 

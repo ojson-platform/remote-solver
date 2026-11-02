@@ -6,7 +6,7 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {between, formsOf, hosted, pageHtml, post, prepare, yard} from './page.harness.ts';
 import {serveBoard} from './page.ts';
-import {readHome, scratch, ticket} from './window.harness.ts';
+import {prepare as stageCheckout, readHome, scratch, ticket} from './window.harness.ts';
 import {openWindow} from './window.ts';
 
 function homeBlockOf(html: string): string {
@@ -241,7 +241,7 @@ spec('home-agent', () => {
 
 function proveAnOverlayAgentLeavesTheBoardAskingForAnAgent(): void {
   const {dir, home, arcadia} = yard();
-  const checkout = prepare(arcadia, home);
+  const checkout = stageCheckout(arcadia, home);
   const window = openWindow(
     {homePath: home, adapter: 'tracker'},
     {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
@@ -260,6 +260,48 @@ spec('home-agent', () => {
   requirement('The layer agent does not record a home agent', () => {
     scenario('An overlay agent leaves the board asking for an agent', () => {
       proveAnOverlayAgentLeavesTheBoardAskingForAnAgent();
+    });
+    scenario('An empty overlay agent shows the home agent', async () => {
+      const {dir, home, arcadia} = yard();
+      const checkout = stageCheckout(arcadia, home);
+      try {
+        writeFileSync(
+          home,
+          [
+            'agent: cursor',
+            'models:',
+            '  mechanical: composer-2.5-fast',
+            '  judgment: grok-4.7-high-fast',
+            'watch:',
+            '  - alpha',
+            'roots:',
+            `  arcadia: ${arcadia}`,
+            '',
+          ].join('\n'),
+        );
+        assert.equal(readHome(home).agent, 'cursor');
+        assert.equal(existsSync(path.join(checkout, '.aifactory', 'config.yaml')), false);
+        const window = openWindow(
+          {homePath: home, adapter: 'tracker'},
+          {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+        );
+        const page = await serveBoard(window);
+        try {
+          window.openSettings();
+          assert.equal(window.overlay().agent, 'cursor');
+          const layerForm = formsOf(await pageHtml(page.url)).find(item =>
+            item.includes('value="choose-overlay-agent"'),
+          );
+          assert.ok(layerForm);
+          const select = layerForm.match(/<select[^>]*name="agent"[^>]*>[\s\S]*?<\/select>/)?.[0];
+          assert.ok(select);
+          assert.match(select, /value="cursor"[^>]*selected/);
+        } finally {
+          await page.close();
+        }
+      } finally {
+        rmSync(dir, {recursive: true, force: true});
+      }
     });
   });
 });

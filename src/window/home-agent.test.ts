@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {existsSync, readFileSync, rmSync} from 'node:fs';
+import {existsSync, mkdirSync, readFileSync, rmSync} from 'node:fs';
+import path from 'node:path';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
@@ -20,6 +21,10 @@ import {
   proveChoosingCursorWritesItsPairAndOmitsEffortAndSpeed2,
   readHome,
   scratch,
+  ticket,
+  writeLaunch,
+  writeServiceConfig,
+  yard,
 } from './window.harness.ts';
 
 function homeBlock(html: string): string {
@@ -327,6 +332,54 @@ spec('home-agent', () => {
           assert.equal(readHome(home).agent, 'cursor');
         },
       );
+    });
+  });
+  requirement('The row, the lamp, and Take read the home agent', () => {
+    scenario('The row, the lamp, and Take read the home agent', () => {
+      const {dir, home, arcadia} = yard();
+      const checkout = path.join(arcadia, 'services', 'billing');
+      mkdirSync(checkout, {recursive: true});
+      writeServiceConfig(checkout, ['alpha']);
+      writeLaunch(home, ['alpha'], {arcadia});
+      let assignees = 0;
+      const window = openWindow(
+        {homePath: home, adapter: 'tracker'},
+        {
+          login: () => MANAGER,
+          tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
+          writeAssignee: () => {
+            assignees += 1;
+          },
+        },
+      );
+      assert.equal(readHome(home).agent, undefined);
+      assert.deepEqual(window.board().rows, [{text: 'фабрике ещё нужен агент'}]);
+      assert.equal(window.board().stepsStart, false);
+      assert.equal(window.board().takeDisabled, true);
+      window.take('1');
+      assert.equal(assignees, 0);
+      rmSync(dir, {recursive: true, force: true});
+    });
+    scenario('A layer agent does not turn the board on', () => {
+      const {dir, home, arcadia} = yard();
+      const checkout = path.join(arcadia, 'services', 'billing');
+      mkdirSync(checkout, {recursive: true});
+      writeServiceConfig(checkout, ['alpha']);
+      writeLaunch(home, ['alpha'], {arcadia});
+      const window = openWindow(
+        {homePath: home, adapter: 'tracker'},
+        {
+          answers: () => true,
+          tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
+        },
+      );
+      window.openSettings();
+      window.chooseOverlayAgent('cursor');
+      assert.equal(readHome(home).agent, undefined);
+      assert.deepEqual(window.board().rows, [{text: 'фабрике ещё нужен агент'}]);
+      assert.equal(window.board().stepsStart, false);
+      assert.equal(window.board().takeDisabled, true);
+      rmSync(dir, {recursive: true, force: true});
     });
   });
 });

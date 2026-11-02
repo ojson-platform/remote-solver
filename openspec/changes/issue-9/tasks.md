@@ -1,5 +1,5 @@
 - [x] `home-agent-settings-sheet` The home block has its own agent field above the models; The field is empty until an agent is saved; Opening settings does not save the first option
 - [x] `choose-agent-home-write` Cursor writes its pair and the board turns on; Codex writes its pair and effort; Claude-code writes its pair and effort; OpenCode writes its pair; A catalog does not change the pair; Choosing the saved agent again changes nothing; An empty offer writes nothing; No home file path writes nothing
 - [x] `role-form-separate` A named role is added without the home agent; An empty role name adds no role; Choosing the home agent adds no role
-- [ ] `board-reads-home-agent` The row, the lamp, and Take read the home agent; A layer agent does not turn the board on
+- [x] `board-reads-home-agent` The row, the lamp, and Take read the home agent; A layer agent does not turn the board on
 - [ ] `layer-overlay` Claude-code on the layer writes the overlay only; The layer agent remains the override for that one checkout; Clearing the layer agent shows the home agent; The overlay models, effort, and speed keep following the merged factory; A codex layer agent does not take home effort; No chosen checkout writes no overlay; The checkout overlay stays out of the repository

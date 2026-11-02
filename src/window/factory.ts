@@ -442,6 +442,9 @@ export function openHome(homePath: string | undefined, offered: readonly string[
     if (!canWrite()) {
       return;
     }
+    if (agentOf(doc) === agentId) {
+      return;
+    }
     commit(replaceAgent(doc, agentId));
   }
 

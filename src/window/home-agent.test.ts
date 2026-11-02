@@ -207,5 +207,33 @@ spec('home-agent', () => {
         assert.equal(doc.models?.judgment, 'gpt-6.1-sol');
       });
     });
+    scenario('Choosing the saved agent again changes nothing', async () => {
+      await hosted({tickets: () => []}, async (page, _window, paths) => {
+        await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString());
+        await post(
+          page.url,
+          'act',
+          new URLSearchParams({act: 'choose-agent', agent: 'cursor'}).toString(),
+        );
+        await post(
+          page.url,
+          'act',
+          new URLSearchParams({
+            act: 'leave-model',
+            mode: 'mechanical',
+            value: 'custom-mechanical-model',
+          }).toString(),
+        );
+        const before = readHome(paths.home);
+        assert.equal(before.agent, 'cursor');
+        assert.equal(before.models?.mechanical, 'custom-mechanical-model');
+        await post(
+          page.url,
+          'act',
+          new URLSearchParams({act: 'choose-agent', agent: 'cursor'}).toString(),
+        );
+        assert.deepEqual(readHome(paths.home), before);
+      });
+    });
   });
 });

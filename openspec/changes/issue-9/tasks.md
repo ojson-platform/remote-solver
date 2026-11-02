@@ -2,4 +2,4 @@
 - [x] `saved-agent-shown` — A saved agent is shown
 - [x] `role-form-storage` — A filled name stores the role and not an agent; An empty name stores no role
 - [x] `choose-agent-pair` — Choosing cursor from an empty field writes the pair; Choosing codex writes the pair
-- [ ] `rechoose-saved-agent` — Choosing the saved agent again changes nothing
+- [x] `rechoose-saved-agent` — Choosing the saved agent again changes nothing

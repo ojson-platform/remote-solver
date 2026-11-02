@@ -116,7 +116,7 @@ export function Settings({snapshot, busy}: {snapshot: WindowSnapshot; busy?: boo
               <h3>Дом</h3>
               <ActForm act="choose-agent" onChangeSubmit>
                 <label>агент</label>
-                <select name="agent" defaultValue={settings.agent}>
+                <select name="agent" defaultValue={settings.agent || ''}>
                   {options(FACTORY_AGENTS, settings.agent, true)}
                 </select>
               </ActForm>

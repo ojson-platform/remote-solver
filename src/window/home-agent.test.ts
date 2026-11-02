@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import {existsSync, rmSync} from 'node:fs';
+import {existsSync, rmSync, writeFileSync} from 'node:fs';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
-import {between, formsOf, hosted, pageHtml, post} from './page.harness.ts';
+import {between, formsOf, hosted, pageHtml, post, prepare, yard} from './page.harness.ts';
+import {serveBoard} from './page.ts';
 import {readHome, scratch} from './window.harness.ts';
 import {openWindow} from './window.ts';
 
@@ -94,6 +95,43 @@ spec('home-agent', () => {
         assert.match(select, /<option[^>]*value=""[^>]*selected/);
         assert.doesNotMatch(select, /value="cursor"[^>]*selected/);
       });
+    });
+    scenario('A saved agent is shown', async () => {
+      const {dir, home, arcadia} = yard();
+      try {
+        prepare(arcadia, home);
+        writeFileSync(
+          home,
+          [
+            'agent: cursor',
+            'models:',
+            '  mechanical: composer-2.5-fast',
+            '  judgment: grok-4.7-high-fast',
+            'watch:',
+            '  - alpha',
+            `roots:`,
+            `  arcadia: ${arcadia}`,
+            '',
+          ].join('\n'),
+        );
+        assert.equal(readHome(home).agent, 'cursor');
+        const window = openWindow({homePath: home, adapter: 'tracker'}, {tickets: () => []});
+        const page = await serveBoard(window);
+        try {
+          window.openSettings();
+          assert.equal(window.settings().agent, 'cursor');
+          const select = homeAgentForm(await pageHtml(page.url)).match(
+            /<select[^>]*name="agent"[^>]*>[\s\S]*?<\/select>/,
+          )?.[0];
+          assert.ok(select);
+          assert.match(select, /value="cursor"[^>]*selected/);
+          assert.doesNotMatch(select, /<option[^>]*value=""[^>]*selected/);
+        } finally {
+          await page.close();
+        }
+      } finally {
+        rmSync(dir, {recursive: true, force: true});
+      }
     });
   });
 });

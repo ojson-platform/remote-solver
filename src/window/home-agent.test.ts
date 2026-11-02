@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import {existsSync, rmSync, writeFileSync} from 'node:fs';
+import path from 'node:path';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {between, formsOf, hosted, pageHtml, post, prepare, yard} from './page.harness.ts';
 import {serveBoard} from './page.ts';
-import {readHome, scratch} from './window.harness.ts';
+import {readHome, scratch, ticket} from './window.harness.ts';
 import {openWindow} from './window.ts';
 
 function homeBlockOf(html: string): string {
@@ -234,6 +235,31 @@ spec('home-agent', () => {
         );
         assert.deepEqual(readHome(paths.home), before);
       });
+    });
+  });
+});
+
+function proveAnOverlayAgentLeavesTheBoardAskingForAnAgent(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+  );
+  assert.equal(readHome(home).agent, undefined);
+  window.openSettings();
+  window.chooseOverlayAgent('codex');
+  const overlay = path.join(checkout, '.aifactory', 'config.yaml');
+  assert.equal(readHome(overlay).agent, 'codex');
+  assert.equal(readHome(home).agent, undefined);
+  assert.deepEqual(window.board().rows, [{text: 'фабрике ещё нужен агент'}]);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+spec('home-agent', () => {
+  requirement('The layer agent does not record a home agent', () => {
+    scenario('An overlay agent leaves the board asking for an agent', () => {
+      proveAnOverlayAgentLeavesTheBoardAskingForAnAgent();
     });
   });
 });

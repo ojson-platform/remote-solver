@@ -4,6 +4,7 @@ import {mkdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 
 import {parse} from 'yaml';
+import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {openWindow} from './window.ts';
 import {
@@ -28,6 +29,106 @@ import {
   writeServiceYaml,
   yard,
 } from './window.harness.ts';
+
+function proveNoHomeAgentLeavesTheFactoryRow(): void {
+  const {dir, home} = scratch();
+  const asked: string[] = [];
+  let started = 0;
+  const window = openWindow(
+    {homePath: home},
+    {
+      answers: agentId => {
+        asked.push(agentId);
+        return true;
+      },
+      startStep: () => {
+        started += 1;
+      },
+    },
+  );
+  assert.deepEqual(window.board().rows, [{text: 'фабрике ещё нужен агент'}]);
+  assert.equal(window.board().stepsStart, false);
+  assert.equal(window.board().takeDisabled, true);
+  window.spy();
+  window.take('1');
+  assert.deepEqual(asked, []);
+  assert.equal(started, 0);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveAHomeAgentTurnsTheBoardOn(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const asked: string[] = [];
+  let started = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      answers: agentId => {
+        asked.push(agentId);
+        return true;
+      },
+      startStep: () => {
+        started += 1;
+      },
+      tickets: () => [
+        ticket({key: '1', queue: 'alpha', sddService: 'services/billing', assignee: ''}),
+      ],
+    },
+  );
+  window.chooseAgent('cursor');
+  const board = window.board();
+  assert.equal(board.rows.some(row => row.text === 'фабрике ещё нужен агент'), false);
+  assert.equal(board.stepsStart, true);
+  assert.equal(board.takeDisabled, false);
+  assert.ok(asked.length > 0);
+  assert.ok(asked.every(agentId => agentId === 'cursor'));
+  window.spy();
+  assert.equal(started, 1);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheLayerAgentLeavesTheFactoryRow(): void {
+  const {dir, home, arcadia} = yard();
+  const checkout = path.join(arcadia, 'services', 'billing');
+  mkdirSync(checkout, {recursive: true});
+  writeServiceConfig(checkout, ['alpha']);
+  writeLaunch(home, ['alpha'], {arcadia});
+  writeOverlay(
+    checkout,
+    ['alpha'],
+    [
+      'agent: cursor',
+      'models:',
+      '  mechanical: composer-2.5-fast',
+      '  judgment: grok-4.7-high-fast',
+      '',
+    ].join('\n'),
+  );
+  const asked: string[] = [];
+  let started = 0;
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      answers: agentId => {
+        asked.push(agentId);
+        return true;
+      },
+      startStep: () => {
+        started += 1;
+      },
+      tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})],
+    },
+  );
+  assert.deepEqual(window.board().rows, [{text: 'фабрике ещё нужен агент'}]);
+  assert.equal(window.board().stepsStart, false);
+  assert.equal(window.board().takeDisabled, true);
+  window.spy();
+  window.take('1');
+  assert.deepEqual(asked, []);
+  assert.equal(started, 0);
+  rmSync(dir, {recursive: true, force: true});
+}
 
 test('choosing an agent does not read a live catalog', () => {
   const {dir, home} = scratch();
@@ -1195,4 +1296,18 @@ test('zero or two open pull requests write nothing', async () => {
       rmSync(hosted.dir, {recursive: true, force: true});
     }
   }
+});
+
+spec('home-agent', () => {
+  requirement('The row, the lamp, and Take read the home agent', () => {
+    scenario('No home agent leaves the factory row', () => {
+      proveNoHomeAgentLeavesTheFactoryRow();
+    });
+    scenario('A home agent turns the board on', () => {
+      proveAHomeAgentTurnsTheBoardOn();
+    });
+    scenario('The layer agent leaves the factory row', () => {
+      proveTheLayerAgentLeavesTheFactoryRow();
+    });
+  });
 });

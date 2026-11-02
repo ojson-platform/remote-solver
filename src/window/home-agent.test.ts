@@ -16,6 +16,7 @@ import {FACTORY_AGENTS} from './types.ts';
 import {openWindow} from './window.ts';
 import {
   assertNoEmptyStrings,
+  homeRoles,
   proveChoosingCursorWritesItsPairAndOmitsEffortAndSpeed2,
   readHome,
   scratch,
@@ -234,6 +235,98 @@ spec('home-agent', () => {
       assert.equal(window.board().takeDisabled, true);
       window.take('1');
       assert.equal(assignees, 0);
+    });
+  });
+  requirement('The same submit can add a role', () => {
+    scenario('A named role is added without the home agent', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [bare('1', 'Quiet')]},
+        async (page, window, {home}) => {
+          window.openSettings();
+          window.chooseAgent('codex');
+          const agentBefore = readHome(home).agent;
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                new URLSearchParams({
+                  act: 'add-role',
+                  name: 'editor',
+                  outcome: 'html',
+                  text: 'role body',
+                }).toString(),
+              )
+            ).status,
+            200,
+          );
+          assert.deepEqual(homeRoles(home), [{name: 'editor', outcome: 'html', text: 'role body'}]);
+          assert.equal(readHome(home).agent, agentBefore);
+        },
+      );
+    });
+    scenario('An empty role name adds no role', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [bare('1', 'Quiet')]},
+        async (page, window, {home}) => {
+          window.openSettings();
+          window.chooseAgent('cursor');
+          const rolesBefore = homeRoles(home);
+          const agentBefore = readHome(home).agent;
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                new URLSearchParams({
+                  act: 'add-role',
+                  name: '',
+                  outcome: 'html',
+                  text: 'ignored',
+                }).toString(),
+              )
+            ).status,
+            200,
+          );
+          assert.deepEqual(homeRoles(home), rolesBefore);
+          assert.equal(readHome(home).agent, agentBefore);
+        },
+      );
+    });
+    scenario('Choosing the home agent adds no role', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [bare('1', 'Quiet')]},
+        async (page, _window, {home}) => {
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                new URLSearchParams({act: 'open-settings'}).toString(),
+              )
+            ).status,
+            200,
+          );
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                new URLSearchParams({
+                  act: 'choose-agent',
+                  agent: 'cursor',
+                  name: 'editor',
+                  outcome: 'html',
+                  text: 'draft',
+                }).toString(),
+              )
+            ).status,
+            200,
+          );
+          assert.equal(homeRoles(home).length, 0);
+          assert.equal(readHome(home).agent, 'cursor');
+        },
+      );
     });
   });
 });

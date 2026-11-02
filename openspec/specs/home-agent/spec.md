@@ -6,51 +6,56 @@ The home agent is the agent stored in the home file. The control that writes it 
 
 ## Requirements
 
-### Requirement: The home agent control is the first field of the new-role form
+### Requirement: The home block has its own agent field above the models
 
-The home block SHALL show the models, then effort and speed when that agent has them, then the watch list, and then the roots. It SHALL NOT show an agent field above the models. Under Roles, the new-role form SHALL start with a select labeled `агент` and SHALL also carry the new role's name, outcome, and text. A change in that form SHALL submit it. The submission SHALL write the home agent when it names one. A filled role name on that submission SHALL be stored with it. An empty role name SHALL store no role.
+The home block SHALL show an agent field labeled `агент` above the models, then the models, then effort and speed when that agent has them, then the watch list, and then the roots. Under Roles, the new-role form SHALL carry the new role's name, outcome, and text, and SHALL NOT contain the home agent field. A submission of that form SHALL NOT write the home agent. A filled role name SHALL be stored. An empty role name SHALL store no role.
 
-#### Scenario: The agent select is the first field of the new-role form
+#### Scenario: The agent field sits above the models
 
 - **WHEN** the manager opens settings and the home file has no agent
-- **THEN** the home block shows the models, the watch list, and the roots, with no agent field above the models, and the new-role form's first field is labeled `агент`
+- **THEN** the home block shows a field labeled `агент` above the models, then the models, the watch list, and the roots, and the new-role form has no field labeled `агент`
 
-#### Scenario: A filled name is stored with the agent
+#### Scenario: A filled name stores the role and not an agent
 
-- **WHEN** the new-role form is submitted with an agent and a role name
-- **THEN** the home file records that agent and that role
+- **WHEN** the new-role form is submitted with a role name and the home file has no agent
+- **THEN** the home file stores that role and still has no agent
 
 #### Scenario: An empty name stores no role
 
-- **WHEN** the new-role form is submitted with an agent and an empty role name
-- **THEN** the home file records that agent and gains no role
+- **WHEN** the new-role form is submitted with an empty role name
+- **THEN** the home file gains no role
 
-### Requirement: While nothing is saved the list shows cursor
+### Requirement: The field is empty until an agent is saved
 
-The home agent select SHALL offer no empty choice, and its first choice SHALL be `cursor`. While the home file has no agent, the field SHALL show `cursor` and the saved agent SHALL stay empty. Choosing that shown `cursor` SHALL NOT submit, and the home file SHALL stay without an agent.
+The home agent field SHALL be empty until an agent is saved. While the home file has no agent, the field SHALL show no chosen agent, and it SHALL NOT show `cursor` as already chosen. Once an agent is saved, the field SHALL show that agent.
 
-#### Scenario: Choosing the shown cursor does not write
+#### Scenario: Nothing saved leaves the field empty
 
-- **WHEN** the home file has no agent and the manager chooses the shown `cursor`
-- **THEN** the form does not submit and the home file still has no agent
+- **WHEN** the manager opens settings and the home file has no agent
+- **THEN** the home agent field shows no chosen agent
+
+#### Scenario: A saved agent is shown
+
+- **WHEN** the home file has saved `cursor` and the manager opens settings
+- **THEN** the home agent field shows `cursor`
 
 ### Requirement: A submitted agent writes the known pair at once
 
-A submission that names an offered agent SHALL write the home file at once with that agent and that agent's known pair. Naming the agent that is already saved SHALL replace that set with the known pair again, including a model the manager had changed. The field SHALL NOT submit a choice that did not change, so choosing the saved agent again from the field SHALL leave the file as it is.
+Choosing an offered agent SHALL write the home file at once with that agent and that agent's known pair. Choosing the agent that is already saved SHALL leave the file as it is, including a model the manager had changed.
 
-#### Scenario: Changing the shown cursor to codex writes the pair
+#### Scenario: Choosing cursor from an empty field writes the pair
 
-- **WHEN** the home file has no agent and the manager changes the choice from the shown `cursor` to `codex`
+- **WHEN** the home file has no agent and the manager chooses `cursor`
+- **THEN** the home file records `cursor`, `composer-2.5-fast`, and `grok-4.7-high-fast`
+
+#### Scenario: Choosing codex writes the pair
+
+- **WHEN** the home file has no agent and the manager chooses `codex`
 - **THEN** the home file records `codex`, `gpt-6-luna`, and `gpt-6.1-sol`
 
-#### Scenario: Submitting the saved agent replaces a changed model
+#### Scenario: Choosing the saved agent again changes nothing
 
-- **WHEN** the saved agent is `cursor`, one model has been changed, and `cursor` is submitted again
-- **THEN** the home file records `composer-2.5-fast` and `grok-4.7-high-fast`
-
-#### Scenario: Choosing the saved agent from the field leaves the file
-
-- **WHEN** the saved agent is `cursor` and the manager chooses the shown `cursor`
+- **WHEN** the saved agent is `cursor`, one model has been changed, and the manager chooses the shown `cursor`
 - **THEN** the home file is unchanged
 
 ### Requirement: The layer agent does not record a home agent

@@ -15,7 +15,7 @@ Writes observable behavior. Zoom is the black box. The delta grammar is `CONTEXT
 ## Steps
 
 1. The delta exists, still matches the proposal, and `threads <pull> --layer spec` is empty: go to step 5.
-2. Run `openspec instructions specs --change issue-<issue> --json`. Write `openspec/changes/issue-<issue>/specs/<capability>/spec.md` from its `template`, sections by § Delta. A scenario is checked from outside, without reading code.
+2. Run `openspec instructions specs --change issue-<issue> --json`. Write `openspec/changes/issue-<issue>/specs/<capability>/spec.md` from its `template`, sections by § Delta. A scenario is checked from outside, without reading code. A sentence in the proposal Outcome or Constraints that names what the caller sees is a Scenario of this capability. The Scenario names each thing that sentence names. Another capability does not stand in for it.
 3. A local proposal change: edit the requirements and scenarios it changes, including ones it drops.
 4. `improve-specs`: Fix thread (`CONTEXT.md`), layer `spec`. A thread that drops a requirement or scenario writes that drop in the delta. `proposal.md` stays.
 5. Run `openspec validate --all --strict --no-interactive`. Exit non-zero on a spec this change owns: fix that file and run it again. A failure in a spec this change does not own: do not edit it. Do not publish while a spec this change owns fails.
@@ -24,6 +24,7 @@ Writes observable behavior. Zoom is the black box. The delta grammar is `CONTEXT
 ## Check
 
 - Every ADDED or MODIFIED Requirement has a Scenario. A dropped requirement is a name under `## REMOVED Requirements`. A dropped scenario is absent from the requirement that stays
+- Every Outcome or Constraints sentence that names what the caller sees is a Scenario of this capability, and that Scenario names each thing the sentence names
 - No stack and no verification boundary
 - The specs this change owns pass `openspec validate --all --strict --no-interactive`
 

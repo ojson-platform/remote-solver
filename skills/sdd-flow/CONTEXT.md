@@ -65,7 +65,7 @@ The other files of `openspec/changes/issue-<issue>/`, with these headings exactl
 - `## Problem`: why, in the caller's words.
 - `## Outcome`: what the caller sees once the change lands.
 - `## Scope`, `## Out of scope`: what this change touches, and what it leaves to another id.
-- `## Constraints`: limits the solution keeps. A limit that names what the caller sees is a Scenario of this capability, and the Scenario names each thing that limit names.
+- `## Constraints`: limits the solution keeps. A limit that names what the caller sees is a Scenario of this capability. Its WHEN is a situation in which those things can disappear, and its THEN states the value the caller still sees for each of them.
 - `## Capabilities`: `### Added` and `### Modified`, lines `- <id> <gist>`, ids by § Capability. The machine reads both lists as the named capabilities, and requires a baseline for each `### Modified` id.
 - `## Open questions`: `- [ ]` items. The machine counts them.
 
@@ -109,7 +109,7 @@ The work the run found belongs to another layer: `thread open <pull> <file> <lin
 ## Publish
 
 1. The checkout lists only the files of this commit. Anything else is an artifact the task did not name: a generated directory is ignored by the repository, a stray file is deleted, a file that belongs to the task joins the commit. Find why it appeared and remove that cause in the same run. `publish` refuses a dirty checkout and lists its files.
-2. Commit. The repository's own commit rule wins when a checkout-root file states it: `CONTRIBUTING`, `CONTRIBUTING.md`, `AGENTS.md`, `commitlint.config.js`, `commitlint.config.cjs`, `commitlint.config.mjs`, `.commitlintrc`, or `.commitlintrc.json`. Read those paths only. When none of them exists, the subject is `#<issue>: <what changed>`. Do not search the tree. The body contains a line `#<issue>`. Any uncommitted `openspec/` of this issue joins the commit.
+2. Commit. The repository's own commit rule wins when a checkout-root file states it: `CONTRIBUTING`, `CONTRIBUTING.md`, `AGENTS.md`, `commitlint.config.js`, `commitlint.config.cjs`, `commitlint.config.mjs`, `.commitlintrc`, or `.commitlintrc.json`. Read those paths only. When none of them exists, the subject is `#<issue>: <what changed>`. Do not search the tree. The body contains a line `#<issue>`. Pass the message with `--cleanup=verbatim` so that line stays. Any uncommitted `openspec/` of this issue joins the commit.
 3. `node scripts/sdd.mjs publish <issue> "#<issue>: <what changed>"`. The argument is the pull request title, not the commit subject. It pushes the issue branch and opens the pull request when there is none.
 4. The layer's mirror line, when the skill names one: § Issue mirror.
 

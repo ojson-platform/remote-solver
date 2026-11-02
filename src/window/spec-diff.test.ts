@@ -1,12 +1,16 @@
 import type {SpecEntry, SpecGap, SpecRow} from './spec-diff.ts';
 
 import assert from 'node:assert/strict';
-import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
 
+import {gitFiles} from '../adapters/vcs.ts';
 import {specDiff, unchangedLabel} from './spec-diff.ts';
+import {buildSpine} from './spine.ts';
 import {arcanumOpenThread} from '../adapters/arcanum.ts';
 import {activeDiff, changelist, fakeHttp, specPath} from '../adapters/arcanum.harness.ts';
 import {githubAdapters} from '../adapters/github.ts';
@@ -1711,6 +1715,115 @@ spec('spec-diff', () => {
         }),
       );
       assert.deepEqual(posts, []);
+    });
+  });
+});
+
+function gitQuiet(root: string, args: string[]): void {
+  execFileSync('git', args, {cwd: root, stdio: 'ignore'});
+}
+
+function issueRepo(): string {
+  const root = mkdtempSync(path.join(tmpdir(), 'sandcastle-spec-diff-'));
+  gitQuiet(root, ['init', '-b', 'master']);
+  gitQuiet(root, ['config', 'user.email', 'test@example.com']);
+  gitQuiet(root, ['config', 'user.name', 'Test']);
+  writeFileSync(path.join(root, 'README.md'), 'root\n');
+  gitQuiet(root, ['add', 'README.md']);
+  gitQuiet(root, ['commit', '-m', 'init']);
+  gitQuiet(root, ['checkout', '-b', 'sdd/7']);
+  return root;
+}
+
+function save(root: string, subject: string, body?: string): void {
+  gitQuiet(root, body ? ['commit', '-m', subject, '-m', body] : ['commit', '-m', subject]);
+}
+
+function copies(value: unknown, needle: string): number {
+  return JSON.stringify(value).split(needle).length - 1;
+}
+
+function addedArchive(): string {
+  const root = issueRepo();
+  const change = path.join(root, 'openspec', 'changes', 'issue-7', 'specs', 'fresh');
+  mkdirSync(change, {recursive: true});
+  writeFileSync(path.join(root, 'openspec', 'changes', 'issue-7', 'proposal.md'), '## Outcome\n\nИз родителя.\n');
+  writeFileSync(
+    path.join(change, 'spec.md'),
+    ['## ADDED Requirements', '', '### Requirement: Новое', '', 'Текст.', ''].join('\n'),
+  );
+  gitQuiet(root, ['add', 'openspec']);
+  save(root, 'plan');
+  mkdirSync(path.join(root, 'openspec', 'changes', 'archive'), {recursive: true});
+  gitQuiet(root, ['mv', 'openspec/changes/issue-7', 'openspec/changes/archive/issue-7']);
+  mkdirSync(path.join(root, 'openspec', 'specs', 'fresh'), {recursive: true});
+  writeFileSync(
+    path.join(root, 'openspec', 'specs', 'fresh', 'spec.md'),
+    ['## Purpose', '', 'Зачем.', '', '## Requirements', '', '### Requirement: Новое', '', 'Текст.', ''].join('\n'),
+  );
+  gitQuiet(root, ['add', 'openspec']);
+  save(root, 'archive', 'Sdd-Archive: issue-7');
+  return root;
+}
+
+function modifiedArchive(): string {
+  const root = issueRepo();
+  const change = path.join(root, 'openspec', 'changes', 'issue-7', 'specs', 'fresh');
+  mkdirSync(change, {recursive: true});
+  mkdirSync(path.join(root, 'openspec', 'specs', 'fresh'), {recursive: true});
+  writeFileSync(path.join(root, 'openspec', 'changes', 'issue-7', 'proposal.md'), '## Outcome\n\nИз родителя.\n');
+  writeFileSync(
+    path.join(root, 'openspec', 'specs', 'fresh', 'spec.md'),
+    ['## Purpose', '', 'Зачем.', '', '## Requirements', '', '### Requirement: Новое', '', 'Старое.', ''].join('\n'),
+  );
+  writeFileSync(
+    path.join(change, 'spec.md'),
+    ['## MODIFIED Requirements', '', '### Requirement: Новое', '', 'Новое.', ''].join('\n'),
+  );
+  gitQuiet(root, ['add', 'openspec']);
+  save(root, 'plan');
+  mkdirSync(path.join(root, 'openspec', 'changes', 'archive'), {recursive: true});
+  gitQuiet(root, ['mv', 'openspec/changes/issue-7', 'openspec/changes/archive/issue-7']);
+  writeFileSync(
+    path.join(root, 'openspec', 'specs', 'fresh', 'spec.md'),
+    ['## Purpose', '', 'Зачем.', '', '## Requirements', '', '### Requirement: Новое', '', 'Новое.', ''].join('\n'),
+  );
+  gitQuiet(root, ['add', 'openspec']);
+  save(root, 'archive', 'Sdd-Archive: issue-7');
+  return root;
+}
+
+function freshCapability(root: string) {
+  const spine = buildSpine({key: '7', checkout: root, files: gitFiles(root, '7', 'sdd')});
+  return spine.capabilities.find(item => item.id === 'fresh');
+}
+
+spec('spec-diff', () => {
+  requirement('An archived change folds the baseline from before the archive commit', () => {
+    scenario('An archived addition is new once', () => {
+      const root = addedArchive();
+      try {
+        const capability = freshCapability(root);
+        assert.ok(capability);
+        assert.equal(capability.badge, 'new');
+        assert.equal(copies(capability.rows, '### Requirement: Новое'), 1);
+      } finally {
+        rmSync(root, {recursive: true, force: true});
+      }
+    });
+  });
+
+  requirement('An archived modification folds the parent baseline', () => {
+    scenario('An archived modification is changed once', () => {
+      const root = modifiedArchive();
+      try {
+        const capability = freshCapability(root);
+        assert.ok(capability);
+        assert.equal(capability.badge, 'changed');
+        assert.equal(copies(capability.rows, '### Requirement: Новое'), 1);
+      } finally {
+        rmSync(root, {recursive: true, force: true});
+      }
     });
   });
 });

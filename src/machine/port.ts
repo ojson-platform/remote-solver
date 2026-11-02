@@ -139,6 +139,17 @@ export type Vcs = {
   /** Files of the issue branch. Reading them is local and stays synchronous. */
   filesAt(key: IssueKey): FileSource;
   /**
+   * Files the plaque and the spine read.
+   * The parent of the tip when that tip is this issue's archive commit.
+   * Absent on an adapter that has no git checkout.
+   */
+  contentAt?(key: IssueKey): FileSource;
+  /**
+   * Commit a pull-request diff ends at.
+   * The parent when `head` is this issue's archive commit. Otherwise `head`.
+   */
+  contentCommit?(key: IssueKey, head: string): Promise<string>;
+  /**
    * Commits on `base..head` and the three-dot diff.
    * A missing object is a failed range, not an empty diff.
    */
@@ -154,6 +165,20 @@ export type Vcs = {
   /** Paths `git status` reports in this checkout: changed, staged, or untracked. Empty on a clean tree. */
   dirty(): Promise<string[]>;
 };
+
+/** The commit a pull-request diff ends at. The parent when `head` is this issue's archive commit. */
+export async function diffEnd(
+  vcs: Pick<Vcs, 'contentCommit'>,
+  key: IssueKey,
+  head: string,
+): Promise<string> {
+  return vcs.contentCommit ? await vcs.contentCommit(key, head) : head;
+}
+
+/** Files the plaque and the spine read. The tip when the adapter has no content tree. */
+export function contentFiles(vcs: Pick<Vcs, 'contentAt' | 'filesAt'>, key: IssueKey): FileSource {
+  return vcs.contentAt?.(key) ?? vcs.filesAt(key);
+}
 
 export type AgentUsage = {
   inputTokens: number;

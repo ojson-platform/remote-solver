@@ -7,6 +7,7 @@ import {performCycle} from './machine/flow.ts';
 import {endStep, observedSignal, runMarks} from './machine/focus.ts';
 import {exited, signature, tick, type State} from './machine/scheduler.ts';
 import {modeOfSkill} from './machine/skill.ts';
+import {contentFiles} from './machine/port.ts';
 import {loadCycle, type CycleSnapshot} from './machine/snapshot.ts';
 
 // Spy: poll the tracker and run up to --parallel issues in this process. Each
@@ -161,6 +162,7 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
           box.review,
           key => box.vcs.filesAt(key),
           box.config.queues,
+          key => contentFiles(box.vcs, key),
         );
         const decisions = await performCycle(
           snapshot,

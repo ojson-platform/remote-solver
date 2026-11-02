@@ -34,6 +34,8 @@ type Run = {
   boundaries?: readonly {capability: string; causes: readonly string[]}[];
   places?: readonly {file: string; line: number; causes: readonly string[]}[];
   pulls?: 'one' | 'none';
+  parent?: string;
+  seen?: string[];
 };
 
 function source(paths: readonly string[]): FileSource {
@@ -82,10 +84,14 @@ async function run(over: Run = {}): Promise<{comments: WindowComment[]; posted: 
   } as Pick<Review, 'pulls' | 'range' | 'threadList'>;
   const vcs = {
     filesAt: () => source(over.files ?? []),
-    async compare() {
+    async contentCommit() {
+      return over.parent ?? 'abc';
+    },
+    async compare(_base: string, head: string) {
+      over.seen?.push(head);
       return {commits: '1', diff: over.diff ?? ''};
     },
-  } as Pick<Vcs, 'compare' | 'filesAt'>;
+  } as Pick<Vcs, 'compare' | 'filesAt' | 'contentCommit'>;
   await endStep(
     KEY,
     {commits: over.commits ?? 0, signal: over.signal},
@@ -193,6 +199,20 @@ async function proveChangeIsSolidWhenTheDirectoryExists(): Promise<void> {
     files: [file('notes.md')],
   });
   assert.deepEqual(posted, ['sdd:focus\nChange solid\n']);
+}
+
+async function proveCodeUsesTheParentDiffOfAnArchiveCommit(): Promise<void> {
+  const seen: string[] = [];
+  const {posted} = await run({
+    commits: 1,
+    files: [file('proposal.md')],
+    diff: 'diff --git a/src/a.ts\n+line\n',
+    parent: 'parentsha',
+    seen,
+  });
+  assert.deepEqual(seen, ['parentsha']);
+  assert.equal(posted.length, 1);
+  assert.equal(posted[0].includes('Code'), true);
 }
 
 async function proveCodeIsOmittedWithoutADiff(): Promise<void> {
@@ -419,6 +439,9 @@ spec('focus', () => {
     });
     scenario('Code is omitted without a diff', async () => {
       await proveCodeIsOmittedWithoutADiff();
+    });
+    scenario('Code uses the parent diff of an archive commit', async () => {
+      await proveCodeUsesTheParentDiffOfAnArchiveCommit();
     });
   });
   requirement('A marker lands on the mirror name', () => {

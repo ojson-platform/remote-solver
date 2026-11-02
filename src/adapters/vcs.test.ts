@@ -5,7 +5,15 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {test} from 'vitest';
 
-import {ensureIssueBranch, gitFiles, gitVcs, packageLinks} from './vcs.ts';
+import {
+  contentBranchFiles,
+  ensureIssueBranch,
+  gitFiles,
+  gitVcs,
+  packageLinks,
+  parentOfArchive,
+  strictContentBranchFiles,
+} from './vcs.ts';
 
 function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, {cwd, encoding: 'utf8'}).trim();
@@ -40,6 +48,54 @@ test('ensureIssueBranch cuts sdd/<key> once from the default branch', async () =
   ]);
   await ensureIssueBranch(root, '12', {branchPrefix: 'sdd', defaultBranch: 'master'});
   assert.equal(git(root, ['rev-parse', 'sdd/12']), cut);
+});
+
+test('parentOfArchive returns the parent only when the head marks this issue', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'sdd-vcs-'));
+  execFileSync('git', ['init'], {cwd: root, stdio: 'ignore'});
+  execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/master'], {cwd: root});
+  const save = (message: string, body?: string) => {
+    const args = ['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '--allow-empty', '-m', message];
+    if (body) {
+      args.push('-m', body);
+    }
+    git(root, args);
+  };
+  save('plan');
+  const parent = git(root, ['rev-parse', 'HEAD']);
+  save('archive', 'Sdd-Archive: issue-7');
+  const head = git(root, ['rev-parse', 'HEAD']);
+  assert.equal(parentOfArchive(root, head, '7'), parent);
+  assert.equal(parentOfArchive(root, head, '8'), head);
+  save('tweak');
+  const later = git(root, ['rev-parse', 'HEAD']);
+  assert.equal(parentOfArchive(root, later, '7'), later);
+});
+
+test('a marked root commit is read as itself', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'sdd-vcs-root-'));
+  execFileSync('git', ['init', '-b', 'sdd/7'], {cwd: root, stdio: 'ignore'});
+  const proposal = path.join(root, 'openspec', 'changes', 'archive', 'issue-7', 'proposal.md');
+  mkdirSync(path.dirname(proposal), {recursive: true});
+  writeFileSync(proposal, 'from the tip\n');
+  git(root, ['add', 'openspec']);
+  git(root, [
+    '-c',
+    'user.name=test',
+    '-c',
+    'user.email=test@example.com',
+    'commit',
+    '-m',
+    'archive',
+    '-m',
+    'Sdd-Archive: issue-7',
+  ]);
+  const head = git(root, ['rev-parse', 'HEAD']);
+  assert.equal(parentOfArchive(root, head, '7'), head);
+  const files = contentBranchFiles(root, '7', 'sdd');
+  assert.ok(files);
+  assert.match(files.read('openspec/changes/archive/issue-7/proposal.md'), /from the tip/);
+  assert.throws(() => strictContentBranchFiles(root, '7', 'sdd'));
 });
 
 test('compare reads commits and the three-dot diff, and a missing object fails the range', async () => {

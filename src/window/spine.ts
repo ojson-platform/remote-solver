@@ -7,7 +7,7 @@ import type {GateStation} from './types.ts';
 import {missingBaselineIds, namedCapabilities, readBranch, type BranchText} from '../machine/change.ts';
 import {changeDir} from '../machine/naming.ts';
 
-import {strictChangeFiles} from './change-files.ts';
+import {strictChangeFiles, strictContentChangeFiles} from './change-files.ts';
 import {specDiff} from './spec-diff.ts';
 
 export const SPINE_LAYERS = [
@@ -457,6 +457,10 @@ export function buildSpine(input: {
   files?: FileSource;
   previous?: Spine;
 }): Spine {
-  const text = readBranch(input.key, input.files ?? strictChangeFiles(input.checkout, input.key)).text;
+  const tip = input.files ?? strictChangeFiles(input.checkout, input.key);
+  const content = input.checkout?.trim()
+    ? strictContentChangeFiles(input.checkout, input.key)
+    : tip;
+  const text = readBranch(input.key, tip, content).text;
   return projectSpine(text, input, input.previous);
 }

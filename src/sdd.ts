@@ -1,4 +1,4 @@
-import type {Review, Vcs} from './machine/port.ts';
+import {contentFiles, type Review, type Vcs} from './machine/port.ts';
 
 import {spawnSync} from 'node:child_process';
 import {mkdirSync, writeFileSync} from 'node:fs';
@@ -223,6 +223,7 @@ async function plan(box: Machine): Promise<void> {
     box.review,
     key => box.vcs.filesAt(key),
     box.config.queues,
+    key => contentFiles(box.vcs, key),
   );
   const decision = pick(await resolveCycle(snapshot, box.tracker, box.config.queues));
   const labels = decision.issue === null ? [] : (await box.tracker.issue(decision.issue)).labels;

@@ -1,5 +1,14 @@
+import {activeChangePath, archiveChangePath} from '../machine/naming.ts';
+import {
+  contentFiles,
+  diffEnd,
+  type CheckState,
+  type Conversation,
+  type Review,
+  type Thread,
+  type Vcs,
+} from '../machine/port.ts';
 import {reviewOf} from '../machine/review.ts';
-import type {CheckState, Conversation, Review, Thread, Vcs} from '../machine/port.ts';
 import {placeOnDiff} from './place.ts';
 import {assembleDossier, type Dossier} from './dossier.ts';
 import type {Remark, Verdict} from './verdict.ts';
@@ -93,7 +102,8 @@ export async function passReview(
     await deps.review.merge(item.pull);
     return {action: 'clean'};
   }
-  const span = range.base ? await deps.vcs.compare(range.base, range.head) : null;
+  const end = await diffEnd(deps.vcs, item.issue, range.head);
+  const span = range.base ? await deps.vcs.compare(range.base, end) : null;
   if (range.base && !span) {
     return {action: 'wait', reason: 'range does not resolve'};
   }
@@ -104,7 +114,7 @@ export async function passReview(
     base: span ? range.base : null,
     commits: span?.commits ?? '',
     diff: span?.diff ?? '',
-    files: deps.vcs.filesAt(item.issue),
+    files: contentFiles(deps.vcs, item.issue),
   });
   if (built.kind === 'wait') {
     return {action: 'wait', reason: built.reason};
@@ -112,7 +122,20 @@ export async function passReview(
   const verdict = await deps.judge(built.dossier);
   const placed =
     verdict.kind === 'remarks'
-      ? {kind: 'remarks' as const, items: verdict.items.map(item => placeOnDiff(span?.diff ?? '', item))}
+      ? {
+          kind: 'remarks' as const,
+          items: verdict.items.map(remark => {
+            const cited =
+              remark.path === undefined
+                ? remark
+                : {...remark, path: activeChangePath(item.issue, remark.path)};
+            const landed = placeOnDiff(span?.diff ?? '', cited);
+            if (end === range.head || landed.path === undefined) {
+              return landed;
+            }
+            return {...landed, path: archiveChangePath(item.issue, landed.path)};
+          }),
+        }
       : verdict;
   await applyReview(placed, item.pull, range.head, deps.review);
   if (placed.kind === 'remarks') {

@@ -1,4 +1,4 @@
-- [ ] `home-block-empty` — The agent field sits above the models; Nothing saved leaves the field empty
+- [x] `home-block-empty` — The agent field sits above the models; Nothing saved leaves the field empty
 - [ ] `saved-agent-shown` — A saved agent is shown
 - [ ] `role-form-storage` — A filled name stores the role and not an agent; An empty name stores no role
 - [ ] `choose-agent-pair` — Choosing cursor from an empty field writes the pair; Choosing codex writes the pair

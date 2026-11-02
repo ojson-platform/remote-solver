@@ -154,7 +154,7 @@ function settleOpened(surface: Surface, view: PageView): void {
 }
 
 function roleDraft(surface: Surface, params: URLSearchParams, act: string | null): void {
-  if (act === 'add-role') {
+  if (act === 'add-role' || act === 'choose-agent') {
     return;
   }
   if (!params.has('name') || !params.has('outcome') || !params.has('text')) {

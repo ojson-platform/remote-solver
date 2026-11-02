@@ -1,4 +1,4 @@
-- [ ] `home-agent-settings-sheet` Nothing saved leaves the field empty; The new-role form does not write the home agent; A saved agent shows in the field
+- [x] `home-agent-settings-sheet` Nothing saved leaves the field empty; The new-role form does not write the home agent; A saved agent shows in the field
 - [ ] `choose-agent-home-write` Choosing cursor writes the known pair; Choosing another agent writes that pair; Choosing the saved agent again changes nothing
 - [ ] `board-reads-home-agent` No home agent leaves the factory row; A home agent turns the board on; The layer agent leaves the factory row
 - [ ] `layer-agent-overlay` An empty layer agent means the home agent; A layer choice writes the overlay only; The home agent leaves overlay models on the merged factory

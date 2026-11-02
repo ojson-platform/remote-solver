@@ -25,6 +25,7 @@ const SETTINGS_ACTS = [
   'set-role-text',
   'set-role-labels',
   'remove-role',
+  'add-role',
   'choose-checkout',
   'choose-overlay-agent',
   'leave-overlay-model',

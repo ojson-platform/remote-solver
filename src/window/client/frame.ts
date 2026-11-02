@@ -24,6 +24,7 @@ const SETTINGS_ACTS = new Set<string>([
   'set-role-text',
   'set-role-labels',
   'remove-role',
+  'add-role',
   'choose-checkout',
   'choose-overlay-agent',
   'leave-overlay-model',

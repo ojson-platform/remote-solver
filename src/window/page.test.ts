@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {existsSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {parse, stringify} from 'yaml';
+import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
 
 import {COLUMN_NAMES, type RoleRecord} from './types.ts';
@@ -488,30 +489,30 @@ test('a neighbor submit keeps the role draft and the hook draft', async () => {
       const sheet = await paint(opened);
       const addForm = formsOf(sheet).find(form => form.includes('class="add"'));
       assert.ok(addForm);
+      assert.match(addForm, /value="add-role"/);
       assert.match(addForm, /name="name"/);
       assert.match(addForm, /name="outcome"/);
       assert.match(addForm, /name="text"/);
+      assert.equal(addForm.includes('name="agent"'), false);
       assert.ok(formsOf(sheet).some(form => form.includes('name="first"')));
       const empty = await post(
         page.url,
         'act',
         new URLSearchParams({
-          act: 'choose-agent',
-          agent: 'cursor',
+          act: 'add-role',
           name: '',
           outcome: 'html',
           text: 'черновик',
         }).toString(),
       );
       assert.equal(empty.status, 200);
-      assert.deepEqual(agents, ['cursor']);
+      assert.deepEqual(agents, []);
       assert.deepEqual(roles, []);
       const drafted = await post(
         page.url,
         'act',
         new URLSearchParams({
-          act: 'choose-agent',
-          agent: 'cursor',
+          act: 'add-role',
           name: 'editor',
           outcome: 'html',
           text: 'черновик',
@@ -1627,4 +1628,130 @@ test('a missing service config asks for one queue name', async () => {
       assert.match(articleOf(next, '1'), /aria-label="Взять"/);
     },
   );
+});
+
+function homeDom(html: string): string {
+  const start = html.indexOf('<h3>Дом</h3>');
+  const roles = html.indexOf('<h3>Роли</h3>', start);
+  assert.ok(start >= 0);
+  assert.ok(roles > start);
+  return html.slice(start, roles);
+}
+
+function rolesBlock(html: string): string {
+  const start = html.indexOf('<h3>Роли</h3>');
+  assert.ok(start >= 0);
+  const end = html.indexOf('</section>', start);
+  assert.ok(end > start);
+  return html.slice(start, end);
+}
+
+async function proveNothingSavedLeavesTheFieldEmpty(): Promise<void> {
+  await hosted(
+    {
+      login: () => MANAGER,
+      tickets: () => [
+        ticket({key: '1', queue: 'alpha', sddService: 'services/billing', labels: ['sdd:cycle']}),
+      ],
+    },
+    async page => {
+      const opened = await fetch(new URL('act', page.url), {
+        method: 'POST',
+        headers: {'content-type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({act: 'open-settings'}).toString(),
+      });
+      const sheet = await paint(opened);
+      const dom = homeDom(sheet);
+      const agentForm = formsOf(dom).find(form => form.includes('value="choose-agent"'));
+      assert.ok(agentForm);
+      assert.match(agentForm, /<label>агент<\/label>/);
+      assert.match(
+        agentForm,
+        /<select name="agent"[^>]*>[\s\S]*<option[^>]*value=""[^>]*selected/,
+      );
+      assert.ok(dom.indexOf('name="agent"') < dom.indexOf('>mechanical<'));
+      assert.match(sheet, /список наблюдения/);
+      assert.match(sheet, /name="arcadia"/);
+    },
+  );
+}
+
+async function proveTheNewRoleFormDoesNotWriteTheHomeAgent(): Promise<void> {
+  await hosted(
+    {
+      login: () => MANAGER,
+      tickets: () => [
+        ticket({key: '1', queue: 'alpha', sddService: 'services/billing', labels: ['sdd:cycle']}),
+      ],
+    },
+    async page => {
+      const opened = await fetch(new URL('act', page.url), {
+        method: 'POST',
+        headers: {'content-type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({act: 'open-settings'}).toString(),
+      });
+      const sheet = await paint(opened);
+      const addForm = formsOf(rolesBlock(sheet)).find(form => form.includes('value="add-role"'));
+      assert.ok(addForm);
+      assert.equal(addForm.includes('name="agent"'), false);
+    },
+  );
+}
+
+async function proveASavedAgentShowsInTheField(): Promise<void> {
+  const {dir, home, arcadia} = yard();
+  try {
+    prepare(arcadia, home);
+    writeFileSync(
+      home,
+      [
+        readFileSync(home, 'utf8').trimEnd(),
+        'agent: cursor',
+        'models:',
+        '  mechanical: composer-2.5-fast',
+        '  judgment: grok-4.7-high-fast',
+        '',
+      ].join('\n'),
+    );
+    const page = await serveBoard(
+      openWindow(
+        {homePath: home, adapter: 'tracker'},
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            ticket({key: '1', queue: 'alpha', sddService: 'services/billing', labels: ['sdd:cycle']}),
+          ],
+        },
+      ),
+    );
+    try {
+      const opened = await fetch(new URL('act', page.url), {
+        method: 'POST',
+        headers: {'content-type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({act: 'open-settings'}).toString(),
+      });
+      const sheet = await paint(opened);
+      const agentForm = formsOf(homeDom(sheet)).find(form => form.includes('value="choose-agent"'));
+      assert.ok(agentForm);
+      assert.match(
+        agentForm,
+        /<select name="agent"[^>]*>[\s\S]*<option[^>]*value="cursor"[^>]*selected/,
+      );
+      assert.ok(agentForm.indexOf('name="agent"') < homeDom(sheet).indexOf('>mechanical<'));
+    } finally {
+      await page.close();
+    }
+  } finally {
+    rmSync(dir, {recursive: true, force: true});
+  }
+}
+
+spec('home-agent', () => {
+  requirement('The home block has its own agent field', () => {
+    scenario('Nothing saved leaves the field empty', () => proveNothingSavedLeavesTheFieldEmpty());
+    scenario('The new-role form does not write the home agent', () =>
+      proveTheNewRoleFormDoesNotWriteTheHomeAgent(),
+    );
+    scenario('A saved agent shows in the field', () => proveASavedAgentShowsInTheField());
+  });
 });

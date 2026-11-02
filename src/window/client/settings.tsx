@@ -114,6 +114,12 @@ export function Settings({snapshot, busy}: {snapshot: WindowSnapshot; busy?: boo
           <div className="blocks">
             <section className="group">
               <h3>Дом</h3>
+              <ActForm act="choose-agent" onChangeSubmit>
+                <label>агент</label>
+                <select name="agent" defaultValue={settings.agent}>
+                  {options(FACTORY_AGENTS, settings.agent, true)}
+                </select>
+              </ActForm>
               <ModeFields
                 modelAct="leave-model"
                 effortAct="leave-effort"
@@ -180,11 +186,7 @@ export function Settings({snapshot, busy}: {snapshot: WindowSnapshot; busy?: boo
                     </ActForm>
                   </div>
                 ))}
-                <ActForm act="choose-agent" className="add" onChangeSubmit>
-                  <label>агент</label>
-                  <select name="agent" defaultValue={settings.agent}>
-                    {options(FACTORY_AGENTS, settings.agent)}
-                  </select>
+                <ActForm act="add-role" className="add" onChangeSubmit>
                   <label>новая роль</label>
                   <input name="name" placeholder="имя" />
                   <select name="outcome" defaultValue="html">

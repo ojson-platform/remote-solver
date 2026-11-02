@@ -174,3 +174,38 @@ spec('home-agent', () => {
     });
   });
 });
+
+spec('home-agent', () => {
+  requirement('A submitted agent writes the known pair at once', () => {
+    scenario('Choosing cursor from an empty field writes the pair', async () => {
+      await hosted({tickets: () => []}, async (page, _window, paths) => {
+        assert.equal(readHome(paths.home).agent, undefined);
+        await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString());
+        await post(
+          page.url,
+          'act',
+          new URLSearchParams({act: 'choose-agent', agent: 'cursor'}).toString(),
+        );
+        const doc = readHome(paths.home);
+        assert.equal(doc.agent, 'cursor');
+        assert.equal(doc.models?.mechanical, 'composer-2.5-fast');
+        assert.equal(doc.models?.judgment, 'grok-4.7-high-fast');
+      });
+    });
+    scenario('Choosing codex writes the pair', async () => {
+      await hosted({tickets: () => []}, async (page, _window, paths) => {
+        assert.equal(readHome(paths.home).agent, undefined);
+        await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString());
+        await post(
+          page.url,
+          'act',
+          new URLSearchParams({act: 'choose-agent', agent: 'codex'}).toString(),
+        );
+        const doc = readHome(paths.home);
+        assert.equal(doc.agent, 'codex');
+        assert.equal(doc.models?.mechanical, 'gpt-6-luna');
+        assert.equal(doc.models?.judgment, 'gpt-6.1-sol');
+      });
+    });
+  });
+});

@@ -6,45 +6,54 @@ The home agent is the agent stored in the home file. The home block shows the mo
 
 ## Requirements
 
-### Requirement: The home agent select is on the new-role form
+### Requirement: The home agent field is on the home block
 
-The home block SHALL show the models, the watch list, and the roots, and SHALL NOT show an agent field above the models. The select that writes the home agent SHALL be the first field of the new-role form, under `Роли`, and its label SHALL be `агент`. While nothing is saved, that list SHALL show `cursor`. Choosing that shown `cursor` SHALL NOT write the home file.
+The home block SHALL show its own agent field above the models, and SHALL show the models, the watch list, and the roots. The new-role form SHALL NOT have that agent field. The field SHALL be empty until an agent is saved.
 
-#### Scenario: The home block has no agent field above the models
-
-- **WHEN** the manager opens settings and the home file has no agent
-- **THEN** the home block shows the models, the watch list, and the roots, and it has no agent field above the models
-
-#### Scenario: The new-role form leads with the agent
+#### Scenario: The home block has its own agent field above the models
 
 - **WHEN** the manager opens settings
-- **THEN** the first field of the new-role form, under `Роли`, is labeled `агент`
+- **THEN** the home block has its own agent field above the models, the home block shows the models, the watch list, and the roots, and the new-role form does not have that field
 
-#### Scenario: Choosing the shown cursor writes nothing
+#### Scenario: The field is empty until an agent is saved
 
-- **WHEN** nothing is saved and the manager chooses the shown `cursor`
-- **THEN** the home file is not written
+- **WHEN** no agent is saved
+- **THEN** the home block's agent field is empty
 
-### Requirement: Sending the new-role form writes the known pair
+### Requirement: Choosing an agent writes the known pair
 
-Choosing an agent the list was not already showing SHALL write the home file at once with that agent and that agent's known pair. Pressing `Добавить`, or changing the role name, the outcome, or the text, SHALL write the home file again with the agent the list is showing and that agent's known pair, even when that agent is already stored. That write SHALL set the models to the known pair, SHALL write effort only when that agent has effort, and SHALL leave no speed key. Choosing the agent the list already shows SHALL NOT send the form, and the home file SHALL stay unchanged.
+Choosing an agent SHALL write the home file at once with that agent and that agent's known pair. Choosing that saved agent again SHALL change nothing.
 
-#### Scenario: Choosing another agent writes the pair
+#### Scenario: Choosing an agent writes the home file at once
 
-- **WHEN** nothing is saved and the manager chooses `codex` on the new-role form
-- **THEN** the home file records `codex` and that agent's known pair
+- **WHEN** the manager chooses an agent that is not the agent already saved
+- **THEN** the home file is written at once with that agent and that agent's known pair
 
-#### Scenario: Добавить writes the shown agent
+#### Scenario: Choosing the saved agent again changes nothing
 
-- **WHEN** nothing is saved and the manager presses `Добавить`
-- **THEN** the home file records `cursor` and that agent's known pair
-
-#### Scenario: Sending the form again matches a fresh choice
-
-- **WHEN** the home file already stores an agent, a model has been changed, and the manager presses `Добавить`
-- **THEN** the models are that agent's known pair again, effort is written only when that agent has effort, and there is no speed key
-
-#### Scenario: Choosing the shown agent leaves the file
-
-- **WHEN** the list already shows the agent stored in the home file and the manager chooses that agent again
+- **WHEN** the home file already has an agent and the manager chooses that saved agent again
 - **THEN** the home file is unchanged
+
+### Requirement: The checkout overlay stays an override of the home agent
+
+`агент слоя` SHALL remain the override for that one checkout. An empty `агент слоя` SHALL mean the home agent. The overlay models, effort, and speed SHALL keep following the merged factory. The checkout overlay SHALL stay out of the repository.
+
+#### Scenario: агент слоя remains the override for that one checkout
+
+- **WHEN** that checkout has `агент слоя` set and the manager saves a home agent
+- **THEN** `агент слоя` remains the override for that one checkout
+
+#### Scenario: Empty means the home agent
+
+- **WHEN** `агент слоя` is empty and the home file has an agent
+- **THEN** the empty `агент слоя` means the home agent for that checkout
+
+#### Scenario: The overlay models, effort, and speed follow the merged factory
+
+- **WHEN** the manager chooses a home agent
+- **THEN** the overlay models still follow the merged factory, the overlay effort still follows the merged factory, and the overlay speed still follows the merged factory
+
+#### Scenario: The checkout overlay stays out of the repository
+
+- **WHEN** the manager chooses a home agent and the checkout has an overlay
+- **THEN** the checkout overlay stays out of the repository

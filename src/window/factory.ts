@@ -135,6 +135,22 @@ function overlayFile(checkout: string): string {
   return path.join(checkout, '.aifactory', 'config.yaml');
 }
 
+function keepOverlayOutOfGit(checkout: string): void {
+  const gitDir = path.join(checkout, '.git');
+  if (!existsSync(gitDir)) {
+    return;
+  }
+  const excludeFile = path.join(gitDir, 'info', 'exclude');
+  const line = '.aifactory/';
+  mkdirSync(path.dirname(excludeFile), {recursive: true});
+  const text = existsSync(excludeFile) ? readFileSync(excludeFile, 'utf8') : '';
+  if (text.split('\n').some(row => row.trim() === line)) {
+    return;
+  }
+  const prefix = text === '' || text.endsWith('\n') ? text : `${text}\n`;
+  writeFileSync(excludeFile, `${prefix}${line}\n`);
+}
+
 export function readOverlayDoc(checkout: string): Doc | null {
   const text = textOf(overlayFile(checkout));
   if (text === null) {
@@ -600,6 +616,7 @@ export function openOverlay(offered: readonly string[]) {
     mkdirSync(path.dirname(file), {recursive: true});
     const text = stringify(clean);
     writeFileSync(file, text);
+    keepOverlayOutOfGit(checkout);
     baseline = text;
     doc = clean;
   }

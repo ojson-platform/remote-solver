@@ -1,0 +1,3 @@
+- [ ] `home-block-field` The home block has its own agent field above the models; The field is empty until an agent is saved
+- [ ] `choosing-home-agent` Choosing an agent writes the home file at once; Choosing the saved agent again changes nothing
+- [ ] `checkout-overlay-override` агент слоя remains the override for that one checkout; Empty means the home agent; The overlay models, effort, and speed follow the merged factory; The checkout overlay stays out of the repository

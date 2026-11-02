@@ -33,6 +33,6 @@ This service only. The home block gains the field that writes the home agent, ab
 
 ### Modified
 
-- `settings` the home block has its own agent field above the models, empty until an agent is saved; choosing an agent writes the home file at once with the known pair, choosing the saved agent again changes nothing, and the new-role form does not have the field
+- `home-agent` the home block has its own agent field above the models, empty until an agent is saved; choosing an agent writes the home file at once with the known pair, choosing the saved agent again changes nothing, and the new-role form does not have the field
 
 ## Open questions

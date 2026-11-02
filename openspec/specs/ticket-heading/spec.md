@@ -1,5 +1,9 @@
 # ticket-heading
 
+## Purpose
+
+The ticket heading names the issue on the board and in the sidebar.
+
 ## Requirements
 
 ### Requirement: The ticket heading names the issue

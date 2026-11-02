@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The drawer is the one open cycle over the board.
+The drawer is the one open cycle, standing over the board from the right.
 
 ## Requirements
 

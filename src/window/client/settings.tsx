@@ -186,7 +186,7 @@ export function Settings({snapshot, busy}: {snapshot: WindowSnapshot; busy?: boo
                     </ActForm>
                   </div>
                 ))}
-                <ActForm act="choose-agent" className="add" onChangeSubmit>
+                <ActForm act="add-role" className="add" onChangeSubmit>
                   <label>новая роль</label>
                   <input name="name" placeholder="имя" />
                   <select name="outcome" defaultValue="html">

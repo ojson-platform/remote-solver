@@ -19,6 +19,7 @@ const SETTINGS_ACTS = new Set<string>([
   'leave-speed',
   'leave-watch',
   'leave-roots',
+  'add-role',
   'rename-role',
   'choose-role-outcome',
   'set-role-text',

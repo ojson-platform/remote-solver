@@ -498,9 +498,6 @@ test('a neighbor submit keeps the role draft and the hook draft', async () => {
         new URLSearchParams({
           act: 'choose-agent',
           agent: 'cursor',
-          name: '',
-          outcome: 'html',
-          text: 'черновик',
         }).toString(),
       );
       assert.equal(empty.status, 200);
@@ -510,8 +507,7 @@ test('a neighbor submit keeps the role draft and the hook draft', async () => {
         page.url,
         'act',
         new URLSearchParams({
-          act: 'choose-agent',
-          agent: 'cursor',
+          act: 'add-role',
           name: 'editor',
           outcome: 'html',
           text: 'черновик',

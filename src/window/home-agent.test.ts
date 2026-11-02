@@ -81,6 +81,45 @@ spec('home-agent', () => {
         assert.equal(newRoleForm(sheet).includes('<label>агент</label>'), false);
       });
     });
+    scenario('A filled name stores the role and not an agent', async () => {
+      await hosted({tickets: () => []}, async (page, _window, paths) => {
+        assert.equal(readHome(paths.home).agent, undefined);
+        await post(page.url, 'act', new URLSearchParams({act: 'open-settings'}).toString());
+        const sheet = await pageHtml(page.url);
+        assert.match(newRoleForm(sheet), /value="add-role"/);
+        await post(
+          page.url,
+          'act',
+          new URLSearchParams({
+            act: 'add-role',
+            name: 'Page',
+            outcome: 'html',
+            text: '<p>hi</p>',
+          }).toString(),
+        );
+        const doc = readHome(paths.home);
+        assert.equal(doc.agent, undefined);
+        assert.deepEqual(doc.roles, [{name: 'Page', outcome: 'html', text: '<p>hi</p>'}]);
+      });
+    });
+    scenario('An empty name stores no role', async () => {
+      await hosted({tickets: () => []}, async (page, _window, paths) => {
+        assert.equal(readHome(paths.home).agent, undefined);
+        await post(
+          page.url,
+          'act',
+          new URLSearchParams({
+            act: 'add-role',
+            name: '',
+            outcome: 'html',
+            text: 'draft',
+          }).toString(),
+        );
+        const doc = readHome(paths.home);
+        assert.equal(doc.agent, undefined);
+        assert.equal(doc.roles, undefined);
+      });
+    });
   });
   requirement('The field is empty until an agent is saved', () => {
     scenario('Nothing saved leaves the field empty', async () => {

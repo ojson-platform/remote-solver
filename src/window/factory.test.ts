@@ -322,6 +322,8 @@ spec('home-agent', () => {
       assert.equal(window.overlay().agent, '');
       assert.equal(window.overlay().models.mechanical.value, 'custom-mechanical');
       assert.equal(window.overlay().models.judgment.value, 'custom-judgment');
+      assert.equal(window.overlay().effort, undefined);
+      assert.equal(window.overlay().speed, undefined);
       rmSync(dir, {recursive: true, force: true});
     });
 

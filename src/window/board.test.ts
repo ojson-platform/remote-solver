@@ -1,10 +1,23 @@
 import assert from 'node:assert/strict';
-import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {stringify} from 'yaml';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
+
+import {memoryPorts} from '../adapters/github.ts';
+import {change} from '../machine/harness.ts';
+import {resolveIssue} from '../machine/flow.ts';
+import type {FileSource} from '../machine/port.ts';
 
 import {gesture} from './client/gesture.ts';
 import {openLiveBoard} from './live.ts';
@@ -43,9 +56,108 @@ import {
   writeOverlay,
   writeServiceConfig,
   writeServiceYaml,
+  visibleKeys,
   yard,
 } from './window.harness.ts';
 import {openWindow} from './window.ts';
+import type {WindowTicket} from './types.ts';
+
+const finishedCycleChange = change({
+  proposal: true,
+  delta: true,
+  design: true,
+  tasks: true,
+  archived: true,
+  openTasks: 0,
+});
+
+function checkoutFiles(checkout: string): FileSource {
+  return {
+    exists: rel => existsSync(path.join(checkout, rel)),
+    read: rel => readFileSync(path.join(checkout, rel), 'utf8'),
+    list: rel => {
+      const full = path.join(checkout, rel);
+      if (!existsSync(full)) {
+        return [];
+      }
+      return readdirSync(full).map(name => path.join(rel, name));
+    },
+  };
+}
+
+async function proveFinishedCycleLeavesBoardAfterReload(phase: 'tasking' | 'verifying'): Promise<void> {
+  const {dir, home, arcadia} = yard();
+  const checkout = prepare(arcadia, home);
+  const archiveDir = path.join(checkout, 'openspec/changes/archive/issue-9');
+  mkdirSync(archiveDir, {recursive: true});
+  writeFileSync(path.join(archiveDir, 'tasks.md'), '- [x] `done` — done\n');
+  const {tracker, review} = memoryPorts({
+    user: MANAGER,
+    issues: [
+      {
+        key: '9',
+        title: '#9: Drop cycle',
+        body: '',
+        state: 'OPEN',
+        labels: ['alpha', 'sdd:cycle', `sdd:${phase}`],
+        assignee: MANAGER,
+        service: 'services/billing',
+      },
+    ],
+    pulls: {
+      '9': [{id: '25', title: '#9: Drop cycle', state: 'MERGED'}],
+    },
+  });
+  let tickets: WindowTicket[] = [];
+  async function reloadTickets(): Promise<void> {
+    const open = await tracker.listOpen();
+    tickets = open.map(issue => ({
+      key: issue.key,
+      title: issue.title,
+      labels: [...issue.labels],
+      assignee: issue.assignee ?? '',
+      queue: 'alpha',
+      sddService: issue.service ?? 'services/billing',
+      open: true,
+      openPullRequests: 0,
+    }));
+  }
+  await reloadTickets();
+  let started = 0;
+  const phases: string[] = [];
+  const window = openWindow(
+    {homePath: home, adapter: 'tracker'},
+    {
+      login: () => MANAGER,
+      tickets: () => tickets,
+      startStep: () => {
+        started += 1;
+      },
+      writePhase: (_key, next) => {
+        phases.push(next);
+      },
+    },
+  );
+  window.chooseAgent('cursor');
+  assert.ok(visibleKeys(window.board()).includes('9'));
+  await resolveIssue('9', {
+    tracker,
+    review,
+    files: checkoutFiles(checkout),
+    queues: [{name: 'alpha'}],
+    change: finishedCycleChange,
+  });
+  await reloadTickets();
+  assert.ok(!visibleKeys(window.board()).includes('9'));
+  await tracker.listOpen();
+  await reloadTickets();
+  assert.ok(!visibleKeys(window.board()).includes('9'));
+  window.spy();
+  assert.equal(started, 0);
+  assert.deepEqual(phases, []);
+  assert.ok(existsSync(archiveDir));
+  rmSync(dir, {recursive: true, force: true});
+}
 
 function proveALaunchWithNoHomePathShowsOneRowThatTheFactoryStillNeedsAnAgent0(): void {
   const window = openWindow({});
@@ -2406,6 +2518,17 @@ spec('hammer', () => {
           }
         },
       );
+    });
+  });
+});
+
+spec('finished-cycle', () => {
+  requirement('A finished cycle leaves the board', () => {
+    scenario('A finished cycle leaves the board and a reload does not bring it back', async () => {
+      await proveFinishedCycleLeavesBoardAfterReload('tasking');
+    });
+    scenario('A finished cycle on verifying leaves the board and a reload does not bring it back', async () => {
+      await proveFinishedCycleLeavesBoardAfterReload('verifying');
     });
   });
 });

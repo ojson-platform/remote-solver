@@ -356,8 +356,7 @@ spec('home-agent', () => {
       git(checkout, ['init', '-b', 'master']);
       git(checkout, ['config', 'user.email', 'test@example.com']);
       git(checkout, ['config', 'user.name', 'Test']);
-      writeFileSync(path.join(checkout, '.gitignore'), '.aifactory/\n');
-      git(checkout, ['add', 'openspec', '.gitignore']);
+      git(checkout, ['add', 'openspec']);
       git(checkout, ['commit', '-m', 'init']);
       window.openSettings();
       window.chooseOverlayAgent('cursor');

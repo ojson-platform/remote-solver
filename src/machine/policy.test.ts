@@ -799,17 +799,63 @@ spec('finished-cycle', () => {
     });
   });
   requirement('An open pull request keeps the card', () => {
-    scenario('Checked tasks and an open pull request stay', () => {
+    scenario('Checked tasks and an open pull request stay', async () => {
       const record = issue(9, ['sdd:tasking'], {state: 'OPEN'});
       const decision = decide(record, [], [openPull], {...ready, openTasks: 0});
       assert.notEqual(decision.kind, 'done');
       assert.equal(record.state, 'OPEN');
+      const {tracker, review} = memoryPorts({
+        user: MANAGER,
+        issues: [
+          {
+            key: '9',
+            title: '#9: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['Sandcastle', 'sdd:cycle', 'sdd:tasking'],
+            assignee: MANAGER,
+          },
+        ],
+        pulls: {'9': [{id: '37', title: '#9: title', state: 'OPEN'}]},
+      });
+      await resolveIssue('9', {
+        tracker,
+        review,
+        files: archivedIssue9Files(),
+        queues: [{name: 'Sandcastle'}],
+        change: archivedOpen,
+      });
+      assert.equal((await tracker.issue('9')).state, 'OPEN');
+      assert.ok((await tracker.listOpen()).some(item => item.key === '9'));
     });
-    scenario('An open pull request stays on the board when every task is checked', () => {
+    scenario('An open pull request stays on the board when every task is checked', async () => {
       const record = issue(9, ['sdd:tasking'], {state: 'OPEN'});
       const decision = decide(record, [], [openPull], archivedOpen);
       assert.equal(decision.kind, 'agent');
       assert.notEqual(decision.kind, 'done');
+      const {tracker, review} = memoryPorts({
+        user: MANAGER,
+        issues: [
+          {
+            key: '9',
+            title: '#9: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['Sandcastle', 'sdd:cycle', 'sdd:tasking'],
+            assignee: MANAGER,
+          },
+        ],
+        pulls: {'9': [{id: '37', title: '#9: title', state: 'OPEN'}]},
+      });
+      await resolveIssue('9', {
+        tracker,
+        review,
+        files: archivedIssue9Files(),
+        queues: [{name: 'Sandcastle'}],
+        change: archivedOpen,
+      });
+      assert.equal((await tracker.issue('9')).state, 'OPEN');
+      assert.ok((await tracker.listOpen()).some(item => item.key === '9'));
     });
   });
   requirement('A cancelled cycle leaves the board', () => {

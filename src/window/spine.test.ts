@@ -835,3 +835,44 @@ spec('spine', () => {
     });
   });
 });
+
+function takenCycleIssueBody(): string {
+  return [
+    'Author text belongs in the pool description block only.',
+    '<!-- sdd:begin -->',
+    'Plan: Mirror-driven plan for a taken cycle',
+    'Specify: Capabilities from the mirror',
+    'Tasks: 3/4',
+    '<!-- sdd:end -->',
+  ].join('\n');
+}
+
+function proveTheSpineOfATakenCycleStaysAsItIs(): void {
+  const issueBody = takenCycleIssueBody();
+  const author = 'Author text belongs in the pool description block only.';
+  const mirrorOnly = issueBody.slice(issueBody.indexOf('<!-- sdd:begin -->'));
+  const baseline = buildSpine({
+    key: '33',
+    station: 'implementing',
+    issueBody: mirrorOnly,
+  });
+  const spine = buildSpine({
+    key: '33',
+    station: 'implementing',
+    issueBody,
+  });
+  assert.deepEqual(spine.lines, baseline.lines);
+  assert.equal(spine.lines.find(line => line.layer === 'Plan')?.text, 'Mirror-driven plan for a taken cycle');
+  assert.equal(spine.lines.find(line => line.layer === 'Specify')?.text, 'Capabilities from the mirror');
+  assert.equal(spine.lines.find(line => line.layer === 'Tasks')?.text, '3/4');
+  assert.equal(spine.lines.some(line => line.text.includes(author)), false);
+  assert.equal(linesFromIssue(issueBody).every(line => !line.text.includes(author)), true);
+}
+
+spec('issue-description', () => {
+  requirement('A pool cycle shows its issue description in the sidebar', () => {
+    scenario('The spine of a taken cycle stays as it is', () => {
+      proveTheSpineOfATakenCycleStaysAsItIs();
+    });
+  });
+});

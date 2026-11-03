@@ -2013,5 +2013,47 @@ spec('phase-header', () => {
         assert.equal(/\.head\s*\{[^}]*rgba\(81,\s*61,\s*29/.test(html), false);
       });
     });
+    scenario('The page bar above the board is not the phase header', async () => {
+      await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+        window.chooseAgent('cursor');
+        const html = await pageHtml(page.url);
+        const top = between(html, '<header class="top"', '</header>');
+        const board = between(html, '<main class="board"', '</main>');
+        const head = between(html, '<div class="head"', '</div>');
+        assert.equal(top.includes('class="phase"'), false);
+        for (const name of COLUMN_NAMES) {
+          assert.match(head, new RegExp(`<span class="phase">${name}</span>`));
+        }
+        assert.equal(board.includes('<header class="top"'), false);
+        assert.equal(top.includes('<div class="head"'), false);
+        assert.equal(/\.top\s*\{[^}]*position:\s*sticky/.test(html), false);
+      });
+    });
+    scenario(
+      'Scrolling the sidebar does not move the header and scrolling the board does not move the sidebar',
+      async () => {
+        await hosted(
+          {login: () => MANAGER, tickets: () => [held('1', 'proposing')]},
+          async (page, window) => {
+            window.chooseAgent('cursor');
+            assert.equal(
+              (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+                .status,
+              200,
+            );
+            const html = await pageHtml(page.url);
+            assert.match(html, /\.board\s*\{[^}]*overflow-y:\s*auto/);
+            assert.match(html, /\.side-scroll\s*\{[^}]*overflow:\s*auto/);
+            assert.match(html, /\.sidebar\s*\{[^}]*position:\s*fixed/);
+            const board = between(html, '<main class="board"', '</main>');
+            assert.match(board, /class="head"/);
+            assert.equal(board.includes('class="sidebar"'), false);
+            const sidebar = bandOf(html, '1');
+            assert.equal(sidebar.includes('class="head"'), false);
+            assert.match(sidebar, /<div class="side-scroll">/);
+          },
+        );
+      },
+    );
   });
 });

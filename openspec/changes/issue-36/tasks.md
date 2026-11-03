@@ -1,2 +1,2 @@
 - [x] `board-scroll-pin` — The phase header stays at the top of the board while the board scrolls; The seven phase names stay aligned with the station columns under them; A row that scrolls up passes beneath the header and the names stay readable over it
-- [ ] `header-limits` — The page bar above the board is not the phase header; Scrolling the sidebar does not move the header and scrolling the board does not move the sidebar
+- [x] `header-limits` — The page bar above the board is not the phase header; Scrolling the sidebar does not move the header and scrolling the board does not move the sidebar

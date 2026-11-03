@@ -7,6 +7,8 @@ import {
   changesPayload,
   classifyChecks,
   clearGithubPause,
+  gh,
+  ghErrorLine,
   githubAdapters,
   isRestGet,
   linkedTitle,
@@ -656,6 +658,151 @@ spec('github-read', () => {
         1_793_005_596_000,
       );
       assert.equal(resetMillis('not json'), undefined);
+    });
+  });
+
+  requirement('A gateway answer is tried again', () => {
+    const gateway = Object.assign(new Error('gh exited 1'), {
+      stdout: 'Service Unavailable\n',
+      stderr: "invalid character 'S' looking for beginning of value\n",
+    });
+
+    scenario('Plain text is tried again', async () => {
+      vi.useFakeTimers();
+      clearGithubPause();
+      const logs: string[] = [];
+      const write = console.error;
+      console.error = line => {
+        logs.push(String(line));
+      };
+      let calls = 0;
+      try {
+        const run = async () => {
+          calls += 1;
+          if (calls === 1) {
+            throw gateway;
+          }
+          return {stdout: '[]', stderr: ''};
+        };
+        const pending = gh(['api', 'repos/acme/billing/issues'], undefined, run);
+        await vi.runAllTimersAsync();
+        assert.equal(await pending, '[]');
+        assert.equal(calls, 2);
+        assert.match(logs.join('\n'), /GitHub answered with text: Service Unavailable/);
+        assert.equal(logs.join('\n').includes('invalid character'), false);
+      } finally {
+        console.error = write;
+        clearGithubPause();
+        vi.useRealTimers();
+      }
+    });
+
+    scenario('A repeated gateway answer fails with the reason', async () => {
+      vi.useFakeTimers();
+      clearGithubPause();
+      const logs: string[] = [];
+      const write = console.error;
+      console.error = line => {
+        logs.push(String(line));
+      };
+      let calls = 0;
+      try {
+        const run = async () => {
+          calls += 1;
+          throw gateway;
+        };
+        const pending = gh(['api', 'repos/acme/billing/issues'], undefined, run);
+        const failed = assert.rejects(pending, /GitHub answered with text: Service Unavailable/);
+        await vi.runAllTimersAsync();
+        await failed;
+        assert.equal(calls, 3);
+        assert.equal(logs.join('\n').includes('invalid character'), false);
+        assert.equal(
+          ghErrorLine(Object.assign(new Error('gh exited 1'), {stderr: gateway.stderr, stdout: gateway.stdout})),
+          'GitHub answered with text: Service Unavailable',
+        );
+      } finally {
+        console.error = write;
+        clearGithubPause();
+        vi.useRealTimers();
+      }
+    });
+
+    scenario('An unknown field is not tried again', async () => {
+      clearGithubPause();
+      let calls = 0;
+      const run = async () => {
+        calls += 1;
+        throw Object.assign(new Error('gh exited 1'), {
+          stdout: '',
+          stderr: 'Unknown JSON field: "baseRefOid"\n',
+        });
+      };
+      await assert.rejects(gh(['pr', 'view', '9', '--json', 'baseRefOid'], undefined, run), /gh exited 1/);
+      assert.equal(calls, 1);
+      clearGithubPause();
+    });
+
+    scenario('HTTP 503 is tried again', async () => {
+      vi.useFakeTimers();
+      clearGithubPause();
+      const logs: string[] = [];
+      const write = console.error;
+      console.error = line => {
+        logs.push(String(line));
+      };
+      let calls = 0;
+      try {
+        const run = async () => {
+          calls += 1;
+          if (calls === 1) {
+            throw Object.assign(new Error('gh exited 1'), {
+              stdout: 'HTTP/2.0 503 Service Unavailable\n\n<html></html>\n',
+              stderr: "invalid character '<' looking for beginning of value\n",
+            });
+          }
+          return {stdout: '[]', stderr: ''};
+        };
+        const pending = gh(['api', 'graphql'], undefined, run);
+        await vi.runAllTimersAsync();
+        assert.equal(await pending, '[]');
+        assert.equal(calls, 2);
+        assert.match(logs.join('\n'), /GitHub answered HTTP 503/);
+        assert.equal(logs.join('\n').includes('invalid character'), false);
+      } finally {
+        console.error = write;
+        clearGithubPause();
+        vi.useRealTimers();
+      }
+    });
+
+    scenario('An unreachable network is tried again', async () => {
+      vi.useFakeTimers();
+      clearGithubPause();
+      const logs: string[] = [];
+      const write = console.error;
+      console.error = line => {
+        logs.push(String(line));
+      };
+      let calls = 0;
+      try {
+        const run = async () => {
+          calls += 1;
+          if (calls === 1) {
+            throw new Error('connect ETIMEDOUT');
+          }
+          return {stdout: 'ok', stderr: ''};
+        };
+        const pending = gh(['pr', 'view', '9'], undefined, run);
+        await vi.runAllTimersAsync();
+        assert.equal(await pending, 'ok');
+        assert.equal(calls, 2);
+        assert.match(logs.join('\n'), /GitHub could not be reached/);
+      } finally {
+        console.error = write;
+        clearGithubPause();
+        vi.useRealTimers();
+      }
     });
   });
 });

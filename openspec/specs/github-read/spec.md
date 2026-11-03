@@ -2,7 +2,7 @@
 
 ## Purpose
 
-GitHub reads for the board and the spy stay inside the rate limit.
+GitHub reads for the board and the spy stay inside the rate limit. A gateway or network failure is tried again, and the log names that failure.
 
 ## Requirements
 
@@ -80,3 +80,32 @@ When GitHub answers that the rate limit is spent and the response names `x-ratel
 
 - **WHEN** the failing answer does not name the reset and the rate-limit resource does
 - **THEN** the pause uses that reset
+
+### Requirement: A gateway answer is tried again
+
+When `gh` fails because the answer is HTML, plain text, HTTP 502, HTTP 503, or HTTP 504, or because the network cannot be reached, the call SHALL be tried up to three times. Each retry SHALL be logged as one line that names the answer. That line SHALL NOT include `invalid character`. After the tries are spent, the call SHALL fail with that same reason. An answer that names an unknown field SHALL NOT be tried again.
+
+#### Scenario: Plain text is tried again
+
+- **WHEN** the first answer is plain text a JSON decoder cannot read
+- **THEN** the call is made again and the log names that text
+
+#### Scenario: A repeated gateway answer fails with the reason
+
+- **WHEN** every try answers with that plain text
+- **THEN** the call fails with that reason and the log does not include `invalid character`
+
+#### Scenario: An unknown field is not tried again
+
+- **WHEN** gh rejects an unknown field
+- **THEN** the call is made once
+
+#### Scenario: HTTP 503 is tried again
+
+- **WHEN** the answer is HTTP 503
+- **THEN** the call is made again and the log names HTTP 503
+
+#### Scenario: An unreachable network is tried again
+
+- **WHEN** the call fails because the network cannot be reached
+- **THEN** the call is made again and the log names that the network cannot be reached

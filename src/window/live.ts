@@ -15,7 +15,7 @@ import path from 'node:path';
 
 import {parse} from 'yaml';
 
-import {githubPauseRemaining} from '../adapters/github.ts';
+import {ghErrorLine, githubPauseRemaining} from '../adapters/github.ts';
 import {readBranch, type BranchFacts, type BranchText} from '../machine/change.ts';
 import {markerName, parseMarker} from '../machine/marker.ts';
 import {phaseOf} from '../machine/phase.ts';
@@ -181,9 +181,13 @@ export type LiveBoardOptions = {
   port?: number;
 };
 
+function logProblem(error: unknown): void {
+  console.error(ghErrorLine(error));
+}
+
 function forget(work: Promise<unknown>): void {
   void work.catch(error => {
-    console.error(error);
+    logProblem(error);
   });
 }
 
@@ -263,7 +267,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
       comments = await tracker.comments(issue.key);
       open = (await review.pulls(issue.key)).filter(pull => pull.state === 'OPEN');
     } catch (error) {
-      console.error(error);
+      logProblem(error);
       return ticket;
     }
     let diff = false;
@@ -287,7 +291,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
                 }
               }
             } catch (error) {
-              console.error(error);
+              logProblem(error);
             }
           }
           const seen = store.spyPull(issue.key);
@@ -303,7 +307,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
         }
       }
     } catch (error) {
-      console.error(error);
+      logProblem(error);
     }
     return {
       ...ticket,
@@ -400,7 +404,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
     const gen = generation;
     const issues = await tracker.listOpen();
     const login = await tracker.login().catch(error => {
-      console.error(error);
+      logProblem(error);
       return undefined;
     });
     const nextPulls = new Map<string, string>();

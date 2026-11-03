@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 import {solverRoot, turn, type Machine} from './adapters/compose.ts';
-import {githubPauseRemaining} from './adapters/github.ts';
+import {ghErrorLine, githubPauseRemaining} from './adapters/github.ts';
 import {tryHoldIssue} from './adapters/lock.ts';
 import {claimChat, clearChat} from './adapters/session.ts';
 import {performCycle} from './machine/flow.ts';
@@ -215,14 +215,14 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
               finish(decision.issue, result.code, result.idle ?? sig);
             },
             error => {
-              console.error(error instanceof Error ? error.message : String(error));
+              console.error(ghErrorLine(error));
               finish(decision.issue, 1, sig);
             },
           );
         }
         watch?.onCycle?.(snapshot);
       } catch (error) {
-        console.error(error instanceof Error ? error.message : String(error));
+        console.error(ghErrorLine(error));
       }
     }
 

@@ -295,19 +295,85 @@ function rateLimited(stdout: string, stderr: string): boolean {
   return /rate limit exceeded/i.test(`${stdout}\n${stderr}`);
 }
 
-export async function gh(args: string[], input?: string): Promise<string> {
-  if (githubPauseRemaining() > 0) {
-    throw Object.assign(new Error('gh exited 1'), {
-      stdout: '',
-      stderr: 'API rate limit exceeded',
-    });
+type GhCommand = (
+  file: string,
+  args: string[],
+  input?: string,
+) => Promise<{stdout: string; stderr: string}>;
+
+const GH_TRIES = 3;
+const GH_GAP_MS = [200, 400];
+const DECODER = /invalid character '(.)' looking for beginning of value/;
+
+function ghSnippet(stdout: string, stderr: string): string {
+  for (const line of `${stdout}\n${stderr}`.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed === '' || DECODER.test(trimmed) || /^gh exited \d/.test(trimmed)) {
+      continue;
+    }
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      continue;
+    }
+    return trimmed.replace(/\s+/g, ' ').slice(0, 120);
   }
+  return '';
+}
+
+/** A gateway page or a dropped connection. A parsed API error, including the rate limit, is absent. */
+export function ghFailureReason(stdout: string, stderr: string, message = ''): string | undefined {
+  const text = `${stdout}\n${stderr}\n${message}`;
+  if (/rate limit exceeded/i.test(text)) {
+    return undefined;
+  }
+  const status = /HTTP\/\d(?:\.\d)? (502|503|504)\b/.exec(text);
+  if (status?.[1]) {
+    return `GitHub answered HTTP ${status[1]}`;
+  }
+  const decoded = DECODER.test(stderr) || DECODER.test(stdout);
+  const html = /<!DOCTYPE|<html/i.test(text);
+  if (decoded || html) {
+    const mark = DECODER.exec(stderr)?.[1] ?? DECODER.exec(stdout)?.[1];
+    if (html || mark === '<') {
+      return 'GitHub answered with HTML';
+    }
+    const bit = ghSnippet(stdout, stderr);
+    return bit === '' ? 'GitHub answered with text' : `GitHub answered with text: ${bit}`;
+  }
+  if (/Service Unavailable|Bad Gateway|Gateway Time-?out/i.test(text)) {
+    const bit = ghSnippet(stdout, stderr);
+    return bit === '' ? 'GitHub answered with text' : `GitHub answered with text: ${bit}`;
+  }
+  if (
+    /ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENETUNREACH|connection reset|i\/o timeout|TLS handshake|network is unreachable|connect: connection refused|timeout awaiting response/i.test(
+      text,
+    )
+  ) {
+    return 'GitHub could not be reached';
+  }
+  return undefined;
+}
+
+/** One line for a board or spy log. A gateway answer keeps its reason and drops the decoder text. */
+export function ghErrorLine(error: unknown): string {
+  const stdout = fieldOf(error, 'stdout');
+  const stderr = fieldOf(error, 'stderr');
+  const message = error instanceof Error ? error.message : String(error);
+  return ghFailureReason(stdout, stderr, message) ?? message;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function ghOnce(args: string[], input: string | undefined, run: GhCommand): Promise<string> {
   const get = isRestGet(args);
   const key = args.join('\0');
   const cached = get ? restBodies.get(key) : undefined;
   const sent = get ? withRestValidators(args, cached?.etag) : args;
   try {
-    const {stdout} = await command('gh', sent, input);
+    const {stdout} = await run('gh', sent, input);
     if (!get) {
       return stdout;
     }
@@ -334,6 +400,40 @@ export async function gh(args: string[], input?: string): Promise<string> {
     }
     throw error;
   }
+}
+
+export async function gh(args: string[], input?: string, run: GhCommand = command): Promise<string> {
+  if (githubPauseRemaining() > 0) {
+    throw Object.assign(new Error('gh exited 1'), {
+      stdout: '',
+      stderr: 'API rate limit exceeded',
+    });
+  }
+  let last: unknown;
+  for (let attempt = 1; attempt <= GH_TRIES; attempt += 1) {
+    try {
+      return await ghOnce(args, input, run);
+    } catch (error) {
+      last = error;
+      const reason = ghFailureReason(
+        fieldOf(error, 'stdout'),
+        fieldOf(error, 'stderr'),
+        error instanceof Error ? error.message : '',
+      );
+      if (!reason || attempt === GH_TRIES) {
+        if (reason) {
+          throw Object.assign(new Error(reason), {
+            stdout: fieldOf(error, 'stdout'),
+            stderr: fieldOf(error, 'stderr'),
+          });
+        }
+        throw error;
+      }
+      console.error(`gh: ${reason}. retrying`);
+      await sleep(GH_GAP_MS[attempt - 1] ?? 400);
+    }
+  }
+  throw last;
 }
 
 /** GitHub check vocabulary stays in this adapter. The machine sees CheckState. */

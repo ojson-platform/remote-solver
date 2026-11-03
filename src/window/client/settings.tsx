@@ -117,7 +117,7 @@ export function Settings({snapshot, busy}: {snapshot: WindowSnapshot; busy?: boo
               <ActForm act="choose-agent" onChangeSubmit>
                 <label>агент</label>
                 <select name="agent" defaultValue={settings.agent}>
-                  {options(FACTORY_AGENTS, settings.agent)}
+                  {options(FACTORY_AGENTS, settings.agent, settings.agent === '')}
                 </select>
               </ActForm>
               <ModeFields

@@ -1,13 +1,27 @@
 import assert from 'node:assert/strict';
-import {existsSync, readFileSync, rmSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import {existsSync, mkdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import path from 'node:path';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {serveBoard} from './page.ts';
-import {formsOf, pageHtml, post} from './page.harness.ts';
+import {formsOf, git, pageHtml, post} from './page.harness.ts';
 import {FACTORY_AGENTS} from './types.ts';
 import {openWindow} from './window.ts';
-import {readHome, scratch} from './window.harness.ts';
+import {
+  readHome,
+  scratch,
+  ticket,
+  writeLaunch,
+  writeOverlay,
+  writeServiceConfig,
+  yard,
+} from './window.harness.ts';
+
+function overlayPath(checkout: string): string {
+  return path.join(checkout, '.aifactory', 'config.yaml');
+}
 
 function agentOptions(html: string): string[] {
   const homeStart = html.indexOf('<h3>Дом</h3>');
@@ -170,6 +184,166 @@ spec('home-agent', () => {
       } finally {
         await page.close();
       }
+      rmSync(dir, {recursive: true, force: true});
+    });
+  });
+
+  requirement('The layer agent does not record the home agent', () => {
+    function trackerWindow(home: string, arcadia: string) {
+      const checkout = path.join(arcadia, 'services', 'billing');
+      mkdirSync(checkout, {recursive: true});
+      writeServiceConfig(checkout, ['alpha']);
+      writeLaunch(home, ['alpha'], {arcadia});
+      return {
+        checkout,
+        window: openWindow(
+          {homePath: home, adapter: 'tracker'},
+          {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+        ),
+      };
+    }
+
+    scenario('An overlay agent leaves the factory needing an agent', async () => {
+      const {dir, home, arcadia} = yard();
+      const {checkout, window} = trackerWindow(home, arcadia);
+      assert.equal(readHome(home).agent, undefined);
+
+      window.openSettings();
+      window.chooseOverlayAgent('cursor');
+      const overlay = readHome(overlayPath(checkout));
+      assert.equal(overlay.agent, 'cursor');
+      assert.equal(overlay.models?.mechanical, 'composer-2.5-fast');
+      assert.equal(overlay.models?.judgment, 'grok-4.7-high-fast');
+      assert.equal(overlay.effort, undefined);
+      assert.equal(overlay.speed, undefined);
+      assert.equal(readHome(home).agent, undefined);
+      assert.deepEqual(window.board().rows, [{text: 'фабрике ещё нужен агент'}]);
+      assert.equal(window.board().stepsStart, false);
+      assert.equal(window.board().takeDisabled, true);
+      rmSync(dir, {recursive: true, force: true});
+    });
+
+    scenario('агент слоя remains the override for that one checkout', async () => {
+      const {dir, home, arcadia} = yard();
+      const {checkout, window} = trackerWindow(home, arcadia);
+      writeOverlay(checkout, ['alpha'], 'agent: cursor\n');
+      window.openSettings();
+      assert.equal(window.overlay().agent, 'cursor');
+      window.clearOverlayAgent();
+      assert.equal(readHome(overlayPath(checkout)).agent, undefined);
+      assert.equal(window.overlay().agent, '');
+      rmSync(dir, {recursive: true, force: true});
+    });
+
+    scenario('Empty means the home agent', async () => {
+      const {dir, home, arcadia} = yard();
+      const {checkout, window} = trackerWindow(home, arcadia);
+      window.chooseAgent('cursor');
+      window.openSettings();
+      assert.equal(window.overlay().agent, '');
+      assert.equal(window.overlay().models.mechanical.value, 'composer-2.5-fast');
+      assert.equal(window.overlay().models.judgment.value, 'grok-4.7-high-fast');
+      window.chooseOverlayAgent('cursor');
+      assert.equal(readHome(overlayPath(checkout)).agent, 'cursor');
+      rmSync(dir, {recursive: true, force: true});
+    });
+
+    scenario(
+      'Choosing cursor on агент слоя writes the known pair and drops old effort and speed',
+      async () => {
+        const {dir, home, arcadia} = yard();
+        const checkout = path.join(arcadia, 'services', 'billing');
+        mkdirSync(checkout, {recursive: true});
+        writeServiceConfig(checkout, ['alpha']);
+        writeFileSync(
+          home,
+          [
+            'agent: codex',
+            'models:',
+            '  mechanical: gpt-6-luna',
+            '  judgment: gpt-6.1-sol',
+            'effort:',
+            '  mechanical: low',
+            '  judgment: high',
+            'watch:',
+            '  - alpha',
+            'roots:',
+            `  arcadia: ${arcadia}`,
+            '',
+          ].join('\n'),
+        );
+        writeOverlay(
+          checkout,
+          ['alpha'],
+          [
+            'models:',
+            '  mechanical: custom-mechanical',
+            '  judgment: custom-judgment',
+            'effort:',
+            '  mechanical: max',
+            'speed:',
+            '  mechanical: fast',
+            '',
+          ].join('\n'),
+        );
+        const window = openWindow(
+          {homePath: home, adapter: 'tracker'},
+          {tickets: () => [ticket({key: '1', queue: 'alpha', sddService: 'services/billing'})]},
+        );
+        window.openSettings();
+        window.chooseOverlayAgent('cursor');
+        const overlay = readHome(overlayPath(checkout));
+        assert.equal(overlay.agent, 'cursor');
+        assert.equal(overlay.models?.mechanical, 'composer-2.5-fast');
+        assert.equal(overlay.models?.judgment, 'grok-4.7-high-fast');
+        assert.equal(overlay.effort, undefined);
+        assert.equal(overlay.speed, undefined);
+        const homeDoc = readHome(home);
+        assert.equal(homeDoc.agent, 'codex');
+        assert.equal(homeDoc.models?.mechanical, 'gpt-6-luna');
+        assert.equal(homeDoc.models?.judgment, 'gpt-6.1-sol');
+        assert.deepEqual(homeDoc.effort, {mechanical: 'low', judgment: 'high'});
+        rmSync(dir, {recursive: true, force: true});
+      },
+    );
+
+    scenario('The overlay models, effort, and speed keep following the merged factory', async () => {
+      const {dir, home, arcadia} = yard();
+      const {checkout, window} = trackerWindow(home, arcadia);
+      window.chooseAgent('cursor');
+      writeOverlay(
+        checkout,
+        ['alpha'],
+        ['models:', '  mechanical: custom-mechanical', '  judgment: custom-judgment', ''].join(
+          '\n',
+        ),
+      );
+      window.openSettings();
+      assert.equal(window.overlay().agent, '');
+      assert.equal(window.overlay().models.mechanical.value, 'custom-mechanical');
+      assert.equal(window.overlay().models.judgment.value, 'custom-judgment');
+      assert.equal(window.overlay().effort, undefined);
+      assert.equal(window.overlay().speed, undefined);
+      rmSync(dir, {recursive: true, force: true});
+    });
+
+    scenario('The checkout overlay stays out of the repository', async () => {
+      const {dir, home, arcadia} = yard();
+      const {checkout, window} = trackerWindow(home, arcadia);
+      git(checkout, ['init', '-b', 'master']);
+      git(checkout, ['config', 'user.email', 'test@example.com']);
+      git(checkout, ['config', 'user.name', 'Test']);
+      writeFileSync(path.join(checkout, '.gitignore'), '.aifactory/\n');
+      git(checkout, ['add', 'openspec', '.gitignore']);
+      git(checkout, ['commit', '-m', 'init']);
+      window.openSettings();
+      window.chooseOverlayAgent('cursor');
+      assert.equal(existsSync(overlayPath(checkout)), true);
+      const status = execFileSync('git', ['status', '--porcelain'], {
+        cwd: checkout,
+        encoding: 'utf8',
+      }).trim();
+      assert.equal(status, '');
       rmSync(dir, {recursive: true, force: true});
     });
   });

@@ -432,7 +432,9 @@ function proveClearingTheOverlayAgentRemovesAgentModelsEffortAndSpeed88(): void 
   assert.equal(doc.effort, undefined);
   assert.equal(doc.speed, undefined);
   assert.deepEqual(doc.watch, ['alpha']);
-  assert.equal(window.overlay().agent, 'cursor');
+  assert.equal(window.overlay().agent, '');
+  assert.equal(window.overlay().models.mechanical.value, 'composer-2.5-fast');
+  assert.equal(window.overlay().models.judgment.value, 'grok-4.7-high-fast');
   rmSync(dir, {recursive: true, force: true});
 }
 

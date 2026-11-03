@@ -164,6 +164,12 @@
     gap: 8px;
     align-items: center;
   }
+  .head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: color-mix(in srgb, var(--bg) 90%, transparent);
+  }
   .phase {
     min-width: 0;
     overflow: hidden;

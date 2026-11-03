@@ -371,7 +371,7 @@ function overlayOf(home: Doc, overlayDoc: Doc, checkout: string): OverlayGroup {
   const group: OverlayGroup = {
     file: '.aifactory/config.yaml',
     checkout,
-    agent: factory.agent,
+    agent: agentOf(overlayDoc),
     models: {
       mechanical: {
         value: factory.mechanical,

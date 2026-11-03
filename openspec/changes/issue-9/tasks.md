@@ -2,4 +2,4 @@
 - [x] `home-empty-agent` — The field is empty until an agent is saved
 - [x] `home-choose-agent` — Choosing an agent writes the home file at once with that agent's known pair; Choosing codex writes its known pair at once; Choosing a different agent writes that agent's known pair at once
 - [x] `home-reselect-agent` — Choosing the saved agent again changes nothing
-- [ ] `layer-agent-overlay` — An overlay agent leaves the factory needing an agent; агент слоя remains the override for that one checkout; Empty means the home agent; Choosing cursor on агент слоя writes the known pair and drops old effort and speed; The overlay models, effort, and speed keep following the merged factory; The checkout overlay stays out of the repository
+- [x] `layer-agent-overlay` — An overlay agent leaves the factory needing an agent; агент слоя remains the override for that one checkout; Empty means the home agent; Choosing cursor on агент слоя writes the known pair and drops old effort and speed; The overlay models, effort, and speed keep following the merged factory; The checkout overlay stays out of the repository

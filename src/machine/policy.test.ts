@@ -691,7 +691,109 @@ test('A finished cycle on a proposed gate does not restore', () => {
   assert.deepEqual(walked.transitions, []);
 });
 
+const openPull = pull(37);
+const archivedOpen = change({
+  proposal: true,
+  delta: true,
+  design: true,
+  tasks: true,
+  archived: true,
+  openTasks: 0,
+});
+
+test('An open pull request on tasking is restored', () => {
+  const record = issue(9, ['sdd:tasking']);
+  const decision = decide(record, [], [openPull], archivedOpen);
+  assert.equal(decision.kind, 'agent');
+  if (decision.kind === 'agent') {
+    assert.equal(decision.action, 'unarchive');
+    assert.equal(decision.phase, 'tasking');
+  }
+  assert.notEqual(decision.kind, 'done');
+  const afterRestore = decide(record, [], [openPull], {...archivedOpen, archived: false});
+  assert.deepEqual(afterRestore, {
+    kind: 'advance',
+    issue: '9',
+    to: 'implementing',
+    reason: 'tasks exist',
+  });
+});
+
+test('A proposed gate restores after it moves', () => {
+  const record = issue(9, ['sdd:proposed', 'sdd:proposing']);
+  const walked = settle(record, [], [openPull], archivedOpen);
+  assert.ok(walked.transitions.length > 0);
+  assert.notEqual(walked.transitions[0]?.to, 'proposing');
+  assert.equal(walked.decision.kind, 'agent');
+  if (walked.decision.kind === 'agent') {
+    assert.equal(walked.decision.action, 'unarchive');
+  }
+  assert.notEqual(walked.decision.reason, 'finished cycle');
+});
+
+test('Checked tasks and an open pull request stay', () => {
+  const record = issue(9, ['sdd:tasking'], {state: 'OPEN'});
+  const active = change({...ready, openTasks: 0});
+  const decision = decide(record, [], [openPull], active);
+  assert.notEqual(decision.kind, 'done');
+  if (decision.kind === 'done') {
+    assert.notEqual(decision.reason, 'finished cycle');
+  }
+  assert.deepEqual(decision, {
+    kind: 'advance',
+    issue: '9',
+    to: 'implementing',
+    reason: 'tasks exist',
+  });
+});
+
+test('An open pull request stays on the board when every task is checked', () => {
+  const record = issue(9, ['sdd:tasking'], {state: 'OPEN'});
+  const decision = decide(record, [], [openPull], archivedOpen);
+  assert.equal(decision.kind, 'agent');
+  assert.notEqual(decision.kind, 'done');
+  const walked = settle(record, [], [openPull], archivedOpen);
+  assert.notEqual(walked.decision.kind, 'done');
+  if (walked.decision.kind === 'done') {
+    assert.notEqual(walked.decision.reason, 'finished cycle');
+  }
+});
+
 spec('finished-cycle', () => {
+  requirement('An archived change through tasking is restored', () => {
+    scenario('An open pull request on tasking is restored', () => {
+      const record = issue(9, ['sdd:tasking']);
+      const decision = decide(record, [], [openPull], archivedOpen);
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'unarchive');
+      }
+      assert.notEqual(decision.kind, 'done');
+    });
+    scenario('A proposed gate restores after it moves', () => {
+      const record = issue(9, ['sdd:proposed', 'sdd:proposing']);
+      const walked = settle(record, [], [openPull], archivedOpen);
+      assert.ok(walked.transitions.length > 0);
+      assert.equal(walked.decision.kind, 'agent');
+      if (walked.decision.kind === 'agent') {
+        assert.equal(walked.decision.action, 'unarchive');
+      }
+    });
+  });
+  requirement('An open pull request keeps the card', () => {
+    scenario('Checked tasks and an open pull request stay', () => {
+      const record = issue(9, ['sdd:tasking'], {state: 'OPEN'});
+      const decision = decide(record, [], [openPull], {...ready, openTasks: 0});
+      assert.notEqual(decision.kind, 'done');
+      assert.equal(record.state, 'OPEN');
+    });
+    scenario('An open pull request stays on the board when every task is checked', () => {
+      const record = issue(9, ['sdd:tasking'], {state: 'OPEN'});
+      const decision = decide(record, [], [openPull], archivedOpen);
+      assert.equal(decision.kind, 'agent');
+      assert.notEqual(decision.kind, 'done');
+    });
+  });
   requirement('A cancelled cycle leaves the board', () => {
     scenario('A cancelled cycle still leaves as it does now', () => {
       const labels = ['sdd:cancelled', 'sdd:tasking'];

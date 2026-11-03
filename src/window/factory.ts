@@ -135,6 +135,31 @@ function overlayFile(checkout: string): string {
   return path.join(checkout, '.aifactory', 'config.yaml');
 }
 
+const OVERLAY_EXCLUDE = '.aifactory/';
+
+/** Local exclude keeps the overlay out of git status without a tracked ignore file. */
+function keepOverlayOutOfGit(checkout: string): void {
+  const gitDir = path.join(checkout, '.git');
+  if (!existsSync(gitDir)) {
+    return;
+  }
+  const exclude = path.join(gitDir, 'info', 'exclude');
+  mkdirSync(path.dirname(exclude), {recursive: true});
+  const prior = existsSync(exclude) ? readFileSync(exclude, 'utf8') : '';
+  if (
+    prior
+      .split('\n')
+      .some(line => line === OVERLAY_EXCLUDE || line === '/.aifactory/' || line === '.aifactory')
+  ) {
+    return;
+  }
+  const suffix = `${OVERLAY_EXCLUDE}\n`;
+  writeFileSync(
+    exclude,
+    prior === '' ? suffix : prior.endsWith('\n') ? prior + suffix : `${prior}\n${suffix}`,
+  );
+}
+
 export function readOverlayDoc(checkout: string): Doc | null {
   const text = textOf(overlayFile(checkout));
   if (text === null) {
@@ -602,6 +627,7 @@ export function openOverlay(offered: readonly string[]) {
   }
 
   function commit(next: Doc): void {
+    keepOverlayOutOfGit(checkout);
     const clean = cleanOverlay(next);
     const file = overlayFile(checkout);
     mkdirSync(path.dirname(file), {recursive: true});

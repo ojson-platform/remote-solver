@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
 
 import {readChange} from './change.ts';
@@ -7,7 +8,30 @@ import {markRobot} from './marker.ts';
 import {queueOf} from './queues.ts';
 import {loadCycle} from './snapshot.ts';
 import {memoryPorts} from '../adapters/github.ts';
+import {change} from './harness.ts';
 import type {FileSource} from './port.ts';
+
+const FINISHED_CLOSE =
+  'SDLC finished: the pull request is merged and the change is archived.';
+
+const finishedChange = change({
+  proposal: true,
+  delta: true,
+  design: true,
+  tasks: true,
+  archived: true,
+  openTasks: 0,
+});
+
+function archivedIssue9Files(): FileSource {
+  const root = 'openspec/changes/archive/issue-9';
+  const tasks = `${root}/tasks.md`;
+  return {
+    exists: rel => rel === root || rel === tasks,
+    read: rel => (rel === tasks ? '- [x] `done` — scenario\n' : ''),
+    list: () => [],
+  };
+}
 
 const files: FileSource = {
   exists: () => false,
@@ -256,6 +280,59 @@ test('performIssue merges a green archived pull request and settles the close', 
   assert.equal(calls.filter(call => call === 'merge:9').length, 1);
   assert.ok((await tracker.labels('3')).includes('sdd:accepted'));
   assert.equal((await tracker.issue('3')).state, 'CLOSED');
+});
+
+spec('finished-cycle', () => {
+  requirement('A finished cycle leaves the board', () => {
+    scenario('A cycle is finished when its pull request is merged and its change is archived', async () => {
+      const {tracker, review, calls} = memoryPorts({
+        issues: [
+          {
+            key: '9',
+            title: '#9: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['Sandcastle', 'sdd:cycle', 'sdd:tasking'],
+          },
+        ],
+        pulls: {'9': [{id: '25', title: '#9: title', state: 'MERGED'}]},
+      });
+      const decision = await resolveIssue('9', {
+        tracker,
+        review,
+        files,
+        queues: [{name: 'Sandcastle'}],
+        change: finishedChange,
+      });
+      assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
+      assert.equal((await tracker.issue('9')).state, 'CLOSED');
+      assert.ok(calls.some(call => call === `close:${FINISHED_CLOSE}`));
+      assert.ok(!(await tracker.listOpen()).some(issue => issue.key === '9'));
+    });
+
+    scenario("The issue closes and the board's open list no longer has it", async () => {
+      const {tracker, review} = memoryPorts({
+        issues: [
+          {
+            key: '9',
+            title: '#9: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['Sandcastle', 'sdd:cycle', 'sdd:tasking'],
+          },
+        ],
+        pulls: {'9': [{id: '25', title: '#9: title', state: 'MERGED'}]},
+      });
+      const snapshot = await loadCycle(tracker, review, () => archivedIssue9Files(), [
+        {name: 'Sandcastle'},
+      ]);
+      assert.ok(snapshot.cycles.some(cycle => cycle.key === '9'));
+      const decisions = await resolveCycle(snapshot, tracker, [{name: 'Sandcastle'}]);
+      assert.deepEqual(decisions, [{kind: 'done', issue: '9', reason: 'finished cycle'}]);
+      assert.equal((await tracker.issue('9')).state, 'CLOSED');
+      assert.ok(!(await tracker.listOpen()).some(issue => issue.key === '9'));
+    });
+  });
 });
 
 test('a cycle includes every configured queue and the earlier name wins', async () => {

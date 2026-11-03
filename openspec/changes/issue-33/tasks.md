@@ -1,0 +1,4 @@
+- [ ] `pool-description` A cycle in the pool shows its issue description in the sidebar; The person reads the issue description when choosing a ticket, along with the title; The description is the issue body the tracker already returned, the author's text outside the markers
+- [ ] `empty-description` An empty description leaves no block
+- [ ] `leave-pool` The block goes when the cycle leaves the pool
+- [ ] `taken-spine` The spine of a taken cycle stays as it is

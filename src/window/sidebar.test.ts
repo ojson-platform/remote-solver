@@ -322,6 +322,31 @@ async function proveThePersonReadsTheIssueDescriptionWhenChoosingATicketAlongWit
   );
 }
 
+function proveAnEmptyDescriptionLeavesNoBlock(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const markerOnly = [
+    '<!-- sdd:begin -->',
+    'Tasks: 0/4',
+    '<!-- sdd:end -->',
+  ].join('\n');
+  const window = openSide(home, [
+    poolTicket('1', 'implementing', {body: ''}),
+    poolTicket('2', 'implementing', {body: '  \n\t  '}),
+    poolTicket('3', 'implementing', {body: markerOnly}),
+  ]);
+  for (const key of ['1', '2', '3']) {
+    window.openCard(key);
+    const blocks = window.sidebar();
+    assert.equal(
+      blocks.some(block => block.kind === 'description'),
+      false,
+      `pool cycle ${key} must not show a description block`,
+    );
+  }
+  rmSync(dir, {recursive: true, force: true});
+}
+
 async function proveTheDescriptionIsTheIssueBodyOutsideTheMarkers(): Promise<void> {
   await hosted(
     {
@@ -461,5 +486,8 @@ spec('issue-description', () => {
         await proveTheDescriptionIsTheIssueBodyOutsideTheMarkers();
       },
     );
+    scenario('An empty description leaves no block', () => {
+      proveAnEmptyDescriptionLeavesNoBlock();
+    });
   });
 });

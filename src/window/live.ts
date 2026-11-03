@@ -132,7 +132,7 @@ export function watchSpy(
       forget(sink.refresh());
     },
   };
-  return runSpy(box, [], watch);
+  return runSpy(box, ['--parallel', '20'], watch);
 }
 
 export type LiveTracker = {

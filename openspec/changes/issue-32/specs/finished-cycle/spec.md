@@ -92,6 +92,41 @@ On a phase before `accepting`, a cycle whose pull request is open SHALL stay on 
 - **WHEN** the phase is `tasking`, the assignee is this manager, the pull request is still open, every task is checked, and the change is archived
 - **THEN** the pull request is still open, every task is checked, and the card stays on the board
 
+### Requirement: A closed issue leaves the open list
+
+The board SHALL be filled from the open issues. A closed issue SHALL be absent from that reading, and a later reading SHALL NOT show its card.
+When the board places a closed issue, the card SHALL leave when the phase is `accepted` or the merge is ahead. A closed issue on `tasking` SHALL stand on `tasking`. A closed issue on `verifying` SHALL stand on `verifying`. A closed issue on `accepting` SHALL stand on `accepting` unless the merge is ahead.
+
+#### Scenario: A later reading omits a closed issue
+
+- **WHEN** the issue is closed and the board reads the open list again
+- **THEN** the card is absent
+
+#### Scenario: A closed tasking issue stands
+
+- **WHEN** a closed issue on `tasking`, assigned to this manager, is in the board's reading
+- **THEN** the card stands on `tasking`
+
+#### Scenario: A closed verifying issue stands
+
+- **WHEN** a closed issue on `verifying`, assigned to this manager, is in the board's reading
+- **THEN** the card stands on `verifying`
+
+#### Scenario: A closed accepted issue leaves
+
+- **WHEN** a closed issue on `accepted` is in the board's reading
+- **THEN** the card is absent
+
+#### Scenario: A closed accepting issue leaves only when the merge is ahead
+
+- **WHEN** a closed issue on `accepting` is in the board's reading and the merge is ahead
+- **THEN** the card is absent
+
+#### Scenario: A closed accepting issue stands when the merge is not ahead
+
+- **WHEN** a closed issue on `accepting`, assigned to this manager, is in the board's reading and the merge is not ahead
+- **THEN** the card stands on `accepting`
+
 ## REMOVED Requirements
 
 ### Requirement: Implementing and verifying keep a merged archived cycle

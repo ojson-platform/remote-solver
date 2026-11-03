@@ -2,7 +2,7 @@
 
 ## Purpose
 
-A cycle whose pull request is merged and whose change is archived. Through `tasking` the machine restores it and the card stays. From `accepting` the machine closes the issue and the card leaves the open list.
+A cycle is finished when its pull request is merged and its change is archived. The machine closes the issue, does not restore that change, and does not start another step. The card leaves the board, and a reload does not bring it back. An archived change whose pull request is still open is restored through `tasking`, and the card stays. From `accepting` the machine closes the issue and the card leaves the open list.
 
 ## Requirements
 

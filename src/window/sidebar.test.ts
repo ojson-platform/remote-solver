@@ -322,6 +322,31 @@ async function proveThePersonReadsTheIssueDescriptionWhenChoosingATicketAlongWit
   );
 }
 
+function proveTheBlockGoesWhenTheCycleLeavesThePool(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const body = 'Still on the ticket after take.\n';
+  const pool = poolTicket('pool-1', 'implementing', {body});
+  const column = cycle('col-1', 'implementing', {body});
+  const window = openSide(home, [pool, column]);
+  assert.equal(
+    window.board().pool.some(card => card.key === 'pool-1'),
+    true,
+  );
+  assert.equal(columnCards(window.board(), 'implementing')?.some(card => card.key === 'col-1'), true);
+  window.openCard('pool-1');
+  assert.deepEqual(window.sidebar().find(block => block.kind === 'description'), {
+    kind: 'description',
+    text: body,
+  });
+  window.openCard('col-1');
+  assert.equal(
+    window.sidebar().some(block => block.kind === 'description'),
+    false,
+  );
+  rmSync(dir, {recursive: true, force: true});
+}
+
 function proveAnEmptyDescriptionLeavesNoBlock(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
@@ -488,6 +513,9 @@ spec('issue-description', () => {
     );
     scenario('An empty description leaves no block', () => {
       proveAnEmptyDescriptionLeavesNoBlock();
+    });
+    scenario('The block goes when the cycle leaves the pool', () => {
+      proveTheBlockGoesWhenTheCycleLeavesThePool();
     });
   });
 });

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
 
 import type {ChangeView} from './change.ts';
@@ -688,4 +689,34 @@ test('A finished cycle on a proposed gate does not restore', () => {
   );
   assert.equal(walked.decision.kind, 'done');
   assert.deepEqual(walked.transitions, []);
+});
+
+spec('finished-cycle', () => {
+  requirement('A cancelled cycle leaves the board', () => {
+    scenario('A cancelled cycle still leaves as it does now', () => {
+      const labels = ['sdd:cancelled', 'sdd:tasking'];
+      const everyTaskChecked = change({
+        proposal: true,
+        delta: true,
+        design: true,
+        tasks: true,
+        archived: true,
+        openTasks: 0,
+      });
+      const openPull = pull(37);
+      const record = issue(1, labels);
+
+      const decision = decide(record, [], [openPull], everyTaskChecked);
+      assert.deepEqual(decision, {kind: 'done', issue: '1', reason: 'cancelled'});
+
+      const mergedShape = decide(record, [], [mergedPull], finishedChange);
+      assert.deepEqual(mergedShape, {kind: 'done', issue: '1', reason: 'cancelled'});
+      assert.notEqual(mergedShape.reason, 'finished cycle');
+
+      const walked = settle(record, [], [openPull], everyTaskChecked);
+      assert.deepEqual(walked.decision, {kind: 'done', issue: '1', reason: 'cancelled'});
+      assert.deepEqual(walked.transitions, []);
+      assert.ok(walked.decision.kind !== 'agent');
+    });
+  });
 });

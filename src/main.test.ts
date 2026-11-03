@@ -6,7 +6,9 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {machine} from './adapters/compose.ts';
 import {memoryPorts} from './adapters/github.ts';
 import {runSpy} from './main.ts';
+import type {Decision} from './machine/policy.ts';
 import type {Runtime, Vcs} from './machine/port.ts';
+import {tick, type State} from './machine/scheduler.ts';
 
 const MANAGER = 'ada';
 
@@ -63,7 +65,50 @@ const idleRuntime: Runtime = {
   },
 };
 
+function agent(issue: string): Extract<Decision, {kind: 'agent'}> {
+  return {
+    kind: 'agent',
+    issue,
+    action: 'create-proposal',
+    skill: 'plan',
+    phase: 'proposing',
+    pr: '',
+    reason: 'write proposal.md',
+  };
+}
+
+const emptyCapState: State = {running: [], idle: {}, reported: {}};
+
 spec('parallel-cap', () => {
+  requirement('A poll starts at most the cap', () => {
+    scenario('A cap of 2 starts two of three', () => {
+      const turned = tick(
+        emptyCapState,
+        [agent('1'), agent('2'), agent('3')],
+        2,
+      );
+      assert.deepEqual(
+        turned.start.map(item => item.issue),
+        ['1', '2'],
+      );
+    });
+
+    scenario('Running workers fill the cap', () => {
+      const running: State = {...emptyCapState, running: ['1', '2']};
+      const turned = tick(running, [agent('3')], 2);
+      assert.deepEqual(turned.start, []);
+    });
+
+    scenario('One free slot starts one ready cycle', () => {
+      const state: State = {running: ['1'], idle: {}, reported: {}};
+      const turned = tick(state, [agent('2'), agent('3')], 2);
+      assert.deepEqual(
+        turned.start.map(item => item.issue),
+        ['2'],
+      );
+    });
+  });
+
   requirement('The spy command defaults to 2 and honors --parallel', () => {
     scenario('No flag uses a cap of 2', async () => {
       const ports = readyCycles(3);

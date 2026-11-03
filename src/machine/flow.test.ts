@@ -333,6 +333,62 @@ spec('finished-cycle', () => {
       assert.ok(!(await tracker.listOpen()).some(issue => issue.key === '9'));
     });
   });
+  requirement('Accepting closes a merged archived cycle', () => {
+    const archivedIssue3: FileSource = {
+      exists: rel => rel === 'openspec/changes/archive/issue-3',
+      read: () => '',
+      list: () => [],
+    };
+    scenario('Accepting closes', async () => {
+      const {tracker, review, calls} = memoryPorts({
+        issues: [
+          {
+            key: '3',
+            title: '#3: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['Sandcastle', 'sdd:cycle', 'sdd:accepting'],
+          },
+        ],
+        pulls: {'3': [{id: '9', title: '#3: title', state: 'MERGED'}]},
+      });
+      const decision = await resolveIssue('3', {
+        tracker,
+        review,
+        files: archivedIssue3,
+        queues: [{name: 'Sandcastle'}],
+      });
+      assert.equal(decision.kind, 'done');
+      assert.ok((await tracker.labels('3')).includes('sdd:accepted'));
+      assert.equal((await tracker.issue('3')).state, 'CLOSED');
+      assert.ok(!calls.some(call => call.startsWith('unarchive')));
+      assert.ok(!(await tracker.listOpen()).some(issue => issue.key === '3'));
+    });
+    scenario('Accepted closes', async () => {
+      const {tracker, review, calls} = memoryPorts({
+        issues: [
+          {
+            key: '3',
+            title: '#3: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['Sandcastle', 'sdd:cycle', 'sdd:accepted'],
+          },
+        ],
+        pulls: {'3': [{id: '9', title: '#3: title', state: 'MERGED'}]},
+      });
+      const decision = await resolveIssue('3', {
+        tracker,
+        review,
+        files: archivedIssue3,
+        queues: [{name: 'Sandcastle'}],
+      });
+      assert.equal(decision.kind, 'done');
+      assert.equal((await tracker.issue('3')).state, 'CLOSED');
+      assert.ok(!calls.some(call => call.startsWith('unarchive')));
+      assert.ok(!(await tracker.listOpen()).some(issue => issue.key === '3'));
+    });
+  });
 });
 
 test('a cycle includes every configured queue and the earlier name wins', async () => {

@@ -5,8 +5,9 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {test} from 'vitest';
 
-import {agentLogPath, ensureServiceEnv, linkCommand, renderAgentEvent} from './runtime.ts';
+import {agentLogPath, agentRuntime, ensureServiceEnv, linkCommand, renderAgentEvent} from './runtime.ts';
 import {gitVcs} from './vcs.ts';
+import type {Vcs} from '../machine/port.ts';
 
 test('the worktree hook links the package into .sandcastle and keeps the service node_modules', () => {
   const parent = mkdtempSync(path.join(tmpdir(), 'sdd-link-'));
@@ -98,6 +99,36 @@ test('the service env link points at the package and does not replace an existin
   ensureServiceEnv(other, solver);
   assert.equal(lstatSync(path.join(other, '.sandcastle', '.env')).isSymbolicLink(), false);
   assert.equal(readFileSync(path.join(other, '.sandcastle', '.env'), 'utf8'), 'CURSOR_API_KEY=local\n');
+});
+
+test('the spy prepares the session worktree directory', async () => {
+  let dir = '';
+  const vcs = {
+    prepare: async (_key: string, options: {worktreesDir: string}) => {
+      dir = options.worktreesDir;
+      throw new Error('stop');
+    },
+  } as Vcs;
+  const runtime = agentRuntime({
+    root: '/tmp/service',
+    vcs,
+    branchPrefix: 'sdd',
+    queueLabel: 'q',
+    prBase: 'master',
+    solverRoot: '/tmp/solver',
+  });
+  await assert.rejects(
+    runtime.run({
+      skill: 'specify',
+      action: 'improve-specs',
+      key: '32',
+      phase: 'specifying',
+      pull: '',
+      mode: 'judgment',
+    }),
+    /stop/,
+  );
+  assert.equal(dir, '.worktrees');
 });
 
 test('the agent log path matches the sandcastle file name', () => {

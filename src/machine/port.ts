@@ -132,7 +132,7 @@ export type FileSource = {
 export type Link = {from: string; to: string};
 
 export type Vcs = {
-  /** Checkout of `sdd/<key>`. Creates it when missing and returns the same path again. */
+  /** Checkout of `sdd/<key>`. Reuses a worktree that already has the branch, and creates one when missing. */
   prepare(key: IssueKey, options: {worktreesDir: string; links: Link[]}): Promise<string>;
   /** Tip of the local issue branch. Throws when the branch does not exist. */
   tip(key: IssueKey): Promise<string>;

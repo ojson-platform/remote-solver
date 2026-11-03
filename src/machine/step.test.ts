@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {existsSync, lstatSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
+import {existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 
@@ -291,6 +291,17 @@ spec('step', () => {
       const again = await runWorktree(service, '1');
       assert.equal(again, checkout);
       assert.equal(readFileSync(path.join(checkout, 'note.txt'), 'utf8'), 'keep\n');
+    });
+    scenario('A branch already checked out elsewhere is reused', async () => {
+      const service = serviceRepo();
+      const held = path.join(service, '.sandcastle', 'worktrees', 'sdd-1');
+      mkdirSync(path.dirname(held), {recursive: true});
+      execFileSync('git', ['worktree', 'add', '-q', '-b', 'sdd/1', held], {cwd: service});
+      writeFileSync(path.join(held, 'note.txt'), 'keep\n');
+      const printed = await runWorktree(service, '1');
+      assert.equal(realpathSync(printed), realpathSync(held));
+      assert.equal(readFileSync(path.join(held, 'note.txt'), 'utf8'), 'keep\n');
+      assert.equal(existsSync(path.join(service, '.worktrees', 'sdd-1')), false);
     });
   });
 });

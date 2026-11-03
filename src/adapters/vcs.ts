@@ -1,7 +1,7 @@
 import type {FileSource, Link, Vcs} from '../machine/port.ts';
 
 import {execFile, execFileSync} from 'node:child_process';
-import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
+import {existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {promisify} from 'node:util';
 
@@ -486,10 +486,26 @@ function ignorePath(root: string, rule: string): void {
   writeFileSync(file, `${body}${rule}\n`);
 }
 
+/** Directory that already has `branch` checked out, if any. */
+async function checkoutOf(root: string, branch: string): Promise<string | null> {
+  const listed = await gitAsync(root, ['worktree', 'list', '--porcelain']);
+  const ref = `refs/heads/${branch}`;
+  let current: string | null = null;
+  for (const line of listed.split('\n')) {
+    if (line.startsWith('worktree ')) {
+      current = line.slice('worktree '.length);
+    } else if (line === `branch ${ref}` && current) {
+      return current;
+    }
+  }
+  return null;
+}
+
 /**
  * Check out `sdd/<key>` under `worktreesDir`, creating the worktree when it is
- * missing and reusing it when it exists. Runs `link` inside the checkout.
- * Does not fast-forward a dirty tree.
+ * missing and reusing it when it exists. A checkout of that branch in any
+ * other directory is reused too, so a second worktree is not added. Runs
+ * `link` inside the checkout. Does not fast-forward a dirty tree.
  */
 export async function prepareCheckout(
   root: string,
@@ -497,11 +513,18 @@ export async function prepareCheckout(
   config: {branchPrefix: string; defaultBranch: string; worktreesDir: string; link: string},
 ): Promise<string> {
   await ensureIssueBranch(root, key, config);
-  const leaf = branchName(key, config.branchPrefix).replaceAll('/', '-');
-  const dir = path.join(root, config.worktreesDir, leaf);
-  if (!existsSync(dir)) {
+  const branch = branchName(key, config.branchPrefix);
+  const existing = await checkoutOf(root, branch);
+  const leaf = branch.replaceAll('/', '-');
+  const preferred = path.join(root, config.worktreesDir, leaf);
+  const same =
+    existing !== null &&
+    existsSync(preferred) &&
+    realpathSync(existing) === realpathSync(preferred);
+  const dir = existing === null || same ? preferred : existing;
+  if (existing === null && !existsSync(dir)) {
     mkdirSync(path.dirname(dir), {recursive: true});
-    await run('git', ['worktree', 'add', '-q', dir, branchName(key, config.branchPrefix)], {
+    await run('git', ['worktree', 'add', '-q', dir, branch], {
       cwd: root,
       encoding: 'utf8',
     });

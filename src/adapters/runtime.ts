@@ -84,7 +84,7 @@ export function ensureServiceEnv(serviceRoot: string, solverRoot: string): void 
   symlinkSync(from, to);
 }
 
-const WORKTREES = '.sandcastle/worktrees';
+const WORKTREES = '.worktrees';
 
 function keyFromBranch(branch: string, prefix: string): string {
   const head = `${prefix}/`;

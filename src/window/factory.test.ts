@@ -322,8 +322,31 @@ spec('home-agent', () => {
       assert.equal(window.overlay().agent, '');
       assert.equal(window.overlay().models.mechanical.value, 'custom-mechanical');
       assert.equal(window.overlay().models.judgment.value, 'custom-judgment');
-      assert.equal(window.overlay().effort, undefined);
-      assert.equal(window.overlay().speed, undefined);
+      rmSync(dir, {recursive: true, force: true});
+    });
+
+    scenario('An empty агент слоя keeps recorded effort and speed', async () => {
+      const {dir, home, arcadia} = yard();
+      const {checkout, window} = trackerWindow(home, arcadia);
+      window.chooseAgent('cursor');
+      writeOverlay(
+        checkout,
+        ['alpha'],
+        [
+          'models:',
+          '  mechanical: custom-mechanical',
+          '  judgment: custom-judgment',
+          'effort:',
+          '  mechanical: max',
+          'speed:',
+          '  mechanical: fast',
+          '',
+        ].join('\n'),
+      );
+      window.openSettings();
+      assert.equal(window.overlay().agent, '');
+      assert.deepEqual(window.overlay().effort, {mechanical: 'max', judgment: ''});
+      assert.deepEqual(window.overlay().speed, {mechanical: 'fast', judgment: ''});
       rmSync(dir, {recursive: true, force: true});
     });
 

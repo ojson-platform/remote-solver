@@ -17,3 +17,5 @@
 - **Machine → Adapters**: the machine reads and writes the tracker, the review, the repository, and the runtime through ports. Adapters implement those ports. Marker grammar stays in the machine.
 - **Reviewer → Machine**: the reviewer reads the change, the markers, and the review. The machine's phase policy does not know the reviewer.
 - **Reviewer → Adapters**: the reviewer uses the same ports. The judge is a runtime ask, not a skill action.
+- **Skill → Tracker**: a phase skill writes a focus through an sdd verb when its artifact is published. The machine does not append the layer ledger. Phase movement stays on layer threads.
+- **Window → focus**: the focus block and the spine sentence read that comment and do not recompute it.

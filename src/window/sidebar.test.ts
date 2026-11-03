@@ -3,6 +3,9 @@ import {rmSync} from 'node:fs';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
+import {renderWindow} from './client/render.ts';
+import {bandOf, hosted, post} from './page.harness.ts';
+import type {WindowSnapshot} from './snapshot.ts';
 import {
   columnCards,
   cycle,
@@ -14,6 +17,16 @@ import {
   writeChange,
   yard,
 } from './window.harness.ts';
+
+async function sidebarHtml(url: string): Promise<string> {
+  const response = await fetch(new URL('/snapshot', url));
+  assert.equal(response.status, 200);
+  return renderWindow((await response.json()) as WindowSnapshot);
+}
+
+function poolTicket(key: string, phase: string, over: Parameters<typeof cycle>[2] = {}) {
+  return cycle(key, phase, {assignee: '', ...over});
+}
 
 function proveASpecifyingCycleWithNoOccasionHasNoReasonBlock(): void {
   const {dir, home, arcadia} = yard();
@@ -264,6 +277,87 @@ function proveASingleStringSddHooksIsTheSidebarLine129(): void {
   rmSync(dir, {recursive: true, force: true});
 }
 
+function proveACycleInThePoolShowsItsIssueDescriptionInTheSidebar(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const body = 'Choose this work item.\n';
+  const window = openSide(home, [poolTicket('1', 'implementing', {body})]);
+  assert.equal(
+    window.board().pool.some(card => card.key === '1'),
+    true,
+  );
+  window.openCard('1');
+  const blocks = window.sidebar();
+  assert.equal(blocks[0]?.kind, 'description');
+  assert.deepEqual(blocks[0], {kind: 'description', text: body});
+  rmSync(dir, {recursive: true, force: true});
+}
+
+async function proveThePersonReadsTheIssueDescriptionWhenChoosingATicketAlongWithTheTitle(): Promise<void> {
+  await hosted(
+    {
+      tickets: () => [
+        poolTicket('1', 'implementing', {
+          title: 'Sidebar title',
+          body: 'Issue description for the pool.',
+        }),
+      ],
+    },
+    async (page, window) => {
+      window.chooseAgent('cursor');
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())).status,
+        200,
+      );
+      const html = await sidebarHtml(page.url);
+      const side = bandOf(html, '1');
+      assert.match(side, /Sidebar title/);
+      assert.match(side, /Issue description for the pool\./);
+      const titleAt = side.indexOf('Sidebar title');
+      const descAt = side.indexOf('Issue description for the pool.');
+      const reasonAt = side.indexOf('<h3>повод</h3>');
+      assert.ok(titleAt >= 0 && descAt > titleAt);
+      assert.ok(reasonAt === -1 || descAt < reasonAt);
+    },
+  );
+}
+
+async function proveTheDescriptionIsTheIssueBodyOutsideTheMarkers(): Promise<void> {
+  await hosted(
+    {
+      tickets: () => [
+        poolTicket('1', 'implementing', {
+          body: [
+            'Author line one',
+            '<!-- sdd:begin -->',
+            'Mirror line hidden',
+            '<!-- sdd:end -->',
+            'Author line two',
+          ].join('\n'),
+        }),
+      ],
+    },
+    async (page, window) => {
+      window.chooseAgent('cursor');
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())).status,
+        200,
+      );
+      const blocks = window.sidebar();
+      const description = blocks.find(block => block.kind === 'description');
+      assert.deepEqual(description, {
+        kind: 'description',
+        text: 'Author line one\n\nAuthor line two',
+      });
+      const html = await sidebarHtml(page.url);
+      const side = bandOf(html, '1');
+      assert.match(side, /Author line one/);
+      assert.match(side, /Author line two/);
+      assert.equal(side.includes('Mirror line hidden'), false);
+    },
+  );
+}
+
 function proveOneNonStringSddHooksPointShowsThatLineInTheSidebarAndTheStringPointRemains130(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
@@ -350,5 +444,22 @@ spec('sidebar', () => {
     scenario('A non-string point keeps the others', () => {
       proveOneNonStringSddHooksPointShowsThatLineInTheSidebarAndTheStringPointRemains130();
     });
+  });
+});
+
+spec('issue-description', () => {
+  requirement('A pool cycle shows its issue description in the sidebar', () => {
+    scenario('A cycle in the pool shows its issue description in the sidebar', () => {
+      proveACycleInThePoolShowsItsIssueDescriptionInTheSidebar();
+    });
+    scenario('The person reads the issue description when choosing a ticket, along with the title', async () => {
+      await proveThePersonReadsTheIssueDescriptionWhenChoosingATicketAlongWithTheTitle();
+    });
+    scenario(
+      "The description is the issue body the tracker already returned, the author's text outside the markers",
+      async () => {
+        await proveTheDescriptionIsTheIssueBodyOutsideTheMarkers();
+      },
+    );
   });
 });

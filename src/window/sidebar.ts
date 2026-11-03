@@ -28,6 +28,26 @@ function askBody(comments: readonly WindowComment[] | undefined): string | undef
 
 const HOOK_UNREADABLE = 'поле хука не читается';
 
+const SDD_BEGIN = '<!-- sdd:begin -->';
+const SDD_END = '<!-- sdd:end -->';
+
+/** Author text outside one complete sdd mirror pair in the issue body. */
+export function authorText(body: string | undefined): string | undefined {
+  if (body === undefined) {
+    return undefined;
+  }
+  let text = body;
+  const begin = text.indexOf(SDD_BEGIN);
+  const end = text.indexOf(SDD_END);
+  if (begin >= 0 && end > begin) {
+    text = text.slice(0, begin) + text.slice(end + SDD_END.length);
+  }
+  if (text.trim() === '') {
+    return undefined;
+  }
+  return text;
+}
+
 function hookParagraph(value: unknown): string {
   return typeof value === 'string' ? value : HOOK_UNREADABLE;
 }
@@ -148,6 +168,7 @@ function reasonLine(
 export function blocksFor(
   item: WindowTicket,
   ctx: {
+    inPool: boolean;
     manager: () => string | undefined;
     review: () => WindowReview | undefined;
     reading: () => readonly WindowTicket[];
@@ -158,6 +179,12 @@ export function blocksFor(
   },
 ): SidebarBlock[] {
   const blocks: SidebarBlock[] = [];
+  if (ctx.inPool) {
+    const text = authorText(item.body);
+    if (text !== undefined) {
+      blocks.push({kind: 'description', text});
+    }
+  }
   const line = reasonLine(item, ctx);
   if (line !== undefined) {
     blocks.push({kind: 'reason', line});

@@ -850,6 +850,15 @@ export function Sidebar({
         </ActForm>
       </header>
       <div className="side-scroll">
+        {opened.blocks
+          .filter(block => block.kind === 'description')
+          .map((block, index) =>
+            block.kind === 'description' ? (
+              <p className="issue-description" key={index}>
+                {block.text}
+              </p>
+            ) : null,
+          )}
         <Blocks blocks={opened.blocks} places={places} />
         {snapshot.roles.length === 0 ? null : (
           <div className="verbs">

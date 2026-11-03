@@ -15,6 +15,7 @@ import {
   bandOf,
   bare,
   between,
+  held,
   formsOf,
   glineOf,
   held,
@@ -1970,6 +1971,47 @@ spec('board', () => {
       } finally {
         rmSync(staged.dir, {recursive: true, force: true});
       }
+    });
+  });
+});
+
+spec('phase-header', () => {
+  requirement('The phase header stays at the top of the board', () => {
+    scenario('The phase header stays at the top of the board while the board scrolls', async () => {
+      await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+        window.chooseAgent('cursor');
+        const html = await pageHtml(page.url);
+        assert.match(html, /\.board\s*\{[^}]*overflow-y:\s*auto/);
+        assert.match(html, /\.head\s*\{[^}]*position:\s*sticky[^}]*top:\s*0/);
+        assert.match(html, /class="board"[\s\S]*class="head"/);
+        assert.equal(html.indexOf('class="top"') < html.indexOf('class="head"'), true);
+      });
+    });
+    scenario('The seven phase names stay aligned with the station columns under them', async () => {
+      await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+        window.chooseAgent('cursor');
+        const html = await pageHtml(page.url);
+        assert.match(
+          html,
+          /\.head, \.stations\s*\{[^}]*grid-template-columns:\s*252px repeat\(7, minmax\(0, 1fr\)\)/,
+        );
+        const head = between(html, '<div class="head"', '</div>');
+        for (const name of COLUMN_NAMES) {
+          assert.match(head, new RegExp(`<span class="phase">${name}</span>`));
+        }
+        assert.match(html, /class="head"[\s\S]*class="stations"/);
+        assert.match(articleOf(html, '1'), /class="stations"/);
+      });
+    });
+    scenario('A row that scrolls up passes beneath the header and the names stay readable over it', async () => {
+      await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+        window.chooseAgent('cursor');
+        const html = await pageHtml(page.url);
+        assert.match(html, /<article[\s\S]*class="stations"/);
+        assert.match(html, /\.head\s*\{[^}]*z-index:\s*[1-9]/);
+        assert.match(html, /\.head\s*\{[^}]*background:/);
+        assert.equal(/\.head\s*\{[^}]*rgba\(81,\s*61,\s*29/.test(html), false);
+      });
     });
   });
 });

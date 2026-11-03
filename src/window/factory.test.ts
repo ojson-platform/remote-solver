@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {existsSync, rmSync} from 'node:fs';
+import {existsSync, readFileSync, rmSync} from 'node:fs';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
@@ -130,6 +130,43 @@ spec('home-agent', () => {
         assert.equal(doc.speed, undefined);
         assert.equal(doc.models?.mechanical, 'gpt-6-luna');
         assert.notEqual(doc.models?.mechanical, 'composer-2.5-fast');
+      } finally {
+        await page.close();
+      }
+      rmSync(dir, {recursive: true, force: true});
+    });
+  });
+
+  requirement('Choosing the saved agent again changes nothing', () => {
+    async function choose(pageUrl: string, agent: string): Promise<void> {
+      assert.equal(
+        (
+          await post(
+            pageUrl,
+            'act',
+            new URLSearchParams({act: 'choose-agent', agent}).toString(),
+          )
+        ).status,
+        200,
+      );
+    }
+
+    scenario('Choosing the saved agent again changes nothing', async () => {
+      const {dir, home} = scratch();
+      const window = openWindow({homePath: home});
+
+      const page = await serveBoard(window);
+      try {
+        await choose(page.url, 'cursor');
+        window.leaveModel('mechanical', 'custom-mechanical');
+        const diskBefore = readFileSync(home, 'utf8');
+        await choose(page.url, 'cursor');
+        assert.equal(readFileSync(home, 'utf8'), diskBefore);
+        const doc = readHome(home);
+        assert.equal(doc.agent, 'cursor');
+        assert.equal(doc.models?.mechanical, 'custom-mechanical');
+        assert.equal(window.settings().agent, 'cursor');
+        assert.equal(window.settings().models.mechanical.value, 'custom-mechanical');
       } finally {
         await page.close();
       }

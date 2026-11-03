@@ -9,12 +9,12 @@
 
 ### Requirement: The skill writes a focus comment when the artifact is published
 
-The skill of the phase SHALL write a focus comment when that phase's artifact is published. The comment SHALL be prose for one phase, or prose for the whole pull request. The first line SHALL be the marker `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, `sdd:focus:code`, or `sdd:focus` for the whole pull request. A pattern in place of those markers SHALL NOT be that first line. Older focus comments SHALL remain. The same text SHALL NOT add another comment. The machine SHALL NOT append the layer ledger (`Plan solid`, `thread N`, `file:line`) as the comment a person reads. A run with no signal SHALL leave the latest focus comment unchanged. The skill SHALL NOT write a focus comment when the cycle has no change file.
+The skill of the phase SHALL write a focus comment when that phase's artifact is published. A separate review of that artifact SHALL NOT write the focus comment. The comment SHALL be prose for one phase, or prose for the whole pull request. The first line SHALL be the marker `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, `sdd:focus:code`, or `sdd:focus` for the whole pull request. A pattern in place of those markers SHALL NOT be that first line. Older focus comments SHALL remain. The same text SHALL NOT add another comment. The machine SHALL NOT append the layer ledger (`Plan solid`, `thread N`, `file:line`) as the comment a person reads. A run with no signal SHALL leave the latest focus comment unchanged. The skill SHALL NOT write a focus comment when the cycle has no change file.
 
 #### Scenario: The skill of the phase writes this comment when the artifact is published
 
-- **WHEN** the phase's artifact is published and this focus comment is already visible, together with the layer ledger (`Plan solid`, `thread N`, `file:line`)
-- **THEN** the skill of the phase writes this comment
+- **WHEN** the phase's artifact is published and the skill of that phase is already the writer of this focus comment, together with a separate review of that artifact
+- **THEN** the skill of the phase writes this focus comment, and the separate review does not
 
 #### Scenario: A focus comment is prose for one phase or the whole pull request
 

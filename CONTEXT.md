@@ -40,6 +40,10 @@ _Avoid_: Level, stage
 The `sdd:` token a reply carries: a layer, `note`, or `fixed`. The machine reads only the latest marker of a thread.
 _Avoid_: Tag, label (that is the tracker's)
 
+**Focus**:
+Prose on the issue for one phase, or for the whole pull request. The first line is the marker. The skill of the phase writes it when that phase's artifact is published. The machine does not append a layer ledger as this comment.
+_Avoid_: Ledger, plaque, gap list
+
 **Thread**:
 One open review conversation on the pull request, with the handles a step replies and resolves with.
 _Avoid_: Comment (that is one message inside it)

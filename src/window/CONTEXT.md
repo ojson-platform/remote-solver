@@ -24,6 +24,14 @@ _Avoid_: Icon button
 A quiet card for writing. Choosing a line of a change document opens one. The send mark sits inside the field. The close control is a circle on the field's corner.
 _Avoid_: Textarea, input
 
+**Focus block**:
+The sidebar block of the latest focus comment. The marker is the badge. The prose sits under it. The window does not recompute the prose. An ask, a role outcome, and a manager's comment are not this block.
+_Avoid_: Summary, status
+
 **Hammer**:
 The chosen filled mark on the plaque of the phase a worker is in. It leaves when the worker leaves; the `impl` badge stays on the task summary.
 _Avoid_: Step mark, pool icon
+
+**Spine sentence**:
+The first sentence of that row's latest phase focus. A whole-pull-request focus belongs to the focus block and to no row.
+_Avoid_: Layer line, solid

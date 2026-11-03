@@ -15,7 +15,7 @@ import path from 'node:path';
 
 import {phaseOf} from '../machine/phase.ts';
 
-import {lay} from './board.ts';
+import {lay, slotOf} from './board.ts';
 import {openCheckout, unreadableRow} from './checkout.ts';
 import {
   FACTORY_AGENTS,
@@ -203,7 +203,10 @@ export function openWindow(
     if (!item) {
       return [];
     }
+    const phase = phaseOf([...item.labels]);
+    const inPool = slotOf(item, phase, outside.login?.()) === 'pool';
     return blocksFor(item, {
+      inPool,
       manager: () => outside.login?.(),
       review: () => outside.review?.(item.key),
       reading: () => checkout.sorted(),

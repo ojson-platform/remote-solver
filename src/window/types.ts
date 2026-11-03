@@ -150,6 +150,7 @@ export type SidebarHookPoint = {action: string; point: string; paragraph: string
 
 /** One block the open ticket has. Absent blocks are omitted. */
 export type SidebarBlock =
+  | {kind: 'description'; text: string}
   | {kind: 'reason'; line: string}
   | {kind: 'ask'; body: string}
   | {kind: 'focus'; body: string}

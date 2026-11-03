@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
+import {rmSync} from 'node:fs';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
 
+import {memoryPorts} from '../adapters/github.ts';
 import type {ChangeView} from './change.ts';
+import {resolveIssue} from './flow.ts';
 import {
   accept,
   decide,
@@ -12,8 +15,16 @@ import {
   writingGate,
   type PullSnapshot,
 } from './policy.ts';
-import type {IssueRecord} from './port.ts';
+import type {FileSource, IssueRecord} from './port.ts';
 import {emptyReview} from './review.ts';
+import {
+  cycle,
+  MANAGER,
+  openCycles,
+  prepare,
+  visibleKeys,
+  yard,
+} from '../window/window.harness.ts';
 
 function change(over: Partial<ChangeView> = {}): ChangeView {
   return {
@@ -643,6 +654,16 @@ const archivedOpen = change({
   archived: true,
   openTasks: 0,
 });
+
+function archivedIssue9Files(): FileSource {
+  const root = 'openspec/changes/archive/issue-9';
+  const tasks = `${root}/tasks.md`;
+  return {
+    exists: rel => rel === root || rel === tasks,
+    read: rel => (rel === tasks ? '- [x] `done` — scenario\n' : ''),
+    list: () => [],
+  };
+}
 
 test('An open pull request on tasking is restored', () => {
   const record = issue(9, ['sdd:tasking']);

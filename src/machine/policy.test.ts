@@ -883,6 +883,17 @@ spec('finished-cycle', () => {
       assert.deepEqual(walked.decision, {kind: 'done', issue: '1', reason: 'cancelled'});
       assert.deepEqual(walked.transitions, []);
       assert.ok(walked.decision.kind !== 'agent');
+
+      const {dir, home, arcadia} = yard();
+      prepare(arcadia, home);
+      const window = openCycles(home, [
+        cycle('1', 'tasking', {
+          labels: ['sdd:cancelled', 'sdd:cycle', 'sdd:tasking'],
+          open: true,
+        }),
+      ]);
+      assert.ok(!visibleKeys(window.board()).includes('1'));
+      rmSync(dir, {recursive: true, force: true});
     });
   });
 });

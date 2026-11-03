@@ -184,18 +184,25 @@ export function mergeFactory(home: Doc, overlay: Doc | null): Factory {
     judgment: slotPresent(overlay?.models, 'judgment') ?? slot(home.models, 'judgment'),
   };
   const ownAgent = overlayAgent !== '';
-  if (pair?.effort) {
-    const source = modeValues(ownOrHome(overlay, ownAgent, 'effort', home));
-    factory.effort = {
-      mechanical: source.mechanical ?? pair.effort.mechanical,
-      judgment: source.judgment ?? pair.effort.judgment,
-    };
+  const effortFrom = modeValues(ownOrHome(overlay, ownAgent, 'effort', home));
+  const recordedEffort = !ownAgent && hasKey(overlay, 'effort');
+  if (pair?.effort || recordedEffort) {
+    factory.effort = pair?.effort
+      ? {
+          mechanical: effortFrom.mechanical ?? pair.effort.mechanical,
+          judgment: effortFrom.judgment ?? pair.effort.judgment,
+        }
+      : {
+          mechanical: effortFrom.mechanical ?? '',
+          judgment: effortFrom.judgment ?? '',
+        };
   }
-  if (pair?.speed) {
-    const source = modeValues(ownOrHome(overlay, ownAgent, 'speed', home));
+  const speedFrom = modeValues(ownOrHome(overlay, ownAgent, 'speed', home));
+  const recordedSpeed = !ownAgent && hasKey(overlay, 'speed');
+  if (pair?.speed || recordedSpeed) {
     factory.speed = {
-      mechanical: source.mechanical ?? '',
-      judgment: source.judgment ?? '',
+      mechanical: speedFrom.mechanical ?? '',
+      judgment: speedFrom.judgment ?? '',
     };
   }
   return factory;

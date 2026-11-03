@@ -2531,4 +2531,58 @@ spec('finished-cycle', () => {
       await proveFinishedCycleLeavesBoardAfterReload('verifying');
     });
   });
+  requirement('A closed issue leaves the open list', () => {
+    scenario('A later reading omits a closed issue', () => {
+      const {dir, home, arcadia} = yard();
+      prepare(arcadia, home);
+      let tickets: WindowTicket[] = [cycle('1', 'tasking')];
+      const window = openWindow(
+        {homePath: home, adapter: 'tracker'},
+        {
+          login: () => MANAGER,
+          tickets: () => tickets,
+        },
+      );
+      assert.ok(visibleKeys(window.board()).includes('1'));
+      tickets = [];
+      assert.ok(!visibleKeys(window.board()).includes('1'));
+      rmSync(dir, {recursive: true, force: true});
+    });
+    scenario('A closed tasking issue stands', () => {
+      const {dir, home, arcadia} = yard();
+      prepare(arcadia, home);
+      const window = openCycles(home, [cycle('1', 'tasking', {open: false})]);
+      assert.deepEqual(
+        columnCards(window.board(), 'tasking')?.map(card => card.key),
+        ['1'],
+      );
+      rmSync(dir, {recursive: true, force: true});
+    });
+    scenario('A closed accepted issue leaves', () => {
+      const {dir, home, arcadia} = yard();
+      prepare(arcadia, home);
+      const window = openCycles(home, [cycle('1', 'accepted', {open: false})]);
+      assert.ok(!visibleKeys(window.board()).includes('1'));
+      rmSync(dir, {recursive: true, force: true});
+    });
+    scenario('A closed accepting issue leaves only when the merge is ahead', () => {
+      const {dir, home, arcadia} = yard();
+      prepare(arcadia, home);
+      const window = openCycles(home, [
+        cycle('1', 'accepting', {open: false, mergeAhead: true}),
+      ]);
+      assert.ok(!visibleKeys(window.board()).includes('1'));
+      rmSync(dir, {recursive: true, force: true});
+    });
+    scenario('A closed accepting issue stands when the merge is not ahead', () => {
+      const {dir, home, arcadia} = yard();
+      prepare(arcadia, home);
+      const window = openCycles(home, [cycle('1', 'accepting', {open: false})]);
+      assert.deepEqual(
+        columnCards(window.board(), 'accepting')?.map(card => card.key),
+        ['1'],
+      );
+      rmSync(dir, {recursive: true, force: true});
+    });
+  });
 });

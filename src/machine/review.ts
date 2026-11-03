@@ -1,3 +1,4 @@
+import {HEADINGS} from './change.ts';
 import {authorIgnored} from './ignore.ts';
 import {markerName, parseMarker} from './marker.ts';
 import {phaseRank, type Phase} from './phase.ts';
@@ -55,6 +56,48 @@ export function layerOfPhase(phase: Phase): string | null {
   return Object.entries(LAYER_PHASE).find(([, value]) => value === phase)?.[0] ?? null;
 }
 
+/** Reads one change file. Absent when the path is not in this checkout. */
+export type OpenItemFile = (rel: string) => string | undefined;
+
+/** The layer an unchecked item forces. A checked item and any other line stay with the reply. */
+export function openItemLayer(
+  file: string,
+  line: number | null,
+  text: string | undefined,
+): 'proposal' | 'design' | null {
+  if (line === null || line < 1 || text === undefined) {
+    return null;
+  }
+  const name = file.split('\\').join('/');
+  if (!name.includes('openspec/changes/') || name.includes('openspec/changes/archive/')) {
+    return null;
+  }
+  const kind = name.endsWith('/proposal.md')
+    ? 'proposal'
+    : name.endsWith('/design.md')
+      ? 'design'
+      : null;
+  if (!kind) {
+    return null;
+  }
+  const lines = text.split(/\r?\n/);
+  if (line > lines.length) {
+    return null;
+  }
+  const wanted = kind === 'proposal' ? HEADINGS.openQuestions : HEADINGS.openDecisions;
+  let heading = '';
+  for (let index = 0; index < line; index += 1) {
+    const found = /^## (.+?)\s*$/.exec(lines[index] ?? '');
+    if (found?.[1]) {
+      heading = found[1];
+    }
+  }
+  if (heading !== wanted) {
+    return null;
+  }
+  return (lines[line - 1] ?? '').trim().startsWith('- [ ]') ? kind : null;
+}
+
 /** The marker the latest reply carries: a layer, `note`, `fixed`, `begin`, or nothing. */
 export function markerOf(body: string): string | null {
   return markerName(parseMarker(body));
@@ -100,6 +143,7 @@ export type ReviewReading = ReviewView & {
 export function readReview(
   threads: readonly ReadThread[],
   comments: Conversation[],
+  fileAt?: OpenItemFile,
 ): ReviewReading {
   const layers: string[] = [];
   const lines: ThreadLine[] = [];
@@ -109,9 +153,15 @@ export function readReview(
       continue;
     }
     const marker = parseMarker(thread.body);
-    if (!marker) {
+    const pinned =
+      marker?.kind === 'fixed'
+        ? null
+        : openItemLayer(thread.path ?? '', thread.line ?? null, fileAt?.(thread.path ?? ''));
+    if (!marker && !pinned) {
       unanswered = true;
-    } else if (marker.kind === 'layer') {
+    } else if (pinned) {
+      layers.push(pinned);
+    } else if (marker?.kind === 'layer') {
       layers.push(marker.layer);
     }
     lines.push({
@@ -119,7 +169,7 @@ export function readReview(
       comment: thread.comment ?? '',
       file: thread.path ?? '',
       line: thread.line ?? null,
-      marker: markerOf(thread.body),
+      marker: pinned ?? markerOf(thread.body),
       body: thread.body,
     });
   }
@@ -156,8 +206,9 @@ export function threadsReport(
   threads: ThreadRecord[],
   comments: Conversation[],
   filter?: {layer?: string; unmarked?: boolean},
+  fileAt?: OpenItemFile,
 ): ThreadsReport {
-  const reading = readReview(threads, comments);
+  const reading = readReview(threads, comments, fileAt);
   const lines = reading.threads
     .filter(line => (filter?.layer ? line.marker === filter.layer : true))
     .filter(line => (filter?.unmarked ? line.marker === null : true));
@@ -165,7 +216,11 @@ export function threadsReport(
 }
 
 /** The cycle's view of the same reading: unanswered, rollback, and layers. */
-export function reviewOf(threads: readonly ReadThread[], comments: Conversation[]): ReviewView {
-  const reading = readReview(threads, comments);
+export function reviewOf(
+  threads: readonly ReadThread[],
+  comments: Conversation[],
+  fileAt?: OpenItemFile,
+): ReviewView {
+  const reading = readReview(threads, comments, fileAt);
   return {unanswered: reading.unanswered, rollback: reading.rollback, layers: reading.layers};
 }

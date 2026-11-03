@@ -17,7 +17,7 @@ Writes observable behavior. Zoom is the black box. The delta grammar is `CONTEXT
 1. The delta exists, still matches the proposal, and `threads <pull> --layer spec` is empty: go to step 5.
 2. Run `openspec instructions specs --change issue-<issue> --json`. Write `openspec/changes/issue-<issue>/specs/<capability>/spec.md` from its `template`, sections by § Delta. A scenario is checked from outside, without reading code. A sentence in the proposal Outcome or Constraints that names what the caller sees is a Scenario of this capability. The Scenario names each thing that sentence names. Another capability does not stand in for it. The Scenario's WHEN shows each of those things already visible, together with the other limit that can replace them. Its THEN states those same values.
 3. A local proposal change: edit the requirements and scenarios it changes, including ones it drops.
-4. `improve-specs`: Fix thread (`CONTEXT.md`), layer `spec`. A thread that drops a requirement or scenario writes that drop in the delta. `proposal.md` stays.
+4. `improve-specs`: Fix thread (`CONTEXT.md`), layer `spec`. A thread that drops a requirement or scenario writes that drop in the delta. `proposal.md` stays. A reply that says which write a named capability does not change rewrites that capability's scenario to that write.
 5. Run `openspec validate --all --strict --no-interactive`. Exit non-zero on a spec this change owns: fix that file and run it again. A failure in a spec this change does not own: do not edit it. Do not publish while a spec this change owns fails.
 6. Publish (`CONTEXT.md`). Mirror: `Specify`.
 
@@ -31,4 +31,5 @@ Writes observable behavior. Zoom is the black box. The delta grammar is `CONTEXT
 ## Stop
 
 - Publish. The machine opens the review gate.
+- A reply that says which write a named capability does not change: rewrite that capability's scenario to that write. Do not add a capability. Do not hand off to `proposal`
 - The capability list, problem, or scope is wrong, or the delta would remove the last requirement of a baseline: Hand-off to `proposal` on the line of `proposal.md` that is wrong. Keep the spec files as they are. Dropping a requirement or scenario of a named capability stays in this action.

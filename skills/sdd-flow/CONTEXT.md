@@ -104,7 +104,7 @@ A skill fixes the threads of its own layer: `threads <pull> --layer <layer>`. Fo
 
 ### Hand-off
 
-The work the run found belongs to another layer: `thread open <pull> <file> <line> 'sdd:layer=<layer> → <phase> <cause>'` on the line of the pushed head that shows it, `<layer>` and `<phase>` from § Layers. An existing thread that turns out to belong to another layer takes the same line as a `thread reply` instead, and stays open. Then end the run. The machine moves the phase on the next poll; the skill of that layer fixes the thread. A remark that is not a layer of this cycle is `sdd:note <cause>` and moves nothing.
+The work the run found belongs to another layer: `thread open <pull> <file> <line> 'sdd:layer=<layer> → <phase> <cause>'` on the line of the pushed head that shows it, `<layer>` and `<phase>` from § Layers. An existing thread that turns out to belong to another layer takes the same line as a `thread reply` instead, and stays open. Then end the run. The machine moves the phase on the next poll; the skill of that layer fixes the thread. A remark that is not a layer of this cycle is `sdd:note <cause>` and moves nothing. A thread on an unchecked item under Open decisions or Open questions stays that file's layer until the item is checked. A hand-off from that item is a new thread, after the check.
 
 ## Publish
 

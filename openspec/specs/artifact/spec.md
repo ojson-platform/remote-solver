@@ -61,7 +61,7 @@ Each writing phase owns one change file. The cycle returns to the phase that sti
 
 ### Requirement: Open items hold only their own file
 
-An unchecked item under Open questions SHALL hold `proposing`, including when `auto-plan` is set. An unchecked item under Open decisions SHALL hold `designing`, including when `auto-design` is set. `specifying` SHALL NOT hold for an unchecked item in the delta.
+An unchecked item under Open questions SHALL hold `proposing`, including when `auto-plan` is set. An unchecked item under Open decisions SHALL hold `designing`, including when `auto-design` is set. A review thread on an unchecked Open questions line SHALL stay on `proposing`. A review thread on an unchecked Open decisions line SHALL stay on `designing`. `specifying` SHALL NOT hold for an unchecked item in the delta.
 
 #### Scenario: Open questions hold proposing under auto-plan
 

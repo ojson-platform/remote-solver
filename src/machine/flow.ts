@@ -114,7 +114,7 @@ export async function resolveIssue(
   const settled = settle(
     record,
     issues,
-    await pullSnapshots(options.review, key),
+    await pullSnapshots(options.review, key, options.files),
     options.change ?? readChange(key, options.files),
   );
   await applySettlement(options.tracker, record.labels, settled, key);

@@ -8,7 +8,7 @@ import {fixThread} from '../sdd.ts';
 import {action, change, issue, pull, ready} from './harness.ts';
 import {markerName, mentionsGrammar, parseMarker} from './marker.ts';
 import {decide} from './policy.ts';
-import {reviewOf, spokeByRobot, threadsReport} from './review.ts';
+import {reviewOf, spokeByRobot, threadsReport, type OpenItemFile} from './review.ts';
 
 test('one parser reads every marker, fixed first, then note, then a layer', () => {
   assert.deepEqual(parseMarker('🤖 sdd:layer=spec → specifying'), {kind: 'layer', layer: 'spec'});
@@ -189,6 +189,160 @@ spec('marker', () => {
         ready,
       );
       assert.equal(action(decision), 'improve-design');
+    });
+  });
+
+  requirement('An open item keeps its file\'s layer', () => {
+    const designFile = 'openspec/changes/issue-1/design.md';
+    const proposalFile = 'openspec/changes/issue-1/proposal.md';
+    const design = [
+      '## Approach',
+      '',
+      'stay',
+      '',
+      '## Open decisions',
+      '',
+      '- [ ] which write',
+    ].join('\n');
+    const proposal = [
+      '## Outcome',
+      '',
+      'the field moves',
+      '',
+      '## Open questions',
+      '',
+      '- [ ] which write',
+    ].join('\n');
+    const files = (text: Record<string, string>): OpenItemFile => rel => text[rel];
+    const designFiles = files({[designFile]: design});
+
+    scenario('A spec marker on an open decision stays on design', () => {
+      const thread = {
+        id: 'T1',
+        comment: '11',
+        path: designFile,
+        line: 7,
+        resolved: false,
+        body: 'sdd:layer=spec → specifying',
+      };
+      const review = reviewOf([thread], [], designFiles);
+      const decision = decide(
+        issue(1, ['sdd:designing', 'sdd:auto-design']),
+        [],
+        [pull(9, {review})],
+        change({proposal: true, delta: true, design: true, openDecisions: 1}),
+      );
+      assert.equal(action(decision), 'improve-design');
+      assert.deepEqual(
+        threadsReport([thread], [], {layer: 'design'}, designFiles).threads.map(item => item.thread),
+        ['T1'],
+      );
+      assert.deepEqual(threadsReport([thread], [], {layer: 'spec'}, designFiles).threads, []);
+    });
+
+    scenario('An unmarked reply on an open decision is design', () => {
+      const thread = {
+        id: 'T1',
+        comment: '11',
+        path: designFile,
+        line: 7,
+        resolved: false,
+        body: 'keep the factory-config write',
+      };
+      const review = reviewOf([thread], [], designFiles);
+      assert.equal(review.unanswered, false);
+      assert.deepEqual(
+        threadsReport([thread], [], {layer: 'design'}, designFiles).threads.map(item => item.thread),
+        ['T1'],
+      );
+      assert.deepEqual(threadsReport([thread], [], {unmarked: true}, designFiles).threads, []);
+    });
+
+    scenario('A spec marker on an open question stays on proposal', () => {
+      const proposalFiles = files({[proposalFile]: proposal});
+      const thread = {
+        id: 'T1',
+        comment: '11',
+        path: proposalFile,
+        line: 7,
+        resolved: false,
+        body: 'sdd:layer=spec → specifying',
+      };
+      const review = reviewOf([thread], [], proposalFiles);
+      const decision = decide(
+        issue(1, ['sdd:proposing', 'sdd:auto-plan']),
+        [],
+        [pull(9, {review})],
+        change({proposal: true, openQuestions: 1}),
+      );
+      assert.equal(action(decision), 'improve-proposal');
+    });
+
+    scenario('A spec marker on another design line moves to specifying', () => {
+      const thread = {
+        resolved: false,
+        path: designFile,
+        line: 3,
+        body: 'sdd:layer=spec → specifying',
+      };
+      const decision = decide(
+        issue(1, ['sdd:designing']),
+        [],
+        [pull(9, {review: reviewOf([thread], [], designFiles)})],
+        change({proposal: true, delta: true, design: true, openDecisions: 1}),
+      );
+      assert.deepEqual(decision, {
+        kind: 'advance',
+        issue: '1',
+        to: 'specifying',
+        reason: 'review thread sent the change back',
+      });
+    });
+
+    scenario('A checked decision keeps the reply\'s layer', () => {
+      const checked = design.replace('- [ ] which write', '- [x] which write');
+      const review = reviewOf(
+        [
+          {
+            resolved: false,
+            path: designFile,
+            line: 7,
+            body: 'sdd:layer=spec → specifying',
+          },
+        ],
+        [],
+        files({[designFile]: checked}),
+      );
+      assert.equal(review.rollback, 'specifying');
+    });
+
+    scenario('Fix refuses while the open item is unchecked', async () => {
+      const memory = memoryPorts({
+        threadList: {
+          '12': [
+            {
+              id: 'PRRT_1',
+              comment: '41',
+              path: designFile,
+              line: 7,
+              resolved: false,
+              body: 'sdd:layer=spec → specifying',
+            },
+          ],
+        },
+      });
+      await assert.rejects(
+        fixThread(
+          {key: '7', pull: '12', thread: 'PRRT_1'},
+          {
+            review: memory.review,
+            vcs: {head: async () => 'abc123', published: async () => true},
+            readFile: designFiles,
+          },
+        ),
+        /still an open item/,
+      );
+      assert.deepEqual(memory.calls, ['threadList']);
     });
   });
 

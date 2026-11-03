@@ -96,6 +96,40 @@ A classified layer marker SHALL move the phase, or start the current layer's act
 - **WHEN** `designing` has `wait-human` and an open thread marks `design`
 - **THEN** the machine improves the design and does not repeat the design gate
 
+### Requirement: An open item keeps its file's layer
+
+An open thread whose line is an unchecked `- [ ]` item under `## Open decisions` in `design.md` SHALL be the `design` layer. An open thread whose line is an unchecked `- [ ]` item under `## Open questions` in `proposal.md` SHALL be the `proposal` layer. The latest reply's marker SHALL NOT replace that layer, except a reply that is `fixed`. `threads --layer` SHALL list the thread under that layer and SHALL NOT list it as unmarked. A thread on any other line, and a thread on a checked item, SHALL keep the marker its reply carries. `thread fix` SHALL refuse while the thread's line is still that unchecked item. The thread SHALL stay open.
+
+#### Scenario: A spec marker on an open decision stays on design
+
+- **WHEN** `designing` has an unchecked Open decisions item and the open thread on that line marks `spec`
+- **THEN** the machine improves the design and does not move the issue to `specifying`, and `threads --layer design` lists that thread
+
+#### Scenario: An unmarked reply on an open decision is design
+
+- **WHEN** an open thread on an unchecked Open decisions line carries no marker
+- **THEN** the thread is not unanswered, `threads --layer design` lists it, and the unmarked list does not
+
+#### Scenario: A spec marker on an open question stays on proposal
+
+- **WHEN** `proposing` has an unchecked Open questions item and the open thread on that line marks `spec`
+- **THEN** the machine improves the proposal and does not wait on the open question
+
+#### Scenario: A spec marker on another design line moves to specifying
+
+- **WHEN** `designing` has an open thread on a design line that is not an unchecked Open decisions item and the thread marks `spec`
+- **THEN** the machine moves the issue to `specifying`
+
+#### Scenario: A checked decision keeps the reply's layer
+
+- **WHEN** an open thread on a checked Open decisions item marks `spec`
+- **THEN** the rollback phase is `specifying`
+
+#### Scenario: Fix refuses while the open item is unchecked
+
+- **WHEN** `thread fix` runs, HEAD is on the remote issue branch, and the thread's line is an unchecked Open decisions item
+- **THEN** the command fails and the thread stays open
+
 ### Requirement: Thread fix closes a thread in one call
 
 `thread fix` SHALL refuse while HEAD is not the tip of the remote issue branch. Otherwise it SHALL reply `fixed` with that HEAD and resolve the thread in the same call. A thread that is already `fixed` and still open SHALL only be resolved. A resolved thread SHALL be left unchanged. The conversation form SHALL post that same line to the conversation.

@@ -1,5 +1,6 @@
 import type {PullSnapshot} from './policy.ts';
 import type {FileSource, IssueRecord, Review, Tracker} from './port.ts';
+import type {OpenItemFile} from './review.ts';
 import type {QueueConfig} from './service-config.ts';
 
 import {readBranch, type BranchFacts, type BranchText, type ChangeView} from './change.ts';
@@ -18,8 +19,20 @@ export type CycleSnapshot = {
 };
 
 /** Pulls of one issue, each open pull carrying the one review reading. */
-export async function pullSnapshots(review: Review, key: string): Promise<PullSnapshot[]> {
+function openItemFile(files: FileSource | undefined): OpenItemFile | undefined {
+  if (!files) {
+    return undefined;
+  }
+  return rel => (rel && files.exists(rel) ? files.read(rel) : undefined);
+}
+
+export async function pullSnapshots(
+  review: Review,
+  key: string,
+  files?: FileSource,
+): Promise<PullSnapshot[]> {
   const pulls = await review.pulls(key);
+  const fileAt = openItemFile(files);
   const snapshots: PullSnapshot[] = [];
   for (const pull of pulls) {
     if (pull.state !== 'OPEN') {
@@ -30,7 +43,7 @@ export async function pullSnapshots(review: Review, key: string): Promise<PullSn
     const notes = await review.comments(pull.id);
     snapshots.push({
       ...pull,
-      review: reviewOf(threads, notes),
+      review: reviewOf(threads, notes, fileAt),
       reading: {threads, notes},
     });
   }
@@ -61,7 +74,7 @@ export async function loadCycle(
   for (const issue of cycles) {
     const files = filesAt(issue.key);
     const read = readBranch(issue.key, files, contentAt(issue.key));
-    pulls.set(issue.key, await pullSnapshots(review, issue.key));
+    pulls.set(issue.key, await pullSnapshots(review, issue.key, files));
     changes.set(issue.key, read.change);
     if (!files.failed?.()) {
       facts.set(issue.key, read.facts);

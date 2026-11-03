@@ -1,7 +1,7 @@
 import {contentFiles, type Review, type Vcs} from './machine/port.ts';
 
 import {spawnSync} from 'node:child_process';
-import {mkdirSync, writeFileSync} from 'node:fs';
+import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 
 import {solverRoot, turn, type Machine} from './adapters/compose.ts';
@@ -16,7 +16,7 @@ import {changeDir} from './machine/naming.ts';
 import {labelsAfterAdvance, PHASES, type Phase} from './machine/phase.ts';
 import {accept as acceptGate, publishChoice, type Decision} from './machine/policy.ts';
 import {queueOf} from './machine/queues.ts';
-import {threadsReport} from './machine/review.ts';
+import {openItemLayer, threadsReport, type OpenItemFile} from './machine/review.ts';
 import {resolveServiceRoot, sameService} from './machine/service-config.ts';
 import {loadCycle} from './machine/snapshot.ts';
 
@@ -118,7 +118,11 @@ export function fixArgs(rest: string[]): {key: string; pull: string; thread: str
  */
 export async function fixThread(
   args: {key: string; pull: string; thread: string | null},
-  deps: {review: Review; vcs: Pick<Vcs, 'head' | 'published'>},
+  deps: {
+    review: Review;
+    vcs: Pick<Vcs, 'head' | 'published'>;
+    readFile?: OpenItemFile;
+  },
 ): Promise<string> {
   const head = await deps.vcs.head();
   if (!(await deps.vcs.published(args.key, head))) {
@@ -137,6 +141,11 @@ export async function fixThread(
   }
   if (record.resolved) {
     return body;
+  }
+  if (openItemLayer(record.path, record.line, deps.readFile?.(record.path))) {
+    throw new Error(
+      `${record.path}:${record.line} is still an open item. Check it, publish, then thread fix.`,
+    );
   }
   if (parseMarker(record.body)?.kind !== 'fixed') {
     await deps.review.reply(args.pull, record.comment, body);
@@ -383,6 +392,7 @@ async function threads(box: Machine, rest: string[]): Promise<void> {
       layer: args.layer,
       unmarked: args.unmarked,
     },
+    checkoutFile,
   );
   console.log(JSON.stringify(report, null, 2));
 }
@@ -437,12 +447,30 @@ async function threadResolve(box: Machine, rest: string[]): Promise<void> {
   await box.review.resolveThread(need(rest[1], usage));
 }
 
+function checkoutFile(rel: string): string | undefined {
+  if (!rel.startsWith('openspec/changes/') || rel.includes('..')) {
+    return undefined;
+  }
+  try {
+    return readFileSync(path.join(process.cwd(), rel), 'utf8');
+  } catch {
+    return undefined;
+  }
+}
+
 async function threadFix(box: Machine, rest: string[]): Promise<void> {
   const args = fixArgs(rest.slice(1));
   if (!args) {
     fail(usage);
   }
-  console.log(await fixThread(args, box));
+  const files = contentFiles(box.vcs, args.key);
+  console.log(
+    await fixThread(args, {
+      review: box.review,
+      vcs: box.vcs,
+      readFile: rel => (files.exists(rel) ? files.read(rel) : undefined),
+    }),
+  );
 }
 
 async function mirror(box: Machine, rest: string[]): Promise<void> {

@@ -21,7 +21,7 @@ Writes the technical decision for this change.
 3. **Write the approach.** `## Approach` says how this change is built: module boundaries, risks, rejected alternatives. `none` when there is nothing to say. Leave the three required sections as step 2 wrote them.
    When the service describes its architecture, record the seams of this change in the service model.
 4. No decision yet: an open decision item. Leave it open.
-5. `improve-design`: Fix thread (`CONTEXT.md`), layer `design`.
+5. `improve-design`: Fix thread (`CONTEXT.md`), layer `design`. A thread on an open decision records the choice and checks that item in the same commit, before a hand-off or `thread fix`. The hand-off is a new thread on the other layer's file.
 6. Publish (`CONTEXT.md`). Mirror: `Design`. Open decisions do not delay the push.
 7. An open decision remains: Wait (`CONTEXT.md`) with the open decision.
 

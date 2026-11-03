@@ -174,3 +174,22 @@ The header SHALL open settings with one gear. That control SHALL be a gear and S
 
 - **WHEN** the board is served
 - **THEN** the header opens settings with a gear and does not show the word `Настройки` on that control
+
+### Requirement: The board listens on the named port
+
+When the command is given `--port`, the page SHALL listen on `127.0.0.1` at that port and the printed URL SHALL use it. Without `--port`, the system SHALL choose the port. A value that is not an integer from 1 to 65535 SHALL be refused before the page is served. A port that is already in use SHALL fail the command.
+
+#### Scenario: A named port is the page address
+
+- **WHEN** the board is served with a port
+- **THEN** a request to that port returns the page
+
+#### Scenario: A port that is not a number is refused
+
+- **WHEN** the command names `--port` without an integer from 1 to 65535
+- **THEN** the command is refused before the page is served
+
+#### Scenario: A taken port does not start the page
+
+- **WHEN** the named port is already in use
+- **THEN** the board does not start

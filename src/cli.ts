@@ -21,7 +21,7 @@ const usage = `Usage:
   remote-solver spy [--parallel N] [--interval S]
   remote-solver review
   remote-solver issue <key>
-  remote-solver board [--home PATH]
+  remote-solver board [--home PATH] [--port N]
 
 Cycle verbs are the sdd bin.`;
 
@@ -30,7 +30,7 @@ export type Route =
   | {kind: 'spy'; argv: string[]}
   | {kind: 'review'}
   | {kind: 'issue'; key: string}
-  | {kind: 'board'; home?: string};
+  | {kind: 'board'; home?: string; port?: number};
 
 export function route(argv: string[]): Route {
   const [command, ...rest] = argv;
@@ -51,15 +51,42 @@ export function route(argv: string[]): Route {
     return {kind: 'issue', key};
   }
   if (command === 'board') {
-    if (rest.length === 0) {
-      return {kind: 'board'};
+    return boardRoute(rest);
+  }
+  return {kind: 'help'};
+}
+
+/** `--home` and `--port` in either order. A bad port is refused before the page starts. */
+function boardRoute(rest: string[]): Route {
+  let home: string | undefined;
+  let port: number | undefined;
+  for (let index = 0; index < rest.length; index += 1) {
+    const flag = rest[index];
+    const value = rest[index + 1];
+    if (flag === '--home' && value !== undefined && value !== '' && !value.startsWith('-')) {
+      if (home !== undefined) {
+        return {kind: 'help'};
+      }
+      home = value;
+      index += 1;
+      continue;
     }
-    if (rest.length === 2 && rest[0] === '--home' && rest[1] !== '' && !rest[1].startsWith('-')) {
-      return {kind: 'board', home: rest[1]};
+    if (flag === '--port' && value !== undefined && /^[1-9]\d*$/.test(value)) {
+      const number = Number(value);
+      if (port !== undefined || number > 65535) {
+        return {kind: 'help'};
+      }
+      port = number;
+      index += 1;
+      continue;
     }
     return {kind: 'help'};
   }
-  return {kind: 'help'};
+  return {
+    kind: 'board',
+    ...(home !== undefined ? {home} : {}),
+    ...(port !== undefined ? {port} : {}),
+  };
 }
 
 type LauncherSource = {
@@ -97,7 +124,7 @@ export async function runCli(argv: string[]): Promise<number> {
     return asked ? 0 : 1;
   }
   if (chosen.kind === 'board') {
-    await runBoard(chosen.home);
+    await runBoard(chosen.home, chosen.port);
     return 0;
   }
   const box = await openMachine(process.cwd(), {
@@ -114,7 +141,7 @@ export async function runCli(argv: string[]): Promise<number> {
 }
 
 /** Serve the window and run the machine spy for this repository. */
-async function runBoard(home: string | undefined): Promise<void> {
+async function runBoard(home: string | undefined, port: number | undefined): Promise<void> {
   const root = process.cwd();
   const homePath = home ?? defaultHomePath();
   const box = await openMachine(root, {
@@ -132,6 +159,7 @@ async function runBoard(home: string | undefined): Promise<void> {
     leading: key => running.has(key),
     spyNote: () => turnsLine([...turns.values()]),
     turn: key => turns.get(key)?.action,
+    ...(port !== undefined ? {port} : {}),
   });
   console.log(page.url);
   void watchSpy(box, {

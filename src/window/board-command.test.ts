@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
 import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {homedir, tmpdir} from 'node:os';
 import path from 'node:path';
@@ -7,6 +8,7 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {vi} from 'vitest';
 
 import {machine} from '../adapters/compose.ts';
+import {route} from '../cli.ts';
 import {memoryPorts} from '../adapters/github.ts';
 import type {RunningTurn} from '../main.ts';
 import type {IssueRecord, Review, Runtime, Vcs} from '../machine/port.ts';
@@ -1116,3 +1118,71 @@ spec('board-command', () => {
     });
   });
 });
+
+spec('board-command', () => {
+  requirement('The board listens on the named port', () => {
+    scenario('A named port is the page address', async () => {
+      const port = await freePort();
+      const staged = yard();
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        port,
+      });
+      try {
+        assert.equal(page.url, `http://127.0.0.1:${port}/`);
+        assert.equal((await fetch(page.url)).status, 200);
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+    scenario('A port that is not a number is refused', () => {
+      assert.deepEqual(route(['board', '--port']), {kind: 'help'});
+      assert.deepEqual(route(['board', '--port', '0']), {kind: 'help'});
+      assert.deepEqual(route(['board', '--port', '65536']), {kind: 'help'});
+      assert.deepEqual(route(['board', '--port', 'nope']), {kind: 'help'});
+    });
+    scenario('A taken port does not start the page', async () => {
+      const port = await freePort();
+      const staged = yard();
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        port,
+      });
+      try {
+        await assert.rejects(
+          () =>
+            serveLiveBoard({
+              homePath: staged.homePath,
+              repo: 'acme/billing',
+              tracker: staged.tracker,
+              review: staged.review,
+              port,
+            }),
+          /EADDRINUSE/,
+        );
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+  });
+});
+
+function freePort(): Promise<number> {
+  const probe = createServer();
+  return new Promise((resolve, reject) => {
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const address = probe.address();
+      const port = address !== null && typeof address !== 'string' ? address.port : 0;
+      probe.close(error => (error ? reject(error) : resolve(port)));
+    });
+  });
+}

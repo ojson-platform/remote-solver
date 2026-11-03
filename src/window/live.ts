@@ -177,6 +177,8 @@ export type LiveBoardOptions = {
   spyNote?: () => string;
   /** Action token while a worker is on a turn for this key. */
   turn?: (key: string) => string | undefined;
+  /** TCP port. Absent means the system chooses one. */
+  port?: number;
 };
 
 function forget(work: Promise<unknown>): void {
@@ -591,7 +593,7 @@ export async function serveLiveBoard(options: LiveBoardOptions): Promise<{
 }> {
   const live = openLiveBoard(options);
   await live.refresh();
-  const page = await serveBoard(live.window);
+  const page = await serveBoard(live.window, options.port ?? 0);
   const refresh = async () => {
     const wrote = await live.refresh();
     if (wrote) {

@@ -785,7 +785,7 @@ async function handle(
 }
 
 /** One process serves the window page. */
-export async function serveBoard(surface: Surface): Promise<{
+export async function serveBoard(surface: Surface, port = 0): Promise<{
   url: string;
   close(): Promise<void>;
   note(): void;
@@ -837,7 +837,7 @@ export async function serveBoard(surface: Surface): Promise<{
   });
   return new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
+    server.listen(port, '127.0.0.1', () => {
       const address = server.address();
       if (address === null || typeof address === 'string') {
         reject(new Error('board page did not bind'));
@@ -850,7 +850,12 @@ export async function serveBoard(surface: Surface): Promise<{
         },
         close: () =>
           new Promise((done, fail) => {
+            for (const res of listeners) {
+              res.end();
+            }
+            listeners.clear();
             server.close(error => (error ? fail(error) : done()));
+            server.closeAllConnections();
           }),
       });
     });

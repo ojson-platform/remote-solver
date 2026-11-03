@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 import {chmodSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
@@ -17,7 +18,10 @@ function provider(bin: string, extra: Partial<AgentProvider> = {}): AgentProvide
         return [{type: 'session_id', sessionId: line.slice('session '.length)}];
       }
       if (line === 'result') {
-        return [{type: 'result'}];
+        return [{type: 'result', result: ''}];
+      }
+      if (line.startsWith('error ')) {
+        return [{type: 'error', message: line.slice('error '.length)}];
       }
       if (line.startsWith('text ')) {
         return [{type: 'text', text: line.slice('text '.length)}];
@@ -59,7 +63,7 @@ test('a result line is the answer, and a recorded session is captured', async ()
           return false;
         },
         async findByIdOnHost() {
-          return null;
+          return {path: undefined, searchedRoot: dir};
         },
       },
       parseSessionUsage: () => ({
@@ -99,6 +103,99 @@ test('a process that stays up after result stops on the grace timer', async () =
   });
   assert.equal(answer.text, 'done');
   assert.ok(Date.now() - started < 5000);
+});
+
+test('silence kills the agent and the processes it started', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'sdd-agent-'));
+  const pidFile = path.join(dir, 'child.pid');
+  const bin = script(dir, `sleep 60 &\necho $! > ${JSON.stringify(pidFile)}\nwait`);
+  await assert.rejects(
+    () =>
+      runAgent({
+        cwd: dir,
+        hostCwd: dir,
+        provider: provider(bin),
+        name: 'step',
+        promptFile: writePrompt(dir),
+        promptArgs: {},
+        logPath: path.join(dir, 'agent.log'),
+        idleTimeoutSeconds: 1,
+      }),
+    /agent exited/,
+  );
+  const pid = Number(readFileSync(pidFile, 'utf8'));
+  let command = '';
+  try {
+    command = execFileSync('ps', ['-p', String(pid), '-o', 'command='], {encoding: 'utf8'}).trim();
+  } catch {
+    command = '';
+  }
+  assert.equal(command.startsWith('sleep'), false);
+});
+
+test('an error in the stream rejects the run after the chat id is known', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'sdd-agent-'));
+  const bin = script(dir, 'echo "session abc"\necho "error boom"\nexit 0');
+  const seen: string[] = [];
+  await assert.rejects(
+    () =>
+      runAgent({
+        cwd: dir,
+        hostCwd: dir,
+        provider: provider(bin),
+        name: 'step',
+        promptFile: writePrompt(dir),
+        promptArgs: {},
+        logPath: path.join(dir, 'agent.log'),
+        onSession: sessionId => seen.push(sessionId),
+      }),
+    /boom/,
+  );
+  assert.deepEqual(seen, ['abc']);
+});
+
+test('a resume on this host passes the chat id and does not copy the session file', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'sdd-agent-'));
+  const bin = script(dir, 'echo "text ok"\necho result');
+  let copied = false;
+  let resumed = '';
+  const answer = await runAgent({
+    cwd: dir,
+    hostCwd: dir,
+    provider: provider(bin, {
+      captureSessions: false,
+      buildPrintCommand: options => {
+        resumed = options.resumeSession ?? '';
+        return {command: bin};
+      },
+      sessionStorage: {
+        async resumeIntoSandbox() {
+          copied = true;
+        },
+        async captureToHost() {
+          copied = true;
+        },
+        hostSessionFilePath: () => undefined,
+        async readHostSession() {
+          return undefined;
+        },
+        async existsOnHost() {
+          return false;
+        },
+        async findByIdOnHost() {
+          return {path: undefined, searchedRoot: dir};
+        },
+      },
+    }),
+    name: 'step',
+    promptFile: writePrompt(dir),
+    promptArgs: {},
+    logPath: path.join(dir, 'agent.log'),
+    resumeSession: 'chat-1',
+  });
+  assert.equal(answer.text, 'ok');
+  assert.equal(resumed, 'chat-1');
+  assert.equal(copied, false);
 });
 
 function writePrompt(dir: string): string {

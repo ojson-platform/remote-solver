@@ -5,11 +5,13 @@ import path from 'node:path';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
-import {type Machine} from '../adapters/compose.ts';
+import {machine, type Machine} from '../adapters/compose.ts';
 import {memoryPorts} from '../adapters/github.ts';
 import {tryHoldIssue} from '../adapters/lock.ts';
+import {readChat, rememberChat} from '../adapters/session.ts';
 import {resolveCycle} from './flow.ts';
 import {files} from './harness.ts';
+import type {Runtime, Vcs} from './port.ts';
 import type {Decision} from './policy.ts';
 import {loadCycle} from './snapshot.ts';
 import {exited, signature, tick, type State} from './scheduler.ts';
@@ -141,4 +143,187 @@ spec('idle', () => {
       assert.equal(existsSync(file), false);
     });
   });
+
+  requirement('A crashed run resumes its chat once', () => {
+    scenario('A crash resumes the same chat', async () => {
+      const {root, seen, crash} = crashedIssue();
+      await assert.rejects(() => driveIssue(crash, '8'));
+      assert.deepEqual(seen, [undefined]);
+      await assert.rejects(() => driveIssue(crash, '8'));
+      assert.deepEqual(seen, [undefined, 'chat-1']);
+      assert.equal(readChat(root, '8')?.resumed, true);
+    });
+    scenario('A second crash stays idle', async () => {
+      const {seen, crash} = crashedIssue();
+      await assert.rejects(() => driveIssue(crash, '8'));
+      await assert.rejects(() => driveIssue(crash, '8'));
+      const third = await driveIssue(crash, '8');
+      assert.equal(third.code, 2);
+      assert.match(third.idle ?? '', /implement-next-task/);
+      assert.equal(seen.length, 2);
+    });
+    scenario('A commit starts a new chat', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-chat-commit-'));
+      const seen: Array<string | undefined> = [];
+      const runtime: Runtime = {
+        async run(skill) {
+          seen.push(skill.resumeSession);
+          if (seen.length === 1) {
+            rememberChat(root, skill.key, {
+              action: skill.action,
+              signature: skill.signature ?? '',
+              sessionId: 'chat-1',
+            });
+          }
+          return {commits: seen.length === 1 ? 1 : 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
+      };
+      const result = await driveIssue(implementing(root, runtime), '8');
+      assert.equal(result.code, 2);
+      assert.deepEqual(seen, [undefined, undefined]);
+      assert.equal(readChat(root, '8'), undefined);
+    });
+    scenario('A run with no commit starts a new chat', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-chat-stop-'));
+      const seen: Array<string | undefined> = [];
+      const runtime: Runtime = {
+        async run(skill) {
+          seen.push(skill.resumeSession);
+          rememberChat(root, skill.key, {
+            action: skill.action,
+            signature: skill.signature ?? '',
+            sessionId: 'chat-1',
+          });
+          return {commits: 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
+      };
+      const box = implementing(root, runtime);
+      const first = await driveIssue(box, '8');
+      assert.equal(first.code, 2);
+      assert.equal(readChat(root, '8'), undefined);
+      await driveIssue(box, '8');
+      assert.deepEqual(seen, [undefined, undefined]);
+    });
+    scenario('A different decision starts a new chat', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-chat-other-'));
+      rememberChat(root, '8', {
+        action: 'implement-next-task',
+        signature: 'implementing\0implement-next-task\0next open task',
+        sessionId: 'old',
+      });
+      const seen: string[] = [];
+      const runtime: Runtime = {
+        async run(skill) {
+          seen.push(`${skill.action} ${skill.resumeSession ?? '-'}`);
+          return {commits: 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
+      };
+      const {tracker, review} = memoryPorts({
+        issues: [
+          {
+            key: '8',
+            title: '#8: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['remote-solver', 'sdd:cycle', 'sdd:proposing'],
+          },
+        ],
+      });
+      const result = await driveIssue(
+        machine(root, {
+          config: {
+            queues: [{name: 'remote-solver'}],
+            base: 'master',
+            branchScope: 'sdd',
+            ignoreComments: [],
+          },
+          tracker,
+          review,
+          vcs: emptyVcs(),
+          runtime,
+        }),
+        '8',
+      );
+      assert.equal(result.code, 2);
+      assert.deepEqual(seen, ['create-proposal -']);
+      assert.equal(readChat(root, '8'), undefined);
+    });
+  });
 });
+
+function emptyVcs(): Vcs {
+  return {
+    prepare: async () => '',
+    tip: async () => 'abc',
+    filesAt: () => ({exists: () => false, read: () => '', list: () => []}),
+    compare: async () => null,
+    push: async () => {},
+    head: async () => 'abc',
+    published: async () => true,
+    dirty: async () => [],
+  };
+}
+
+function implementing(root: string, runtime: Runtime): Machine {
+  const tasks = path.join('openspec', 'changes', 'issue-8', 'tasks.md');
+  const {tracker, review} = memoryPorts({
+    issues: [
+      {
+        key: '8',
+        title: '#8: title',
+        body: '',
+        state: 'OPEN',
+        labels: ['remote-solver', 'sdd:cycle', 'sdd:implementing'],
+      },
+    ],
+    pulls: {8: [{id: '80', title: '#8: title', state: 'OPEN'}]},
+  });
+  return machine(root, {
+    config: {
+      queues: [{name: 'remote-solver'}],
+      base: 'master',
+      branchScope: 'sdd',
+      ignoreComments: [],
+    },
+    tracker,
+    review,
+    vcs: {
+      ...emptyVcs(),
+      filesAt: () => ({
+        exists: rel => rel === tasks,
+        read: rel => (rel === tasks ? '- [ ] one\n' : ''),
+        list: () => [],
+      }),
+    },
+    runtime,
+  });
+}
+
+function crashedIssue(): {root: string; seen: Array<string | undefined>; crash: Machine} {
+  const root = mkdtempSync(path.join(tmpdir(), 'sdd-chat-crash-'));
+  const seen: Array<string | undefined> = [];
+  const runtime: Runtime = {
+    async run(skill) {
+      seen.push(skill.resumeSession);
+      rememberChat(root, skill.key, {
+        action: skill.action,
+        signature: skill.signature ?? '',
+        sessionId: 'chat-1',
+      });
+      throw new Error('agent exited 1');
+    },
+    async ask() {
+      return {text: ''};
+    },
+  };
+  return {root, seen, crash: implementing(root, runtime)};
+}

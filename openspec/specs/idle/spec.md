@@ -53,3 +53,32 @@ A second process SHALL NOT start an agent for an issue a live process already ho
 
 - **WHEN** the process recorded in the hold is gone
 - **THEN** the next drive takes the hold
+
+### Requirement: A crashed run resumes its chat once
+
+A skill run that crashes before a commit SHALL leave its chat. The next start of that same decision SHALL resume that chat. A second crash of that chat SHALL NOT start an agent, and that decision SHALL stay idle. A run that commits, a run that finishes with no commit, and a different decision SHALL each start a new chat.
+
+#### Scenario: A crash resumes the same chat
+
+- **WHEN** a skill run crashes before it commits
+- **THEN** the next start of that same decision resumes that chat
+
+#### Scenario: A second crash stays idle
+
+- **WHEN** the resumed chat crashes as well
+- **THEN** the spy does not start an agent and that decision stays idle
+
+#### Scenario: A commit starts a new chat
+
+- **WHEN** a skill run commits
+- **THEN** the next start of the same action begins a new chat
+
+#### Scenario: A run with no commit starts a new chat
+
+- **WHEN** a skill run finishes with no commit
+- **THEN** the next start of that same decision begins a new chat
+
+#### Scenario: A different decision starts a new chat
+
+- **WHEN** a chat is recorded for one decision and the next decision is different
+- **THEN** that run begins a new chat

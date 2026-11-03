@@ -9,26 +9,54 @@ function failureReason(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** One runtime pass. A missing or broken answer is unjudged, never a clean merge. */
+const RETRY = [
+  'The previous answer was not a verdict.',
+  'Reply with one line only: clean, or remark: <text>.',
+  'Put that line inside <verdict> and </verdict>.',
+  'Do not repeat the dossier.',
+].join('\n');
+
+/** One runtime pass. A missing or broken answer is asked once more in the same chat, then stays unjudged. */
 export async function sandcastleJudge(
   runtime: Pick<Runtime, 'ask'>,
   dossier: Dossier,
 ): Promise<Verdict> {
+  const promptFile = path.join(solverRoot(), 'prompts', 'review.md');
+  const branch = `reviewer/${dossier.head.slice(0, 12)}`;
+  let answer;
   try {
-    const answer = await runtime.ask({
+    answer = await runtime.ask({
       name: 'review',
       mode: 'judgment',
-      promptFile: path.join(solverRoot(), 'prompts', 'review.md'),
+      promptFile,
       promptArgs: {
         COMMITS: dossier.commits,
         DIFF: dossier.diff,
         CHANGE: dossier.change,
         STANDARDS: dossier.standards,
       },
-      branch: `reviewer/${dossier.head.slice(0, 12)}`,
+      branch,
       outputTag: 'verdict',
     });
-    return parseVerdict(answer.text);
+  } catch (error) {
+    return {kind: 'unjudged', reason: failureReason(error)};
+  }
+  const verdict = parseVerdict(answer.text);
+  if (verdict.kind !== 'unjudged' || !answer.sessionId) {
+    return verdict;
+  }
+  try {
+    const retry = await runtime.ask({
+      name: 'review',
+      mode: 'judgment',
+      promptFile,
+      promptArgs: {},
+      prompt: RETRY,
+      branch,
+      outputTag: 'verdict',
+      resumeSession: answer.sessionId,
+    });
+    return parseVerdict(retry.text);
   } catch (error) {
     return {kind: 'unjudged', reason: failureReason(error)};
   }

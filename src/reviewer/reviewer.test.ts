@@ -11,6 +11,7 @@ import {assembleDossier} from './dossier.ts';
 import {placeOnDiff} from './place.ts';
 import {describeQueue, reviewQueue} from './plan.ts';
 import {runReview} from './run.ts';
+import {sandcastleJudge} from './judge.ts';
 import {parseVerdict} from './verdict.ts';
 
 function namedFiles(entries: Record<string, string>): FileSource {
@@ -500,6 +501,70 @@ spec('reviewer', () => {
       if (built.kind === 'ready') {
         assert.match(built.dossier.change, /why/);
       }
+    });
+  });
+
+  requirement('A broken verdict is asked again once', () => {
+    const dossier = {
+      issue: '12',
+      pull: '16',
+      head: '24143f8848df5b1328801fc59b91c078dcfce2e3',
+      base: 'def',
+      commits: 'abc',
+      diff: 'the diff body',
+      change: 'why',
+      standards: '',
+    };
+
+    scenario('A bad answer is asked again in the same chat', async () => {
+      const asks: {resume?: string; prompt?: string; diff: string}[] = [];
+      const verdict = await sandcastleJudge(
+        {
+          async ask(request) {
+            asks.push({
+              resume: request.resumeSession,
+              prompt: request.prompt,
+              diff: request.promptArgs.DIFF ?? '',
+            });
+            return asks.length === 1
+              ? {text: 'not a verdict', sessionId: 'chat-9'}
+              : {text: 'clean'};
+          },
+        },
+        dossier,
+      );
+      assert.deepEqual(verdict, {kind: 'clean'});
+      assert.equal(asks[1]?.resume, 'chat-9');
+      assert.equal(asks[1]?.diff, '');
+      assert.equal(asks[1]?.prompt?.includes('the diff body'), false);
+    });
+    scenario('A second bad answer stays unjudged', async () => {
+      let asks = 0;
+      const verdict = await sandcastleJudge(
+        {
+          async ask() {
+            asks += 1;
+            return {text: 'still no', sessionId: 'chat-9'};
+          },
+        },
+        dossier,
+      );
+      assert.equal(verdict.kind, 'unjudged');
+      assert.equal(asks, 2);
+    });
+    scenario('A runtime failure does not ask again', async () => {
+      let asks = 0;
+      const verdict = await sandcastleJudge(
+        {
+          async ask() {
+            asks += 1;
+            throw new Error('tag <verdict> not found');
+          },
+        },
+        dossier,
+      );
+      assert.deepEqual(verdict, {kind: 'unjudged', reason: 'tag <verdict> not found'});
+      assert.equal(asks, 1);
     });
   });
 });

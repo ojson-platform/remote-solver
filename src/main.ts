@@ -3,6 +3,7 @@ import path from 'node:path';
 import {solverRoot, turn, type Machine} from './adapters/compose.ts';
 import {githubPauseRemaining} from './adapters/github.ts';
 import {tryHoldIssue} from './adapters/lock.ts';
+import {claimChat, clearChat} from './adapters/session.ts';
 import {performCycle} from './machine/flow.ts';
 import {endStep, observedSignal, runMarks} from './machine/focus.ts';
 import {exited, signature, tick, type State} from './machine/scheduler.ts';
@@ -20,7 +21,7 @@ import {loadCycle, type CycleSnapshot} from './machine/snapshot.ts';
 // From the service repository:
 // One issue: remote-solver issue <key>
 // Spy:       remote-solver spy [--parallel 2] [--interval 20]
-// Board:     remote-solver board [--home PATH]
+// Board:     remote-solver board [--home PATH] [--port N]
 
 function flag(argv: string[], name: string, fallback: number): number {
   const index = argv.indexOf(name);
@@ -67,6 +68,12 @@ async function driveHeldIssue(box: Machine, key: string, watch?: SpyWatch): Prom
       console.log(`#${key} ${decision.kind}: ${decision.reason}`);
       return {code: 0};
     }
+    const sig = signature(decision);
+    const claim = claimChat(box.root, key, decision.action, sig);
+    if (claim.kind === 'spent') {
+      console.error(`Stopped: ${decision.action} already resumed its chat once.`);
+      return {code: 2, idle: sig};
+    }
     watch?.onTurn?.(key, {issue: key, phase: decision.phase, action: decision.action});
     console.log(`\n#${key} ${decision.phase} → ${decision.action} (${decision.skill})`);
     const before = await runMarks(key, box);
@@ -81,7 +88,10 @@ async function driveHeldIssue(box: Machine, key: string, watch?: SpyWatch): Prom
       sddHooks: record.sddHooks,
       service: record.service,
       issue: {title: record.title, body: record.body},
+      signature: sig,
+      ...(claim.kind === 'resume' ? {resumeSession: claim.sessionId} : {}),
     });
+    clearChat(box.root, key);
     if (outcome.sessionId) {
       console.log(`#${key} session ${outcome.sessionId}`);
     }

@@ -1,4 +1,4 @@
-import {spawn} from 'node:child_process';
+import {spawn, type ChildProcess} from 'node:child_process';
 import {appendFileSync, existsSync, mkdirSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 
@@ -15,9 +15,13 @@ export type AgentRun = {
   name: string;
   promptFile: string;
   promptArgs: Record<string, string>;
+  /** When set, this text is the whole prompt. The prompt file is not read. */
+  prompt?: string;
   logPath: string;
   outputTag?: string;
   resumeSession?: string;
+  /** Called as soon as the agent reports its chat id, before the process ends. */
+  onSession?: (sessionId: string) => void;
   forkSession?: boolean;
   /** Seconds of stdout silence before the run is rejected. Default 600. */
   idleTimeoutSeconds?: number;
@@ -58,6 +62,23 @@ function tagged(text: string, tag: string | undefined): string {
 
 type Capture = {text: string; sessionId?: string};
 
+/** The agent is its own process group. A hung tool's children stay in that group. */
+function killChild(child: ChildProcess): void {
+  const pid = child.pid;
+  if (pid === undefined) {
+    return;
+  }
+  try {
+    process.kill(-pid, 'SIGKILL');
+  } catch {
+    try {
+      child.kill('SIGKILL');
+    } catch {
+      // The process has already exited.
+    }
+  }
+}
+
 /** One agent process. Resolves on a clean exit, or after a result event if the process stays up. */
 function runProcess(
   command: string,
@@ -68,10 +89,16 @@ function runProcess(
   logPath: string,
   idleMs: number,
   graceMs: number,
+  onSession?: (sessionId: string) => void,
 ): Promise<Capture> {
   mkdirSync(path.dirname(logPath), {recursive: true});
   return new Promise((resolve, reject) => {
-    const child = spawn('sh', ['-c', command], {cwd, env, stdio: ['pipe', 'pipe', 'pipe']});
+    const child = spawn('sh', ['-c', command], {
+      cwd,
+      env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      detached: true,
+    });
     if (stdin !== undefined && child.stdin) {
       child.stdin.write(stdin);
     }
@@ -79,11 +106,15 @@ function runProcess(
     let stderr = '';
     let text = '';
     let sessionId: string | undefined;
+    let failure = '';
     let buffer = '';
     let settled = false;
     let sawResult = false;
     let grace: NodeJS.Timeout | undefined;
-    const idle = setTimeout(() => stop(false), idleMs);
+    const idle = setTimeout(() => {
+      killChild(child);
+      stop(false);
+    }, idleMs);
     const resetIdle = () => {
       idle.refresh();
     };
@@ -100,7 +131,8 @@ function runProcess(
         resolve({text, sessionId});
         return;
       }
-      reject(new Error(`agent exited ${code}: ${stderr.slice(-500)}`));
+      const detail = failure || stderr;
+      reject(new Error(`agent exited ${code}: ${detail.slice(-500)}`));
     };
     child.stdout?.on('data', (chunk: Buffer) => {
       resetIdle();
@@ -115,11 +147,17 @@ function runProcess(
           }
           if (event.type === 'session_id') {
             sessionId = event.sessionId;
+            onSession?.(event.sessionId);
+          }
+          if (event.type === 'error') {
+            failure = event.message;
+            killChild(child);
+            stop(false, 1);
           }
           if (event.type === 'result' && !sawResult) {
             sawResult = true;
             grace = setTimeout(() => {
-              child.kill();
+              killChild(child);
               stop(true);
             }, graceMs);
           }
@@ -134,6 +172,10 @@ function runProcess(
       if (buffer) {
         appendFileSync(logPath, `${buffer}\n`);
       }
+      if (failure) {
+        stop(false, code ?? 1);
+        return;
+      }
       stop(code === 0 || sawResult, code ?? 1);
     });
   });
@@ -141,10 +183,11 @@ function runProcess(
 
 /** Run one agent in a directory that is already the right checkout. */
 export async function runAgent(run: AgentRun): Promise<AgentResult> {
-  const prompt = substitute(readFileSync(run.promptFile, 'utf8'), run.promptArgs);
+  const prompt = run.prompt ?? substitute(readFileSync(run.promptFile, 'utf8'), run.promptArgs);
   const handle = await openHostHandle(run.cwd);
-  if (run.resumeSession && run.provider.sessionStorage) {
-    await run.provider.sessionStorage.resumeIntoSandbox({
+  const storage = run.provider.sessionStorage;
+  if (run.resumeSession && run.provider.captureSessions && storage) {
+    await storage.resumeIntoSandbox({
       hostCwd: run.hostCwd,
       sandboxCwd: run.cwd,
       sessionId: run.resumeSession,
@@ -166,8 +209,8 @@ export async function runAgent(run: AgentRun): Promise<AgentResult> {
     run.logPath,
     (run.idleTimeoutSeconds ?? 600) * 1000,
     run.resultGraceMs ?? 60_000,
+    run.onSession,
   );
-  const storage = run.provider.sessionStorage;
   let sessionFilePath: string | undefined;
   let usage = undefined;
   if (run.provider.captureSessions && storage && captured.sessionId) {

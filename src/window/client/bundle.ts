@@ -20,16 +20,21 @@ function loadClient(): Promise<string> {
   if (!existsSync(entry)) {
     return Promise.resolve(readFileSync(join(dir, 'client.js'), 'utf8'));
   }
-  return import('esbuild').then(({build}) =>
-    build({
-      absWorkingDir: dir,
-      entryPoints: [entry],
-      bundle: true,
-      format: 'iife',
-      platform: 'browser',
-      write: false,
-      jsx: 'automatic',
-      logLevel: 'silent',
-    }).then(result => result.outputFiles[0]?.text ?? ''),
-  );
+  return import('esbuild').then(async ({build, stop}) => {
+    try {
+      const result = await build({
+        absWorkingDir: dir,
+        entryPoints: [entry],
+        bundle: true,
+        format: 'iife',
+        platform: 'browser',
+        write: false,
+        jsx: 'automatic',
+        logLevel: 'silent',
+      });
+      return result.outputFiles[0]?.text ?? '';
+    } finally {
+      await stop();
+    }
+  });
 }

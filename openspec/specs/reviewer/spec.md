@@ -103,6 +103,27 @@ An empty answer, or an answer that is not `clean` and not a remark, SHALL post n
 - **WHEN** the judge's text is exactly `clean`, or the text is empty
 - **THEN** `clean` is a clean verdict and the empty text is unjudged
 
+### Requirement: A broken verdict is asked again once
+
+When the judge returns text that is not a verdict and the run has a session, the judge SHALL ask once more in that session. The second prompt SHALL NOT carry the dossier. A second text that is not a verdict SHALL be unjudged. A runtime failure SHALL be unjudged and SHALL NOT ask again.
+
+#### Scenario: A bad answer is asked again in the same chat
+
+- **WHEN** the first answer is not a verdict, the run has a session, and the second answer is `clean`
+- **THEN** the verdict is clean
+- **AND** the second ask resumes that session and does not carry the dossier
+
+#### Scenario: A second bad answer stays unjudged
+
+- **WHEN** both answers are not a verdict
+- **THEN** the verdict is unjudged
+- **AND** the judge asked twice
+
+#### Scenario: A runtime failure does not ask again
+
+- **WHEN** the runtime throws
+- **THEN** the verdict is unjudged and the runtime was asked once
+
 ### Requirement: A remark lands on a diff line only when that line is in the diff
 
 A remark whose file and line are in the diff SHALL stay on that line. A line that is not in the diff SHALL keep the file and drop the line. A file that is not in the diff SHALL be left on the conversation. When the head is the archive commit, the diff SHALL end at its parent, and a remark on a change file SHALL be posted on the archive path at the pull request head. That remark MAY name the file by its path in the parent diff or by its archive path. The change text in the dossier SHALL be the parent's.

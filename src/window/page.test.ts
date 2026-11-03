@@ -1628,3 +1628,14 @@ test('a missing service config asks for one queue name', async () => {
     },
   );
 });
+
+test('the page server closes while a client socket is still open', async () => {
+  const page = await serveBoard(idle());
+  const shot = await fetch(new URL('/snapshot', page.url));
+  await shot.text();
+  const events = await fetch(new URL('/events', page.url));
+  await events.body?.getReader().read();
+  const started = Date.now();
+  await page.close();
+  assert.ok(Date.now() - started < 1000);
+});

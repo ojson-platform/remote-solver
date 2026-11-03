@@ -26,7 +26,15 @@ test('route sends spy, review, issue, and board to the launcher', () => {
     kind: 'board',
     home: '/tmp/home.yaml',
   });
+  assert.deepEqual(route(['board', '--port', '50978']), {kind: 'board', port: 50978});
+  assert.deepEqual(route(['board', '--port', '50978', '--home', '/tmp/home.yaml']), {
+    kind: 'board',
+    home: '/tmp/home.yaml',
+    port: 50978,
+  });
   assert.deepEqual(route(['board', '--home']), {kind: 'help'});
+  assert.deepEqual(route(['board', '--port']), {kind: 'help'});
+  assert.deepEqual(route(['board', '--port', '0']), {kind: 'help'});
   assert.deepEqual(route(['accept', '12']), {kind: 'help'});
   assert.deepEqual(route(['plan']), {kind: 'help'});
 });
@@ -38,7 +46,7 @@ test('the launcher bin prints its commands and refuses a cycle verb', () => {
   assert.equal(child.status, 1);
   assert.match(child.stderr, /remote-solver spy/);
   assert.match(child.stderr, /remote-solver issue <key>/);
-  assert.match(child.stderr, /remote-solver board/);
+  assert.match(child.stderr, /remote-solver board \[--home PATH\] \[--port N\]/);
   assert.match(child.stderr, /Cycle verbs are the sdd bin/);
   assert.doesNotMatch(child.stderr, /accept <key>/);
   const help = spawnSync(process.execPath, [bin, '--help'], {encoding: 'utf8', cwd: root});

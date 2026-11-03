@@ -203,6 +203,8 @@ export type SkillRun = {
   pull: string;
   mode: SkillMode;
   resumeSession?: string;
+  /** `phase`, `action`, and `reason`. A retry resumes only this decision's chat. */
+  signature?: string;
   /** Directory of the service. The step reads hooks there. Empty means the worktree root. */
   service?: string;
   /** Cycle hook field. The machine does not create it. */
@@ -230,6 +232,10 @@ export type RuntimeAsk = {
   branch: string;
   /** The answer is the text inside this tag. */
   outputTag: string;
+  /** Continue this chat. The prompt is the next turn. */
+  resumeSession?: string;
+  /** When set, this text is the whole prompt. The prompt file is not read. */
+  prompt?: string;
 };
 
 export type Runtime = {

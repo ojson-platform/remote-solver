@@ -4,13 +4,12 @@ import type {AgentStreamEvent} from '@ai-hero/sandcastle';
 import {existsSync, mkdirSync, readFileSync, symlinkSync} from 'node:fs';
 import path from 'node:path';
 
-import {cursor} from '@ai-hero/sandcastle';
-
 import {serviceHookDoc, stepPrompt} from '../machine/hook.ts';
 import {branchName} from '../machine/naming.ts';
-import {modelFor, type SkillMode} from '../machine/skill.ts';
+import {cursorFor, modelFor, type SkillMode} from '../machine/skill.ts';
 
 import {runAgent} from './agent.ts';
+import {rememberChat} from './session.ts';
 import {linkCommand as checkoutLinks, packageLinks} from './vcs.ts';
 
 /** The hook sandcastle runs. Links whatever of this package is on disk. */
@@ -142,7 +141,7 @@ export function agentRuntime(config: AgentRuntimeConfig): Runtime {
       const answer = await runAgent({
         cwd: dir,
         hostCwd: config.root,
-        provider: cursor((config.modelOf ?? modelFor)(skill.mode)),
+        provider: cursorFor((config.modelOf ?? modelFor)(skill.mode)),
         name: skill.action,
         promptFile: path.join(config.solverRoot, 'prompts', 'sdd.md'),
         promptArgs: {
@@ -164,6 +163,14 @@ export function agentRuntime(config: AgentRuntimeConfig): Runtime {
           skill.action,
         ),
         resumeSession: skill.resumeSession,
+        onSession: skill.signature
+          ? sessionId =>
+              rememberChat(config.root, skill.key, {
+                action: skill.action,
+                signature: skill.signature ?? '',
+                sessionId,
+              })
+          : undefined,
       });
       return {
         commits: await commitCount(config.vcs, before, await config.vcs.tip(skill.key)),
@@ -178,12 +185,14 @@ export function agentRuntime(config: AgentRuntimeConfig): Runtime {
       return runAgent({
         cwd: dir,
         hostCwd: config.root,
-        provider: cursor((config.modelOf ?? modelFor)(request.mode)),
+        provider: cursorFor((config.modelOf ?? modelFor)(request.mode)),
         name: request.name,
         promptFile: request.promptFile,
         promptArgs: request.promptArgs,
+        prompt: request.prompt,
         logPath: agentLogPath(config.root, request.branch, request.name),
         outputTag: request.outputTag,
+        resumeSession: request.resumeSession,
       });
     },
   };

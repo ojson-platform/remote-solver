@@ -20,7 +20,12 @@ export function modelFor(mode: SkillMode): string {
   return mode === 'mechanical' ? 'composer-2.5-fast' : 'grok-4.7-high-fast';
 }
 
+/** Cursor on this host. The CLI already keeps the chat; capturing `store.db` would copy it out of a sandbox that is not there. */
+export function cursorFor(model: string): AgentProvider {
+  return cursor(model, {captureSessions: false});
+}
+
 /** The agent for a mode. Today every mode is Cursor; the choice lives here. */
 export function agentFor(mode: SkillMode): AgentProvider {
-  return cursor(modelFor(mode));
+  return cursorFor(modelFor(mode));
 }

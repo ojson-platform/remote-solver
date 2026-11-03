@@ -2532,10 +2532,38 @@ spec('finished-cycle', () => {
     });
   });
   requirement('A closed issue leaves the open list', () => {
-    scenario('A later reading omits a closed issue', () => {
+    scenario('A later reading omits a closed issue', async () => {
       const {dir, home, arcadia} = yard();
       prepare(arcadia, home);
-      let tickets: WindowTicket[] = [cycle('1', 'tasking')];
+      const {tracker} = memoryPorts({
+        user: MANAGER,
+        issues: [
+          {
+            key: '1',
+            title: '#1: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['alpha', 'sdd:cycle', 'sdd:tasking'],
+            assignee: MANAGER,
+            service: 'services/billing',
+          },
+        ],
+      });
+      let tickets: WindowTicket[] = [];
+      async function reloadTickets(): Promise<void> {
+        const open = await tracker.listOpen();
+        tickets = open.map(issue => ({
+          key: issue.key,
+          title: issue.title,
+          labels: [...issue.labels],
+          assignee: issue.assignee ?? '',
+          queue: 'alpha',
+          sddService: issue.service ?? 'services/billing',
+          open: true,
+          openPullRequests: 0,
+        }));
+      }
+      await reloadTickets();
       const window = openWindow(
         {homePath: home, adapter: 'tracker'},
         {
@@ -2554,6 +2582,16 @@ spec('finished-cycle', () => {
       const window = openCycles(home, [cycle('1', 'tasking', {open: false})]);
       assert.deepEqual(
         columnCards(window.board(), 'tasking')?.map(card => card.key),
+        ['1'],
+      );
+      rmSync(dir, {recursive: true, force: true});
+    });
+    scenario('A closed verifying issue stands', () => {
+      const {dir, home, arcadia} = yard();
+      prepare(arcadia, home);
+      const window = openCycles(home, [cycle('1', 'verifying', {open: false})]);
+      assert.deepEqual(
+        columnCards(window.board(), 'verifying')?.map(card => card.key),
         ['1'],
       );
       rmSync(dir, {recursive: true, force: true});

@@ -622,3 +622,70 @@ test('settle walks mechanical advances on labels and stops to close an accepted 
   );
   assert.deepEqual(closing.decision, {kind: 'done', issue: '1', reason: 'pull request merged'});
 });
+
+const mergedPull = pull(25, {state: 'MERGED'});
+const finishedChange = change({
+  proposal: true,
+  delta: true,
+  design: true,
+  tasks: true,
+  archived: true,
+  openTasks: 0,
+});
+
+test('The machine does not restore that change and does not start another step', () => {
+  const decision = decide(
+    issue(9, ['sdd:tasking']),
+    [],
+    [mergedPull],
+    finishedChange,
+  );
+  assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
+  const walked = settle(issue(9, ['sdd:tasking']), [], [mergedPull], finishedChange);
+  assert.equal(walked.decision.kind, 'done');
+  assert.deepEqual(walked.transitions, []);
+});
+
+test('Implementing without tasks does not restore a finished cycle', () => {
+  const archived = change({archived: true, tasks: false});
+  const decision = decide(issue(9, ['sdd:implementing']), [], [mergedPull], archived);
+  assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
+  const walked = settle(issue(9, ['sdd:implementing']), [], [mergedPull], archived);
+  assert.equal(walked.decision.kind, 'done');
+  assert.ok(!walked.transitions.some(transition => transition.to === 'tasking'));
+});
+
+test('An open task on a finished cycle does not start', () => {
+  const withOpen = change({...finishedChange, openTasks: 1});
+  const decision = decide(issue(9, ['sdd:implementing']), [], [mergedPull], withOpen);
+  assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
+  const walked = settle(issue(9, ['sdd:implementing']), [], [mergedPull], withOpen);
+  assert.equal(walked.decision.kind, 'done');
+  assert.ok(walked.decision.kind !== 'agent');
+});
+
+test('Checked tasks on a finished cycle do not wait for an open pull request', () => {
+  const decision = decide(issue(9, ['sdd:implementing']), [], [mergedPull], finishedChange);
+  assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
+  const walked = settle(issue(9, ['sdd:implementing']), [], [mergedPull], finishedChange);
+  assert.equal(walked.decision.kind, 'done');
+  assert.ok(!walked.transitions.some(transition => transition.to === 'verifying'));
+});
+
+test('A finished cycle on a proposed gate does not restore', () => {
+  const decision = decide(
+    issue(9, ['sdd:proposed', 'sdd:proposing']),
+    [],
+    [mergedPull],
+    finishedChange,
+  );
+  assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
+  const walked = settle(
+    issue(9, ['sdd:proposed', 'sdd:proposing']),
+    [],
+    [mergedPull],
+    finishedChange,
+  );
+  assert.equal(walked.decision.kind, 'done');
+  assert.deepEqual(walked.transitions, []);
+});

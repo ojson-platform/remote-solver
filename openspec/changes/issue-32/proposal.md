@@ -27,5 +27,7 @@ A cycle whose pull request is still open stays on the board, including one whose
 ### Modified
 
 - finished-cycle a finished cycle leaves the board, and a reload does not bring it back
+- merge a phase at or before tasking restores an archived change only while the pull request is still open
+- verifying a finished cycle does not wait
 
 ## Open questions

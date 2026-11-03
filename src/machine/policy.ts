@@ -151,7 +151,10 @@ function agent(
 }
 
 /** Archived with a merged pull request and none open: the cycle is finished. */
-function finishedCycle(pulls: PullSnapshot[], change: ChangeView): boolean {
+function finishedCycle(pulls: PullSnapshot[], change: ChangeView, labels: string[]): boolean {
+  if (labels.includes('sdd:cancelled')) {
+    return false;
+  }
   if (!change.archived) {
     return false;
   }
@@ -209,7 +212,7 @@ export function decide(
   if (!phase) {
     return {kind: 'advance', issue: issue.key, to: 'proposing', reason: 'enter the cycle'};
   }
-  if (phaseRank(phase) < phaseRank('accepting') && finishedCycle(pulls, change)) {
+  if (phaseRank(phase) < phaseRank('accepting') && finishedCycle(pulls, change, names)) {
     return {kind: 'done', issue: issue.key, reason: 'finished cycle'};
   }
   if (phase === 'accepted') {

@@ -1,5 +1,5 @@
 - [x] `finish-settlement` — The machine does not restore that change and does not start another step; Implementing without tasks does not restore a finished cycle; An open task on a finished cycle does not start; Checked tasks on a finished cycle do not wait for an open pull request; A finished cycle on a proposed gate does not restore
 - [x] `finish-close` — A cycle is finished when its pull request is merged and its change is archived; The issue closes and the board's open list no longer has it
 - [x] `finish-board-leave` — A finished cycle leaves the board and a reload does not bring it back; A finished cycle on verifying leaves the board and a reload does not bring it back
-- [ ] `cancelled-regression` — A cancelled cycle still leaves as it does now
+- [x] `cancelled-regression` — A cancelled cycle still leaves as it does now
 - [ ] `open-pull-request` — An open pull request on tasking is restored; A proposed gate restores after it moves; Checked tasks and an open pull request stay; An open pull request stays on the board when every task is checked

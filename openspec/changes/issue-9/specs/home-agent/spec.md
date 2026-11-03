@@ -59,12 +59,12 @@ Choosing the agent the home file already records SHALL change nothing. The home 
 
 ### Requirement: The layer agent does not record the home agent
 
-The select labeled `агент слоя` SHALL remain the override for that one checkout. An empty `агент слоя` SHALL mean the home agent. It SHALL NOT write the home agent. The overlay models, effort, and speed SHALL keep following the merged factory, and SHALL NOT be replaced by the overlay agent's known pair. The checkout overlay SHALL stay out of the repository. While the home file has no agent, the board row SHALL stay `фабрике ещё нужен агент`, the lamp SHALL stay `шаги стоят`, and Take SHALL NOT act.
+The select labeled `агент слоя` SHALL remain the override for that one checkout. Choosing an agent on `агент слоя` SHALL write that checkout's overlay with the new agent, that agent's known pair, and the default effort and speed. A key the agent does not have SHALL stay absent. Old effort and speed keys SHALL NOT remain. That choice SHALL NOT write the home agent. An empty `агент слоя` SHALL mean the home agent. While `агент слоя` is empty, the overlay models, effort, and speed SHALL keep following the merged factory. The checkout overlay SHALL stay out of the repository. While the home file has no agent, the board row SHALL stay `фабрике ещё нужен агент`, the lamp SHALL stay `шаги стоят`, and Take SHALL NOT act.
 
 #### Scenario: An overlay agent leaves the factory needing an agent
 
-- **WHEN** the home file has no agent, one checkout is chosen, the manager chooses `cursor` on `агент слоя`, and cursor's known pair is the other value that could replace the merged factory's models, effort, and speed
-- **THEN** `агент слоя` remains the override `cursor` for that checkout, the home file still has no agent, the overlay models, effort, and speed keep following the merged factory, the board row is `фабрике ещё нужен агент`, the lamp is `шаги стоят`, and Take does not act
+- **WHEN** the home file has no agent, one checkout is chosen, the overlay has no effort key and no speed key, the manager chooses `cursor` on `агент слоя`, and leaving the merged factory's models, effort, and speed in place is the other value that choice could write
+- **THEN** the checkout overlay records the new agent `cursor`, the known pair mechanical `composer-2.5-fast` and judgment `grok-4.7-high-fast`, and the default effort and speed, so the effort key stays absent and the speed key stays absent, the home file still has no agent, the board row is `фабрике ещё нужен агент`, the lamp is `шаги стоят`, and Take does not act
 
 #### Scenario: агент слоя remains the override for that one checkout
 
@@ -76,9 +76,14 @@ The select labeled `агент слоя` SHALL remain the override for that one 
 - **WHEN** the home file records `cursor`, one checkout is chosen, `агент слоя` is empty, and `cursor` on `агент слоя` is the other value that can replace that empty
 - **THEN** the empty `агент слоя` means the home agent `cursor`
 
+#### Scenario: Choosing cursor on агент слоя writes the known pair and drops old effort and speed
+
+- **WHEN** the home file records `codex`, mechanical `gpt-6-luna`, judgment `gpt-6.1-sol`, and effort `low` and `high`, one checkout's overlay records mechanical `custom-mechanical`, judgment `custom-judgment`, effort `max`, and speed `fast`, the manager chooses `cursor` on `агент слоя`, and keeping mechanical `custom-mechanical`, judgment `custom-judgment`, effort `max`, and speed `fast` is the other value that choice could write
+- **THEN** the checkout overlay records the new agent `cursor`, the known pair mechanical `composer-2.5-fast` and judgment `grok-4.7-high-fast`, and the default effort and speed, the effort key is absent, the speed key is absent, the old effort and speed keys do not remain, and the home file still records `codex`, mechanical `gpt-6-luna`, judgment `gpt-6.1-sol`, and effort `low` and `high`
+
 #### Scenario: The overlay models, effort, and speed keep following the merged factory
 
-- **WHEN** the merged factory for that checkout has mechanical `custom-mechanical`, judgment `custom-judgment`, and no effort and no speed, the overlay models, effort, and speed already show those values, the manager chooses `cursor` on `агент слоя`, and cursor's known pair mechanical `composer-2.5-fast` and judgment `grok-4.7-high-fast` is the other value that can replace those models, effort, and speed
+- **WHEN** `агент слоя` is empty, the merged factory for that checkout has mechanical `custom-mechanical`, judgment `custom-judgment`, and no effort and no speed, the overlay models, effort, and speed already show those values, and choosing `cursor` on `агент слоя`, with mechanical `composer-2.5-fast` and judgment `grok-4.7-high-fast`, is the other value that can replace those models, effort, and speed
 - **THEN** the overlay models, effort, and speed keep following the merged factory: mechanical `custom-mechanical`, judgment `custom-judgment`, and no effort and no speed
 
 #### Scenario: The checkout overlay stays out of the repository

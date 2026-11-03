@@ -2572,7 +2572,9 @@ spec('finished-cycle', () => {
         },
       );
       assert.ok(visibleKeys(window.board()).includes('1'));
-      tickets = [];
+      await tracker.close('1', 'closed for the test');
+      await reloadTickets();
+      assert.ok(!(await tracker.listOpen()).some(issue => issue.key === '1'));
       assert.ok(!visibleKeys(window.board()).includes('1'));
       rmSync(dir, {recursive: true, force: true});
     });

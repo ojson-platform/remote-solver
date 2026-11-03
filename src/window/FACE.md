@@ -54,6 +54,10 @@ The pool card and a comment field share one quiet frame. A focused field turns i
 
 The edge is a bright line with light inside the shape. A task chip wears it, brass when open and green when done. While the pointer is over a small circle, the circle grows slightly and wears the edge: the take circle, the breakdown circle, a layer door, and the line field's close circle. A broken door wears that edge in red. A close mark, the send mark, the empty gate, and the set gate only grow. The gear grows and keeps its light wash. A wide control wears the edge and keeps its size: the station plaque, a role verb, a hairline pill, and a task jump. The cycle card takes the open card's brass hairline. A brass pill lightens and grows. A document line, a diff row, a capability summary, and a folded-lines bar take a quiet brass wash. A closed section head takes that wash too, and the wash runs flush with the sheet. The waiting strip glows along itself. A green or red mark stays flat: a wash on the diff row, a coloured word in the section head. A disabled take, an open section head, a link, and a settings field stay as they are.
 
+## Settings sheet
+
+The **Дом** group shows the home agent select labeled `агент` above the model fields, the watch list, and the roots. The new-role form under **Роли** carries name, outcome, text, and `Добавить` only.
+
 ## Specs
 
 A spec names the control and what it does. The room, the type, the colour, the ground, and the measure stay here and in the stylesheet.

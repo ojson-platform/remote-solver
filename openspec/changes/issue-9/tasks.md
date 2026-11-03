@@ -1,4 +1,4 @@
-- [ ] `home-agent-field` — The home block has its own agent field above the models and the new-role form does not
+- [x] `home-agent-field` — The home block has its own agent field above the models and the new-role form does not
 - [ ] `home-empty-agent` — The field is empty until an agent is saved
 - [ ] `home-choose-agent` — Choosing an agent writes the home file at once with that agent's known pair; Choosing codex writes its known pair at once; Choosing a different agent writes that agent's known pair at once
 - [ ] `home-reselect-agent` — Choosing the saved agent again changes nothing

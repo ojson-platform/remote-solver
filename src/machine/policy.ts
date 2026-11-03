@@ -150,6 +150,17 @@ function agent(
   return {kind: 'agent', issue, action, skill: ACTION_SKILL[action], phase, pr, reason};
 }
 
+/** Archived with a merged pull request and none open: the cycle is finished. */
+function finishedCycle(pulls: PullSnapshot[], change: ChangeView): boolean {
+  if (!change.archived) {
+    return false;
+  }
+  if (pulls.some(pr => pr.state === 'OPEN')) {
+    return false;
+  }
+  return pulls.some(pr => pr.state === 'MERGED');
+}
+
 /** A merged pull request closes the cycle. `sdd:auto-merge` is the only path where the machine merges. */
 function mergeOrWait(
   issueKey: string,
@@ -197,6 +208,9 @@ export function decide(
   const phase = phaseOf(names);
   if (!phase) {
     return {kind: 'advance', issue: issue.key, to: 'proposing', reason: 'enter the cycle'};
+  }
+  if (phaseRank(phase) < phaseRank('accepting') && finishedCycle(pulls, change)) {
+    return {kind: 'done', issue: issue.key, reason: 'finished cycle'};
   }
   if (phase === 'accepted') {
     const acceptedOpen = open;

@@ -1,2 +1,2 @@
 - [x] `board-parallel-cap` The board runs its spy with a parallel cap of 20; A poll that finds twenty ready cycles starts twenty agents; The twenty-first waits until one of those workers leaves
-- [ ] `spy-parallel-cap` No flag uses a cap of 2; A positive --parallel is the cap; The spy keeps the default cap of 2 and honors --parallel
+- [x] `spy-parallel-cap` No flag uses a cap of 2; A positive --parallel is the cap; The spy keeps the default cap of 2 and honors --parallel

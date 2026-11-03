@@ -1,3 +1,4 @@
+import {execFileSync} from 'node:child_process';
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 
@@ -139,11 +140,16 @@ const OVERLAY_EXCLUDE = '.aifactory/';
 
 /** Local exclude keeps the overlay out of git status without a tracked ignore file. */
 function keepOverlayOutOfGit(checkout: string): void {
-  const gitDir = path.join(checkout, '.git');
-  if (!existsSync(gitDir)) {
+  let rel: string;
+  try {
+    rel = execFileSync('git', ['rev-parse', '--git-path', 'info/exclude'], {
+      cwd: checkout,
+      encoding: 'utf8',
+    }).trim();
+  } catch {
     return;
   }
-  const exclude = path.join(gitDir, 'info', 'exclude');
+  const exclude = path.resolve(checkout, rel);
   mkdirSync(path.dirname(exclude), {recursive: true});
   const prior = existsSync(exclude) ? readFileSync(exclude, 'utf8') : '';
   if (

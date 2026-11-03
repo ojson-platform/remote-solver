@@ -355,16 +355,16 @@ spec('home-agent', () => {
     scenario('The checkout overlay stays out of the repository', async () => {
       const {dir, home, arcadia} = yard();
       const {checkout, window} = trackerWindow(home, arcadia);
-      git(checkout, ['init', '-b', 'master']);
-      git(checkout, ['config', 'user.email', 'test@example.com']);
-      git(checkout, ['config', 'user.name', 'Test']);
-      git(checkout, ['add', 'openspec']);
-      git(checkout, ['commit', '-m', 'init']);
+      git(arcadia, ['init', '-b', 'master']);
+      git(arcadia, ['config', 'user.email', 'test@example.com']);
+      git(arcadia, ['config', 'user.name', 'Test']);
+      git(arcadia, ['add', 'services']);
+      git(arcadia, ['commit', '-m', 'init']);
       window.openSettings();
       window.chooseOverlayAgent('cursor');
       assert.equal(existsSync(overlayPath(checkout)), true);
       const status = execFileSync('git', ['status', '--porcelain'], {
-        cwd: checkout,
+        cwd: arcadia,
         encoding: 'utf8',
       }).trim();
       assert.equal(status, '');

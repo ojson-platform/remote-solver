@@ -9,7 +9,7 @@
 
 ### Requirement: The skill writes a focus comment when the artifact is published
 
-The skill of the phase SHALL write a focus comment when that phase's artifact is published. The comment SHALL be prose for one phase, or prose for the whole pull request. The first line SHALL be the marker `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, `sdd:focus:code`, or `sdd:focus` for the whole pull request. Older focus comments SHALL remain. The same text SHALL NOT add another comment. The machine SHALL NOT append the layer ledger (`Plan solid`, `thread N`, `file:line`) as the comment a person reads. A run with no signal SHALL leave the latest focus comment unchanged. The skill SHALL NOT write a focus comment when the cycle has no change file.
+The skill of the phase SHALL write a focus comment when that phase's artifact is published. The comment SHALL be prose for one phase, or prose for the whole pull request. The first line SHALL be the marker `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, `sdd:focus:code`, or `sdd:focus` for the whole pull request. A pattern in place of those markers SHALL NOT be that first line. Older focus comments SHALL remain. The same text SHALL NOT add another comment. The machine SHALL NOT append the layer ledger (`Plan solid`, `thread N`, `file:line`) as the comment a person reads. A run with no signal SHALL leave the latest focus comment unchanged. The skill SHALL NOT write a focus comment when the cycle has no change file.
 
 #### Scenario: The skill of the phase writes this comment when the artifact is published
 
@@ -23,8 +23,8 @@ The skill of the phase SHALL write a focus comment when that phase's artifact is
 
 #### Scenario: The first line is the marker sdd:focus:plan, sdd:focus:spec, sdd:focus:design, sdd:focus:tasks, sdd:focus:code, or sdd:focus
 
-- **WHEN** focus comments are already visible whose first lines are the markers `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, and `sdd:focus:code`, together with a whole-pull-request comment whose first line is the marker `sdd:focus`
-- **THEN** the first line is the marker `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, `sdd:focus:code`, or `sdd:focus` for the whole pull request
+- **WHEN** focus comments are already visible whose first lines are the markers `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, and `sdd:focus:code`, together with a pattern `sdd:focus:<phase>` in place of those markers and a whole-pull-request comment whose first line is the marker `sdd:focus`
+- **THEN** the first line is the marker `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, `sdd:focus:code`, or `sdd:focus` for the whole pull request, and a pattern in place of those markers is not that first line
 
 #### Scenario: The layer ledger is not the comment a person reads
 

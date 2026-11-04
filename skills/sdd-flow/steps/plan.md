@@ -17,7 +17,7 @@ Records why and the scope. Zoom is context, not implementation. The commit and t
 2. `proposal.md` already exists: leave it.
 3. A question below the context zoom stays out of the proposal.
 4. `improve-proposal`: Fix thread (`CONTEXT.md`), layer `proposal`. A thread on an open question records the answer and checks that item in the same commit, before a hand-off or `thread fix`. The hand-off is a new thread on the other layer's file.
-5. Publish (`CONTEXT.md`). Mirror: `Change` and `Plan`. Open questions do not delay the pull request.
+5. Publish (`CONTEXT.md`). When `proposal.md` is in the commit, focus with marker `sdd:focus:plan`. Mirror: `Change` and `Plan`. Open questions do not delay the pull request.
 6. Open questions remain: Wait (`CONTEXT.md`) with the questions.
 
 ## Check

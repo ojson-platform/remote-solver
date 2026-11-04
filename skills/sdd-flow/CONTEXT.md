@@ -121,7 +121,8 @@ The work the run found belongs to another layer: `thread open <pull> <file> <lin
 1. The checkout lists only the files of this commit. Anything else is an artifact the task did not name: a generated directory is ignored by the repository, a stray file is deleted, a file that belongs to the task joins the commit. Find why it appeared and remove that cause in the same run. `publish` refuses a dirty checkout and lists its files.
 2. Commit. The repository's own commit rule wins when a checkout-root file states it: `CONTRIBUTING`, `CONTRIBUTING.md`, `AGENTS.md`, `commitlint.config.js`, `commitlint.config.cjs`, `commitlint.config.mjs`, `.commitlintrc`, or `.commitlintrc.json`. Read those paths only. When none of them exists, the subject is `#<issue>: <what changed>`. Do not search the tree. The body contains a line `#<issue>`. Pass the message with `--cleanup=verbatim` so that line stays. Any uncommitted `openspec/` of this issue joins the commit.
 3. `node scripts/sdd.mjs publish <issue> "#<issue>: <what changed>"`. The argument is the pull request title, not the commit subject. It pushes the issue branch and opens the pull request when there is none.
-4. The layer's mirror line, when the skill names one: § Issue mirror.
+4. When the commit includes this phase's artifact: `node scripts/sdd.mjs focus <issue> '<body>'`. The body is one marker line (`sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, `sdd:focus:code`, or `sdd:focus` for the whole pull request) plus the prose. A separate review step does not write focus.
+5. The layer's mirror line, when the skill names one: § Issue mirror.
 
 Nothing to commit: skip steps 1–2 and still run step 3.
 

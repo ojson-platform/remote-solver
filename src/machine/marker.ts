@@ -49,9 +49,42 @@ export function unmarkedLine(body: string): string {
   return first.startsWith(ROBOT_MARK) ? first.slice(ROBOT_MARK.length).trim() : first;
 }
 
+/** Recognized focus markers on the first line. A focus marker is not a layer marker. */
+export const FOCUS_MARKER_LINES = [
+  'sdd:focus',
+  'sdd:focus:plan',
+  'sdd:focus:spec',
+  'sdd:focus:design',
+  'sdd:focus:tasks',
+  'sdd:focus:code',
+] as const;
+
+export type FocusMarkerLine = (typeof FOCUS_MARKER_LINES)[number];
+
+const FOCUS_MIRROR: Record<Exclude<FocusMarkerLine, 'sdd:focus'>, string> = {
+  'sdd:focus:plan': 'Plan',
+  'sdd:focus:spec': 'Specify',
+  'sdd:focus:design': 'Design',
+  'sdd:focus:tasks': 'Tasks',
+  'sdd:focus:code': 'Code',
+};
+
+/** Mirror row name for a phase focus marker. Whole-pull-request `sdd:focus` maps to none. */
+export function focusMirrorName(marker: FocusMarkerLine): string | null {
+  return marker === 'sdd:focus' ? null : (FOCUS_MIRROR[marker] ?? null);
+}
+
+/** The focus marker on the first line, if any. Patterns such as `sdd:focus:other` are not markers. */
+export function focusMarkerLine(body: string): FocusMarkerLine | null {
+  const line = unmarkedLine(body);
+  return (FOCUS_MARKER_LINES as readonly string[]).includes(line)
+    ? (line as FocusMarkerLine)
+    : null;
+}
+
 /** A focus record. The robot mark on the first line does not change that. */
 export function isFocusRecord(body: string): boolean {
-  return unmarkedLine(body) === 'sdd:focus';
+  return focusMarkerLine(body) !== null;
 }
 
 /** Any marker token, well-formed or not, or the robot mark. Text a reviewer remark must not carry. */

@@ -1,41 +1,29 @@
 import assert from 'node:assert/strict';
-import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
-import {tmpdir} from 'node:os';
-import path from 'node:path';
 import {test} from 'vitest';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
-import type {FileSource, Review, Tracker, Vcs} from './port.ts';
+import type {FileSource, Tracker} from './port.ts';
 import {changeDir} from './naming.ts';
-import {endStep, observedSignal, type RunMarks} from './focus.ts';
-import {openWindow, type WindowComment} from '../window/window.ts';
+import {focusMarkerLine, focusMirrorName, FOCUS_MARKER_LINES, isFocusRecord, parseMarker} from './marker.ts';
 import {
-  MANAGER,
-  columnCards,
-  cycle,
-  prepare,
-  proveTheSidebarFocusPlaqueDoesNotIncludeTheMarkerLine121,
-  yard,
-} from '../window/window.harness.ts';
+  endStep,
+  firstFocusSentence,
+  focusProse,
+  observedSignal,
+  postFocusComment,
+  type RunMarks,
+} from './focus.ts';
+import {focusArgs, postFocus} from '../sdd.ts';
+import {focusPlaque} from '../window/focus.ts';
 
-const KEY = '1';
-
-type ThreadSeed = {id: string; body: string; resolved?: boolean};
+const KEY = '26';
 
 type Run = {
   commits?: number;
   signal?: 'Wait' | 'Hand-off' | null;
   files?: readonly string[];
-  diff?: string;
-  threads?: readonly ThreadSeed[];
-  comments?: WindowComment[];
-  requirements?: readonly {capability: string; name: string; causes: readonly string[]}[];
-  boundaries?: readonly {capability: string; causes: readonly string[]}[];
-  places?: readonly {file: string; line: number; causes: readonly string[]}[];
-  pulls?: 'one' | 'none';
-  parent?: string;
-  seen?: string[];
+  comments?: {body: string; manager?: boolean}[];
 };
 
 function source(paths: readonly string[]): FileSource {
@@ -49,7 +37,11 @@ function source(paths: readonly string[]): FileSource {
   };
 }
 
-async function run(over: Run = {}): Promise<{comments: WindowComment[]; posted: string[]}> {
+function file(name: string): string {
+  return `${changeDir(KEY)}/${name}`;
+}
+
+async function runEndStep(over: Run = {}): Promise<string[]> {
   const comments = (over.comments ?? []).map(comment => ({...comment}));
   const posted: string[] = [];
   const tracker = {
@@ -61,293 +53,205 @@ async function run(over: Run = {}): Promise<{comments: WindowComment[]; posted: 
       comments.push({body});
     },
   } as Pick<Tracker, 'comments' | 'comment'>;
-  const review = {
-    async pulls() {
-      if (over.pulls === 'none') {
-        return [];
-      }
-      return [{id: '9', title: '#1: title', state: 'OPEN', checks: 'green' as const}];
-    },
-    async range() {
-      return {head: 'abc', base: 'base'};
-    },
-    async threadList() {
-      return (over.threads ?? []).map(thread => ({
-        id: thread.id,
-        comment: '1',
-        path: 'src/a.ts',
-        line: 1,
-        resolved: thread.resolved ?? false,
-        body: thread.body,
-      }));
-    },
-  } as Pick<Review, 'pulls' | 'range' | 'threadList'>;
-  const vcs = {
-    filesAt: () => source(over.files ?? []),
-    async contentCommit() {
-      return over.parent ?? 'abc';
-    },
-    async compare(_base: string, head: string) {
-      over.seen?.push(head);
-      return {commits: '1', diff: over.diff ?? ''};
-    },
-  } as Pick<Vcs, 'compare' | 'filesAt' | 'contentCommit'>;
   await endStep(
     KEY,
     {commits: over.commits ?? 0, signal: over.signal},
     {
       tracker,
-      review,
-      vcs,
-      requirements: over.requirements,
-      boundaries: over.boundaries,
-      places: over.places,
+      review: {pulls: async () => [], range: async () => ({head: 'a', base: 'b'}), threadList: async () => []},
+      vcs: {filesAt: () => source(over.files ?? []), compare: async () => null, contentCommit: async () => 'a'},
     },
   );
-  return {comments, posted};
+  return posted;
 }
 
-function dir(): string {
-  return changeDir(KEY);
-}
-
-function file(name: string): string {
-  return path.join(dir(), name);
-}
-
-async function proveASignalWithNewTextAppendsAComment(): Promise<void> {
-  const older = 'sdd:focus\nPlan solid\n';
-  const {comments, posted} = await run({
-    commits: 1,
-    files: [file('notes.md')],
-    comments: [{body: older}, {body: 'sdd:focus\nCode solid\n', manager: true}],
-  });
-  assert.equal(posted.length, 1);
-  assert.equal(posted[0].startsWith('sdd:focus\n'), true);
-  assert.equal(comments[0]?.body, older);
-  assert.equal(comments[1]?.manager, true);
-  assert.equal(comments[2]?.body, posted[0]);
-}
-
-async function proveTheSameTextAddsNothing(): Promise<void> {
-  const same = 'sdd:focus\nChange solid\n';
-  const {comments, posted} = await run({
-    signal: 'Wait',
-    files: [file('notes.md')],
-    comments: [{body: same}, {body: 'sdd:focus\nPlan gap\n', manager: true}],
-  });
-  assert.deepEqual(posted, []);
-  assert.equal(comments.length, 2);
-  assert.equal(comments[0]?.body, same);
-}
-
-async function proveNoSignalLeavesThePlaque(): Promise<void> {
-  const body = 'sdd:focus\nChange solid\n';
-  const {comments, posted} = await run({
-    files: [file('notes.md')],
-    diff: 'diff --git a/src/a.ts\n',
-    comments: [{body}],
-  });
-  assert.deepEqual(posted, []);
-  assert.equal(comments.length, 1);
-  const root = mkdtempSync(path.join(tmpdir(), 'focus-plaque-'));
-  const arcadia = path.join(root, 'arcadia');
-  const home = path.join(root, 'home.yaml');
-  const checkout = path.join(arcadia, 'services', 'billing');
-  mkdirSync(path.join(checkout, 'openspec'), {recursive: true});
-  writeFileSync(
-    path.join(checkout, 'openspec', 'config.yaml'),
-    'sdd:\n  queues:\n    - name: alpha\n',
-  );
-  writeFileSync(home, `watch:\n  - alpha\nroots:\n  arcadia: ${arcadia}\n`);
-  const window = openWindow(
-    {homePath: home, adapter: 'tracker'},
-    {
-      login: () => 'ada',
-      tickets: () => [
-        {
-          key: KEY,
-          title: KEY,
-          assignee: 'ada',
-          queue: 'alpha',
-          sddService: 'services/billing',
-          labels: ['sdd:cycle', 'sdd:implementing'],
-          comments,
-        },
-      ],
+async function runFocus(
+  body: string,
+  over: Omit<Run, 'commits' | 'signal'> = {},
+): Promise<{posted: string[]; comments: {body: string; manager?: boolean}[]}> {
+  const comments = (over.comments ?? []).map(comment => ({...comment}));
+  const posted: string[] = [];
+  const tracker = {
+    async comments() {
+      return comments.map(comment => ({...comment}));
     },
-  );
-  window.openCard(KEY);
-  const plaque = window.sidebar().find(block => block.kind === 'focus');
-  assert.deepEqual(plaque, {kind: 'focus', body: 'Change solid\n'});
-  rmSync(root, {recursive: true, force: true});
+    async comment(_key: string, text: string) {
+      posted.push(text);
+      comments.push({body: text});
+    },
+  } as Pick<Tracker, 'comments' | 'comment'>;
+  await postFocusComment(KEY, body, {tracker, vcs: {filesAt: () => source(over.files ?? [file('proposal.md')])}});
+  return {posted, comments};
 }
 
-async function proveNoChangeFileMeansNoFocusComment(): Promise<void> {
-  const {posted} = await run({
-    commits: 1,
-    files: [],
-    diff: 'diff --git a/src/a.ts\n+line\n',
-    threads: [{id: 'PRRT_9', body: 'sdd:layer=code → implementing the file fails'}],
-  });
-  assert.deepEqual(posted, []);
-}
+spec('focus', () => {
+  requirement('The skill writes a focus comment when the artifact is published', () => {
+    scenario('The skill of the phase writes this comment when the artifact is published', async () => {
+      const {posted} = await runFocus('sdd:focus:plan\nThe proposal names scope and one capability.\n');
+      assert.equal(posted.length, 1);
+      assert.equal(posted[0]?.startsWith('sdd:focus:plan\n'), true);
+      const machine = await runEndStep({commits: 1, files: [file('proposal.md')]});
+      assert.deepEqual(machine, []);
+    });
 
-async function proveChangeIsSolidWhenTheDirectoryExists(): Promise<void> {
-  const {posted} = await run({
-    commits: 1,
-    files: [file('notes.md')],
-  });
-  assert.deepEqual(posted, ['sdd:focus\nChange solid\n']);
-}
+    scenario('A focus comment is prose for one phase or the whole pull request', async () => {
+      const phase = await runFocus('sdd:focus:spec\nDelta specs name observable behavior.\n');
+      const whole = await runFocus('sdd:focus\nThe pull request closes the focus digest gap.\n', {
+        comments: [{body: phase.posted[0] ?? ''}],
+      });
+      assert.equal(focusMarkerLine(phase.posted[0] ?? ''), 'sdd:focus:spec');
+      assert.equal(focusMarkerLine(whole.posted[0] ?? ''), 'sdd:focus');
+    });
 
-async function proveCodeUsesTheParentDiffOfAnArchiveCommit(): Promise<void> {
-  const seen: string[] = [];
-  const {posted} = await run({
-    commits: 1,
-    files: [file('proposal.md')],
-    diff: 'diff --git a/src/a.ts\n+line\n',
-    parent: 'parentsha',
-    seen,
-  });
-  assert.deepEqual(seen, ['parentsha']);
-  assert.equal(posted.length, 1);
-  assert.equal(posted[0].includes('Code'), true);
-}
+    scenario('The first line is the marker sdd:focus:plan, sdd:focus:spec, sdd:focus:design, sdd:focus:tasks, sdd:focus:code, or sdd:focus', () => {
+      for (const marker of FOCUS_MARKER_LINES) {
+        assert.equal(focusMarkerLine(`${marker}\nprose`), marker);
+        assert.equal(isFocusRecord(`${marker}\nprose`), true);
+      }
+      assert.equal(focusMarkerLine('sdd:focus:phase\nprose'), null);
+      assert.equal(isFocusRecord('sdd:focus:phase\nprose'), false);
+    });
 
-async function proveCodeIsOmittedWithoutADiff(): Promise<void> {
-  const {posted} = await run({
-    commits: 1,
-    files: [file('notes.md')],
-    diff: '',
-    threads: [{id: 'PRRT_9', body: 'sdd:layer=code → implementing the file fails'}],
-    places: [{file: 'src/a.ts', line: 3, causes: ['here']}],
-  });
-  assert.equal(posted.length, 1);
-  assert.equal(posted[0].includes('Code'), false);
-  assert.equal(posted[0].includes('PRRT_9'), false);
-  assert.equal(posted[0].includes('src/a.ts'), false);
-}
+    scenario('The layer ledger is not the comment a person reads', async () => {
+      const {posted} = await runFocus('sdd:focus:tasks\nThree slices cover publish, window, and threads.\n');
+      const body = posted[0] ?? '';
+      assert.equal(body.includes('Plan solid'), false);
+      assert.equal(body.includes('thread PRRT'), false);
+      assert.equal(body.includes('src/a.ts'), false);
+    });
 
-async function proveASpecMarkerLandsOnSpecify(): Promise<void> {
-  const {posted} = await run({
-    signal: 'Hand-off',
-    files: [file('specs/preset/spec.md')],
-    threads: [{id: 'PRRT_4', body: 'sdd:layer=spec → specifying the remark asks for a scenario'}],
-  });
-  assert.deepEqual(posted, [
-    [
-      'sdd:focus',
-      'Change solid',
-      'Specify thread PRRT_4',
-      'specifying the remark asks for a scenario',
-      '',
-    ].join('\n'),
-  ]);
-}
+    scenario('Older focus comments remain', async () => {
+      const older = 'sdd:focus:plan\nFirst plan focus.\n';
+      const {comments, posted} = await runFocus('sdd:focus:spec\nSpec focus follows.\n', {
+        comments: [{body: older}],
+      });
+      assert.equal(posted.length, 1);
+      assert.equal(comments[0]?.body, older);
+      assert.equal(comments.length, 2);
+    });
 
-async function proveChangeTakesNoThread(): Promise<void> {
-  const {posted} = await run({
-    commits: 1,
-    files: [file('specs/preset/spec.md')],
-    threads: [{id: 'PRRT_4', body: 'sdd:layer=spec → specifying the remark asks for a scenario'}],
-  });
-  const change = posted[0]?.split('\n').find(line => line.startsWith('Change '));
-  assert.equal(change, 'Change solid');
-}
+    scenario('The same text does not add another comment', async () => {
+      const same = 'sdd:focus:design\nBoundary names focus tests.\n';
+      const first = await runFocus(same);
+      const second = await runFocus(same, {comments: [{body: first.posted[0] ?? ''}]});
+      assert.equal(first.posted.length, 1);
+      assert.deepEqual(second.posted, []);
+    });
 
-async function proveARequirementPointerNamesTheRequirement(): Promise<void> {
-  const {posted} = await run({
-    commits: 1,
-    files: [file('specs/preset/spec.md')],
-    requirements: [
-      {
-        capability: 'preset',
-        name: 'The cache keeps the first hit',
-        causes: ['the scenario is not observed', 'the name stays'],
-      },
-    ],
-  });
-  assert.deepEqual(posted, [
-    [
-      'sdd:focus',
-      'Change solid',
-      'Specify requirement preset The cache keeps the first hit',
-      'the scenario is not observed; the name stays',
-      '',
-    ].join('\n'),
-  ]);
-}
+    scenario('No signal leaves the comment', async () => {
+      const body = 'sdd:focus:code\nImplement slice one.\n';
+      const posted = await runEndStep({files: [file('tasks.md')], comments: [{body}]});
+      assert.deepEqual(posted, []);
+    });
 
-async function proveTheCommentHasNoCoverageCount(): Promise<void> {
-  const {posted} = await run({
-    commits: 1,
-    files: [file('specs/preset/spec.md')],
-    diff: 'diff --git a/src/a.ts\n@@ -1 +1 @@\n+coverage 12/40\nDIFF_BODY_UNIQUE\n',
-    threads: [
-      {
-        id: 'PRRT_1',
-        body: 'sdd:layer=spec → specifying the scenario is missing\nretry 1/3\ncoverage 12/40\ndiff --git a/src/a.ts\n+added',
-      },
-    ],
+    scenario('No change file means no focus comment', async () => {
+      const posted = await runEndStep({commits: 1, files: []});
+      assert.deepEqual(posted, []);
+      const focus = await runFocus('sdd:focus:plan\nNo directory.\n', {files: []});
+      assert.deepEqual(focus.posted, []);
+    });
   });
-  assert.equal(posted.length, 1);
-  const body = posted[0] ?? '';
-  assert.equal(body.includes('the scenario is missing'), true);
-  assert.equal(body.includes('retry 1/3'), true);
-  assert.equal(body.includes('12/40'), false);
-  assert.equal(body.includes('DIFF_BODY_UNIQUE'), false);
-  assert.equal(body.includes('diff --git'), false);
-  assert.equal(body.includes('+added'), false);
-  assert.equal(body.includes('+coverage'), false);
-}
 
-test('a marker lands on its mirror layer, and Plan and Tasks with no thread are solid', async () => {
-  const {posted} = await run({
-    commits: 1,
-    files: [file('proposal.md'), file('design.md'), file('tasks.md'), file('specs/preset/spec.md')],
-    diff: 'diff --git a/src/a.ts\n+line\n',
-    threads: [
-      {id: 'P1', body: 'sdd:layer=proposal → proposing the outcome line is wrong'},
-      {id: 'D1', body: 'sdd:layer=design → designing the boundary is missing'},
-      {id: 'T1', body: 'sdd:layer=tasks → tasking the slice is too big'},
-      {id: 'C1', body: 'sdd:layer=code → implementing the test fails'},
-      {id: 'OUT', body: 'sdd:layer=out → implementing not this cycle'},
-      {id: 'NOTE', body: 'sdd:note leave this'},
-    ],
-    boundaries: [{capability: 'preset', causes: ['the boundary names no command']}],
+  requirement('The prose says what the phase produced', () => {
+    scenario('The prose says what this phase produced', async () => {
+      const prose = 'Design names the focus verb and the window seam.';
+      const {posted} = await runFocus(`sdd:focus:design\n${prose}\n`);
+      assert.equal(posted[0]?.includes(prose), true);
+    });
+
+    scenario('Something weak or that must be looked at is said too', async () => {
+      const {posted} = await runFocus(
+        'sdd:focus:plan\nScope is clear; the outcome line still needs a sharper caller verb.\n',
+      );
+      assert.equal(posted[0]?.includes('needs a sharper'), true);
+    });
+
+    scenario('Open questions are pointed at by place and count', async () => {
+      const {posted} = await runFocus(
+        'sdd:focus:plan\nPlan is drafted; proposal.md still has 2 open questions.\n',
+      );
+      const body = posted[0] ?? '';
+      assert.equal(body.includes('2 open questions'), true);
+      assert.equal(body.includes('- [ ]'), false);
+    });
+
+    scenario('A clean phase omits the weak-spot sentence', async () => {
+      const {posted} = await runFocus('sdd:focus:tasks\nTasks slice the delta into three commits.\n');
+      assert.equal(posted[0]?.includes('weak'), false);
+      assert.equal(posted[0]?.includes('looked at'), false);
+    });
+
+    scenario('A phase with no open questions omits the pointer', async () => {
+      const {posted} = await runFocus('sdd:focus:spec\nSpecs cover every ADDED scenario.\n');
+      assert.equal(posted[0]?.includes('open questions'), false);
+    });
+
+    scenario('There is no fixed heading the writer fills in', async () => {
+      const {posted} = await runFocus('sdd:focus:code\nFocus posts through the tracker port only.\n');
+      const body = posted[0] ?? '';
+      assert.equal(body.includes('## Produced'), false);
+      assert.equal(body.includes('Weak spot:'), false);
+    });
   });
-  assert.deepEqual(posted, [
-    [
-      'sdd:focus',
-      'Change solid',
-      'Plan thread P1',
-      'proposing the outcome line is wrong',
-      'Specify solid',
-      'Design thread D1; boundary preset',
-      'designing the boundary is missing',
-      'the boundary names no command',
-      'Tasks thread T1',
-      'tasking the slice is too big',
-      'Code thread C1',
-      'implementing the test fails',
-      '',
-    ].join('\n'),
-  ]);
-  assert.equal(posted[0]?.includes('OUT'), false);
-  assert.equal(posted[0]?.includes('leave this'), false);
+
+  requirement('The sidebar focus block shows the latest focus prose', () => {
+    scenario('The sidebar focus block shows the latest marker as a badge and the prose under it', () => {
+      const comments = [
+        {body: 'sdd:focus:plan\nOlder plan focus.\n'},
+        {body: 'sdd:focus:spec\nLatest spec focus.\n'},
+      ];
+      assert.equal(focusMarkerLine(comments[1]?.body ?? ''), 'sdd:focus:spec');
+      assert.equal(focusPlaque(comments), 'Latest spec focus.\n');
+    });
+
+    scenario('The spine row of that phase keeps the first sentence of its own latest phase comment', () => {
+      const comment = 'sdd:focus:plan\nPlan names scope. A second sentence stays on the row.\n';
+      assert.equal(firstFocusSentence(comment), 'Plan names scope.');
+      assert.equal(focusMirrorName(focusMarkerLine(comment) ?? 'sdd:focus'), 'Plan');
+    });
+
+    scenario('A whole-pull-request comment belongs to the focus block and to no single row', () => {
+      const comment = 'sdd:focus\nWhole pull request summary.\n';
+      assert.equal(focusMirrorName(focusMarkerLine(comment) ?? 'sdd:focus'), null);
+      assert.equal(focusProse(comment), 'Whole pull request summary.');
+    });
+
+    scenario('A manager comment is not the focus block', () => {
+      const comments = [
+        {body: 'sdd:focus:tasks\nTask slice prose.\n'},
+        {body: 'manager note', manager: true},
+      ];
+      assert.equal(focusPlaque(comments), 'Task slice prose.\n');
+    });
+  });
+
+  requirement('A marker lands on the mirror name', () => {
+    scenario('Phase movement stays on sdd:layer= threads', () => {
+      assert.deepEqual(parseMarker('sdd:layer=spec → specifying'), {kind: 'layer', layer: 'spec'});
+      assert.equal(focusMarkerLine('sdd:focus:spec\nprose'), 'sdd:focus:spec');
+      assert.equal(parseMarker('sdd:focus:spec\nprose'), null);
+    });
+
+    scenario('Change takes no thread', () => {
+      assert.equal(focusMirrorName('sdd:focus'), null);
+      assert.equal(focusMarkerLine('sdd:focus:change\nprose'), null);
+    });
+  });
 });
 
-test('a review place names the file and the line on Code', async () => {
-  const {posted} = await run({
-    commits: 1,
-    files: [file('notes.md')],
-    diff: 'diff --git a/src/a.ts\n+line\n',
-    places: [{file: 'src/a.ts', line: 4, causes: ['the check failed']}],
+test('focus args take the issue key and the body', () => {
+  assert.deepEqual(focusArgs(['26', 'sdd:focus:plan\nProse']), {
+    key: '26',
+    body: 'sdd:focus:plan\nProse',
   });
-  assert.deepEqual(posted, [
-    ['sdd:focus', 'Change solid', 'Code src/a.ts:4', 'the check failed', ''].join('\n'),
-  ]);
+  assert.equal(focusArgs([]), null);
+});
+
+test('postFocus refuses an unrecognized marker line', async () => {
+  await assert.rejects(
+    postFocus({key: '26', body: 'sdd:focus:phase\nnope\n'}, {vcs: {filesAt: () => source([file('proposal.md')])}, tracker: {comments: async () => [], comment: async () => {}}}),
+    /recognized/,
+  );
 });
 
 test('a commit is Publish, a new marker is Hand-off, a new wait is Wait, and a still cycle is no signal', () => {
@@ -356,111 +260,7 @@ test('a commit is Publish, a new marker is Hand-off, a new wait is Wait, and a s
   assert.equal(observedSignal(0, quiet, quiet), null);
   assert.equal(observedSignal(0, quiet, {...quiet, waiting: true, comments: 1}), 'Wait');
   assert.equal(
-    observedSignal(0, {...quiet, waiting: true, comments: 1}, {...quiet, waiting: true, comments: 1}),
-    null,
-  );
-  assert.equal(observedSignal(0, quiet, {...quiet, threads: ['T1']}), 'Hand-off');
-  assert.equal(
     observedSignal(0, quiet, {...quiet, spoken: ['sdd:layer=code → implementing the test fails']}),
     'Hand-off',
   );
-  assert.equal(
-    observedSignal(
-      0,
-      {...quiet, spoken: ['sdd:layer=spec → kept']},
-      {...quiet, spoken: ['sdd:layer=spec → kept']},
-    ),
-    null,
-  );
-});
-
-async function proveAReviewPlaceOpensThePortUrl(): Promise<void> {
-  const {dir, home, arcadia} = yard();
-  prepare(arcadia, home);
-  const body = ['sdd:focus', 'Change solid', 'Code src/a.ts:4', 'the check failed', ''].join('\n');
-  let asked: {file: string; line: number} | undefined;
-  let calls = 0;
-  const window = openWindow(
-    {homePath: home, adapter: 'tracker'},
-    {
-      login: () => MANAGER,
-      tickets: () => [
-        cycle('1', 'implementing', {
-          comments: [{body}],
-        }),
-      ],
-      reviewPlace: place => {
-        calls += 1;
-        asked = place;
-        return 'https://arcanum.example/review/42';
-      },
-    },
-  );
-  window.openCard('1');
-  const card = columnCards(window.board(), 'implementing')?.[0];
-  assert.equal(card?.layers, 'Code');
-  assert.equal(JSON.stringify(card).includes('src/a.ts'), false);
-  assert.equal(JSON.stringify(card).includes('the check failed'), false);
-  assert.equal(window.openReviewPlace('src/a.ts', 4), 'https://arcanum.example/review/42');
-  assert.deepEqual(asked, {file: 'src/a.ts', line: 4});
-  assert.equal(window.openReviewPlace('src/b.ts', 4), undefined);
-  assert.equal(calls, 1);
-  const plaque = window.sidebar().find(block => block.kind === 'focus');
-  assert.deepEqual(plaque, {
-    kind: 'focus',
-    body: 'Change solid\nCode src/a.ts:4\nthe check failed\n',
-  });
-  rmSync(dir, {recursive: true, force: true});
-}
-
-spec('focus', () => {
-  requirement('Focus is a new issue comment after a signal', () => {
-    scenario('A signal with new text appends a comment', async () => {
-      await proveASignalWithNewTextAppendsAComment();
-    });
-    scenario('The same text adds nothing', async () => {
-      await proveTheSameTextAddsNothing();
-    });
-    scenario('No signal leaves the plaque', async () => {
-      await proveNoSignalLeavesThePlaque();
-    });
-    scenario('No change file means no focus comment', async () => {
-      await proveNoChangeFileMeansNoFocusComment();
-    });
-  });
-  requirement('The window shows the body after the marker line', () => {
-    scenario('A manager comment is not the plaque', () => {
-      proveTheSidebarFocusPlaqueDoesNotIncludeTheMarkerLine121();
-    });
-  });
-  requirement('A layer is written when its file exists', () => {
-    scenario('Change is solid when the directory exists', async () => {
-      await proveChangeIsSolidWhenTheDirectoryExists();
-    });
-    scenario('Code is omitted without a diff', async () => {
-      await proveCodeIsOmittedWithoutADiff();
-    });
-    scenario('Code uses the parent diff of an archive commit', async () => {
-      await proveCodeUsesTheParentDiffOfAnArchiveCommit();
-    });
-  });
-  requirement('A marker lands on the mirror name', () => {
-    scenario('A spec marker lands on Specify', async () => {
-      await proveASpecMarkerLandsOnSpecify();
-    });
-    scenario('Change takes no thread', async () => {
-      await proveChangeTakesNoThread();
-    });
-  });
-  requirement('A gap is one pointer and a why line', () => {
-    scenario('A requirement pointer names the requirement', async () => {
-      await proveARequirementPointerNamesTheRequirement();
-    });
-    scenario('A review place opens the port URL', async () => {
-      await proveAReviewPlaceOpensThePortUrl();
-    });
-    scenario('The comment has no coverage count', async () => {
-      await proveTheCommentHasNoCoverageCount();
-    });
-  });
 });

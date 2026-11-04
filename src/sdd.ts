@@ -8,6 +8,8 @@ import {solverRoot, turn, type Machine} from './adapters/compose.ts';
 import {openMachine} from './adapters/load.ts';
 import {packageLinks} from './adapters/vcs.ts';
 import {readChange} from './machine/change.ts';
+import {postFocusComment} from './machine/focus.ts';
+import {focusMarkerLine} from './machine/marker.ts';
 import {applyLabels, pick, resolveCycle} from './machine/flow.ts';
 import {openWait, setPhase, setWait} from './machine/labels.ts';
 import {parseMarker} from './machine/marker.ts';
@@ -32,6 +34,7 @@ import {loadCycle} from './machine/snapshot.ts';
 //   sdd thread resolve <thread>
 //   sdd thread fix <key> <pull> <thread> | thread fix <key> <pull> --conversation
 //   sdd mirror <key> <Layer> <text>
+//   sdd focus <key> '<body>'
 
 function fail(message: string): never {
   console.error(message);
@@ -46,7 +49,7 @@ function need(value: string | undefined, usage: string): string {
 }
 
 const usage =
-  'Usage: sdd plan | step <key> [--auto-plan] [--auto-spec] [--auto-design] | worktree <key> | assign <key> | set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key> | publish <key> "<title>" | checks <pull> | threads <pull> [--layer <layer>] [--unmarked] | thread open|reply|say|resolve ... | thread fix <key> <pull> <thread>|--conversation | mirror <key> <Layer> <text>';
+  'Usage: sdd plan | step <key> [--auto-plan] [--auto-spec] [--auto-design] | worktree <key> | assign <key> | set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key> | publish <key> "<title>" | focus <key> "<body>" | checks <pull> | threads <pull> [--layer <layer>] [--unmarked] | thread open|reply|say|resolve ... | thread fix <key> <pull> <thread>|--conversation | mirror <key> <Layer> <text>';
 
 const AUTO_LABEL: Record<string, string> = {
   '--auto-plan': 'sdd:auto-plan',
@@ -220,6 +223,7 @@ const verbs: Record<string, Verb> = {
   unwait,
   accept,
   publish: publishCommand,
+  focus: focusCommand,
   checks,
   threads,
   thread,
@@ -371,6 +375,40 @@ async function publishCommand(box: Machine, rest: string[]): Promise<void> {
     fail(usage);
   }
   console.log(await publish({key, title}, box));
+}
+
+/** `focus <key> "<body>"`. Body is the marker line plus prose. */
+export function focusArgs(rest: string[]): {key: string; body: string} | null {
+  const key = rest[0];
+  const body = rest.slice(1).join(' ');
+  if (!key || !body || key.startsWith('-')) {
+    return null;
+  }
+  return {key, body};
+}
+
+export async function postFocus(
+  args: {key: string; body: string},
+  deps: {
+    tracker: Pick<Machine['tracker'], 'comments' | 'comment'>;
+    vcs: Pick<Machine['vcs'], 'filesAt'>;
+  },
+): Promise<string> {
+  if (!focusMarkerLine(args.body)) {
+    throw new Error(
+      'Focus comment must start with a recognized sdd:focus marker (sdd:focus, sdd:focus:plan, sdd:focus:spec, sdd:focus:design, sdd:focus:tasks, or sdd:focus:code) on the first line.',
+    );
+  }
+  const posted = await postFocusComment(args.key, args.body, deps);
+  return posted ? `#${args.key}: focus comment posted` : `#${args.key}: focus comment unchanged`;
+}
+
+async function focusCommand(box: Machine, rest: string[]): Promise<void> {
+  const args = focusArgs(rest);
+  if (!args) {
+    fail(usage);
+  }
+  console.log(await postFocus(args, box));
 }
 
 async function checks(box: Machine, rest: string[]): Promise<void> {

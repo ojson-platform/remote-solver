@@ -30,7 +30,7 @@ A file the task does not name stays unread and unedited: other changes, ADRs, a 
 4. **Implement the task.** For each scenario the task names, do 4.1 and then 4.2 before the next scenario. The substeps still hold. One commit covers the whole task.
    4.1 **Write the test red.** The test file is the path in `## Proof`. The test name contains this scenario's title. The test observes only what `## Proof` says. Run the one-file command from `## Proof`. Red is the test whose name contains this scenario's title failing on its assertion or on behavior that is not there yet. Exit 0, a test file that does not load, or a run that collects no test is not red: rewrite the test. Do not edit a file from `## Source` before the command is red.
    4.2 **Edit source code** only as `## Source` says, and only enough for this scenario. Run that same one-file command and the layer command from the card. The one-file command exits 0. The layer command exits 0, or its only coverage gaps are scenarios this task does not name. Those gaps belong to their own tasks. Run the fast suite and the type check when the card names them. A failing assertion outside this task: revert the code and Hand-off to `code` on the failing file, cause the failing test. Do not choose a command the card did not write.
-5. Check this task's `- [x]` only. One commit naming `<id>`. Publish (`CONTEXT.md`). Mirror: `Tasks`.
+5. Check this task's `- [x]` only. One commit naming `<id>`. Publish (`CONTEXT.md`). When source or tests from the task are in the commit, focus with marker `sdd:focus:code`. Mirror: `Tasks`.
 
 ## Check
 

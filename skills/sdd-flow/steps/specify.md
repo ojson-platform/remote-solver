@@ -19,7 +19,7 @@ Writes observable behavior. Zoom is the black box. The delta grammar is `CONTEXT
 3. A local proposal change: edit the requirements and scenarios it changes, including ones it drops.
 4. `improve-specs`: Fix thread (`CONTEXT.md`), layer `spec`. A thread that drops a requirement or scenario writes that drop in the delta. `proposal.md` stays. A reply that says which write a named capability does not change rewrites that capability's scenario to that write.
 5. Run `openspec validate --all --strict --no-interactive`. Exit non-zero on a spec this change owns: fix that file and run it again. A failure in a spec this change does not own: do not edit it. Do not publish while a spec this change owns fails.
-6. Publish (`CONTEXT.md`). Mirror: `Specify`.
+6. Publish (`CONTEXT.md`). When a delta spec is in the commit, focus with marker `sdd:focus:spec`. Mirror: `Specify`.
 
 ## Check
 

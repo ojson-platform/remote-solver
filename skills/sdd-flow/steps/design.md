@@ -22,7 +22,7 @@ Writes the technical decision for this change.
    When the service describes its architecture, record the seams of this change in the service model.
 4. No decision yet: an open decision item. Leave it open.
 5. `improve-design`: Fix thread (`CONTEXT.md`), layer `design`. A thread on an open decision records the choice and checks that item in the same commit, before a hand-off or `thread fix`. The hand-off is a new thread on the other layer's file.
-6. Publish (`CONTEXT.md`). Mirror: `Design`. Open decisions do not delay the push.
+6. Publish (`CONTEXT.md`). When `design.md` is in the commit, focus with marker `sdd:focus:design`. Mirror: `Design`. Open decisions do not delay the push.
 7. An open decision remains: Wait (`CONTEXT.md`) with the open decision.
 
 ## Check

@@ -134,24 +134,41 @@ export function focusBlockProse(marker: FocusMarkerLine, body: string): string {
   return rest.length === 0 ? '' : `${rest.join('\n')}\n`;
 }
 
-/** Latest first sentence per mirror layer from phase focus markers. */
-export function phaseFocusSentences(
+export type FocusCommentScan = {
+  phaseSentences: Map<string, string>;
+  latestWholeFocusBody: string | undefined;
+};
+
+/** One pass over issue comments for phase spine sentences and legacy ledger bodies. */
+export function scanFocusComments(
   comments: readonly WindowComment[] | undefined,
-): Map<string, string> {
-  const out = new Map<string, string>();
+): FocusCommentScan {
+  const phaseSentences = new Map<string, string>();
+  let latestWholeFocusBody: string | undefined;
   for (const comment of comments ?? []) {
     if (comment.manager || !isFocusRecord(comment.body)) {
       continue;
     }
     const marker = focusMarkerLine(comment.body);
-    if (marker === null || marker === 'sdd:focus') {
+    if (marker === null) {
+      continue;
+    }
+    if (marker === 'sdd:focus') {
+      latestWholeFocusBody = comment.body.split('\n').slice(1).join('\n');
       continue;
     }
     const layer = focusMirrorName(marker);
     const sentence = firstFocusSentence(comment.body);
     if (layer && sentence) {
-      out.set(layer, sentence);
+      phaseSentences.set(layer, sentence);
     }
   }
-  return out;
+  return {phaseSentences, latestWholeFocusBody};
+}
+
+/** Latest first sentence per mirror layer from phase focus markers. */
+export function phaseFocusSentences(
+  comments: readonly WindowComment[] | undefined,
+): Map<string, string> {
+  return scanFocusComments(comments).phaseSentences;
 }

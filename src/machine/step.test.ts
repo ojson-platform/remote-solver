@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync} from 'node:fs';
+import {existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 
@@ -302,6 +302,16 @@ spec('step', () => {
       assert.equal(realpathSync(printed), realpathSync(held));
       assert.equal(readFileSync(path.join(held, 'note.txt'), 'utf8'), 'keep\n');
       assert.equal(existsSync(path.join(service, '.worktrees', 'sdd-1')), false);
+    });
+    scenario('A checkout does not link node_modules to itself', async () => {
+      const service = serviceRepo();
+      const modules = path.join(service, 'node_modules');
+      mkdirSync(modules);
+      const checkout = await runWorktree(service, '1');
+      const link = path.join(checkout, 'node_modules');
+      assert.equal(readlinkSync(link), modules);
+      await runWorktree(checkout, '1');
+      assert.equal(readlinkSync(link), modules);
     });
   });
 });

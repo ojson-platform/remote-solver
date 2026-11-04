@@ -25,7 +25,11 @@ export function linkCommand(links: Link[], serviceRoot: string): string {
   }
   const modules = path.join(serviceRoot, 'node_modules');
   if (existsSync(modules)) {
-    steps.push(`ln -sfn ${shQuote(modules)} node_modules`);
+    const target = shQuote(modules);
+    // A checkout that is itself the service root already holds this path. Linking it again points node_modules at itself.
+    steps.push(
+      `if [ "$(cd "$(dirname ${target})" && pwd -P)/$(basename ${target})" != "$(pwd -P)/node_modules" ]; then ln -sfn ${target} node_modules; fi`,
+    );
     excluded.push('/node_modules');
   }
   const skills = links.find(link => link.to === 'skills');

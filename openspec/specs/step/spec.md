@@ -73,7 +73,7 @@ When `step` is given `--auto-plan`, `--auto-spec`, or `--auto-design`, it SHALL 
 
 ### Requirement: Worktree prepares the session checkout
 
-`worktree <key>` SHALL check out branch `sdd/<key>` at `.worktrees/sdd-<key>`, creating the checkout when it is missing and reusing it when it exists, including when it is dirty. When that branch is already checked out in another worktree, `worktree` SHALL reuse that checkout and SHALL NOT add a second one. The spy SHALL prepare this same checkout. It SHALL print that checkout path. The package links SHALL be in that checkout. `.sandcastle/service-root` in that checkout SHALL name the service root `worktree` was run from. A dirty file SHALL remain. The service status SHALL NOT list `.worktrees`.
+`worktree <key>` SHALL check out branch `sdd/<key>` at `.worktrees/sdd-<key>`, creating the checkout when it is missing and reusing it when it exists, including when it is dirty. When that branch is already checked out in another worktree, `worktree` SHALL reuse that checkout and SHALL NOT add a second one. The spy SHALL prepare this same checkout. It SHALL print that checkout path. The package links SHALL be in that checkout. `.sandcastle/service-root` in that checkout SHALL name the service root `worktree` was run from. A dirty file SHALL remain. The service status SHALL NOT list `.worktrees`. A `node_modules` link that already names the service `node_modules` SHALL stay pointed there when `worktree` runs again from that checkout.
 
 #### Scenario: A missing checkout is created
 
@@ -91,3 +91,8 @@ When `step` is given `--auto-plan`, `--auto-spec`, or `--auto-design`, it SHALL 
 
 - **WHEN** branch `sdd/<key>` is already checked out outside `.worktrees` and that checkout contains an uncommitted file, and `worktree` is run
 - **THEN** the printed path is that checkout, the file is still there, and `.worktrees/sdd-<key>` does not exist
+
+#### Scenario: A checkout does not link node_modules to itself
+
+- **WHEN** the session checkout links `node_modules` to the service `node_modules`, and `worktree` is run again from that checkout
+- **THEN** `node_modules` still points at the service `node_modules`

@@ -5,7 +5,6 @@ import {ghErrorLine, githubPauseRemaining} from './adapters/github.ts';
 import {tryHoldIssue} from './adapters/lock.ts';
 import {claimChat, clearChat} from './adapters/session.ts';
 import {performCycle} from './machine/flow.ts';
-import {endStep, observedSignal, runMarks} from './machine/focus.ts';
 import {exited, signature, tick, type State} from './machine/scheduler.ts';
 import {modeOfSkill} from './machine/skill.ts';
 import {contentFiles} from './machine/port.ts';
@@ -76,7 +75,6 @@ async function driveHeldIssue(box: Machine, key: string, watch?: SpyWatch): Prom
     }
     watch?.onTurn?.(key, {issue: key, phase: decision.phase, action: decision.action});
     console.log(`\n#${key} ${decision.phase} → ${decision.action} (${decision.skill})`);
-    const before = await runMarks(key, box);
     const record = await box.tracker.issue(key);
     const outcome = await runtime.run({
       skill: decision.skill,
@@ -100,9 +98,6 @@ async function driveHeldIssue(box: Machine, key: string, watch?: SpyWatch): Prom
         `#${key} tokens in ${outcome.usage.inputTokens} out ${outcome.usage.outputTokens}`,
       );
     }
-    const signal =
-      outcome.signal ?? observedSignal(outcome.commits, before, await runMarks(key, box));
-    await endStep(key, {...outcome, signal}, box);
     if (outcome.commits === 0) {
       console.error(
         `Stopped: ${decision.action} made no commit, so the next poll would repeat it.`,

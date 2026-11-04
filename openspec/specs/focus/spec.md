@@ -6,89 +6,118 @@ Focus is the machine's record on a cycle of which layers are solid and which gap
 
 ## Requirements
 
-### Requirement: Focus is a new issue comment after a signal
+### Requirement: The skill writes a focus comment when the artifact is published
 
-The machine SHALL append a new issue comment when a step run ends with signal Publish, Wait, or Hand-off and the text differs from the latest `sdd:focus` comment. The comment SHALL start with the line `sdd:focus`. Older focus comments SHALL remain. The same text SHALL NOT add another comment. A run with no signal SHALL leave the plaque unchanged. The machine SHALL NOT write a focus comment until the cycle has at least one change file.
+The skill of the phase SHALL write a focus comment when that phase's artifact is published. A separate review of that artifact SHALL NOT write the focus comment. The comment SHALL be prose for one phase, or prose for the whole pull request. The first line SHALL be the marker `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, `sdd:focus:code`, or `sdd:focus` for the whole pull request. A pattern in place of those markers SHALL NOT be that first line. Older focus comments SHALL remain. The same text SHALL NOT add another comment. The machine SHALL NOT append the layer ledger (`Plan solid`, `thread N`, `file:line`) as the comment a person reads. A run with no signal SHALL leave the latest focus comment unchanged. The skill SHALL NOT write a focus comment when the cycle has no change file.
 
-#### Scenario: A signal with new text appends a comment
+#### Scenario: The skill of the phase writes this comment when the artifact is published
 
-- **WHEN** a step run ends with Publish and the focus text differs from the latest `sdd:focus` comment
-- **THEN** the issue gains a new comment that starts with `sdd:focus`
+- **WHEN** the phase's artifact is published and the skill of that phase is already the writer of this focus comment, together with a separate review of that artifact
+- **THEN** the skill of the phase writes this focus comment, and the separate review does not
 
-#### Scenario: The same text adds nothing
+#### Scenario: A focus comment is prose for one phase or the whole pull request
 
-- **WHEN** a step run ends with Wait and the focus text equals the latest `sdd:focus` comment
-- **THEN** the issue gains no focus comment
+- **WHEN** a focus comment that is prose for one phase is already visible, together with a focus comment that is prose for the whole pull request
+- **THEN** a focus comment is prose for one phase, or for the whole pull request
 
-#### Scenario: No signal leaves the plaque
+#### Scenario: The first line is the marker sdd:focus:plan, sdd:focus:spec, sdd:focus:design, sdd:focus:tasks, sdd:focus:code, or sdd:focus
 
-- **WHEN** a step run ends with no signal
-- **THEN** the latest `sdd:focus` comment stays the plaque
+- **WHEN** focus comments are already visible whose first lines are the markers `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, and `sdd:focus:code`, together with a pattern `sdd:focus:<phase>` in place of those markers and a whole-pull-request comment whose first line is the marker `sdd:focus`
+- **THEN** the first line is the marker `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, `sdd:focus:code`, or `sdd:focus` for the whole pull request, and a pattern in place of those markers is not that first line
+
+#### Scenario: The layer ledger is not the comment a person reads
+
+- **WHEN** the comment a person reads is already visible, together with the layer ledger (`Plan solid`, `thread N`, `file:line`)
+- **THEN** the machine does not append the layer ledger (`Plan solid`, `thread N`, `file:line`) as the comment a person reads
+
+#### Scenario: Older focus comments remain
+
+- **WHEN** an older focus comment is already visible, together with a newer focus comment
+- **THEN** the older focus comment remains
+
+#### Scenario: The same text does not add another comment
+
+- **WHEN** a focus comment with this text is already visible, together with the same text written again
+- **THEN** the same text does not add another comment
+
+#### Scenario: No signal leaves the comment
+
+- **WHEN** a step run ends with no signal and a focus comment is already visible
+- **THEN** that focus comment stays unchanged
 
 #### Scenario: No change file means no focus comment
 
 - **WHEN** the cycle has no change file and a step run ends with Publish
-- **THEN** the issue gains no `sdd:focus` comment
+- **THEN** the issue gains no focus comment
 
-### Requirement: The window shows the body after the marker line
+### Requirement: The sidebar focus block shows the latest focus prose
 
-The window SHALL show the body after the line `sdd:focus` and SHALL NOT recompute it. An ask, a role outcome, and a manager's comment SHALL NOT become the plaque.
+The sidebar focus block SHALL show the latest focus comment, with that marker as a badge and the prose under it. The window SHALL NOT recompute the prose. The spine row of that phase SHALL keep the first sentence of its own latest phase comment. A whole-pull-request comment SHALL belong to the focus block and to no single row. An ask, a role outcome, and a manager's comment SHALL NOT become the focus block.
 
-#### Scenario: A manager comment is not the plaque
+#### Scenario: The sidebar focus block shows the latest marker as a badge and the prose under it
 
-- **WHEN** the latest issue comment is the manager's and an older comment starts with `sdd:focus`
-- **THEN** the plaque is the body of that older comment
+- **WHEN** the sidebar focus block, the latest focus comment, that marker, that badge, and the prose under it are already visible, together with an older focus comment
+- **THEN** the sidebar focus block shows the latest of these, with that marker as a badge, and the prose under it
 
-### Requirement: A layer is written when its file exists
+#### Scenario: The spine row of that phase keeps the first sentence of its own latest phase comment
 
-The record SHALL list a layer only when its file already exists, in this order: Change, Plan, Specify, Design, Tasks, Code. Change SHALL be written when the change directory exists, and it SHALL then be `solid`. Plan SHALL be written when `proposal.md` exists. Code SHALL be written when the pull request has a diff. When the head commit contains a line `Sdd-Archive: issue-<key>` and the active change directory still has a file, that diff SHALL end at the parent of the head. A missing layer SHALL be omitted. A layer line SHALL be `solid` or a list of gaps. Change, Plan, and Tasks with no thread of their own SHALL be `solid`. A thread on a layer line SHALL be a gap of kind `thread`.
+- **WHEN** the spine row of that phase is already visible and the first sentence of its own latest phase comment is already visible, together with a whole-pull-request comment
+- **THEN** the spine row of that phase keeps the first sentence of its own latest phase comment
 
-#### Scenario: Change is solid when the directory exists
+#### Scenario: A whole-pull-request comment belongs to the focus block and to no single row
 
-- **WHEN** the change directory exists and `proposal.md` does not
-- **THEN** the record lists Change as `solid` and omits Plan
+- **WHEN** a whole-pull-request comment and the focus block are already visible, together with a single spine row
+- **THEN** the whole-pull-request comment belongs to the focus block and to no single row
 
-#### Scenario: Code is omitted without a diff
+#### Scenario: A manager comment is not the focus block
 
-- **WHEN** the pull request has no diff
-- **THEN** the record omits Code
-
-#### Scenario: Code uses the parent diff of an archive commit
-
-- **WHEN** the head is the archive commit, the active change directory still has a file, and the diff of its parent is non-empty
-- **THEN** the record lists Code and the diff is read at the parent
+- **WHEN** the latest issue comment is the manager's and an older comment is a focus comment
+- **THEN** the focus block is that older comment, with its marker as a badge and its prose under the badge
 
 ### Requirement: A marker lands on the mirror name
 
-The focus names SHALL be the mirror names. A `proposal` marker SHALL land on Plan, `spec` on Specify, `design` on Design, `tasks` on Tasks, and `code` on Code. Change SHALL be the change directory and SHALL NOT take a thread.
+The focus names SHALL be the mirror names. A `proposal` marker SHALL land on Plan, `spec` on Specify, `design` on Design, `tasks` on Tasks, and `code` on Code. Change SHALL be the change directory and SHALL NOT take a thread. Phase movement SHALL stay on `sdd:layer=` threads.
 
-#### Scenario: A spec marker lands on Specify
+#### Scenario: Phase movement stays on sdd:layer= threads
 
-- **WHEN** a thread's latest marker is `spec`
-- **THEN** that thread is a gap on Specify
+- **WHEN** phase movement is already visible on a thread whose marker is `sdd:layer=spec`, together with a focus comment
+- **THEN** phase movement stays on `sdd:layer=` threads, and the `spec` marker lands on Specify
 
 #### Scenario: Change takes no thread
 
 - **WHEN** the change directory exists
 - **THEN** no thread is planted on Change
 
-### Requirement: A gap is one pointer and a why line
+### Requirement: The prose says what the phase produced
 
-A gap SHALL be one per pointer. The why line SHALL name every cause of that pointer, in the cycle's prose. Layer names, `solid`, and gap kinds SHALL be the terms. A requirement name SHALL stay as it is in the spec. The service config SHALL have no language key. A coverage count and diff text SHALL NOT be in the comment. The window SHALL NOT show pointers or the why line on the card.
+The prose SHALL say what this phase produced. When something is weak or must be looked at, the prose SHALL say that too. When the artifact still has open questions, the prose SHALL point at them by place and count and SHALL NOT restate them. A clean phase SHALL omit the weak-spot sentence. A phase with no open questions SHALL omit the pointer. There SHALL be no fixed heading the writer fills in.
 
-A `requirement` pointer on Specify SHALL name the capability id and the requirement name. A `boundary` pointer on Design SHALL name the capability id. A `thread` pointer SHALL name the thread handle, on the layer of the thread's marker. A review place on Code SHALL name the file and the line on the pull request, and it SHALL open at the URL the port gives: Arcanum on Tracker, the pull request page on GitHub.
+#### Scenario: The prose says what this phase produced
 
-#### Scenario: A requirement pointer names the requirement
+- **WHEN** what this phase produced is already visible, together with a fixed heading
+- **THEN** the prose says what this phase produced
 
-- **WHEN** Specify has a gap of kind `requirement`
-- **THEN** the pointer names the capability id and the requirement name, and the why line names the causes of that pointer
+#### Scenario: Something weak or that must be looked at is said too
 
-#### Scenario: A review place opens the port URL
+- **WHEN** something weak or that must be looked at is already visible, together with a clean phase
+- **THEN** the prose says that too
 
-- **WHEN** Code has a review place and the manager opens it on Tracker
-- **THEN** the window opens the Arcanum URL the port gives
+#### Scenario: Open questions are pointed at by place and count
 
-#### Scenario: The comment has no coverage count
+- **WHEN** the artifact still has open questions and their place and count are already visible, together with the text of those questions
+- **THEN** the prose points at them by place and count and does not restate them
 
-- **WHEN** the machine appends an `sdd:focus` comment
-- **THEN** the comment has no coverage count and no diff text
+#### Scenario: A clean phase omits the weak-spot sentence
+
+- **WHEN** a clean phase is already visible, together with a weak-spot sentence
+- **THEN** a clean phase omits the weak-spot sentence
+
+#### Scenario: A phase with no open questions omits the pointer
+
+- **WHEN** a phase with no open questions is already visible, together with a pointer by place and count
+- **THEN** a phase with no open questions omits the pointer
+
+#### Scenario: There is no fixed heading the writer fills in
+
+- **WHEN** the focus prose is already visible, together with a fixed heading the writer fills in
+- **THEN** there is no fixed heading the writer fills in

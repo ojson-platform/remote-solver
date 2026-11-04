@@ -37,15 +37,8 @@ export async function applyLabels(
   }
 }
 
-async function closeAccepted(tracker: Tracker, key: string): Promise<void> {
-  await tracker.close(key, 'SDLC accepted: the pull request is merged and the baseline is in trunk.');
-}
-
-async function closeFinished(tracker: Tracker, key: string): Promise<void> {
-  await tracker.close(
-    key,
-    'SDLC finished: the pull request is merged and the change is archived.',
-  );
+async function closeIssue(tracker: Tracker, key: string, sentence: string): Promise<void> {
+  await tracker.close(key, sentence);
 }
 
 async function applySettlement(
@@ -62,9 +55,17 @@ async function applySettlement(
     }
   }
   if (closing) {
-    await closeAccepted(tracker, key);
+    await closeIssue(
+      tracker,
+      key,
+      'SDLC accepted: the pull request is merged and the baseline is in trunk.',
+    );
   } else if (settled.decision.kind === 'done' && settled.decision.reason === 'finished cycle') {
-    await closeFinished(tracker, key);
+    await closeIssue(
+      tracker,
+      key,
+      'SDLC finished: the pull request is merged and the change is archived.',
+    );
   }
   if (
     settled.decision.kind === 'wait' &&

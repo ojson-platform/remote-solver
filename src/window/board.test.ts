@@ -2206,6 +2206,8 @@ spec('phase-header', () => {
         assert.equal(board.includes('<header class="top"'), false);
         assert.equal(top.includes('<div class="head"'), false);
         assert.equal(/\.top\s*\{[^}]*position:\s*sticky/.test(html), false);
+        assert.ok(html.indexOf('class="top"') < html.indexOf('class="board-frame"'));
+        assert.ok(html.indexOf('class="head"') < html.indexOf('<main class="board"'));
       });
     });
     scenario(

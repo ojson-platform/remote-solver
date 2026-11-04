@@ -1319,7 +1319,7 @@ spec('board', () => {
           const plaque = stationOf(html, '1', 'specifying');
           assert.match(plaque, /блокеры 9/);
           assert.equal(plaque.includes('restore-baseline'), false);
-          assert.equal(plaque.includes('class="mark"'), false);
+          assert.match(plaqueButton(plaque), /<svg class="hammer mark"/);
           const card = window
             .board()
             .columns.find(column => column.name === 'specifying')
@@ -1631,10 +1631,10 @@ spec('board', () => {
           const tasking = stationOf(html, '2', 'tasking');
           assert.match(specifying, /<span class="reason">restore-baseline<\/span>/);
           assert.equal(specifying.includes('class="kicker"'), false);
-          assert.equal(specifying.includes('class="mark"'), false);
+          assert.equal(plaqueButton(specifying).includes('hammer mark'), false);
           assert.match(tasking, /<span class="reason">create-tasks<\/span>/);
           assert.equal(tasking.includes('class="kicker"'), false);
-          assert.equal(tasking.includes('class="mark"'), false);
+          assert.equal(plaqueButton(tasking).includes('hammer mark'), false);
         },
       );
     });
@@ -2061,5 +2061,136 @@ spec('phase-header', () => {
         );
       },
     );
+  });
+});
+
+function plaqueButton(stationHtml: string): string {
+  const match = stationHtml.match(/<button class="plaque"[\s\S]*?<\/button>/);
+  assert.ok(match, 'plaque button');
+  return match[0];
+}
+
+spec('hammer', () => {
+  requirement('The plaque of the phase a worker is in wears the hammer', () => {
+    scenario('The hammer hangs on the plaque of the phase the worker is in', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          leading: () => true,
+          tickets: () => [held('1', 'implementing')],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const plaque = stationOf(await pageHtml(page.url), '1', 'implementing');
+          assert.match(plaqueButton(plaque), /<svg class="hammer mark"/);
+        },
+      );
+    });
+    scenario('A worker improving a spec hangs the hammer on the specifying plaque', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          leading: () => true,
+          turn: () => 'restore-baseline',
+          tickets: () => [held('1', 'specifying')],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const plaque = stationOf(await pageHtml(page.url), '1', 'specifying');
+          assert.match(plaqueButton(plaque), /<svg class="hammer mark"/);
+        },
+      );
+    });
+    scenario('A worker archiving hangs the hammer on the accepting plaque', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          leading: () => true,
+          tickets: () => [held('1', 'accepted', {open: true})],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const plaque = stationOf(await pageHtml(page.url), '1', 'accepting');
+          assert.match(plaqueButton(plaque), /<svg class="hammer mark"/);
+        },
+      );
+    });
+    scenario('Any phase the running set is actually working gets the same mark', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          leading: () => true,
+          turn: () => 'design-next',
+          tickets: () => [held('1', 'designing')],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const plaque = stationOf(await pageHtml(page.url), '1', 'designing');
+          assert.match(plaqueButton(plaque), /<svg class="hammer mark"/);
+        },
+      );
+    });
+    scenario('The hammer goes when the worker leaves', async () => {
+      let leading = true;
+      await hosted(
+        {
+          login: () => MANAGER,
+          leading: () => leading,
+          tickets: () => [held('1', 'implementing')],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          leading = false;
+          page.note();
+          const plaque = stationOf(await pageHtml(page.url), '1', 'implementing');
+          assert.equal(plaqueButton(plaque).includes('hammer mark'), false);
+        },
+      );
+    });
+    scenario('A cycle that is waiting for a person shows no hammer', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          leading: () => false,
+          tickets: () => [
+            held('1', 'proposing', {
+              labels: ['sdd:cycle', 'sdd:proposing', 'sdd:wait-human'],
+              comments: [{body: 'please decide'}],
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const plaque = stationOf(await pageHtml(page.url), '1', 'proposing');
+          assert.match(plaque, /<span class="kicker">ask<\/span>/);
+          assert.equal(plaqueButton(plaque).includes('hammer mark'), false);
+        },
+      );
+    });
+    scenario('The plaque is the mark', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          leading: () => true,
+          tickets: () => [held('1', 'tasking')],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          const article = articleOf(html, '1');
+          const plaque = stationOf(html, '1', 'tasking');
+          const button = plaqueButton(plaque);
+          assert.match(button, /<svg class="hammer mark"/);
+          assert.match(button, /aria-hidden="true"/);
+          assert.equal(article.includes('class="hammer mark"'), plaque.includes('class="hammer mark"'));
+          for (const name of COLUMN_NAMES) {
+            if (name === 'tasking') {
+              continue;
+            }
+            assert.equal(stationOf(html, '1', name).includes('class="hammer mark"'), false);
+          }
+        },
+      );
+    });
   });
 });

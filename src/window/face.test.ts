@@ -1,8 +1,40 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createElement} from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
 
+import {HammerMark} from './client/marks.tsx';
 import {FACE, crossButton, fieldClose, hairline, pill, rootCss, sendMark} from './face.ts';
+
+const HAMMER_D =
+  'M2 4 H8 V8 H22 L26 12 L22 16 H8 V20 H2 Z M12 12 H16 V30 H12 Z';
+
+function taskSummaryWithHammer(): string {
+  return renderToStaticMarkup(
+    createElement(
+      'span',
+      {className: 'sentence'},
+      'impl-a ',
+      createElement('span', {className: 'badge'}, 'impl'),
+      ' ',
+      createElement(HammerMark),
+    ),
+  );
+}
+
+function hammerSvg(summary: string): string {
+  const start = summary.indexOf('<svg class="hammer mark"');
+  assert.ok(start >= 0);
+  const end = summary.indexOf('</svg>', start);
+  assert.ok(end > start);
+  return summary.slice(start, end + '</svg>'.length);
+}
+
+function faceCss(): string {
+  return readFileSync(new URL('./face.css', import.meta.url), 'utf8');
+}
 
 test('the face emits the named controls', () => {
   assert.equal(pill('Настройки'), '<button class="cmd" type="submit">Настройки</button>');
@@ -58,4 +90,42 @@ test('the ground is a fixed slant', () => {
   assert.match(css, /background-attachment:\s*fixed/);
   assert.match(css, /linear-gradient\(118deg,\s*#0c0b09[\s\S]*#6a5640/);
   assert.match(css, /body::before\s*\{[^}]*opacity:\s*0\.38/);
+});
+
+spec('hammer', () => {
+  requirement('The impl task wears the hammer while the issue is in the running set', () => {
+    scenario('The hammer is the chosen mark', () => {
+      const summary = taskSummaryWithHammer();
+      const svg = hammerSvg(summary);
+      assert.match(svg, /viewBox="0 0 32 32"/);
+      assert.match(svg, /transform-origin:\s*43\.75%\s+93\.75%/);
+      const paths = [...svg.matchAll(/<path\b/g)];
+      assert.equal(paths.length, 1);
+      assert.match(svg, new RegExp(`d="${HAMMER_D}"`));
+      assert.match(svg, /fill="currentColor"/);
+      assert.doesNotMatch(svg, /stroke=/);
+      assert.doesNotMatch(svg, /fill-rule="evenodd"/);
+    });
+
+    scenario(
+      'The filled path is M2 4 H8 V8 H22 L26 12 L22 16 H8 V20 H2 Z M12 12 H16 V30 H12 Z',
+      () => {
+        const summary = taskSummaryWithHammer();
+        const svg = hammerSvg(summary);
+        assert.match(svg, new RegExp(`d="${HAMMER_D}"`));
+        assert.match(svg, /fill="currentColor"/);
+      },
+    );
+
+    scenario(
+      'The hammer knocks about 45 degrees and repeats while the issue stays in the running set',
+      () => {
+        const css = faceCss();
+        assert.match(css, /\.spine svg\.hammer\.mark\s*\{[^}]*transform-origin:\s*43\.75%\s+93\.75%/);
+        assert.match(css, /@keyframes hammer-knock[\s\S]*rotate\([^)]*45deg/);
+        assert.match(css, /\.spine svg\.hammer\.mark\s*\{[^}]*animation:[^;]*hammer-knock[^;]*infinite/);
+        assert.doesNotMatch(css, /@keyframes hammer-knock[\s\S]*rotate\([^)]*360deg/);
+      },
+    );
+  });
 });

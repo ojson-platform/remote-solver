@@ -8,7 +8,7 @@
 - [Adapters](./src/adapters/CONTEXT.md): the outsides the machine talks to
 - [Window](./src/window/CONTEXT.md): the face the window draws. Look: [FACE.md](./src/window/FACE.md)
 
-`prompts/context.md` holds the procedures skills share. It is not a glossary.
+`skills/sdd-flow/CONTEXT.md` holds the procedures skills share. It is not a glossary.
 
 ## Relationships
 

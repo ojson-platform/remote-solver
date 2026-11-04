@@ -2,7 +2,7 @@ mode: mechanical
 
 # sdd-fix
 
-Fixes what the review found in the code. The threads are the instruction; the task file of that code is the boundary.
+Fixes what the review found in the code. The threads are the instruction; the task file of that code is the boundary. Reads, edits, and check commands follow `CONTEXT.md` § Once.
 
 ## Out of this action
 

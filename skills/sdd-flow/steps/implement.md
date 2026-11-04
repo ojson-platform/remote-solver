@@ -2,7 +2,7 @@ mode: mechanical
 
 # sdd-implement
 
-One task per run. One commit: test, code, checkbox. The task file is the instruction. Do not invent a design.
+One task per run. One commit: test, code, checkbox. The task file is the instruction. Do not invent a design. Reads, edits, and check commands follow `CONTEXT.md` § Once.
 
 ## Read only
 

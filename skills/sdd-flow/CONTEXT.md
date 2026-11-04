@@ -14,6 +14,16 @@ A run ends in exactly one signal. A run that ends with none leaves the decision 
 
 "Stop" in a skill means: emit the signal that fits, then end the run.
 
+## Once
+
+Read this file once in a run, the first time a step names one of its sections. A file named under a step's Read only is read once. After an edit of a file succeeds, that file is known for the rest of the run: do not read it again.
+
+One edit of a file covers one scenario of the step. When the check command fails after that edit and a file has changed since the last run of the command, one further edit of that file is allowed, then the command runs once more. A command that already exited 0 does not run again. A command the card does not name does not run, apart from the verbs and the git steps in § Publish. `git log`, `git show`, and a diff of an older commit do not run.
+
+A long command keeps its exit code. On failure the output keeps the failing test name and its assertion. On success the output keeps the last lines.
+
+The validate command in § Delta runs once, after the spec edit, when this step checks a spec. It runs again only when it failed and that spec file has changed since.
+
 ## Layers
 
 | Layer | Phase it opens | Change file |

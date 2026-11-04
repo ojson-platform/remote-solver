@@ -6,6 +6,7 @@ import type {AgentProvider} from '@ai-hero/sandcastle';
 
 import type {AgentResult} from '../machine/port.ts';
 import {openHostHandle} from './host-sandbox.ts';
+import {orphans, readProcessTable} from './reap.ts';
 
 export type AgentRun = {
   cwd: string;
@@ -27,6 +28,8 @@ export type AgentRun = {
   idleTimeoutSeconds?: number;
   /** Milliseconds to wait after a result event before stopping a process that will not exit. Default 60_000. */
   resultGraceMs?: number;
+  /** How often to reap a process the run started after its parent exits. Default 1000. */
+  reapIntervalMs?: number;
 };
 
 function substitute(template: string, args: Record<string, string>): string {
@@ -62,7 +65,7 @@ function tagged(text: string, tag: string | undefined): string {
 
 type Capture = {text: string; sessionId?: string};
 
-/** The agent is its own process group. A hung tool's children stay in that group. */
+/** The agent is its own process group. Ending the run kills children still in that group. */
 function killChild(child: ChildProcess): void {
   const pid = child.pid;
   if (pid === undefined) {
@@ -79,6 +82,22 @@ function killChild(child: ChildProcess): void {
   }
 }
 
+function reapTree(root: number, seen: Set<number>): void {
+  let rows;
+  try {
+    rows = readProcessTable();
+  } catch {
+    return;
+  }
+  for (const pid of orphans(root, rows, seen)) {
+    try {
+      process.kill(pid, 'SIGKILL');
+    } catch {
+      // The process has already exited.
+    }
+  }
+}
+
 /** One agent process. Resolves on a clean exit, or after a result event if the process stays up. */
 function runProcess(
   command: string,
@@ -89,6 +108,7 @@ function runProcess(
   logPath: string,
   idleMs: number,
   graceMs: number,
+  reapMs: number,
   onSession?: (sessionId: string) => void,
 ): Promise<Capture> {
   mkdirSync(path.dirname(logPath), {recursive: true});
@@ -103,6 +123,13 @@ function runProcess(
       child.stdin.write(stdin);
     }
     child.stdin?.end();
+    const seen = new Set<number>();
+    const reap = setInterval(() => {
+      if (child.pid !== undefined) {
+        reapTree(child.pid, seen);
+      }
+    }, reapMs);
+    reap.unref();
     let stderr = '';
     let text = '';
     let sessionId: string | undefined;
@@ -112,7 +139,6 @@ function runProcess(
     let sawResult = false;
     let grace: NodeJS.Timeout | undefined;
     const idle = setTimeout(() => {
-      killChild(child);
       stop(false);
     }, idleMs);
     const resetIdle = () => {
@@ -123,7 +149,12 @@ function runProcess(
         return;
       }
       settled = true;
+      clearInterval(reap);
       clearTimeout(idle);
+      killChild(child);
+      if (child.pid !== undefined) {
+        reapTree(child.pid, seen);
+      }
       if (grace) {
         clearTimeout(grace);
       }
@@ -151,13 +182,11 @@ function runProcess(
           }
           if (event.type === 'error') {
             failure = event.message;
-            killChild(child);
             stop(false, 1);
           }
           if (event.type === 'result' && !sawResult) {
             sawResult = true;
             grace = setTimeout(() => {
-              killChild(child);
               stop(true);
             }, graceMs);
           }
@@ -209,6 +238,7 @@ export async function runAgent(run: AgentRun): Promise<AgentResult> {
     run.logPath,
     (run.idleTimeoutSeconds ?? 600) * 1000,
     run.resultGraceMs ?? 60_000,
+    run.reapIntervalMs ?? 1000,
     run.onSession,
   );
   let sessionFilePath: string | undefined;

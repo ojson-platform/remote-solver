@@ -6,6 +6,7 @@ import path from 'node:path';
 import {test} from 'vitest';
 
 import type {AgentProvider, ParsedStreamEvent} from '@ai-hero/sandcastle';
+import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {runAgent} from './agent.ts';
 
@@ -43,7 +44,10 @@ function script(dir: string, body: string): string {
 
 test('a result line is the answer, and a recorded session is captured', async () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'sdd-agent-'));
-  const bin = script(dir, 'echo "session abc"\necho "text hello <verdict>clean</verdict>"\necho result');
+  const bin = script(
+    dir,
+    'echo "session abc"\necho "text hello <verdict>clean</verdict>"\necho result',
+  );
   const captured: string[] = [];
   const answer = await runAgent({
     cwd: dir,
@@ -196,6 +200,64 @@ test('a resume on this host passes the chat id and does not copy the session fil
   assert.equal(answer.text, 'ok');
   assert.equal(resumed, 'chat-1');
   assert.equal(copied, false);
+});
+
+spec('agent-run', () => {
+  requirement('A process left behind by the agent run is killed while the run continues', () => {
+    scenario('A grandchild is killed after its parent exits', async () => {
+      const dir = mkdtempSync(path.join(tmpdir(), 'sdd-agent-'));
+      const pidFile = path.join(dir, 'grand.pid');
+      const bin = script(
+        dir,
+        `
+grand=${JSON.stringify(pidFile)}
+sh -c "sleep 30 & echo \\$! > \\"$grand\\"; sleep 0.4" &
+i=0
+while [ ! -s "$grand" ]; do
+  i=$((i + 1))
+  if [ "$i" -gt 50 ]; then echo "error no-grandchild"; echo result; exit 0; fi
+  sleep 0.05
+done
+i=0
+while kill -0 "$(cat "$grand")" 2>/dev/null; do
+  i=$((i + 1))
+  if [ "$i" -gt 25 ]; then echo "error still-alive"; echo result; exit 0; fi
+  sleep 0.1
+done
+echo "text reaped"
+echo result
+`,
+      );
+      try {
+        const answer = await runAgent({
+          cwd: dir,
+          hostCwd: dir,
+          provider: provider(bin),
+          name: 'step',
+          promptFile: writePrompt(dir),
+          promptArgs: {},
+          logPath: path.join(dir, 'agent.log'),
+          reapIntervalMs: 100,
+          idleTimeoutSeconds: 10,
+        });
+        assert.equal(answer.text, 'reaped');
+      } finally {
+        let pid = 0;
+        try {
+          pid = Number(readFileSync(pidFile, 'utf8'));
+        } catch {
+          pid = 0;
+        }
+        if (pid > 0) {
+          try {
+            process.kill(pid, 'SIGKILL');
+          } catch {
+            // The reaper already took it.
+          }
+        }
+      }
+    });
+  });
 });
 
 function writePrompt(dir: string): string {

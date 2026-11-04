@@ -66,6 +66,7 @@ type Surface = {
   checkouts: () => string[];
   spyNote: () => string;
   turn: (key: string) => string | undefined;
+  running: (key: string) => boolean;
   openReviewPlace: (file: string, line: number) => string | undefined;
   doorPlace: (file: string) => string | undefined;
   gateMark: (key: string, station: string, side?: boolean) => void;

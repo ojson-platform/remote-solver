@@ -23,3 +23,7 @@ _Avoid_: Icon button
 **Field**:
 A quiet card for writing. Choosing a line of a change document opens one. The send mark sits inside the field. The close control is a circle on the field's corner.
 _Avoid_: Textarea, input
+
+**Hammer**:
+The filled mark on the impl task while the issue stays in the spy's running set. It leaves when the agent leaves the issue; the impl badge stays.
+_Avoid_: Step mark, pool icon

@@ -183,3 +183,12 @@ export function CrossButton({label}: {label: string}): ReactNode {
     </button>
   );
 }
+
+/** The hammer on the impl task while the issue stays in the running set. */
+export function HammerMark(): ReactNode {
+  return (
+    <svg className="hammer mark" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M2 4 H8 V8 H22 L26 12 L22 16 H8 V20 H2 Z M12 12 H16 V30 H12 Z" fill="currentColor" />
+    </svg>
+  );
+}

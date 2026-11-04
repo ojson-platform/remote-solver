@@ -6,7 +6,15 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {memoryPorts} from '../adapters/github.ts';
 import {fixThread} from '../sdd.ts';
 import {action, change, issue, pull, ready} from './harness.ts';
-import {markerName, mentionsGrammar, parseMarker} from './marker.ts';
+import {
+  focusMarkerLine,
+  focusMirrorName,
+  FOCUS_MARKER_LINES,
+  markerName,
+  mentionsGrammar,
+  parseMarker,
+} from './marker.ts';
+import {phaseOfLayer} from './review.ts';
 import {decide} from './policy.ts';
 import {readReview, reviewOf, spokeByRobot, threadsReport, type OpenItemFile} from './review.ts';
 
@@ -446,6 +454,43 @@ spec('marker', () => {
         'body:🤖 sdd:fixed abc123',
         'resolveThread',
       ]);
+    });
+  });
+});
+
+spec('focus', () => {
+  requirement('A marker lands on the mirror name', () => {
+    scenario('Phase movement stays on sdd:layer= threads', () => {
+      const layerThread = {resolved: false, body: 'sdd:layer=spec → specifying'};
+      const focusComment = {robot: true, body: 'sdd:focus:spec\nSpec delta is complete.\n'};
+      const review = reviewOf([layerThread], [focusComment]);
+      assert.deepEqual(parseMarker(layerThread.body), {kind: 'layer', layer: 'spec'});
+      assert.equal(review.rollback, 'specifying');
+      assert.deepEqual(review.layers, ['spec']);
+      assert.equal(focusMarkerLine(focusComment.body), 'sdd:focus:spec');
+      assert.equal(parseMarker(focusComment.body), null);
+      assert.equal(focusMirrorName('sdd:focus:spec'), 'Specify');
+      for (const marker of FOCUS_MARKER_LINES) {
+        if (marker === 'sdd:focus') {
+          assert.equal(focusMirrorName(marker), null);
+          continue;
+        }
+        assert.equal(typeof focusMirrorName(marker), 'string');
+      }
+    });
+
+    scenario('Change takes no thread', () => {
+      const changeDir = 'openspec/changes/issue-26/proposal.md';
+      const review = reviewOf(
+        [{resolved: false, path: changeDir, body: 'sdd:layer=change → change'}],
+        [],
+      );
+      assert.equal(parseMarker('sdd:layer=change → change'), null);
+      assert.equal(phaseOfLayer('change'), null);
+      assert.equal(review.rollback, null);
+      assert.equal(focusMirrorName('sdd:focus'), null);
+      assert.equal(focusMarkerLine('sdd:focus:change\nprose'), null);
+      assert.equal(mentionsGrammar('sdd:layer=change'), true);
     });
   });
 });

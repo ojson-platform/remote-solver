@@ -13,6 +13,16 @@ export type Marker =
 
 const TOKENS = ['sdd:fixed', 'sdd:note', 'sdd:layer=', 'sdd:begin'];
 
+/** Layers a review thread may carry. Change is the directory, not a layer marker. */
+export const THREAD_LAYER_MARKERS = [
+  'proposal',
+  'spec',
+  'design',
+  'tasks',
+  'code',
+  'out',
+] as const;
+
 /**
  * The one marker a body carries. `fixed` wins over everything else in the same
  * body, then `note`, then a layer, then the issue-mirror `begin`.
@@ -25,7 +35,7 @@ export function parseMarker(body: string): Marker | null {
     return {kind: 'note'};
   }
   const layer = body.match(/sdd:layer=([a-z]+)/)?.[1];
-  if (layer) {
+  if (layer && (THREAD_LAYER_MARKERS as readonly string[]).includes(layer)) {
     return {kind: 'layer', layer};
   }
   return body.includes('sdd:begin') ? {kind: 'begin'} : null;

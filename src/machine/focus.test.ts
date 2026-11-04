@@ -5,7 +5,7 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import type {FileSource, Tracker} from './port.ts';
 import {changeDir} from './naming.ts';
-import {focusMarkerLine, focusMirrorName, FOCUS_MARKER_LINES, isFocusRecord, parseMarker} from './marker.ts';
+import {focusMarkerLine, focusMirrorName, FOCUS_MARKER_LINES, isFocusRecord} from './marker.ts';
 import {
   endStep,
   firstFocusSentence,
@@ -225,18 +225,6 @@ spec('focus', () => {
     });
   });
 
-  requirement('A marker lands on the mirror name', () => {
-    scenario('Phase movement stays on sdd:layer= threads', () => {
-      assert.deepEqual(parseMarker('sdd:layer=spec → specifying'), {kind: 'layer', layer: 'spec'});
-      assert.equal(focusMarkerLine('sdd:focus:spec\nprose'), 'sdd:focus:spec');
-      assert.equal(parseMarker('sdd:focus:spec\nprose'), null);
-    });
-
-    scenario('Change takes no thread', () => {
-      assert.equal(focusMirrorName('sdd:focus'), null);
-      assert.equal(focusMarkerLine('sdd:focus:change\nprose'), null);
-    });
-  });
 });
 
 test('focus args take the issue key and the body', () => {

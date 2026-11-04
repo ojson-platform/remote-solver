@@ -184,7 +184,7 @@ export function CrossButton({label}: {label: string}): ReactNode {
   );
 }
 
-/** The hammer on the impl task while the issue stays in the running set. */
+/** The hammer on the station plaque while a worker stays on that phase. */
 export function HammerMark(): ReactNode {
   return (
     <svg

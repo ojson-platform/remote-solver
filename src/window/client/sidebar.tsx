@@ -14,7 +14,7 @@ import {Gate} from './board.tsx';
 import {BusyEdge} from './busy.tsx';
 import {ActForm, Hidden} from './forms.tsx';
 import {capIsOpen, layerHasFold} from './gesture.ts';
-import {Cross, HammerMark, SendMark} from './marks.tsx';
+import {Cross, SendMark} from './marks.tsx';
 
 function codeLine(line: string, places: Record<string, string>): ReactNode {
   const matched = /^(\s*)Code(\s+)(\S.*)$/.exec(line);
@@ -61,11 +61,7 @@ function implTask(tasks: readonly SpineTask[]): SpineTask | undefined {
   return tasks.find(task => !task.done);
 }
 
-function tasksSummary(
-  model: Spine,
-  places: Record<string, string>,
-  running: boolean,
-): ReactNode {
+function tasksSummary(model: Spine, places: Record<string, string>): ReactNode {
   if (model.station !== 'implementing') {
     return sentence(model, 'Tasks', places);
   }
@@ -77,12 +73,6 @@ function tasksSummary(
   return (
     <span className="sentence">
       {task.id} <span className="badge">impl</span>
-      {running ? (
-        <>
-          {' '}
-          <HammerMark />
-        </>
-      ) : null}
       {mirror == null ? null : (
         <>
           <br />
@@ -976,7 +966,7 @@ export function Sidebar({
             model={model}
             open={open === 'Tasks'}
             quiet={quiet('Tasks')}
-            sentenceNode={tasksSummary(model, places, row.running === true)}
+            sentenceNode={tasksSummary(model, places)}
           >
             {model.tasks.map(task => (
               <details className="task" key={task.id}>

@@ -11,15 +11,13 @@ import {FACE, crossButton, fieldClose, hairline, pill, rootCss, sendMark} from '
 const HAMMER_D =
   'M2 4 H8 V8 H22 L26 12 L22 16 H8 V20 H2 Z M12 12 H16 V30 H12 Z';
 
-function taskSummaryWithHammer(): string {
+function plaqueWithHammer(): string {
   return renderToStaticMarkup(
     createElement(
-      'span',
-      {className: 'sentence'},
-      'impl-a ',
-      createElement('span', {className: 'badge'}, 'impl'),
-      ' ',
+      'button',
+      {className: 'plaque', type: 'submit'},
       createElement(HammerMark),
+      createElement('span', {className: 'reason'}, 'implementing'),
     ),
   );
 }
@@ -93,10 +91,22 @@ test('the ground is a fixed slant', () => {
 });
 
 spec('hammer', () => {
-  requirement('The impl task wears the hammer while the issue is in the running set', () => {
+  requirement('The plaque of the phase a worker is in wears the hammer', () => {
+    scenario('The mark stays one filled path while the worker stays', () => {
+      const plaque = plaqueWithHammer();
+      const svg = hammerSvg(plaque);
+      const paths = [...svg.matchAll(/<path\b/g)];
+      assert.equal(paths.length, 1);
+      assert.match(svg, new RegExp(`d="${HAMMER_D}"`));
+      assert.match(svg, /fill="currentColor"/);
+      assert.doesNotMatch(svg, /stroke=/);
+      const css = faceCss();
+      assert.match(css, /\.plaque svg\.hammer\.mark\s*\{[^}]*animation:[^;]*hammer-knock[^;]*infinite/);
+    });
+
     scenario('The hammer is the chosen mark', () => {
-      const summary = taskSummaryWithHammer();
-      const svg = hammerSvg(summary);
+      const plaque = plaqueWithHammer();
+      const svg = hammerSvg(plaque);
       assert.match(svg, /viewBox="0 0 32 32"/);
       assert.match(svg, /transform-origin:\s*43\.75%\s+93\.75%/);
       const paths = [...svg.matchAll(/<path\b/g)];
@@ -110,23 +120,20 @@ spec('hammer', () => {
     scenario(
       'The filled path is M2 4 H8 V8 H22 L26 12 L22 16 H8 V20 H2 Z M12 12 H16 V30 H12 Z',
       () => {
-        const summary = taskSummaryWithHammer();
-        const svg = hammerSvg(summary);
+        const plaque = plaqueWithHammer();
+        const svg = hammerSvg(plaque);
         assert.match(svg, new RegExp(`d="${HAMMER_D}"`));
         assert.match(svg, /fill="currentColor"/);
       },
     );
 
-    scenario(
-      'The hammer knocks about 45 degrees and repeats while the issue stays in the running set',
-      () => {
-        const css = faceCss();
-        assert.match(css, /\.spine svg\.hammer\.mark\s*\{[^}]*transform-origin:\s*43\.75%\s+93\.75%/);
-        assert.match(css, /@keyframes hammer-knock[\s\S]*rotate\([^)]*45deg/);
-        assert.match(css, /\.spine svg\.hammer\.mark\s*\{[^}]*animation:[^;]*hammer-knock[^;]*infinite/);
-        assert.doesNotMatch(css, /@keyframes hammer-knock[\s\S]*rotate\([^)]*360deg/);
-      },
-    );
+    scenario('The hammer knocks about 45 degrees and repeats while the worker stays', () => {
+      const css = faceCss();
+      assert.match(css, /\.plaque svg\.hammer\.mark\s*\{[^}]*transform-origin:\s*43\.75%\s+93\.75%/);
+      assert.match(css, /@keyframes hammer-knock[\s\S]*rotate\([^)]*45deg/);
+      assert.match(css, /\.plaque svg\.hammer\.mark\s*\{[^}]*animation:[^;]*hammer-knock[^;]*infinite/);
+      assert.doesNotMatch(css, /@keyframes hammer-knock[\s\S]*rotate\([^)]*360deg/);
+    });
   });
 });
 

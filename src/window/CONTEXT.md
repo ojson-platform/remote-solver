@@ -25,5 +25,5 @@ A quiet card for writing. Choosing a line of a change document opens one. The se
 _Avoid_: Textarea, input
 
 **Hammer**:
-The filled mark on the impl task while the issue stays in the spy's running set. It leaves when the agent leaves the issue; the impl badge stays.
+The chosen filled mark on the plaque of the phase a worker is in. It leaves when the worker leaves; the `impl` badge stays on the task summary.
 _Avoid_: Step mark, pool icon

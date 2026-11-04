@@ -8,7 +8,7 @@ The machine merges only on `accepting` with `auto-merge`. The issue closes only 
 
 ### Requirement: An early archived change is restored
 
-On a phase at or before `tasking`, an archived change SHALL be returned to the active change before any other step of that phase.
+On a phase before `accepting`, an archived change SHALL be returned to the active change before any other step of that phase, including a repair of the phase just entered. A merged pull request SHALL NOT be restored.
 
 #### Scenario: Tasking restores an archived change
 
@@ -19,6 +19,21 @@ On a phase at or before `tasking`, an archived change SHALL be returned to the a
 
 - **WHEN** the phase is `tasking`, the change is archived, and an open thread has no marker
 - **THEN** the machine restores the change and does not classify the thread
+
+#### Scenario: Implementing restores an archived change before a code repair
+
+- **WHEN** the phase is `implementing`, the pull request is open, the change is archived, and an open thread marks `code`
+- **THEN** the machine restores the change and does not fix the code yet
+
+#### Scenario: Accepting with a code thread restores before the repair
+
+- **WHEN** the phase is `accepting`, the pull request is open, the change is archived, and an open thread marks `code`
+- **THEN** the machine moves to `implementing` and restores the change before any repair
+
+#### Scenario: A merged pull request stays archived
+
+- **WHEN** the phase is `implementing`, the pull request is merged, and the change is archived
+- **THEN** the machine does not restore the change
 
 ### Requirement: Accepting archives before it merges
 

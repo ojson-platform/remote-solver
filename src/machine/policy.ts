@@ -218,8 +218,12 @@ export function decide(
     return closeGate(issue.key, phase, closed, change);
   }
 
-  const early = phaseRank(phase) <= phaseRank('tasking');
-  if (early && change.archived) {
+  // A repair must not commit on top of the archive commit. Accepting still rolls back first; the next step of this settlement restores the change while that commit is the tip. A merged pull request stays archived.
+  if (
+    phaseRank(phase) < phaseRank('accepting') &&
+    change.archived &&
+    !pulls.some(pr => pr.state === 'MERGED')
+  ) {
     return agent(issue.key, 'unarchive', phase, '', 'return the delta to the change');
   }
 

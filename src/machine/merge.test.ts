@@ -4,7 +4,7 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {memoryPorts} from '../adapters/github.ts';
 import {resolveIssue} from './flow.ts';
-import {decide} from './policy.ts';
+import {decide, settle} from './policy.ts';
 import {reviewOf} from './review.ts';
 import {action, change, files, issue, pull} from './harness.ts';
 
@@ -28,6 +28,45 @@ spec('merge', () => {
         change({archived: true, design: true, tasks: true}),
       );
       assert.equal(action(decision), 'unarchive');
+    });
+    scenario('Implementing restores an archived change before a code repair', () => {
+      const decision = decide(
+        issue(1, ['sdd:implementing']),
+        [],
+        [
+          pull(9, {
+            review: {unanswered: false, rollback: 'implementing', layers: ['code']},
+          }),
+        ],
+        change({archived: true}),
+      );
+      assert.equal(action(decision), 'unarchive');
+    });
+    scenario('Accepting with a code thread restores before the repair', () => {
+      const settled = settle(
+        issue(1, ['sdd:accepting']),
+        [],
+        [
+          pull(9, {
+            review: {unanswered: false, rollback: 'implementing', layers: ['code']},
+          }),
+        ],
+        change({archived: true}),
+      );
+      assert.deepEqual(
+        settled.transitions.map(step => step.to),
+        ['implementing'],
+      );
+      assert.equal(action(settled.decision), 'unarchive');
+    });
+    scenario('A merged pull request stays archived', () => {
+      const decision = decide(
+        issue(1, ['sdd:implementing']),
+        [],
+        [pull(9, {state: 'MERGED'})],
+        change({archived: true, design: true, tasks: true}),
+      );
+      assert.notEqual(action(decision), 'unarchive');
     });
   });
 

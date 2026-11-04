@@ -29,6 +29,8 @@ A child is an open issue that carries the cycle label and names this issue as it
 
 While a task is open, the machine SHALL run that task and SHALL NOT wait on children, unless the open pull request conflicts with its base. A conflict SHALL be rebased first. When no task is open and the pull request does not conflict, it SHALL wait until every child is `accepted`, then wait while any open issue listed as a dependency still exists. A closed issue SHALL NOT hold the parent. After those waits the machine SHALL move to `verifying`.
 
+A finished parent is the finished-cycle exception to that move. The parent is finished when its pull request is merged and its change is archived. While a child is short of `accepted` and an open blocker remains, the machine SHALL wait and SHALL NOT move to `verifying`. Tasks that are all checked SHALL NOT replace that wait.
+
 #### Scenario: An open task runs before the children are checked
 
 - **WHEN** `implementing` has an unchecked task and a child that is not accepted
@@ -48,6 +50,11 @@ While a task is open, the machine SHALL run that task and SHALL NOT wait on chil
 
 - **WHEN** `implementing` has no open task, no child, and no open dependency
 - **THEN** the machine moves the issue to `verifying`
+
+#### Scenario: A finished parent with a child short of accepted and an open blocker waits
+
+- **WHEN** the phase is `implementing`, the parent is finished, the pull request is merged, the change is archived, every task is checked, a child is short of `accepted`, and an open blocker remains
+- **THEN** the parent is finished, the pull request is merged, the change is archived, the child is short of `accepted`, the open blocker remains, and the machine waits
 
 ### Requirement: Parent and Depends are body lines
 

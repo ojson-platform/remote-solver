@@ -1,3 +1,3 @@
 - [x] `line-select-face` A sidebar line can be selected and copied
 - [x] `line-select-drag` A drag that leaves selected text is not a click; The drag does not open the line's comment and does not close one that is already open; The field stays as it was
-- [ ] `line-select-click` A click that leaves no selection still opens an empty field, still closes an empty field, and still leaves a field that holds text open
+- [x] `line-select-click` A click that leaves no selection still opens an empty field, still closes an empty field, and still leaves a field that holds text open

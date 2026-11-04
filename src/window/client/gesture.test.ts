@@ -143,5 +143,34 @@ spec('line-select', () => {
         {line: 'вторая', text: ''},
       ]);
     });
+    scenario(
+      'A click that leaves no selection still opens an empty field, still closes an empty field, and still leaves a field that holds text open',
+      () => {
+        const text = {} as Node;
+        const line = lineContains(text);
+        const collapsed = mockSelection('', text, text, true);
+        const emptyText = mockSelection('', text, text);
+        const outside = {} as Node;
+        const offLine = mockSelection('фрагмент', outside, outside);
+
+        assert.equal(dragLeavesSelection(line, collapsed), false);
+        assert.equal(dragLeavesSelection(line, emptyText), false);
+        assert.equal(dragLeavesSelection(line, offLine), false);
+
+        assert.deepEqual(draftsAfterLineClick([], 'первая', line, collapsed), [
+          {line: 'первая', text: ''},
+        ]);
+        assert.deepEqual(draftsAfterLineClick([{line: 'первая', text: ''}], 'первая', line, collapsed), []);
+        assert.deepEqual(
+          draftsAfterLineClick([{line: 'первая', text: 'черновик'}], 'первая', line, collapsed),
+          [{line: 'первая', text: 'черновик'}],
+        );
+
+        assert.deepEqual(draftsAfterLineClick([], 'первая', line, emptyText), [
+          {line: 'первая', text: ''},
+        ]);
+        assert.deepEqual(draftsAfterLineClick([], 'первая', line, offLine), [{line: 'первая', text: ''}]);
+      },
+    );
   });
 });

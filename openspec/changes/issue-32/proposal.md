@@ -12,6 +12,8 @@ A cycle is finished when its pull request is merged and its change is archived. 
 
 A cycle is finished when its pull request is merged and its change is archived. The issue closes, so the board's open list no longer has it. The machine does not restore that change and does not start another step on it. A finished cycle leaves the board, and a reload does not bring it back.
 
+A finished parent with a child short of accepted and an open blocker waits.
+
 ## Out of scope
 
 Deleting the issue. Closing a cycle whose pull request is open. Hiding a single checked task inside the Tasks row.
@@ -29,5 +31,6 @@ A cycle whose pull request is still open stays on the board, including one whose
 - finished-cycle a finished cycle leaves the board, and a reload does not bring it back
 - merge a phase at or before tasking restores an archived change only while the pull request is still open
 - verifying a finished cycle does not wait
+- dependencies a finished parent with a child short of accepted and an open blocker waits
 
 ## Open questions

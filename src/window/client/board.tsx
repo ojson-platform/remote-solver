@@ -201,15 +201,17 @@ export function Board({rows, opened}: {rows: readonly SnapshotRow[]; opened?: st
     </span>
   ));
   return (
-    <main className="board">
+    <div className="board-frame">
       <div className="head">
         <span />
         {names}
       </div>
-      {rows.map(row => (
-        <Ticket key={row.key} row={row} open={row.key === opened} />
-      ))}
-    </main>
+      <main className="board">
+        {rows.map(row => (
+          <Ticket key={row.key} row={row} open={row.key === opened} />
+        ))}
+      </main>
+    </div>
   );
 }
 

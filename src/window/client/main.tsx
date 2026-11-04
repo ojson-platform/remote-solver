@@ -376,8 +376,9 @@ function boot(): void {
       if (card instanceof HTMLElement && board instanceof HTMLElement) {
         const cardRect = card.getBoundingClientRect();
         const boxRect = board.getBoundingClientRect();
-        if (cardRect.top < boxRect.top) {
-          board.scrollTop -= boxRect.top - cardRect.top;
+        const lead = Number.parseFloat(getComputedStyle(board).paddingTop) || 0;
+        if (cardRect.top < boxRect.top + lead) {
+          board.scrollTop -= boxRect.top + lead - cardRect.top;
         } else if (cardRect.bottom > boxRect.bottom) {
           board.scrollTop += cardRect.bottom - boxRect.bottom;
         }

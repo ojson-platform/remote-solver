@@ -14,7 +14,7 @@ The bar holds the lockup, the lamp, the spy line, and the gear. The lamp is the 
 
 ## Board
 
-The board is a column of keys and then the stations, in one grid. A station name is a small tracked capital on one line, and a long name is cut. The board does not scroll sideways. The phase name row stays at the top of the board scroll while ticket rows pass underneath, with a quiet ground tint over the names.
+The board is a column of keys and then the stations, in one grid. A station name is a small tracked capital on one line, and a long name is cut. The board does not scroll sideways. The phase name row stays over the board while ticket rows scroll. The names have no ground of their own. A row that scrolls up fades out in the clear band under the names, and at rest the first row starts below that band.
 
 A column has no frame. An edge on the board is an inset ring on a tile, a plaque, or a circle. The board casts no shadow.
 

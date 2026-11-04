@@ -147,8 +147,9 @@
     color: #f0cb86;
   }
   .stage { flex: 1; min-height: 0; min-width: 0; display: flex; }
+  .board-frame { position: relative; flex: 1; min-width: 0; min-height: 0; }
   .board {
-    flex: 1;
+    height: 100%;
     min-width: 0;
     min-height: 0;
     overflow-x: hidden;
@@ -157,6 +158,9 @@
     flex-direction: column;
     gap: 10px;
     padding: 12px;
+    padding-top: 88px;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0 28px, #000 68px, #000 100%);
+    mask-image: linear-gradient(to bottom, transparent 0 28px, #000 68px, #000 100%);
   }
   .head, .stations {
     display: grid;
@@ -165,10 +169,14 @@
     align-items: center;
   }
   .head {
-    position: sticky;
+    position: absolute;
     top: 0;
-    z-index: 1;
-    background: color-mix(in srgb, var(--bg) 90%, transparent);
+    left: 12px;
+    right: 12px;
+    height: 28px;
+    z-index: 2;
+    background: transparent;
+    pointer-events: none;
   }
   .phase {
     min-width: 0;

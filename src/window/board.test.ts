@@ -1982,8 +1982,9 @@ spec('phase-header', () => {
         window.chooseAgent('cursor');
         const html = await pageHtml(page.url);
         assert.match(html, /\.board\s*\{[^}]*overflow-y:\s*auto/);
-        assert.match(html, /\.head\s*\{[^}]*position:\s*sticky[^}]*top:\s*0/);
-        assert.match(html, /class="board"[\s\S]*class="head"/);
+        assert.match(html, /\.head\s*\{[^}]*position:\s*absolute[^}]*top:\s*0/);
+        assert.match(html, /class="board-frame"[\s\S]*class="head"[\s\S]*<main class="board"/);
+        assert.equal(between(html, '<main class="board"', '</main>').includes('class="head"'), false);
         assert.equal(html.indexOf('class="top"') < html.indexOf('class="head"'), true);
       });
     });
@@ -2003,14 +2004,18 @@ spec('phase-header', () => {
         assert.match(articleOf(html, '1'), /class="stations"/);
       });
     });
-    scenario('A row that scrolls up passes beneath the header and the names stay readable over it', async () => {
+    scenario('A row that scrolls up fades out under the names and the names stay readable', async () => {
       await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
         window.chooseAgent('cursor');
         const html = await pageHtml(page.url);
         assert.match(html, /<article[\s\S]*class="stations"/);
+        assert.match(
+          html,
+          /\.board\s*\{[^}]*mask-image:\s*linear-gradient\(to bottom, transparent 0 28px, #000 68px, #000 100%\)/,
+        );
+        assert.match(html, /\.board\s*\{[^}]*padding-top:\s*88px/);
+        assert.match(html, /\.head\s*\{[^}]*background:\s*transparent/);
         assert.match(html, /\.head\s*\{[^}]*z-index:\s*[1-9]/);
-        assert.match(html, /\.head\s*\{[^}]*background:/);
-        assert.equal(/\.head\s*\{[^}]*rgba\(81,\s*61,\s*29/.test(html), false);
       });
     });
     scenario('The page bar above the board is not the phase header', async () => {
@@ -2046,7 +2051,8 @@ spec('phase-header', () => {
             assert.match(html, /\.side-scroll\s*\{[^}]*overflow:\s*auto/);
             assert.match(html, /\.sidebar\s*\{[^}]*position:\s*fixed/);
             const board = between(html, '<main class="board"', '</main>');
-            assert.match(board, /class="head"/);
+            assert.match(html, /class="board-frame"[\s\S]*class="head"[\s\S]*<main class="board"/);
+            assert.equal(board.includes('class="head"'), false);
             assert.equal(board.includes('class="sidebar"'), false);
             const sidebar = bandOf(html, '1');
             assert.equal(sidebar.includes('class="head"'), false);

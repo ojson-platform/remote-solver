@@ -2,13 +2,13 @@
 
 ## Purpose
 
-The phase header is the row of phase names inside the board. It stays at the top of the board while the board scrolls.
+The phase header is the row of phase names over the board. It stays at the top of the board while the board scrolls. Its background stays transparent. A ticket row that scrolls up fades out in the clear band under the names, and at rest the first row starts below that band.
 
 ## Requirements
 
 ### Requirement: The phase header stays at the top of the board
 
-The phase header SHALL be the row of phase names inside the board. The phase header SHALL stay at the top of the board while the board scrolls. The seven phase names SHALL stay aligned with the station columns under them. A row that scrolls up SHALL pass beneath the header, and the names SHALL stay readable over it. The page bar above the board SHALL NOT be the phase header. Scrolling the sidebar SHALL NOT move this header, and scrolling the board SHALL NOT move the sidebar.
+The phase header SHALL be the row of phase names over the board scroll. The phase header SHALL stay at the top of the board while the board scrolls. The seven phase names SHALL stay aligned with the station columns under them. The header background SHALL stay transparent. A row that scrolls up SHALL fade out in the clear band under the names, and the names SHALL stay readable. At rest the first row SHALL start below that band and stay fully readable. The page bar above the board SHALL NOT be the phase header. Scrolling the sidebar SHALL NOT move this header, and scrolling the board SHALL NOT move the sidebar.
 
 #### Scenario: The phase header stays at the top of the board while the board scrolls
 
@@ -20,10 +20,10 @@ The phase header SHALL be the row of phase names inside the board. The phase hea
 - **WHEN** the seven phase names are already visible and aligned with the station columns under them, together with the board scroll that can move those columns out from under the names
 - **THEN** the seven phase names stay aligned with the station columns under them
 
-#### Scenario: A row that scrolls up passes beneath the header and the names stay readable over it
+#### Scenario: A row that scrolls up fades out under the names and the names stay readable
 
-- **WHEN** the names are already readable over the header, together with a row that scrolls up and can cover those names
-- **THEN** a row that scrolls up passes beneath the header, and the names stay readable over it
+- **WHEN** a ticket row scrolls up toward the phase names
+- **THEN** the row fades out in the clear band under the names, the header background stays transparent, and at rest the first row starts below that band fully readable
 
 #### Scenario: The page bar above the board is not the phase header
 

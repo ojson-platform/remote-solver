@@ -8,7 +8,10 @@ import {missingBaselineIds, namedCapabilities, readBranch, type BranchText} from
 import {changeDir} from '../machine/naming.ts';
 
 import {strictChangeFiles, strictContentChangeFiles} from './change-files.ts';
+import {phaseFocusSentences} from './focus.ts';
+import {focusMarkerLine, isFocusRecord} from '../machine/marker.ts';
 import {specDiff} from './spec-diff.ts';
+import type {WindowComment} from './types.ts';
 
 export const SPINE_LAYERS = [
   'Change',
@@ -326,6 +329,69 @@ function mergeLines(issue: SpineLine[], focus: SpineLine[]): SpineLine[] {
   return [...issue.filter(line => !replaced.has(line.layer)), ...focus];
 }
 
+function applyPhaseSentences(issue: SpineLine[], sentences: Map<string, string>): SpineLine[] {
+  if (sentences.size === 0) {
+    return issue;
+  }
+  const replaced = new Set(sentences.keys());
+  const kept = issue.filter(line => !replaced.has(line.layer));
+  const added: SpineLine[] = [];
+  for (const [layer, text] of sentences) {
+    if (!isDocLayer(layer)) {
+      continue;
+    }
+    added.push({layer, raw: `${layer} ${text}`, text});
+  }
+  return [...kept, ...added];
+}
+
+function focusRevisionSource(input: {
+  focusComments?: readonly WindowComment[];
+  focusBody?: string;
+  issueBody?: string;
+}): string {
+  const focusPart =
+    input.focusComments === undefined
+      ? (input.focusBody ?? '')
+      : (input.focusComments ?? [])
+          .filter(comment => !comment.manager && isFocusRecord(comment.body))
+          .map(comment => comment.body)
+          .join('\0');
+  return `${focusPart}\0${input.issueBody ?? ''}`;
+}
+
+/** Spine layer lines from issue comments and the mirror block. */
+export function focusSpineLines(
+  comments: readonly WindowComment[] | undefined,
+  issueBody: string,
+  legacyBody?: string,
+): {lines: SpineLine[]; rest: string[]} {
+  if (comments === undefined) {
+    const focus = linesFromFocus(legacyBody ?? '');
+    return {
+      lines: mergeLines(linesFromIssue(issueBody), focus.lines),
+      rest: focus.rest.filter(line => !line.includes('sdd:begin') && !line.includes('sdd:end')),
+    };
+  }
+  const sentences = phaseFocusSentences(comments);
+  let lines = applyPhaseSentences(linesFromIssue(issueBody), sentences);
+  let ledgerBody: string | undefined;
+  for (const comment of comments) {
+    if (comment.manager || !isFocusRecord(comment.body)) {
+      continue;
+    }
+    if (focusMarkerLine(comment.body) !== 'sdd:focus') {
+      continue;
+    }
+    ledgerBody = comment.body.split('\n').slice(1).join('\n');
+  }
+  const ledger = ledgerBody ? linesFromFocus(ledgerBody) : {lines: [], rest: []};
+  return {
+    lines: mergeLines(lines, ledger.lines),
+    rest: ledger.rest.filter(line => !line.includes('sdd:begin') && !line.includes('sdd:end')),
+  };
+}
+
 function baselineListed(rel: string, baselines: readonly string[]): boolean {
   const match = rel.split('\\').join('/').match(/^openspec\/specs\/(.+)\/spec\.md$/);
   return match !== null && baselines.includes(match[1] ?? '');
@@ -338,6 +404,7 @@ export function projectSpine(
     key: string;
     station?: string;
     focusBody?: string;
+    focusComments?: readonly WindowComment[];
     issueBody?: string;
     checks?: 'green' | 'red' | 'pending' | 'none';
     diff?: boolean;
@@ -348,7 +415,7 @@ export function projectSpine(
   previous?: Spine,
 ): Spine {
   const sections: SpinePartRevisions = {
-    focus: partRevision(`${input.focusBody ?? ''}\0${input.issueBody ?? ''}`),
+    focus: partRevision(focusRevisionSource(input)),
     plan: partRevision(text.proposal),
     specify: partRevision(
       JSON.stringify({proposal: text.proposal, specs: text.specs, baselines: text.baselines}),
@@ -363,13 +430,13 @@ export function projectSpine(
     ),
   };
   const kept = previous?.sections;
-  const focus = linesFromFocus(input.focusBody ?? '');
-  const lines =
-    kept?.focus === sections.focus && previous ? previous.lines : mergeLines(linesFromIssue(input.issueBody ?? ''), focus.lines);
-  const rest =
-    kept?.focus === sections.focus && previous
-      ? previous.rest
-      : focus.rest.filter(line => !line.includes('sdd:begin') && !line.includes('sdd:end'));
+  const focus = focusSpineLines(
+    input.focusComments,
+    input.issueBody ?? '',
+    input.focusComments === undefined ? input.focusBody : undefined,
+  );
+  const lines = kept?.focus === sections.focus && previous ? previous.lines : focus.lines;
+  const rest = kept?.focus === sections.focus && previous ? previous.rest : focus.rest;
   const proposalText = text.proposal;
   const proposal =
     kept?.plan === sections.plan && previous
@@ -447,6 +514,7 @@ export function buildSpine(input: {
   checkout?: string;
   station?: string;
   focusBody?: string;
+  focusComments?: readonly WindowComment[];
   issueBody?: string;
   checks?: 'green' | 'red' | 'pending' | 'none';
   diff?: boolean;

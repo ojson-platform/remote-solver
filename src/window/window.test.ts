@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import {parse} from 'yaml';
 
+import {focusBlockProse} from './focus.ts';
 import {openWindow} from './window.ts';
 import {
   MANAGER,
@@ -769,7 +770,14 @@ test('opening a pool card and opening a column card both use sidebar() the same 
   window.openCard('2');
   assert.equal(window.overlay().checkout, checkout);
   const fromColumn = window.sidebar();
-  assert.deepEqual(fromPool, [{kind: 'focus', body: 'Plan gap\nwhy\n'}]);
+  assert.deepEqual(fromPool, [
+    {
+      kind: 'focus',
+      marker: 'sdd:focus',
+      body: 'Plan gap\nwhy\n',
+      display: focusBlockProse('sdd:focus', 'Plan gap\nwhy\n'),
+    },
+  ]);
   assert.deepEqual(fromColumn, fromPool);
   rmSync(dir, {recursive: true, force: true});
 });
@@ -792,7 +800,12 @@ test('the sidebar lists the blocks that exist from reason through hook', () => {
   assert.deepEqual(window.sidebar(), [
     {kind: 'reason', line: 'proposed · Ask'},
     {kind: 'ask', body: 'please decide'},
-    {kind: 'focus', body: 'Plan gap\n'},
+    {
+      kind: 'focus',
+      marker: 'sdd:focus',
+      body: 'Plan gap\n',
+      display: focusBlockProse('sdd:focus', 'Plan gap\n'),
+    },
     {kind: 'unanswered', threads: [{lines: ['please look']}]},
     {kind: 'hook', points: [{action: 'archive', point: 'before', paragraph: 'keep'}]},
   ]);

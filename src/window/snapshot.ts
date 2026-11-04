@@ -108,6 +108,7 @@ type SnapshotSurface = {
   turn(key: string): string | undefined;
   running(key: string): boolean;
   sidebar(): SidebarBlock[];
+  openTicket?: () => {comments?: readonly {body: string; manager?: boolean}[]; body?: string} | undefined;
   spine(): Spine | undefined;
   heldSpine?: () => {spine?: Spine; ready: boolean; revision?: string};
   doorPlace(file: string): string | undefined;
@@ -368,13 +369,13 @@ function openCycle(
   if (!row) {
     return undefined;
   }
-  const focus = surface.sidebar().find(block => block.kind === 'focus');
-  const focusBody = focus?.kind === 'focus' ? focus.body : undefined;
+  const ticket = surface.openTicket?.();
   const unread = (): Spine =>
     buildSpine({
       key: row.key,
       station: row.station,
-      focusBody,
+      focusComments: ticket?.comments,
+      issueBody: ticket?.body,
       gateOff: row.gateOff,
     });
   let model: Spine;

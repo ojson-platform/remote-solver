@@ -527,6 +527,19 @@ function reviewFold(
   );
 }
 
+function FocusBlocks({blocks}: {blocks: readonly SidebarBlock[]}): ReactNode {
+  return blocks
+    .filter(block => block.kind === 'focus')
+    .map((block, index) =>
+      block.kind === 'focus' ? (
+        <section className="block focus-block" key={index}>
+          <span className="badge">{block.marker}</span>
+          <pre>{block.display}</pre>
+        </section>
+      ) : null,
+    );
+}
+
 function Blocks({
   blocks,
   places,
@@ -886,6 +899,7 @@ export function Sidebar({
             ) : null,
           )}
         <Blocks blocks={opened.blocks} places={places} />
+        <FocusBlocks blocks={opened.blocks} />
         {snapshot.roles.length === 0 ? null : (
           <div className="verbs">
             {snapshot.roles.map(role => (

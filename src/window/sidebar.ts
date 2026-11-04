@@ -2,7 +2,7 @@ import {isFocusRecord} from '../machine/marker.ts';
 import {phaseOf} from '../machine/phase.ts';
 
 import {decisionCount, questionCount, reasonParts, slotOf} from './board.ts';
-import {focusPlaque} from './focus.ts';
+import {focusBlockProse, focusSidebar} from './focus.ts';
 import {
   isDoc,
   type CardState,
@@ -195,9 +195,14 @@ export function blocksFor(
       blocks.push({kind: 'ask', body});
     }
   }
-  const plaque = focusPlaque(item.comments);
-  if (plaque !== undefined) {
-    blocks.push({kind: 'focus', body: plaque});
+  const focus = focusSidebar(item.comments);
+  if (focus !== undefined) {
+    blocks.push({
+      kind: 'focus',
+      marker: focus.marker,
+      body: focus.body,
+      display: focusBlockProse(focus.marker, focus.body),
+    });
   }
   const unanswered = unansweredBlock(ctx.review());
   if (unanswered) {

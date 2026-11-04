@@ -34,6 +34,7 @@ type Surface = {
   take: (key?: string) => boolean | void;
   spy: () => void;
   sidebar: () => SidebarBlock[];
+  openTicket?: () => {comments?: readonly {body: string; manager?: boolean}[]; body?: string} | undefined;
   spine: () => Spine | undefined;
   heldSpine?: () => {spine?: Spine; ready: boolean; revision?: string};
   armSpine?: (epoch: number) => boolean;

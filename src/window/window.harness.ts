@@ -9,6 +9,7 @@ import {changeDir} from '../machine/naming.ts';
 import type {FileSource} from '../machine/port.ts';
 import {loadCycle} from '../machine/snapshot.ts';
 
+import {focusBlockProse} from './focus.ts';
 import {openWindow, type WindowTicket} from './window.ts';
 
 export function scratch(): {dir: string; home: string} {
@@ -314,8 +315,15 @@ export function proveTheSidebarFocusPlaqueDoesNotIncludeTheMarkerLine121(): void
   ]);
   window.openCard('1');
   const blocks = window.sidebar();
-  assert.deepEqual(blocks, [{kind: 'focus', body: 'Specify thread 4\nwhy this gap\n'}]);
-  assert.equal(JSON.stringify(blocks).includes('sdd:focus'), false);
+  assert.deepEqual(blocks, [
+    {
+      kind: 'focus',
+      marker: 'sdd:focus',
+      body: 'Specify thread 4\nwhy this gap\n',
+      display: focusBlockProse('sdd:focus', 'Specify thread 4\nwhy this gap\n'),
+    },
+  ]);
+  assert.equal(blocks[0]?.kind === 'focus' && blocks[0].body.includes('sdd:focus'), false);
   assert.equal(JSON.stringify(blocks).includes('Plan gap'), false);
   rmSync(dir, {recursive: true, force: true});
 }
@@ -336,11 +344,18 @@ export function proveAnOpenCycleWhoseOnlySidebarBlockIsFocusShowsThatBlock113():
   const window = openSide(home, [item]);
   window.openCard('1');
   const blocks = window.sidebar();
-  assert.deepEqual(blocks, [{kind: 'focus', body: 'Specify thread 4\n'}]);
+  assert.deepEqual(blocks, [
+    {
+      kind: 'focus',
+      marker: 'sdd:focus',
+      body: 'Specify thread 4\n',
+      display: focusBlockProse('sdd:focus', 'Specify thread 4\n'),
+    },
+  ]);
   const text = JSON.stringify(blocks);
   assert.equal(text.includes('UNIQUE PROPOSAL BODY'), false);
   assert.equal(text.includes('MIRROR TEXT'), false);
-  assert.equal(text.includes('sdd:focus'), false);
+  assert.equal(blocks[0]?.kind === 'focus' && blocks[0].body.includes('sdd:focus'), false);
   rmSync(dir, {recursive: true, force: true});
 }
 

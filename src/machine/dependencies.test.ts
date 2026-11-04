@@ -6,7 +6,7 @@ import {memoryPorts} from '../adapters/github.ts';
 import {resolveCycle} from './flow.ts';
 import {decide} from './policy.ts';
 import {reviewOf} from './review.ts';
-import {action, issue, pull, ready} from './harness.ts';
+import {action, change, issue, pull, ready} from './harness.ts';
 
 spec('dependencies', () => {
   requirement('Tasking waits until every child is specified', () => {
@@ -74,6 +74,18 @@ spec('dependencies', () => {
         to: 'verifying',
         reason: 'no open tasks',
       });
+    });
+    scenario('A finished parent with a child short of accepted and an open blocker waits', () => {
+      const parent = issue(1, ['sdd:implementing'], {dependsOn: ['8']});
+      const child = issue(2, ['sdd:cycle', 'sdd:implementing'], {parent: '1'});
+      const blocker = issue(8, ['sdd:cycle', 'sdd:implementing']);
+      const archived = change({...ready, archived: true, openTasks: 0});
+      const merged = pull(25, {state: 'MERGED'});
+      const decision = decide(parent, [parent, child, blocker], [merged], archived);
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.match(decision.reason, /#2/);
+      }
     });
   });
 

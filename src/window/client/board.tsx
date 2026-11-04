@@ -5,7 +5,7 @@ import {COLUMN_NAMES, isGateStation} from '../types.ts';
 import type {SnapshotRow} from '../snapshot.ts';
 
 import {ActForm, Hidden} from './forms.tsx';
-import {Glyph, Wizard} from './marks.tsx';
+import {Glyph, HammerMark, Wizard} from './marks.tsx';
 
 function phaseStat(row: PhaseRow): ReactNode {
   if (typeof row === 'number') {
@@ -45,6 +45,7 @@ function Plaque({row}: {row: SnapshotRow}): ReactNode {
     <ActForm act="open" className="open">
       <Hidden name="key" value={row.key} />
       <button className="plaque" type="submit">
+        {row.running === true ? <HammerMark /> : null}
         {body}
       </button>
     </ActForm>

@@ -147,7 +147,11 @@ export function firstFocusSentence(body: string): string | undefined {
   }
   const flat = prose.replace(/\n+/g, ' ').trim();
   const match = flat.match(/^([\s\S]*?[.!?])(?:\s|$)/);
-  return match ? match[1].trim() : (flat.split(/\s+/).slice(0, 8).join(' ') || undefined);
+  if (match) {
+    return match[1].trim();
+  }
+  const firstLine = prose.split('\n')[0]?.trim() ?? '';
+  return firstLine === '' ? undefined : firstLine;
 }
 
 /** Step runs no longer append a layer ledger; phase skills write focus after Publish. */

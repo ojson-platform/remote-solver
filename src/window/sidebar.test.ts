@@ -4,6 +4,7 @@ import {rmSync} from 'node:fs';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {renderWindow} from './client/render.ts';
+import {focusBlockProse} from './focus.ts';
 import {bandOf, hosted, post} from './page.harness.ts';
 import type {WindowSnapshot} from './snapshot.ts';
 import {
@@ -17,6 +18,15 @@ import {
   writeChange,
   yard,
 } from './window.harness.ts';
+
+function focusBlock(marker: string, body: string) {
+  return {
+    kind: 'focus' as const,
+    marker,
+    body,
+    display: focusBlockProse(marker as import('../machine/marker.ts').FocusMarkerLine, body),
+  };
+}
 
 async function sidebarHtml(url: string): Promise<string> {
   const response = await fetch(new URL('/snapshot', url));
@@ -109,7 +119,7 @@ function proveRemovingSddWaitHumanRemovesTheSidebarAskWhileTheCommentsRemain119(
   labels.splice(labels.indexOf('sdd:wait-human'), 1);
   const blocks = window.sidebar();
   assert.equal(kinds(blocks).includes('ask'), false);
-  assert.deepEqual(blocks, [{kind: 'focus', body: 'Plan gap\n'}]);
+  assert.deepEqual(blocks, [focusBlock('sdd:focus', 'Plan gap\n')]);
   assert.equal(comments.length, 2);
   rmSync(dir, {recursive: true, force: true});
 }
@@ -258,7 +268,7 @@ function proveAMissingOrEmptySddHooksLeavesNoSidebarHookBlock128(): void {
   for (const key of ['1', '2', '3', '4', '5', '6']) {
     window.openCard(key);
     const blocks = window.sidebar();
-    assert.deepEqual(blocks, [{kind: 'focus', body: 'Plan gap\n'}]);
+    assert.deepEqual(blocks, [focusBlock('sdd:focus', 'Plan gap\n')]);
     assert.equal(kinds(blocks).includes('hook'), false);
   }
   rmSync(dir, {recursive: true, force: true});
@@ -408,6 +418,72 @@ async function proveTheDescriptionIsTheIssueBodyOutsideTheMarkers(): Promise<voi
   );
 }
 
+function proveTheSidebarFocusBlockShowsTheLatestMarkerAsABadgeAndTheProseUnderIt(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [
+    cycle('1', 'implementing', {
+      comments: [
+        {body: 'sdd:focus:plan\nOlder plan note.\n'},
+        {body: 'sdd:focus:spec\nSpecify boundaries hold.\n'},
+      ],
+    }),
+  ]);
+  window.openCard('1');
+  const focus = window.sidebar().find(block => block.kind === 'focus');
+  assert.deepEqual(focus, focusBlock('sdd:focus:spec', 'Specify boundaries hold.\n'));
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheSpineRowOfThatPhaseKeepsTheFirstSentenceOfItsOwnLatestPhaseComment(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [
+    cycle('1', 'implementing', {
+      body: ['<!-- sdd:begin -->', 'Plan: Mirror fallback.', '<!-- sdd:end -->'].join('\n'),
+      comments: [{body: 'sdd:focus:plan\nPlan produced the outcome. More detail here.\n'}],
+    }),
+  ]);
+  window.openCard('1');
+  const plan = window.spine()?.lines.find(line => line.layer === 'Plan');
+  assert.equal(plan?.text, 'Plan produced the outcome.');
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveAWholePullRequestCommentBelongsToTheFocusBlockAndToNoSingleRow(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [
+    cycle('1', 'implementing', {
+      body: ['<!-- sdd:begin -->', 'Plan: Mirror only.', '<!-- sdd:end -->'].join('\n'),
+      comments: [{body: 'sdd:focus\nWhole pull request summary.\n'}],
+    }),
+  ]);
+  window.openCard('1');
+  const focus = window.sidebar().find(block => block.kind === 'focus');
+  assert.deepEqual(focus, focusBlock('sdd:focus', 'Whole pull request summary.\n'));
+  const plan = window.spine()?.lines.find(line => line.layer === 'Plan');
+  assert.equal(plan?.text, 'Mirror only.');
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveAManagerCommentIsNotTheFocusBlock(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [
+    cycle('1', 'implementing', {
+      comments: [
+        {body: 'sdd:focus:code\nCode slice landed.\n'},
+        {body: 'sdd:focus\nManager ledger\n', manager: true},
+      ],
+    }),
+  ]);
+  window.openCard('1');
+  const focus = window.sidebar().find(block => block.kind === 'focus');
+  assert.deepEqual(focus, focusBlock('sdd:focus:code', 'Code slice landed.\n'));
+  rmSync(dir, {recursive: true, force: true});
+}
+
 function proveOneNonStringSddHooksPointShowsThatLineInTheSidebarAndTheStringPointRemains130(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
@@ -469,6 +545,20 @@ spec('sidebar', () => {
     });
     scenario('No focus comment leaves no block', () => {
       proveNoSddFocusCommentLeavesNoSidebarFocusBlock120();
+    });
+  });
+  requirement('The sidebar focus block shows the latest focus prose', () => {
+    scenario('The sidebar focus block shows the latest marker as a badge and the prose under it', () => {
+      proveTheSidebarFocusBlockShowsTheLatestMarkerAsABadgeAndTheProseUnderIt();
+    });
+    scenario('The spine row of that phase keeps the first sentence of its own latest phase comment', () => {
+      proveTheSpineRowOfThatPhaseKeepsTheFirstSentenceOfItsOwnLatestPhaseComment();
+    });
+    scenario('A whole-pull-request comment belongs to the focus block and to no single row', () => {
+      proveAWholePullRequestCommentBelongsToTheFocusBlockAndToNoSingleRow();
+    });
+    scenario('A manager comment is not the focus block', () => {
+      proveAManagerCommentIsNotTheFocusBlock();
     });
   });
   requirement('Unanswered review shows threads the port already gives', () => {

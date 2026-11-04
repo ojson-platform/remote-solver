@@ -31,7 +31,7 @@ import {
   takeBlock,
   type Factory,
 } from './factory.ts';
-import {focusNamesPlace, focusPlaque} from './focus.ts';
+import {focusNamesPlace} from './focus.ts';
 import {openRoleEditor, runRole, shelfOf} from './role.ts';
 import {openServiceGroup} from './service-group.ts';
 import {blocksFor} from './sidebar.ts';
@@ -277,7 +277,7 @@ export function openWindow(
     const chrome = {
       key: item.key,
       station,
-      focusBody: focusPlaque(item.comments),
+      focusComments: item.comments,
       issueBody: item.body,
       checks: item.checks,
       diff: item.diff === true,
@@ -351,6 +351,16 @@ export function openWindow(
     },
     overlay: () => overlaySession.view(home.doc()),
     sidebar,
+    openTicket() {
+      if (openKey === '') {
+        return undefined;
+      }
+      const item = checkout.sorted().find(ticket => ticket.key === openKey);
+      if (!item) {
+        return undefined;
+      }
+      return {comments: item.comments, body: item.body};
+    },
     spine() {
       return readOpenSpine();
     },

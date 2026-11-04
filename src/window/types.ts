@@ -153,7 +153,7 @@ export type SidebarBlock =
   | {kind: 'description'; text: string}
   | {kind: 'reason'; line: string}
   | {kind: 'ask'; body: string}
-  | {kind: 'focus'; body: string}
+  | {kind: 'focus'; marker: string; body: string; display: string}
   | {
       kind: 'unanswered';
       threads?: readonly {lines: readonly string[]}[];

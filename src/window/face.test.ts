@@ -129,3 +129,13 @@ spec('hammer', () => {
     );
   });
 });
+
+spec('line-select', () => {
+  requirement('A sidebar line can be selected and copied', () => {
+    scenario('A sidebar line can be selected and copied', () => {
+      const css = faceCss();
+      assert.match(css, /\.spine button\.line\s*\{[^}]*user-select:\s*text/);
+      assert.match(css, /\.spine button\.diff-row\s*\{[^}]*user-select:\s*text/);
+    });
+  });
+});

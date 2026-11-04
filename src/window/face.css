@@ -630,6 +630,7 @@
     padding: 4px 8px;
     border-radius: 8px;
     cursor: pointer;
+    user-select: text;
   }
   .spine button.line:hover,
   .spine button.line.is-on {
@@ -674,6 +675,7 @@
     line-height: 1.45;
     text-align: left;
     cursor: pointer;
+    user-select: text;
   }
   .spine button.diff-row:hover,
   .spine button.diff-row.is-on {

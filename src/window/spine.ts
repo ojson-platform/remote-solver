@@ -8,8 +8,8 @@ import {missingBaselineIds, namedCapabilities, readBranch, type BranchText} from
 import {changeDir} from '../machine/naming.ts';
 
 import {strictChangeFiles, strictContentChangeFiles} from './change-files.ts';
-import {phaseFocusSentences} from './focus.ts';
-import {focusMarkerLine, isFocusRecord} from '../machine/marker.ts';
+import {scanFocusComments} from './focus.ts';
+import {isFocusRecord} from '../machine/marker.ts';
 import {specDiff} from './spec-diff.ts';
 import type {WindowComment} from './types.ts';
 
@@ -373,19 +373,11 @@ export function focusSpineLines(
       rest: focus.rest.filter(line => !line.includes('sdd:begin') && !line.includes('sdd:end')),
     };
   }
-  const sentences = phaseFocusSentences(comments);
-  let lines = applyPhaseSentences(linesFromIssue(issueBody), sentences);
-  let ledgerBody: string | undefined;
-  for (const comment of comments) {
-    if (comment.manager || !isFocusRecord(comment.body)) {
-      continue;
-    }
-    if (focusMarkerLine(comment.body) !== 'sdd:focus') {
-      continue;
-    }
-    ledgerBody = comment.body.split('\n').slice(1).join('\n');
-  }
-  const ledger = ledgerBody ? linesFromFocus(ledgerBody) : {lines: [], rest: []};
+  const {phaseSentences, latestWholeFocusBody} = scanFocusComments(comments);
+  const lines = applyPhaseSentences(linesFromIssue(issueBody), phaseSentences);
+  const ledger = latestWholeFocusBody
+    ? linesFromFocus(latestWholeFocusBody)
+    : {lines: [], rest: []};
   return {
     lines: mergeLines(lines, ledger.lines),
     rest: ledger.rest.filter(line => !line.includes('sdd:begin') && !line.includes('sdd:end')),

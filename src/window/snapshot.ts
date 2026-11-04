@@ -46,6 +46,8 @@ export type SnapshotRow = {
   station?: ColumnName;
   /** Action token while a worker is on a turn for this cycle. */
   action?: string;
+  /** True while the spy's running set contains this issue. */
+  running?: true;
   plaque: {top?: string; bottom?: string};
   phaseRow?: PhaseRow;
   reason?: string;
@@ -104,6 +106,7 @@ type SnapshotSurface = {
   shelf(): {name: string; outcome: RoleOutcome}[];
   spyNote(): string;
   turn(key: string): string | undefined;
+  running(key: string): boolean;
   sidebar(): SidebarBlock[];
   spine(): Spine | undefined;
   heldSpine?: () => {spine?: Spine; ready: boolean; revision?: string};
@@ -298,6 +301,7 @@ function publishedDoors(
 function publish(
   row: Fact,
   action: string | undefined,
+  inRunning: boolean,
   place: (file: string) => string | undefined,
 ): SnapshotRow {
   const shown = action === '' ? undefined : action;
@@ -309,6 +313,7 @@ function publish(
     ...ticketLinks({key: row.key, repo: row.repo, service: row.service, pull: row.pull}),
     ...(row.station !== undefined ? {station: row.station} : {}),
     ...(shown !== undefined ? {action: shown} : {}),
+    ...(inRunning ? {running: true} : {}),
     ...(row.phaseRow !== undefined ? {phaseRow: row.phaseRow} : {}),
     ...(row.reason !== undefined ? {reason: row.reason} : {}),
     ...(row.takeDisabled === true ? {takeDisabled: true} : {}),
@@ -429,7 +434,9 @@ export function snapshot(surface: SnapshotSurface, view: SnapshotView): WindowSn
     banners: board.rows,
     roles: surface.shelf(),
     reviewPlaces,
-    rows: drawn.map(row => publish(row, surface.turn(row.key), file => surface.doorPlace(file))),
+    rows: drawn.map(row =>
+      publish(row, surface.turn(row.key), surface.running(row.key), file => surface.doorPlace(file)),
+    ),
     ...(view.status !== undefined ? {status: view.status} : {}),
     ...(view.show !== undefined && view.show !== '' ? {show: view.show} : {}),
     ...(view.popup !== undefined ? {popup: view.popup} : {}),

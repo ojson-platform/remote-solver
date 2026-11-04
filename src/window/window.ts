@@ -303,6 +303,7 @@ export function openWindow(
     board,
     spyNote: () => outside.spyNote?.() ?? '',
     turn: (key: string) => outside.turn?.(key),
+    running: (key: string) => outside.leading?.(key) === true,
     shelf: () => shelfOf(roles.list()),
     settings: () => home.settings(settingsOpen),
     addRole: (role: RoleRecord) => roles.add(role),

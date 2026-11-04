@@ -263,6 +263,7 @@ export function idle() {
     checkouts: () => [] as string[],
     spyNote: () => '',
     turn: () => undefined,
+    running: () => false,
     openReviewPlace: () => undefined as string | undefined,
     doorPlace: () => undefined as string | undefined,
     gateMark: () => {},

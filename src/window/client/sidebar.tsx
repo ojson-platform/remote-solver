@@ -14,7 +14,7 @@ import {Gate} from './board.tsx';
 import {BusyEdge} from './busy.tsx';
 import {ActForm, Hidden} from './forms.tsx';
 import {capIsOpen, layerHasFold} from './gesture.ts';
-import {Cross, SendMark} from './marks.tsx';
+import {Cross, HammerMark, SendMark} from './marks.tsx';
 
 function codeLine(line: string, places: Record<string, string>): ReactNode {
   const matched = /^(\s*)Code(\s+)(\S.*)$/.exec(line);
@@ -54,6 +54,42 @@ function codeLine(line: string, places: Record<string, string>): ReactNode {
       {matched[1]}Code{matched[2]}
       {rendered}
     </>
+  );
+}
+
+function implTask(tasks: readonly SpineTask[]): SpineTask | undefined {
+  return tasks.find(task => !task.done);
+}
+
+function tasksSummary(
+  model: Spine,
+  places: Record<string, string>,
+  running: boolean,
+): ReactNode {
+  if (model.station !== 'implementing') {
+    return sentence(model, 'Tasks', places);
+  }
+  const task = implTask(model.tasks);
+  if (!task) {
+    return sentence(model, 'Tasks', places);
+  }
+  const mirror = sentence(model, 'Tasks', places);
+  return (
+    <span className="sentence">
+      {task.id} <span className="badge">impl</span>
+      {running ? (
+        <>
+          {' '}
+          <HammerMark />
+        </>
+      ) : null}
+      {mirror == null ? null : (
+        <>
+          <br />
+          {mirror}
+        </>
+      )}
+    </span>
   );
 }
 
@@ -931,7 +967,7 @@ export function Sidebar({
             model={model}
             open={open === 'Tasks'}
             quiet={quiet('Tasks')}
-            sentenceNode={sentence(model, 'Tasks', places)}
+            sentenceNode={tasksSummary(model, places, row.running === true)}
           >
             {model.tasks.map(task => (
               <details className="task" key={task.id}>

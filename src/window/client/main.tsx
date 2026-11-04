@@ -27,6 +27,7 @@ import {
   type ReadSlot,
 } from './frame.ts';
 import {
+  dragLeavesSelection,
   draftsAfterClick,
   foldsAfterSpec,
   focusStaysInForm,
@@ -650,6 +651,9 @@ function boot(): void {
     }
     const line = target?.closest('button.line, button.diff-row');
     if (line instanceof HTMLElement) {
+      if (dragLeavesSelection(line)) {
+        return;
+      }
       const targetLine = line.getAttribute('data-line') ?? '';
       const current = lineDrafts();
       const next = draftsAfterClick(current, targetLine);

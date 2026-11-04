@@ -142,6 +142,40 @@ export function scenarioTarget(
   return undefined;
 }
 
+type LineHit = {contains: (node: Node) => boolean};
+
+type ClickSelection = {
+  anchorNode: Node | null;
+  focusNode: Node | null;
+  isCollapsed: boolean;
+  toString: () => string;
+};
+
+function selectionAtClick(): ClickSelection | null {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+  return document.getSelection();
+}
+
+/** A drag that left text on the line is not a click and must not toggle the field. */
+export function dragLeavesSelection(
+  line: LineHit,
+  selection: ClickSelection | null = selectionAtClick(),
+): boolean {
+  if (!selection || selection.isCollapsed) {
+    return false;
+  }
+  if (selection.toString() === '') {
+    return false;
+  }
+  const endpoint = selection.focusNode ?? selection.anchorNode;
+  if (!endpoint) {
+    return false;
+  }
+  return line.contains(endpoint);
+}
+
 export function draftsAfterClick(
   open: readonly {line: string; text: string}[],
   target: string,

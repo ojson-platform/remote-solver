@@ -4,7 +4,39 @@ import assert from 'node:assert/strict';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
 
-import {capIsOpen, foldsAfterSpec, revealFold, scenarioTarget} from './gesture.ts';
+import {draftsAfterClick} from '../page.ts';
+import {capIsOpen, dragLeavesSelection, foldsAfterSpec, revealFold, scenarioTarget} from './gesture.ts';
+
+function mockSelection(
+  text: string,
+  anchor: Node,
+  focus: Node,
+  collapsed = false,
+): {anchorNode: Node; focusNode: Node; isCollapsed: boolean; toString: () => string} {
+  return {
+    anchorNode: anchor,
+    focusNode: focus,
+    isCollapsed: collapsed,
+    toString: () => text,
+  };
+}
+
+function lineContains(inside: Node): {contains: (node: Node) => boolean} {
+  return {contains: node => node === inside};
+}
+
+/** Same draft rule as the line click listener when a drag leaves selected text. */
+function draftsAfterLineClick(
+  open: readonly {line: string; text: string}[],
+  targetLine: string,
+  line: {contains: (node: Node) => boolean},
+  selection: Parameters<typeof dragLeavesSelection>[1],
+): {line: string; text: string}[] {
+  if (dragLeavesSelection(line, selection)) {
+    return [...open];
+  }
+  return draftsAfterClick(open, targetLine);
+}
 
 test('revealFold keeps an index that is already open', () => {
   const open = [2, 0, 4];
@@ -66,5 +98,50 @@ test('scenarioTarget trims a hidden scenario line and keeps that fold index', ()
     capability: 'case-read',
     gap: 1,
     name: 'Проверка',
+  });
+});
+
+spec('line-select', () => {
+  requirement('A sidebar line can be selected and copied', () => {
+    scenario('A drag that leaves selected text is not a click', () => {
+      const text = {} as Node;
+      const line = lineContains(text);
+      const drag = mockSelection('фрагмент', text, text);
+      assert.equal(dragLeavesSelection(line, drag), true);
+      const click = mockSelection('', text, text, true);
+      assert.equal(dragLeavesSelection(line, click), false);
+      const outside = {} as Node;
+      const miss = mockSelection('фрагмент', outside, outside);
+      assert.equal(dragLeavesSelection(line, miss), false);
+    });
+    scenario(
+      "The drag does not open the line's comment and does not close one that is already open",
+      () => {
+      const text = {} as Node;
+      const line = lineContains(text);
+      const drag = mockSelection('строка', text, text);
+      const closed = draftsAfterLineClick([], 'первая', line, drag);
+      assert.deepEqual(closed, []);
+      const open = draftsAfterLineClick([{line: 'первая', text: ''}], 'первая', line, drag);
+      assert.deepEqual(open, [{line: 'первая', text: ''}]);
+      },
+    );
+    scenario('The field stays as it was', () => {
+      const text = {} as Node;
+      const line = lineContains(text);
+      const drag = mockSelection('черновик', text, text);
+      const typed = draftsAfterLineClick([{line: 'первая', text: 'черновик'}], 'первая', line, drag);
+      assert.deepEqual(typed, [{line: 'первая', text: 'черновик'}]);
+      const other = draftsAfterLineClick(
+        [{line: 'первая', text: 'черновик'}],
+        'вторая',
+        line,
+        drag,
+      );
+      assert.deepEqual(other, [{line: 'первая', text: 'черновик'}]);
+      assert.deepEqual(draftsAfterClick([{line: 'первая', text: ''}], 'вторая'), [
+        {line: 'вторая', text: ''},
+      ]);
+    });
   });
 });

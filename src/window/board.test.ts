@@ -2192,6 +2192,45 @@ spec('phase-header', () => {
         assert.equal(/padding-top:\s*88px/.test(html), false);
       });
     });
+    scenario('A shown card clears the fade by the board\'s computed padding-top', async () => {
+      await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+        window.chooseAgent('cursor');
+        const client = await (await fetch(new URL('/client.js', page.url))).text();
+        const leadAt = client.indexOf('getComputedStyle(board).paddingTop');
+        assert.ok(leadAt !== -1);
+        const showScroll = client.slice(client.lastIndexOf('querySelector(".board")', leadAt), leadAt + 200);
+        assert.match(showScroll, /const lead = Number\.parseFloat\(getComputedStyle\(board\)\.paddingTop\) \|\| 0/);
+        assert.match(showScroll, /cardRect\.top < boxRect\.top \+ lead/);
+        assert.match(showScroll, /board\.scrollTop -= boxRect\.top \+ lead - cardRect\.top/);
+      });
+    });
+    scenario('That lead stays tied to the padding when the padding changes', async () => {
+      await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+        window.chooseAgent('cursor');
+        const html = await pageHtml(page.url);
+        assert.match(html, /\.board\s*\{[^}]*padding-top:\s*28px/);
+        const client = await (await fetch(new URL('/client.js', page.url))).text();
+        const leadAt = client.indexOf('getComputedStyle(board).paddingTop');
+        assert.ok(leadAt !== -1);
+        const showScroll = client.slice(client.lastIndexOf('querySelector(".board")', leadAt), leadAt + 120);
+        assert.equal(/\blead\s*=\s*28\b/.test(showScroll), false);
+        assert.equal(/\blead\s*=\s*88\b/.test(showScroll), false);
+        assert.match(showScroll, /getComputedStyle\(board\)\.paddingTop/);
+      });
+    });
+    scenario('There is no second offset', async () => {
+      await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+        window.chooseAgent('cursor');
+        const client = await (await fetch(new URL('/client.js', page.url))).text();
+        const leadAt = client.indexOf('getComputedStyle(board).paddingTop');
+        assert.ok(leadAt !== -1);
+        const showScroll = client.slice(client.lastIndexOf('querySelector(".board")', leadAt), leadAt + 200);
+        assert.equal(/\b88\b/.test(showScroll), false);
+        assert.equal(/\b60\b/.test(showScroll), false);
+        assert.equal(showScroll.match(/\blead\b/g)?.length, 3);
+        assert.equal(showScroll.includes('boxRect.top + lead'), true);
+      });
+    });
     scenario('The page bar above the board is not the phase header', async () => {
       await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
         window.chooseAgent('cursor');

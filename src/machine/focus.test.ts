@@ -6,22 +6,13 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import type {FileSource, Tracker} from './port.ts';
 import {changeDir} from './naming.ts';
 import {focusMarkerLine, focusMirrorName, FOCUS_MARKER_LINES, isFocusRecord} from './marker.ts';
-import {
-  endStep,
-  firstFocusSentence,
-  focusProse,
-  observedSignal,
-  postFocusComment,
-  type RunMarks,
-} from './focus.ts';
+import {firstFocusSentence, focusProse, latestFocusComment, postFocusComment} from './focus.ts';
 import {focusArgs, postFocus} from '../sdd.ts';
 import {focusPlaque} from '../window/focus.ts';
 
 const KEY = '26';
 
 type Run = {
-  commits?: number;
-  signal?: 'Wait' | 'Hand-off' | null;
   files?: readonly string[];
   comments?: {body: string; manager?: boolean}[];
 };
@@ -41,33 +32,9 @@ function file(name: string): string {
   return `${changeDir(KEY)}/${name}`;
 }
 
-async function runEndStep(over: Run = {}): Promise<string[]> {
-  const comments = (over.comments ?? []).map(comment => ({...comment}));
-  const posted: string[] = [];
-  const tracker = {
-    async comments() {
-      return comments.map(comment => ({...comment}));
-    },
-    async comment(_key: string, body: string) {
-      posted.push(body);
-      comments.push({body});
-    },
-  } as Pick<Tracker, 'comments' | 'comment'>;
-  await endStep(
-    KEY,
-    {commits: over.commits ?? 0, signal: over.signal},
-    {
-      tracker,
-      review: {pulls: async () => [], range: async () => ({head: 'a', base: 'b'}), threadList: async () => []},
-      vcs: {filesAt: () => source(over.files ?? []), compare: async () => null, contentCommit: async () => 'a'},
-    },
-  );
-  return posted;
-}
-
 async function runFocus(
   body: string,
-  over: Omit<Run, 'commits' | 'signal'> = {},
+  over: Run = {},
 ): Promise<{posted: string[]; comments: {body: string; manager?: boolean}[]}> {
   const comments = (over.comments ?? []).map(comment => ({...comment}));
   const posted: string[] = [];
@@ -90,8 +57,6 @@ spec('focus', () => {
       const {posted} = await runFocus('sdd:focus:plan\nThe proposal names scope and one capability.\n');
       assert.equal(posted.length, 1);
       assert.equal(posted[0]?.startsWith('sdd:focus:plan\n'), true);
-      const machine = await runEndStep({commits: 1, files: [file('proposal.md')]});
-      assert.deepEqual(machine, []);
     });
 
     scenario('A focus comment is prose for one phase or the whole pull request', async () => {
@@ -140,13 +105,11 @@ spec('focus', () => {
 
     scenario('No signal leaves the comment', async () => {
       const body = 'sdd:focus:code\nImplement slice one.\n';
-      const posted = await runEndStep({files: [file('tasks.md')], comments: [{body}]});
-      assert.deepEqual(posted, []);
+      const comments = [{body}];
+      assert.equal(latestFocusComment(comments), body);
     });
 
     scenario('No change file means no focus comment', async () => {
-      const posted = await runEndStep({commits: 1, files: []});
-      assert.deepEqual(posted, []);
       const focus = await runFocus('sdd:focus:plan\nNo directory.\n', {files: []});
       assert.deepEqual(focus.posted, []);
     });
@@ -242,13 +205,3 @@ test('postFocus refuses an unrecognized marker line', async () => {
   );
 });
 
-test('a commit is Publish, a new marker is Hand-off, a new wait is Wait, and a still cycle is no signal', () => {
-  const quiet: RunMarks = {waiting: false, comments: 0, threads: [], spoken: []};
-  assert.equal(observedSignal(1, quiet, quiet), 'Publish');
-  assert.equal(observedSignal(0, quiet, quiet), null);
-  assert.equal(observedSignal(0, quiet, {...quiet, waiting: true, comments: 1}), 'Wait');
-  assert.equal(
-    observedSignal(0, quiet, {...quiet, spoken: ['sdd:layer=code → implementing the test fails']}),
-    'Hand-off',
-  );
-});

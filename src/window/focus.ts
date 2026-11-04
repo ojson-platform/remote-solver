@@ -1,6 +1,6 @@
 import type {WindowComment} from './types.ts';
 
-import {firstFocusSentence, FOCUS_LAYERS} from '../machine/focus.ts';
+import {firstFocusSentence, FOCUS_LAYERS, latestFocusComment} from '../machine/focus.ts';
 import {
   focusMarkerLine,
   focusMirrorName,
@@ -12,14 +12,7 @@ export type FocusSidebar = {marker: FocusMarkerLine; body: string};
 
 /** Latest non-manager focus comment body, in tracker order. */
 export function latestFocusRecord(comments: readonly WindowComment[] | undefined): string | undefined {
-  let body: string | undefined;
-  for (const comment of comments ?? []) {
-    if (comment.manager || !isFocusRecord(comment.body)) {
-      continue;
-    }
-    body = comment.body;
-  }
-  return body;
+  return latestFocusComment(comments ?? []);
 }
 
 /** Marker and prose body for the sidebar focus block. */

@@ -31,7 +31,8 @@ function canonical(body: string): string {
   return rest === '' ? first : `${first}\n${rest}`;
 }
 
-function latestFocus(comments: readonly FocusComment[]): string | undefined {
+/** Latest non-manager focus comment body, in tracker order. */
+export function latestFocusComment(comments: readonly FocusComment[]): string | undefined {
   let body: string | undefined;
   for (const comment of comments) {
     if (comment.manager || !isFocusRecord(comment.body)) {
@@ -122,7 +123,7 @@ export async function postFocusComment(
     return false;
   }
   const text = body.endsWith('\n') ? body : `${body}\n`;
-  const latest = latestFocus(await deps.tracker.comments(key));
+  const latest = latestFocusComment(await deps.tracker.comments(key));
   if (latest !== undefined && canonical(latest) === canonical(text)) {
     return false;
   }

@@ -28,7 +28,7 @@ Files are named only in the task card. The cut follows the caller path.
 5. A foreign contract: a child issue labeled with the first queue `name` under `sdd.queues` in `openspec/config.yaml` and `sdd:cycle`, body line `Parent: #<issue>`. A neighbor cycle already covers that contract: do not duplicate it, add `Depends: #<issue>`. A service with no cycle: an ordinary issue and `Depends: #<issue>`.
 6. A scenario in two tasks, a scenario in none, or a task with no anchor: fix that before the commit.
 7. `improve-tasks`: Fix thread (`CONTEXT.md`), layer `tasks`.
-8. Publish (`CONTEXT.md`): `tasks.md` and `tasks/*.md`. Mirror: `Tasks`.
+8. Publish (`CONTEXT.md`): `tasks.md` and `tasks/*.md`. Focus with marker `sdd:focus:tasks`. Mirror: `Tasks`.
 
 ## Check
 

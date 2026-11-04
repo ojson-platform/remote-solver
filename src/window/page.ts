@@ -19,7 +19,14 @@ import {factorySvg} from './mark.ts';
 import {omitHeldSpine, snapshot, type WindowSnapshot} from './snapshot.ts';
 import {ROLE_OUTCOMES} from './types.ts';
 
-export {draftsAfterClick, headClickToggles, lineFieldClosesOnEscape, plaqueClickOpens, rowHeadOpens} from './client/gesture.ts';
+export {
+  draftsAfterClick,
+  dragLeavesSelection,
+  headClickToggles,
+  lineFieldClosesOnEscape,
+  plaqueClickOpens,
+  rowHeadOpens,
+} from './client/gesture.ts';
 
 /** The window this page draws and drives. */
 type Surface = {

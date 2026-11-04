@@ -2,13 +2,13 @@
 
 ## Purpose
 
-The phase header is the row of phase names over the board. It stays at the top of the board while the board scrolls. Its background stays transparent. A ticket row that scrolls up fades out in the clear band under the names, and at rest the first row starts below that band.
+The phase header is the row of phase names over the board. It stays at the top of the board while the board scrolls. Its background stays transparent. A ticket row that scrolls up fades out in the header's lower padding under the letters, and at rest the first row starts at the bottom of the header, fully readable.
 
 ## Requirements
 
 ### Requirement: The phase header stays at the top of the board
 
-The phase header SHALL be the row of phase names over the board scroll. The phase header SHALL stay at the top of the board while the board scrolls. The seven phase names SHALL stay aligned with the station columns under them. The header background SHALL stay transparent. A row that scrolls up SHALL fade out in the clear band under the names, and the names SHALL stay readable. At rest the first row SHALL start below that band and stay fully readable. The page bar above the board SHALL NOT be the phase header. Scrolling the sidebar SHALL NOT move this header, and scrolling the board SHALL NOT move the sidebar.
+The phase header SHALL be the row of phase names over the board scroll. The phase header SHALL stay at the top of the board while the board scrolls. The seven phase names SHALL stay aligned with the station columns under them. The header background SHALL stay transparent. A row that scrolls up SHALL fade out under the names, and the names SHALL stay readable. The fade SHALL be the header's lower padding and nowhere below it. At rest the first row SHALL start at the bottom edge of the header and stay fully readable. The page bar above the board SHALL NOT be the phase header. Scrolling the sidebar SHALL NOT move this header, and scrolling the board SHALL NOT move the sidebar.
 
 #### Scenario: The phase header stays at the top of the board while the board scrolls
 
@@ -23,7 +23,7 @@ The phase header SHALL be the row of phase names over the board scroll. The phas
 #### Scenario: A row that scrolls up fades out under the names and the names stay readable
 
 - **WHEN** a ticket row scrolls up toward the phase names
-- **THEN** the row fades out in the clear band under the names, the header background stays transparent, and at rest the first row starts below that band fully readable
+- **THEN** the row fades out under the names, the names stay readable, the fade is the header's lower padding, and at rest the first row starts at the bottom of the header, fully readable
 
 #### Scenario: The page bar above the board is not the phase header
 

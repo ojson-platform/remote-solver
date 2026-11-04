@@ -158,9 +158,9 @@
     flex-direction: column;
     gap: 10px;
     padding: 12px;
-    padding-top: 88px;
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0 28px, #000 68px, #000 100%);
-    mask-image: linear-gradient(to bottom, transparent 0 28px, #000 68px, #000 100%);
+    padding-top: 28px;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0 20.75px, #000 28px, #000 100%);
+    mask-image: linear-gradient(to bottom, transparent 0 20.75px, #000 28px, #000 100%);
   }
   .head, .stations {
     display: grid;

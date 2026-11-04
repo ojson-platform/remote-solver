@@ -140,6 +140,27 @@ function atLeast(issue: IssueRecord, phase: Phase): boolean {
   return phaseRank(current) >= phaseRank(phase);
 }
 
+/** After every task is checked: children short of `accepted`, then open blockers. */
+function implementingDependencyWait(issue: IssueRecord, issues: IssueRecord[]): Decision | null {
+  const kids = children(issue.key, issues).filter(kid => !atLeast(kid, 'accepted'));
+  if (kids.length) {
+    return {
+      kind: 'wait',
+      issue: issue.key,
+      reason: `wait for children to be accepted: ${kids.map(kid => '#' + kid.key).join(', ')}`,
+    };
+  }
+  const openBlockers = blockers(issue, issues);
+  if (openBlockers.length) {
+    return {
+      kind: 'wait',
+      issue: issue.key,
+      reason: `wait for blockers: ${openBlockers.map(item => '#' + item.key).join(', ')}`,
+    };
+  }
+  return null;
+}
+
 function agent(
   issue: string,
   action: AgentAction,
@@ -214,21 +235,9 @@ export function decide(
   }
   if (phaseRank(phase) < phaseRank('accepting') && finishedCycle(pulls, change, names)) {
     if (phase === 'implementing' && change.tasks && change.openTasks === 0) {
-      const kids = children(issue.key, issues).filter(kid => !atLeast(kid, 'accepted'));
-      if (kids.length) {
-        return {
-          kind: 'wait',
-          issue: issue.key,
-          reason: `wait for children to be accepted: ${kids.map(kid => '#' + kid.key).join(', ')}`,
-        };
-      }
-      const openBlockers = blockers(issue, issues);
-      if (openBlockers.length) {
-        return {
-          kind: 'wait',
-          issue: issue.key,
-          reason: `wait for blockers: ${openBlockers.map(item => '#' + item.key).join(', ')}`,
-        };
+      const dependencyWait = implementingDependencyWait(issue, issues);
+      if (dependencyWait) {
+        return dependencyWait;
       }
     }
     return {kind: 'done', issue: issue.key, reason: 'finished cycle'};
@@ -459,21 +468,9 @@ export function decide(
         'next open task',
       );
     }
-    const kids = children(issue.key, issues).filter(kid => !atLeast(kid, 'accepted'));
-    if (kids.length) {
-      return {
-        kind: 'wait',
-        issue: issue.key,
-        reason: `wait for children to be accepted: ${kids.map(kid => '#' + kid.key).join(', ')}`,
-      };
-    }
-    const openBlockers = blockers(issue, issues);
-    if (openBlockers.length) {
-      return {
-        kind: 'wait',
-        issue: issue.key,
-        reason: `wait for blockers: ${openBlockers.map(item => '#' + item.key).join(', ')}`,
-      };
+    const dependencyWait = implementingDependencyWait(issue, issues);
+    if (dependencyWait) {
+      return dependencyWait;
     }
     return {kind: 'advance', issue: issue.key, to: 'verifying', reason: 'no open tasks'};
   }

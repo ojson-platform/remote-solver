@@ -1,0 +1,2 @@
+- [ ] `running-set-hammer` The task that wears impl wears the hammer while the issue is in the running set; The hammer goes and the impl badge stays when the agent leaves the issue; An issue in the running set with no impl task shows no hammer
+- [ ] `hammer-mark-knock` The hammer is the chosen mark; The filled path is M2 4 H8 V8 H22 L26 12 L22 16 H8 V20 H2 Z M12 12 H16 V30 H12 Z; The hammer knocks about 45 degrees and repeats while the issue stays in the running set

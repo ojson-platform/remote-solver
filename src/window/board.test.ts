@@ -2011,11 +2011,185 @@ spec('phase-header', () => {
         assert.match(html, /<article[\s\S]*class="stations"/);
         assert.match(
           html,
-          /\.board\s*\{[^}]*mask-image:\s*linear-gradient\(to bottom, transparent 0 28px, #000 68px, #000 100%\)/,
+          /\.board\s*\{[^}]*-webkit-mask-image:\s*linear-gradient\(to bottom, transparent 0 20\.75px, #000 28px, #000 100%\)/,
         );
-        assert.match(html, /\.board\s*\{[^}]*padding-top:\s*88px/);
+        assert.match(
+          html,
+          /\.board\s*\{[^}]*mask-image:\s*linear-gradient\(to bottom, transparent 0 20\.75px, #000 28px, #000 100%\)/,
+        );
+        assert.match(html, /\.board\s*\{[^}]*padding-top:\s*28px/);
         assert.match(html, /\.head\s*\{[^}]*background:\s*transparent/);
         assert.match(html, /\.head\s*\{[^}]*z-index:\s*[1-9]/);
+      });
+    });
+    scenario(
+      'The phase names stay over the board on a transparent header and a row that scrolls up fades out before it covers the letters',
+      async () => {
+        await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          assert.match(html, /\.head\s*\{[^}]*background:\s*transparent/);
+          assert.match(
+            html,
+            /\.board\s*\{[^}]*mask-image:\s*linear-gradient\(to bottom, transparent 0 20\.75px, #000 28px, #000 100%\)/,
+          );
+          assert.equal(between(html, '<main class="board"', '</main>').includes('class="phase"'), false);
+        });
+      },
+    );
+    scenario('The empty band under the names goes away', async () => {
+      await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+        window.chooseAgent('cursor');
+        const html = await pageHtml(page.url);
+        assert.match(html, /\.board\s*\{[^}]*padding-top:\s*28px/);
+        assert.equal(/\.board\s*\{[^}]*padding-top:\s*88px/.test(html), false);
+      });
+    });
+    scenario(
+      'At rest the first row starts at the bottom edge of the header and stays fully readable',
+      async () => {
+        await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          const board = between(html, '<main class="board"', '</main>');
+          assert.match(board, /^[\s\S]*<article class="ticket"/);
+          assert.match(html, /\.board\s*\{[^}]*padding-top:\s*28px/);
+          assert.match(html, /\.head\s*\{[^}]*height:\s*28px/);
+        });
+      },
+    );
+    scenario('The fade is the header\'s lower padding and nowhere below it', async () => {
+      await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+        window.chooseAgent('cursor');
+        const html = await pageHtml(page.url);
+        assert.match(
+          html,
+          /\.board\s*\{[^}]*mask-image:\s*linear-gradient\(to bottom, transparent 0 20\.75px, #000 28px, #000 100%\)/,
+        );
+        assert.equal(/transparent 0 28px, #000 68px/.test(html), false);
+      });
+    });
+    scenario(
+      'Content is gone through the letters, fades only across the padding under them, and is fully opaque from the bottom edge of the header',
+      async () => {
+        await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          assert.match(
+            html,
+            /linear-gradient\(to bottom, transparent 0 20\.75px, #000 28px, #000 100%\)/,
+          );
+        });
+      },
+    );
+    scenario(
+      'Scrolling a row up fades it inside those 7px and hides it before it reaches the letters',
+      async () => {
+        await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          assert.match(html, /transparent 0 20\.75px, #000 28px/);
+        });
+      },
+    );
+    scenario('At rest the first row is not inside the fade', async () => {
+      await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+        window.chooseAgent('cursor');
+        const html = await pageHtml(page.url);
+        assert.match(html, /\.board\s*\{[^}]*padding-top:\s*28px/);
+        assert.match(html, /#000 28px, #000 100%/);
+      });
+    });
+    scenario('The header is 28px tall', async () => {
+      await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+        window.chooseAgent('cursor');
+        const html = await pageHtml(page.url);
+        assert.match(html, /\.head\s*\{[^}]*height:\s*28px/);
+      });
+    });
+    scenario('The names are 10px type on a 1.35 line, centered in that 28px', async () => {
+      await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+        window.chooseAgent('cursor');
+        const html = await pageHtml(page.url);
+        assert.match(html, /\.phase\s*\{[^}]*font-size:\s*10px/);
+        assert.match(html, /\.head\s*\{[^}]*height:\s*28px/);
+        assert.match(html, /\.head, \.stations\s*\{[^}]*align-items:\s*center/);
+      });
+    });
+    scenario(
+      'The letters run from about 7px to 21px and the padding under them is the last 7px',
+      async () => {
+        await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          assert.match(html, /transparent 0 20\.75px, #000 28px/);
+          assert.match(html, /\.head\s*\{[^}]*height:\s*28px/);
+        });
+      },
+    );
+    scenario('The fade belongs in that lower padding and nowhere below it', async () => {
+      await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+        window.chooseAgent('cursor');
+        const html = await pageHtml(page.url);
+        assert.match(html, /transparent 0 20\.75px, #000 28px, #000 100%/);
+        assert.equal(/#000 68px/.test(html), false);
+      });
+    });
+    scenario('The mask stays on the scrolling board', async () => {
+      await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+        window.chooseAgent('cursor');
+        const html = await pageHtml(page.url);
+        assert.match(html, /\.board\s*\{[^}]*mask-image:/);
+        assert.equal(/\.head\s*\{[^}]*mask-image:/.test(html), false);
+      });
+    });
+    scenario(
+      'The names stay outside the mask, transparent, 28px tall, and aligned with the station columns',
+      async () => {
+        await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          assert.match(html, /class="board-frame"[\s\S]*class="head"[\s\S]*<main class="board"/);
+          assert.match(html, /\.head\s*\{[^}]*background:\s*transparent/);
+          assert.match(html, /\.head\s*\{[^}]*height:\s*28px/);
+          assert.match(
+            html,
+            /\.head, \.stations\s*\{[^}]*grid-template-columns:\s*252px repeat\(7, minmax\(0, 1fr\)\)/,
+          );
+        });
+      },
+    );
+    scenario('The mask fades from 20.75px to 28px', async () => {
+      await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+        window.chooseAgent('cursor');
+        const html = await pageHtml(page.url);
+        assert.match(html, /transparent 0 20\.75px, #000 28px/);
+      });
+    });
+    scenario('padding-top is 28px, the header height', async () => {
+      await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+        window.chooseAgent('cursor');
+        const html = await pageHtml(page.url);
+        assert.match(html, /\.board\s*\{[^}]*padding-top:\s*28px/);
+        assert.match(html, /\.head\s*\{[^}]*height:\s*28px/);
+      });
+    });
+    scenario('The first row starts on that edge', async () => {
+      await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+        window.chooseAgent('cursor');
+        const html = await pageHtml(page.url);
+        const board = between(html, '<main class="board"', '</main>');
+        assert.match(board, /<main class="board"><article class="ticket"/);
+        assert.match(html, /\.board\s*\{[^}]*padding-top:\s*28px/);
+      });
+    });
+    scenario('The only air between the letters and the row is the header\'s own lower padding', async () => {
+      await hosted({login: () => MANAGER, tickets: () => [held('1', 'proposing')]}, async (page, window) => {
+        window.chooseAgent('cursor');
+        const html = await pageHtml(page.url);
+        assert.match(html, /\.board\s*\{[^}]*padding-top:\s*28px/);
+        assert.match(html, /transparent 0 20\.75px, #000 28px/);
+        assert.equal(/padding-top:\s*88px/.test(html), false);
       });
     });
     scenario('The page bar above the board is not the phase header', async () => {

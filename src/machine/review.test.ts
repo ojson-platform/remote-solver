@@ -140,8 +140,8 @@ test('the spy mark and an ignored commenter are the robot, a bot login is not', 
   assert.equal(markRobot('🤖 sdd:note fyi'), '🤖 sdd:note fyi');
 });
 
-test('a conversation layer stays open until a later sdd:fixed', () => {
-  const open = reviewOf(
+test('a conversation layer stays recorded until a later sdd:fixed and does not open a phase', () => {
+  const open = readReview(
     [],
     [
       {robot: false, body: 'Нужно поребейзить ПР'},
@@ -149,10 +149,11 @@ test('a conversation layer stays open until a later sdd:fixed', () => {
     ],
   );
   assert.equal(open.unanswered, false);
-  assert.equal(open.rollback, 'implementing');
-  assert.deepEqual(open.layers, ['code']);
+  assert.equal(open.rollback, null);
+  assert.deepEqual(open.layers, []);
+  assert.equal(open.conversation.layer, 'code');
 
-  const closed = reviewOf(
+  const closed = readReview(
     [],
     [
       {robot: false, body: 'Нужно поребейзить ПР'},
@@ -163,4 +164,5 @@ test('a conversation layer stays open until a later sdd:fixed', () => {
   assert.equal(closed.unanswered, false);
   assert.equal(closed.rollback, null);
   assert.deepEqual(closed.layers, []);
+  assert.equal(closed.conversation.layer, null);
 });

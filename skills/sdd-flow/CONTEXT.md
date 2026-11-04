@@ -25,7 +25,7 @@ A run ends in exactly one signal. A run that ends with none leaves the decision 
 | `code` | `implementing` | source and tests |
 | `out` | leaves the phase | another issue |
 
-Earliest to latest: proposal, spec, design, tasks, code. The machine moves the phase to the earliest open marker.
+Earliest to latest: proposal, spec, design, tasks, code. The machine moves the phase to the earliest open thread marker. A marker on the conversation records a request and does not move the phase.
 
 ## Capability
 
@@ -100,7 +100,7 @@ node scripts/sdd.mjs thread fix <issue> <pull> --conversation
 
 ### Fix thread
 
-A skill fixes the threads of its own layer: `threads <pull> --layer <layer>`. For each thread: one commit that answers it, Publish, then `thread fix <issue> <pull> <thread>`. A conversation request of that layer (`conversation.layer`) is the same work, answered with `thread fix <issue> <pull> --conversation`.
+A skill fixes the threads of its own layer: `threads <pull> --layer <layer>`. For each thread: one commit that answers it, Publish, then `thread fix <issue> <pull> <thread>`. The machine starts that skill for an open thread, not for a conversation marker alone. When the skill is already fixing that layer and `conversation.layer` names it, the conversation request is the same work, answered with `thread fix <issue> <pull> --conversation`.
 
 ### Hand-off
 

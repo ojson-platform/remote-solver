@@ -8,7 +8,7 @@ import {
   type Thread,
   type Vcs,
 } from '../machine/port.ts';
-import {reviewOf} from '../machine/review.ts';
+import {readReview} from '../machine/review.ts';
 import {placeOnDiff} from './place.ts';
 import {assembleDossier, type Dossier} from './dossier.ts';
 import type {Remark, Verdict} from './verdict.ts';
@@ -34,11 +34,11 @@ export function reviewStep(input: {
   if (input.checks !== 'green') {
     return {kind: 'wait', reason: `checks are ${input.checks}`};
   }
-  const view = reviewOf(input.threads, input.comments);
+  const view = readReview(input.threads, input.comments);
   if (view.unanswered) {
     return {kind: 'wait', reason: 'unanswered comment'};
   }
-  if (view.layers.length > 0) {
+  if (view.layers.length > 0 || view.conversation.layer !== null) {
     return {kind: 'wait', reason: 'open layer'};
   }
   if (!input.head) {

@@ -41,7 +41,7 @@ A comment the machine wrote, or a commenter the service listed as ignored. A log
 _Avoid_: Bot
 
 **Conversation**:
-Comments on the pull request that are not attached to the diff. A marker here can still name a layer.
+Comments on the pull request that are not attached to the diff. A marker here can still name a layer. That layer does not move the phase.
 _Avoid_: Thread, review body
 
 **Unanswered**:
@@ -49,7 +49,7 @@ A thread or conversation whose latest word is a person's and carries no marker.
 _Avoid_: Open comment
 
 **Rollback**:
-An advance back to the earliest phase an open layer marker names. It is what follows a hand-off.
+An advance back to the earliest phase an open thread marker names. It is what follows a hand-off.
 _Avoid_: Revert, reset
 
 **Mirror**:

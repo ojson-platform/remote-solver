@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The latest marker on a review thread or the pull-request conversation tells the machine which layer the work belongs to.
+The latest marker on an open review thread tells the machine which layer the work belongs to. A marker on the pull-request conversation records a request and does not move the phase.
 
 ## Requirements
 
@@ -55,7 +55,7 @@ A body that starts with the robot mark SHALL be the robot. An author on the igno
 
 ### Requirement: The earliest layer rolls the phase back
 
-Among open threads and the conversation, the earliest of `proposal`, `spec`, `design`, `tasks`, and `code` SHALL move the phase there when that phase is earlier than the current one. `out`, `note`, `fixed`, and `begin` SHALL NOT move the phase. On `verifying` this rollback SHALL wait until the checks rule runs. A later `fixed` in the conversation SHALL clear its layer. A later layer SHALL replace it.
+Among open threads, the earliest of `proposal`, `spec`, `design`, `tasks`, and `code` SHALL move the phase there when that phase is earlier than the current one. `out`, `note`, `fixed`, and `begin` SHALL NOT move the phase. On `verifying` this rollback SHALL wait until the checks rule runs.
 
 #### Scenario: A spec marker during implementing moves to specifying
 
@@ -72,14 +72,33 @@ Among open threads and the conversation, the earliest of `proposal`, `spec`, `de
 - **WHEN** open threads mark both `code` and `spec`
 - **THEN** the rollback phase is `specifying`
 
+### Requirement: A conversation marker does not take the phase
+
+A layer marker that sits only on the pull-request conversation SHALL leave the phase's own decision in place. It SHALL NOT roll the phase back and SHALL NOT start that layer's action. An open thread with that layer SHALL still roll the phase back or start the action. A later `fixed` in the conversation SHALL clear its layer. A later layer SHALL replace it. `note` SHALL NOT name a layer.
+
+#### Scenario: A conversation code marker during implementing leaves the next task
+
+- **WHEN** `implementing` has an open task and the conversation marks `code`
+- **THEN** the machine runs the next task
+
+#### Scenario: A conversation code marker with no open task moves on to verifying
+
+- **WHEN** `implementing` has no open task and the conversation marks `code`
+- **THEN** the machine moves the issue to `verifying`
+
+#### Scenario: A conversation code marker on accepting does not move to implementing
+
+- **WHEN** the phase is `accepting`, the change is archived, the checks are green, and the conversation marks `code`
+- **THEN** the machine waits for the merge
+
 #### Scenario: A later fixed clears the conversation layer
 
 - **WHEN** the phase is `accepting`, the change is archived, the checks are green, and the conversation marks `code` and then `fixed`
-- **THEN** the machine does not move the issue to `implementing`
+- **THEN** the conversation layer is clear and the machine does not move the issue to `implementing`
 
 ### Requirement: A classified marker moves before a held review gate
 
-A classified layer marker SHALL move the phase, or start the current layer's action, before a held review gate is repeated. An open thread with no marker SHALL still be classified first. `wait-human` SHALL keep the gate when no thread carries a layer marker.
+A classified layer marker on an open thread SHALL move the phase, or start the current layer's action, before a held review gate is repeated. An open thread with no marker SHALL still be classified first. `wait-human` SHALL keep the gate when no thread carries a layer marker.
 
 #### Scenario: An unlabeled thread during a held design review is classified
 

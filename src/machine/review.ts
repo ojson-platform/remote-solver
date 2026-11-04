@@ -137,8 +137,9 @@ export type ReviewReading = ReviewView & {
 
 /**
  * Open threads and the conversation, read once. An open thread without a marker
- * is unanswered. Only a layer marker opens a phase. `fixed` closes a conversation
- * layer. Handles are kept for the threads verb.
+ * is unanswered. An open thread's layer marker opens a phase. A conversation
+ * layer is recorded and does not. `fixed` closes a conversation layer.
+ * Handles are kept for the threads verb.
  */
 export function readReview(
   threads: readonly ReadThread[],
@@ -174,9 +175,6 @@ export function readReview(
     });
   }
   const fromConversation = conversationLayer(comments);
-  if (fromConversation) {
-    layers.push(fromConversation);
-  }
   let rollback: Phase | null = null;
   for (const layer of layers) {
     const phase = phaseOfLayer(layer);

@@ -8,7 +8,7 @@ import {fixThread} from '../sdd.ts';
 import {action, change, issue, pull, ready} from './harness.ts';
 import {markerName, mentionsGrammar, parseMarker} from './marker.ts';
 import {decide} from './policy.ts';
-import {reviewOf, spokeByRobot, threadsReport, type OpenItemFile} from './review.ts';
+import {readReview, reviewOf, spokeByRobot, threadsReport, type OpenItemFile} from './review.ts';
 
 test('one parser reads every marker, fixed first, then note, then a layer', () => {
   assert.deepEqual(parseMarker('🤖 sdd:layer=spec → specifying'), {kind: 'layer', layer: 'spec'});
@@ -134,8 +134,54 @@ spec('marker', () => {
       );
       assert.equal(review.rollback, 'specifying');
     });
+  });
+
+  requirement('A conversation marker does not take the phase', () => {
+    const codeTalk = [
+      {robot: false, body: 'Перед архивацией обновить face.md'},
+      {robot: true, body: '🤖 sdd:layer=code → implementing'},
+    ];
+    scenario('A conversation code marker during implementing leaves the next task', () => {
+      const review = reviewOf([], codeTalk);
+      const decision = decide(
+        issue(1, ['sdd:implementing']),
+        [],
+        [pull(9, {review})],
+        change({...ready, openTasks: 1}),
+      );
+      assert.equal(review.rollback, null);
+      assert.deepEqual(review.layers, []);
+      assert.equal(action(decision), 'implement-next-task');
+    });
+    scenario('A conversation code marker with no open task moves on to verifying', () => {
+      const decision = decide(
+        issue(1, ['sdd:implementing']),
+        [],
+        [pull(9, {review: reviewOf([], codeTalk)})],
+        ready,
+      );
+      assert.deepEqual(decision, {
+        kind: 'advance',
+        issue: '1',
+        to: 'verifying',
+        reason: 'no open tasks',
+      });
+    });
+    scenario('A conversation code marker on accepting does not move to implementing', () => {
+      const decision = decide(
+        issue(1, ['sdd:accepting']),
+        [],
+        [pull(9, {checks: 'green', review: reviewOf([], codeTalk)})],
+        change({archived: true}),
+      );
+      assert.deepEqual(decision, {
+        kind: 'wait',
+        issue: '1',
+        reason: 'wait for merge of PR #9',
+      });
+    });
     scenario('A later fixed clears the conversation layer', () => {
-      const review = reviewOf(
+      const review = readReview(
         [],
         [
           {robot: false, body: 'please rebase'},
@@ -149,6 +195,7 @@ spec('marker', () => {
         [pull(9, {checks: 'green', review})],
         change({archived: true}),
       );
+      assert.equal(review.conversation.layer, null);
       assert.equal(decision.kind, 'wait');
     });
   });

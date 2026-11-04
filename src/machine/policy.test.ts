@@ -515,7 +515,7 @@ test('a green archived pull request waits for a person to merge, and sdd:auto-me
   assert.equal(pending.kind, 'wait');
 });
 
-test('an accepting pull request rolls back when a conversation layer is open', () => {
+test('an accepting pull request rolls back when an open thread marks code', () => {
   const decision = decide(
     issue(1, ['sdd:accepting']),
     [],

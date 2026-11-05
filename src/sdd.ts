@@ -422,7 +422,7 @@ export async function postFocus(
 ): Promise<string> {
   if (!focusMarkerLine(args.body)) {
     throw new Error(
-      'Focus comment must start with a recognized sdd:focus marker (sdd:focus, sdd:focus:plan, sdd:focus:spec, sdd:focus:design, sdd:focus:tasks, or sdd:focus:code) on the first line.',
+      'Focus comment must start with a recognized sdd:focus marker (sdd:focus, sdd:focus:plan, sdd:focus:spec, sdd:focus:design, sdd:focus:tasks, sdd:focus:code, or sdd:focus:accept) on the first line.',
     );
   }
   const posted = await postFocusComment(args.key, args.body, deps);

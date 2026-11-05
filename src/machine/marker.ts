@@ -67,6 +67,7 @@ export const FOCUS_MARKER_LINES = [
   'sdd:focus:design',
   'sdd:focus:tasks',
   'sdd:focus:code',
+  'sdd:focus:accept',
 ] as const;
 
 export type FocusMarkerLine = (typeof FOCUS_MARKER_LINES)[number];
@@ -77,6 +78,7 @@ const FOCUS_MIRROR: Record<Exclude<FocusMarkerLine, 'sdd:focus'>, string> = {
   'sdd:focus:design': 'Design',
   'sdd:focus:tasks': 'Tasks',
   'sdd:focus:code': 'Code',
+  'sdd:focus:accept': 'Accept',
 };
 
 /** Mirror row name for a phase focus marker. Whole-pull-request `sdd:focus` maps to none. */

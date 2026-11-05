@@ -484,6 +484,126 @@ function proveAManagerCommentIsNotTheFocusBlock(): void {
   rmSync(dir, {recursive: true, force: true});
 }
 
+function proveTheFocusBlockPagesTheWrittenFocusComments(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [
+    cycle('1', 'implementing', {
+      comments: [
+        {body: 'sdd:focus:plan\nOlder plan note.\n'},
+        {body: 'sdd:focus:spec\nSpecify boundaries hold.\n'},
+        {body: 'sdd:focus:code\nCode slice landed.\n'},
+      ],
+    }),
+  ]);
+  window.openCard('1');
+  const pages = window.sidebar().filter(block => block.kind === 'focus');
+  assert.deepEqual(pages, [
+    focusBlock('sdd:focus:code', 'Code slice landed.\n'),
+    focusBlock('sdd:focus:spec', 'Specify boundaries hold.\n'),
+    focusBlock('sdd:focus:plan', 'Older plan note.\n'),
+  ]);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveTheBadgeIsTheCommentsMarker(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [
+    cycle('1', 'implementing', {
+      comments: [{body: 'sdd:focus:design\nDesign boundaries named.\n'}],
+    }),
+  ]);
+  window.openCard('1');
+  const focus = window.sidebar().find(block => block.kind === 'focus');
+  assert.equal(focus?.kind === 'focus' && focus.marker, 'sdd:focus:design');
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveSddFocusAcceptIsOneOfThesePages(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [
+    cycle('1', 'implementing', {
+      comments: [
+        {body: 'sdd:focus:code\nEarlier code note.\n'},
+        {body: 'sdd:focus:accept\nAccept gate is ready.\n'},
+      ],
+    }),
+  ]);
+  window.openCard('1');
+  const pages = window.sidebar().filter(block => block.kind === 'focus');
+  assert.deepEqual(pages[0], focusBlock('sdd:focus:accept', 'Accept gate is ready.\n'));
+  assert.equal(pages.some(page => page.kind === 'focus' && page.marker === 'sdd:focus:accept'), true);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveAWholePullRequestCommentLeavesPhaseLinesOutOfTheProse(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [
+    cycle('1', 'implementing', {
+      comments: [{body: 'sdd:focus\nPlan\nProse without a phase word.\n'}],
+    }),
+  ]);
+  window.openCard('1');
+  const focus = window.sidebar().find(block => block.kind === 'focus');
+  assert.deepEqual(focus, focusBlock('sdd:focus', 'Plan\nProse without a phase word.\n'));
+  assert.equal(focus?.kind === 'focus' && focus.display, 'Prose without a phase word.\n');
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveAPhaseCommentKeepsTheProseAfterTheMarker(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [
+    cycle('1', 'implementing', {
+      comments: [{body: 'sdd:focus:plan\nFirst sentence here.\nSecond sentence stays.\n'}],
+    }),
+  ]);
+  window.openCard('1');
+  const focus = window.sidebar().find(block => block.kind === 'focus');
+  assert.deepEqual(focus, {
+    ...focusBlock('sdd:focus:plan', 'First sentence here.\nSecond sentence stays.\n'),
+    display: 'First sentence here.\nSecond sentence stays.\n',
+  });
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveAnAcceptCommentKeepsTheProseAfterTheMarker(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [
+    cycle('1', 'implementing', {
+      comments: [{body: 'sdd:focus:accept\nFirst accept sentence.\nSecond accept sentence.\n'}],
+    }),
+  ]);
+  window.openCard('1');
+  const focus = window.sidebar().find(block => block.kind === 'focus');
+  assert.deepEqual(focus, {
+    ...focusBlock('sdd:focus:accept', 'First accept sentence.\nSecond accept sentence.\n'),
+    display: 'First accept sentence.\nSecond accept sentence.\n',
+  });
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveAnotherTicketShowsItsOwnLatestFocus(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [
+    cycle('1', 'implementing', {
+      comments: [{body: 'sdd:focus:plan\nPlan for ticket one.\n'}],
+    }),
+    cycle('2', 'implementing', {
+      comments: [{body: 'sdd:focus:code\nCode for ticket two.\n'}],
+    }),
+  ]);
+  window.openCard('2');
+  const focus = window.sidebar().find(block => block.kind === 'focus');
+  assert.deepEqual(focus, focusBlock('sdd:focus:code', 'Code for ticket two.\n'));
+  rmSync(dir, {recursive: true, force: true});
+}
+
 function proveOneNonStringSddHooksPointShowsThatLineInTheSidebarAndTheStringPointRemains130(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
@@ -583,6 +703,38 @@ spec('sidebar', () => {
     });
     scenario('A non-string point keeps the others', () => {
       proveOneNonStringSddHooksPointShowsThatLineInTheSidebarAndTheStringPointRemains130();
+    });
+  });
+});
+
+spec('written-focus-page', () => {
+  requirement('The focus block shows the latest written focus', () => {
+    scenario('The focus block pages the written focus comments', () => {
+      proveTheFocusBlockPagesTheWrittenFocusComments();
+    });
+    scenario("The badge is the comment's marker", () => {
+      proveTheBadgeIsTheCommentsMarker();
+    });
+    scenario('sdd:focus:accept is one of these pages', () => {
+      proveSddFocusAcceptIsOneOfThesePages();
+    });
+    scenario('A manager comment is not the block', () => {
+      proveAManagerCommentIsNotTheFocusBlock();
+    });
+    scenario('A whole-pull-request comment leaves phase lines out of the prose', () => {
+      proveAWholePullRequestCommentLeavesPhaseLinesOutOfTheProse();
+    });
+    scenario('A phase comment keeps the prose after the marker', () => {
+      proveAPhaseCommentKeepsTheProseAfterTheMarker();
+    });
+    scenario('An accept comment keeps the prose after the marker', () => {
+      proveAnAcceptCommentKeepsTheProseAfterTheMarker();
+    });
+    scenario('No focus comment leaves no block', () => {
+      proveNoSddFocusCommentLeavesNoSidebarFocusBlock120();
+    });
+    scenario('Another ticket shows its own latest focus', () => {
+      proveAnotherTicketShowsItsOwnLatestFocus();
     });
   });
 });

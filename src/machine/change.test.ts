@@ -9,7 +9,7 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {contentBranchFiles, gitFiles, strictContentBranchFiles} from '../adapters/vcs.ts';
 import {changeText, HEADINGS, readBranch, readChange} from './change.ts';
-import {archiveDir} from './naming.ts';
+import {activeChangePath, archiveChangePath, archiveDir} from './naming.ts';
 import type {FileSource} from './port.ts';
 
 function git(root: string, args: string[]): void {
@@ -342,3 +342,34 @@ function rootMarked(): string {
   commit(root, 'archive', 'Sdd-Archive: issue-7');
   return root;
 }
+
+spec('spec-archive', () => {
+  requirement('One commit holds the fold', () => {
+    scenario('The machine, the window, review, and unarchive keep reading archive/issue-<key>', () => {
+      assert.equal(archiveDir('55'), 'openspec/changes/archive/issue-55');
+      assert.doesNotMatch(archiveDir('55'), /\d{4}-\d{2}-\d{2}-issue/);
+      const datedOnly: FileSource = {
+        exists: rel => rel === 'openspec/changes/archive/2025-11-05-issue-7/proposal.md',
+        read: () => 'dated only\n',
+        list: () => [],
+      };
+      assert.equal(readChange('7', datedOnly).archived, false);
+      assert.equal(
+        archiveChangePath('7', 'openspec/changes/issue-7/proposal.md'),
+        'openspec/changes/archive/issue-7/proposal.md',
+      );
+      assert.equal(
+        activeChangePath('7', 'openspec/changes/archive/issue-7/proposal.md'),
+        'openspec/changes/issue-7/proposal.md',
+      );
+      const root = markedArchive();
+      try {
+        const read = readMarked(root);
+        assert.equal(read.facts.proposal, 'openspec/changes/archive/issue-7/proposal.md');
+        assert.doesNotMatch(read.facts.proposal, /\d{4}-\d{2}-\d{2}-issue/);
+      } finally {
+        rmSync(root, {recursive: true, force: true});
+      }
+    });
+  });
+});

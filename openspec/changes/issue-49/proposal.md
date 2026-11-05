@@ -24,9 +24,9 @@ Depends: #31
 
 ### Added
 
-### Modified
-
 - `thread-line` each review thread of the open pull request stands on the line it anchors, including a comment GitHub has that the sidebar does not show
+
+### Modified
 
 ## Open questions
 

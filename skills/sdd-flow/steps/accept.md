@@ -20,7 +20,7 @@ Folds the delta into the baseline on the same PR, by `CONTEXT.md` § Delta. A pe
 
 1. Find this change's archive commit: the tip of `sdd/<issue>` whose body contains a line `Sdd-Archive: issue-<issue>`. When the tip has no such line, stop. Do not revert an earlier commit.
 2. Revert that commit: the change returns to `openspec/changes/issue-<issue>/`, the baseline returns to its pre-archive text. The revert is the new tip. Its body contains a line `#<issue>` (§ Publish) and does not contain a line `Sdd-Archive: issue-<issue>`.
-3. Publish (`CONTEXT.md`). No mirror line.
+3. Publish (`CONTEXT.md`) without focus. No mirror line.
 
 ## Check
 

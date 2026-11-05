@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import {HEADINGS, type BranchFacts} from '../machine/change.ts';
 import {isFocusRecord} from '../machine/marker.ts';
-import {GATE_CLOSES, GATE_PHASES, phaseOf, type Phase} from '../machine/phase.ts';
+import {GATE_CLOSES, GATE_PHASES, phaseOf, phaseRank, type Phase} from '../machine/phase.ts';
 
 import {changeFiles, changeRel, listedSpecs} from './change-files.ts';
 import {focusLayers} from './focus.ts';
@@ -147,18 +147,43 @@ function taskRow(files: FileSource, key: string): {done: number; open: number} |
   return {done, open};
 }
 
+/** Child cycles this issue still waits on at tasking: not yet `specified`. */
+function childWaits(parent: string, reading: readonly WindowTicket[]): string[] {
+  const keys: string[] = [];
+  for (const issue of reading) {
+    if (issue.parent !== parent || !issue.labels.includes('sdd:cycle')) {
+      continue;
+    }
+    const current = phaseOf([...issue.labels]);
+    if (current && current !== 'cancelled' && phaseRank(current) >= phaseRank('specified')) {
+      continue;
+    }
+    keys.push(issue.key);
+  }
+  keys.sort(keyOrder);
+  return keys;
+}
+
 function phaseRowOf(
   column: ColumnName,
   item: WindowTicket,
   questions: number,
   decisions: number,
   tasks: {done: number; open: number} | undefined,
+  reading: readonly WindowTicket[],
 ): PhaseRow | undefined {
   if (column === 'proposing') {
     return questions;
   }
   if (column === 'designing') {
     return decisions;
+  }
+  if (column === 'tasking') {
+    if (!tasks) {
+      return undefined;
+    }
+    const waits = childWaits(item.key, reading);
+    return waits.length > 0 ? {waits} : undefined;
   }
   if (column === 'implementing') {
     return tasks;
@@ -453,7 +478,10 @@ function phaseText(row: PhaseRow): string {
   if (typeof row === 'string') {
     return row;
   }
-  return `${row.done} сделано · ${row.open} открыто`;
+  if ('waits' in row) {
+    return `Waits for ${row.waits.join(', ')}`;
+  }
+  return `Done ${row.done}/${row.done + row.open}`;
 }
 
 /** Top and bottom of a plaque. The window reads these lines; it does not write them. */
@@ -516,7 +544,7 @@ function buildCycle(
     ? known.decisions
     : unchecked(files!.read(changeRel(item.key, 'design.md')), HEADINGS.openDecisions);
   const tasks = known ? known.tasks : taskRow(files!, item.key);
-  const phaseRow = phaseRowOf(column, item, questions, decisions, tasks);
+  const phaseRow = phaseRowOf(column, item, questions, decisions, tasks, reading);
   const parts = reasonParts(item, phase, breakReason, reading, questions, decisions);
   const occasion = parts.length > 0;
   const card: CycleCard = {key: item.key, title: item.title};

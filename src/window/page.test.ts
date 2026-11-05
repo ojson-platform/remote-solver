@@ -1018,9 +1018,9 @@ test('an open card is marked, the face holds the phase, and close clears the row
     const faceEnd = article.indexOf('</button>', faceStart);
     const face = article.slice(faceStart, faceEnd);
     assert.match(plaque, /class="stat"/);
-    assert.match(plaque, /12 сделано · 2 открыто/);
+    assert.match(plaque, /Done 12\/14/);
     assert.equal(plaque.includes('мерж'), false);
-    assert.equal(face.includes('12 сделано'), false);
+    assert.equal(face.includes('Done 12'), false);
     assert.equal(face.includes('мерж'), false);
     const poolFace = articleOf(html, '3');
     assert.match(poolFace, /aria-label="Поломка"/);

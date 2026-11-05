@@ -346,7 +346,13 @@ export function isGateStation(name: string): name is GateStation {
   return (GATE_STATIONS as readonly string[]).includes(name);
 }
 
-export type PhaseRow = number | {done: number; open: number} | 'green' | 'red' | 'pending';
+export type PhaseRow =
+  | number
+  | {done: number; open: number}
+  | {waits: readonly string[]}
+  | 'green'
+  | 'red'
+  | 'pending';
 
 export type LinkMarkKind = 'child' | 'wait' | 'hold';
 

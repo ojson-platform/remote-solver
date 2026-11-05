@@ -1959,6 +1959,76 @@ spec('board', () => {
     scenario('Specifying has no phase row', () => {
       proveSpecifyingHasNoPhaseRow52();
     });
+    scenario('Tasking names a child that is not specified', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('55', 'tasking'),
+            held('60', 'tasking', {parent: '55', labels: ['sdd:cycle']}),
+          ],
+        },
+        async (page, window, paths) => {
+          pageWrite(paths.arcadia, '55', 'tasks.md', '- [ ] one\n');
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          assert.match(stationOf(html, '55', 'tasking'), /Waits for 60/);
+          const opened = await post(
+            page.url,
+            'act',
+            new URLSearchParams({act: 'open', key: '55'}).toString(),
+          );
+          assert.equal(opened.status, 200);
+          const line = reasonParagraphOf(bandOf(await pageHtml(page.url), '55'));
+          assert.equal(line?.includes('60') ?? false, false);
+        },
+      );
+    });
+    scenario('A specified child leaves the tasking plaque without that wait', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('55', 'tasking'), held('60', 'specified', {parent: '55'})],
+        },
+        async (page, window, paths) => {
+          pageWrite(paths.arcadia, '55', 'tasks.md', '- [ ] one\n');
+          window.chooseAgent('cursor');
+          const plaque = stationOf(await pageHtml(page.url), '55', 'tasking');
+          assert.equal(plaque.includes('Waits for'), false);
+        },
+      );
+    });
+    scenario('Tasking without tasks.md keeps the worker action', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('55', 'tasking'),
+            held('60', 'tasking', {parent: '55', labels: ['sdd:cycle']}),
+          ],
+          turn: key => (key === '55' ? 'create-tasks' : undefined),
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const plaque = stationOf(await pageHtml(page.url), '55', 'tasking');
+          assert.match(plaque, /create-tasks/);
+          assert.equal(plaque.includes('Waits for'), false);
+        },
+      );
+    });
+    scenario('Implementing shows done over the total', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'implementing')],
+        },
+        async (page, window, paths) => {
+          pageWrite(paths.arcadia, '1', 'tasks.md', '- [ ] one\n- [ ] two\n- [ ] three\n- [ ] four\n');
+          window.chooseAgent('cursor');
+          assert.match(stationOf(await pageHtml(page.url), '1', 'implementing'), /Done 0\/4/);
+        },
+      );
+    });
     scenario('Implementing without tasks.md has no count', () => {
       proveImplementingCountsTasksMdAndOmitsTheCountWhenTheFileIsAbsent54();
     });

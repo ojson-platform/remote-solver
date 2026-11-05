@@ -14,11 +14,10 @@ function phaseStat(row: PhaseRow): ReactNode {
   if (typeof row === 'string') {
     return <div className={`stat ${row}`}>{row}</div>;
   }
-  return (
-    <div className="stat">
-      {row.done} сделано · {row.open} открыто
-    </div>
-  );
+  if ('waits' in row) {
+    return <div className="stat">{`Waits for ${row.waits.join(', ')}`}</div>;
+  }
+  return <div className="stat">{`Done ${row.done}/${row.done + row.open}`}</div>;
 }
 
 function linkMarkTitle(rows: readonly SnapshotRow[], key: string): string | undefined {
@@ -58,7 +57,10 @@ function phaseText(row: PhaseRow): string {
   if (typeof row === 'number' || typeof row === 'string') {
     return String(row);
   }
-  return `${row.done} сделано · ${row.open} открыто`;
+  if ('waits' in row) {
+    return `Waits for ${row.waits.join(', ')}`;
+  }
+  return `Done ${row.done}/${row.done + row.open}`;
 }
 
 function Plaque({row}: {row: SnapshotRow}): ReactNode {

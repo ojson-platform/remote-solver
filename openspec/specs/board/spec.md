@@ -147,7 +147,7 @@ Two open pull requests SHALL keep the card in the pool, SHALL show icon reason `
 
 ### Requirement: The phase row is read from the cycle
 
-The window SHALL read the phase row from the same files and headings the machine reads, and SHALL NOT recompute it. `proposing` SHALL show the number of open `- [ ]` items under `## Open questions` in `proposal.md`, including 0. `specifying` SHALL show no row. `designing` SHALL show the number of open `- [ ]` items under `## Open decisions` in `design.md`, including 0. `tasking` SHALL show no row. `implementing` SHALL show done and open from `tasks.md` when that file exists, counting `- [x]` as done and `- [ ]` as open. When `tasks.md` is absent, `implementing` SHALL show no such count. `verifying` and `accepting` SHALL show one state of the open pull request, `green`, `red`, or `pending`. A state `none` SHALL show no row. Check names and logs SHALL NOT be on the card. The window SHALL NOT show a coverage count, and SHALL NOT show children, blockers, or threads as a separate number.
+The window SHALL read the phase row from the same files and headings the machine reads, and SHALL NOT recompute it. `proposing` SHALL show the number of open `- [ ]` items under `## Open questions` in `proposal.md`, including 0. `specifying` SHALL show no row. `designing` SHALL show the number of open `- [ ]` items under `## Open decisions` in `design.md`, including 0. `tasking` SHALL show no row, except when `tasks.md` exists and a child cycle is not yet at least `specified`. A child is a cycle issue whose parent is this issue. A child with no phase, or a cancelled child, is not `specified`. The plaque SHALL then show `Waits for` those keys in key order, separated by `, `. The reason block SHALL NOT name them. When every such child is at least `specified`, or `tasks.md` is absent, `tasking` SHALL show no such line. `implementing` SHALL show `Done <done>/<done+open>` from `tasks.md` when that file exists, counting `- [x]` as done and `- [ ]` as open. When `tasks.md` is absent, `implementing` SHALL show no such count. `verifying` and `accepting` SHALL show one state of the open pull request, `green`, `red`, or `pending`. A state `none` SHALL show no row. Check names and logs SHALL NOT be on the card. The window SHALL NOT show a coverage count, and SHALL NOT show children, blockers, or threads as a separate number.
 
 #### Scenario: Proposing shows the open-question count
 
@@ -158,6 +158,26 @@ The window SHALL read the phase row from the same files and headings the machine
 
 - **WHEN** a cycle stands in `specifying`
 - **THEN** the card has no phase row
+
+#### Scenario: Tasking names a child that is not specified
+
+- **WHEN** the phase is `tasking`, `tasks.md` exists, and a child cycle has no phase
+- **THEN** the plaque shows `Waits for` that child's key, and the reason block does not name the child
+
+#### Scenario: A specified child leaves the tasking plaque without that wait
+
+- **WHEN** the phase is `tasking`, `tasks.md` exists, and every child cycle is at least `specified`
+- **THEN** the plaque does not show `Waits for`
+
+#### Scenario: Tasking without tasks.md keeps the worker action
+
+- **WHEN** the phase is `tasking`, `tasks.md` is absent, a child cycle is not `specified`, and the worker's action is `create-tasks`
+- **THEN** the plaque shows `create-tasks` and does not show `Waits for`
+
+#### Scenario: Implementing shows done over the total
+
+- **WHEN** a cycle stands in `implementing` and `tasks.md` has no done item and four open items
+- **THEN** the plaque shows `Done 0/4`
 
 #### Scenario: Implementing without tasks.md has no count
 

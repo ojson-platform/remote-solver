@@ -12,3 +12,14 @@ sdd:
   queues:
     - name: remote-solver
       description: Cycles in this repository
+  hooks:
+    archive:
+      before:
+        - |
+          Make the final review of sdd flow before the archive section.
+
+          Post a thread only for a return. A leave is not a thread.
+
+          For each return, `thread open <pull> <file> <line> '<body>'`. The file is that return's `where`. The line is a changed line of that file. When the gap's line is outside the diff, use the nearest changed line in the same file. The body is plain English: the gap, then the promise. It carries no marker.
+
+          When a thread was opened, do not publish the archive. Stop. When there is no return, follow the archive section and Publish.

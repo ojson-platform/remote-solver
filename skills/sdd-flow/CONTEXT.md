@@ -18,7 +18,9 @@ A run ends in exactly one signal. A run that ends with none leaves the decision 
 
 Read this file once in a run, the first time a step names one of its sections. A file named under a step's Read only is read once. After an edit of a file succeeds, that file is known for the rest of the run: do not read it again.
 
-One edit of a file covers one scenario of the step. When the check command fails after that edit and a file has changed since the last run of the command, one further edit of that file is allowed, then the command runs once more. A command that already exited 0 does not run again. A command the card does not name does not run, apart from the verbs and the git steps in § Publish. `git log`, `git show`, and a diff of an older commit do not run.
+One edit of a file covers one scenario of the step. When the check command fails after that edit and a file has changed since the last run of the command, one further edit of that file is allowed, then the command runs once more. A command the card does not name does not run, apart from the verbs and the git steps in § Publish. `git log`, `git show`, and a diff of an older commit do not run.
+
+The one-file command is the check while its test is red and after each edit of that test or its source. It runs again after a later edit even when it already exited 0. The layer command runs once per task, after the one-file command exits 0 for every scenario of that task, and before the commit. The fast suite and the type check run then too, when the card names them. They do not run while the one-file command is failing, and they do not run after each edit. A layer failure in a file this task names returns to the one-file command. The layer command runs once more after that command exits 0. A layer failure outside this task is a Hand-off, and the layer command does not run again.
 
 A long command keeps its exit code. On failure the output keeps the failing test name and its assertion. On success the output keeps the last lines.
 
@@ -90,7 +92,7 @@ The other files of `openspec/changes/issue-<issue>/`, with these headings exactl
 
 `tasks/<id>.md`: the Scenario titles, then
 - `## Source`: what changes, what the task leaves untouched, every file the implementer may edit. The test file is not here.
-- `## Proof`: the test file path, what the test observes, which files it may read, the commands that must exit 0 (the one-file command and the layer command, the fast suite when the card names one, and the type check when the card names it), and the trace line when the boundary copied one.
+- `## Proof`: the test file path, what the test observes, which files it may read, and the commands. The one-file command runs on each attempt while the test is red and after each edit. The layer command, the fast suite when the card names one, and the type check when the card names it run once after the one-file command exits 0. The trace line is copied when the boundary has one.
 
 ## Threads
 

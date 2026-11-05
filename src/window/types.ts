@@ -151,6 +151,8 @@ export type WindowReview = {
     lines: readonly string[];
     /** Every comment body in host order. Omitted when only the latest body is known. */
     comments?: readonly string[];
+    /** Commit from a reply whose marker is fixed, when that reply is not a comment. */
+    fixedCommit?: string | null;
   }[];
   conversation?: {last?: {marker?: string | null; body: string} | null} | null;
 };
@@ -168,12 +170,19 @@ export type SidebarBlock =
       threads?: readonly {lines: readonly string[]}[];
       comment?: string;
     }
-  | {kind: 'line-thread'; file: string; line: number; comments: readonly string[]}
+  | {
+      kind: 'line-thread';
+      file: string;
+      line: number;
+      comments: readonly string[];
+      fixedCommit?: string | null;
+    }
   | {
       kind: 'phase-thread';
       layer: 'Plan' | 'Specify' | 'Design' | 'Tasks' | 'Code';
       file: string;
       comments: readonly string[];
+      fixedCommit?: string | null;
     }
   | {kind: 'hook'; line: string}
   | {kind: 'hook'; points: readonly SidebarHookPoint[]};

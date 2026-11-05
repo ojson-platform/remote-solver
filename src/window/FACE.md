@@ -52,9 +52,7 @@ The top bar is transparent, so the ground shows through it. The drawer is a roun
 
 The pool card and a comment field share one quiet frame. A focused field turns its hairline brass. The acceptance control uses the plaque's frame. The set gate sign is larger than the empty circle. A task's open or done mark is a short chip, not a pill.
 
-A **posted comment** on a document line is that same quiet frame without a field, without a send mark, and without a close circle. It uses no new colour.
-
-A **posted comment** on a document line is that same quiet frame without a field, without a send mark, and without a close circle. It uses no new colour.
+A **posted comment** on a document line is that same quiet frame without a field, without a send mark, and without a close circle. It uses no new colour. A **fixed status** on that comment is a brass sentence under the pre: «исправлено», or «исправлено ·» and the commit when the reply named one.
 
 The edge is a bright line with light inside the shape. A task chip wears it, brass when open and green when done.
 

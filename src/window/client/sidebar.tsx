@@ -269,17 +269,26 @@ function lineTemplate(keyName: string): ReactNode {
   );
 }
 
+type PostedLineComment = {body: string; fixedCommit?: string | null};
+
 function commentsOnLine(
   blocks: readonly SidebarBlock[],
   path: string,
   line: number,
-): readonly string[] {
-  const out: string[] = [];
+): readonly PostedLineComment[] {
+  const out: PostedLineComment[] = [];
   for (const block of blocks) {
     if (block.kind !== 'line-thread' || block.file !== path || block.line !== line) {
       continue;
     }
-    out.push(...block.comments);
+    block.comments.forEach((body, index) => {
+      out.push({
+        body,
+        ...(index === 0 && block.fixedCommit !== undefined
+          ? {fixedCommit: block.fixedCommit}
+          : {}),
+      });
+    });
   }
   return out;
 }
@@ -367,15 +376,24 @@ function phaseComments(
   return out;
 }
 
-function PostedComments({comments}: {comments: readonly string[]}): ReactNode {
+function FixedStatus({commit}: {commit: string | null}): ReactNode {
+  return (
+    <p className="thread-fixed">
+      {commit === null ? 'исправлено' : `исправлено · ${commit}`}
+    </p>
+  );
+}
+
+function PostedComments({comments}: {comments: readonly PostedLineComment[]}): ReactNode {
   if (comments.length === 0) {
     return null;
   }
   return (
     <>
-      {comments.map((body, index) => (
+      {comments.map((comment, index) => (
         <div className="posted-comment" key={index}>
-          <pre>{body}</pre>
+          <pre>{comment.body}</pre>
+          {comment.fixedCommit !== undefined ? <FixedStatus commit={comment.fixedCommit} /> : null}
         </div>
       ))}
     </>

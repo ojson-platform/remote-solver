@@ -3632,6 +3632,136 @@ function writeFoldedScenarioChange(arcadia: string): void {
   );
 }
 
+spec('focus-pager', () => {
+  requirement('The focus pager is one control on the focus row, opposite the badge', () => {
+    scenario('Opening still lands on the latest page', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {
+              comments: [
+                {body: 'sdd:focus:plan\nOlder plan note.\n'},
+                {body: 'sdd:focus:spec\nLatest spec focus.\n'},
+                {body: 'sdd:focus:code\nNewest code focus.\n'},
+              ],
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const focus = focusBlockHtml(bandOf(await pageHtml(page.url), '1'));
+          assert.match(focus, />3\/3</);
+          assert.match(focus, />sdd:focus:code</);
+          assert.match(focus, /Newest code focus\./);
+          assert.equal(focus.includes('Older plan note'), false);
+        },
+      );
+    });
+  });
+
+  requirement('The control sits in the right part of the focus row and scrolls with the block', () => {
+    scenario('The control sits in the right part of the focus row and scrolls with the block', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {
+              comments: [
+                {body: 'sdd:focus:plan\nOlder plan note.\n'},
+                {body: 'sdd:focus:code\nNewest code focus.\n'},
+              ],
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const side = bandOf(await pageHtml(page.url), '1');
+          const scroll = sideScrollHtml(side);
+          assert.match(scroll, /^<div class="side-scroll">\s*<section class="block focus-block">/);
+          const focus = focusBlockHtml(side);
+          assert.match(focus, /class="focus-row"/);
+          const row = focus.match(/<div class="focus-row">[\s\S]*?<\/div>/)?.[0];
+          assert.ok(row);
+          const badgeAt = row.indexOf('class="badge"');
+          const pagerAt = row.indexOf('class="focus-pager"');
+          assert.ok(badgeAt >= 0 && pagerAt > badgeAt);
+          assert.ok(scroll.includes('class="focus-pager"'));
+          assert.equal(between(side, '<header>', '</header>').includes('focus-pager'), false);
+        },
+      );
+    });
+
+    scenario('The row is the chosen placement', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {
+              comments: [
+                {body: 'sdd:focus:plan\nOlder plan note.\n'},
+                {body: 'sdd:focus:code\nNewest code focus.\n'},
+              ],
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const focus = focusBlockHtml(bandOf(await pageHtml(page.url), '1'));
+          assert.match(focus, /class="focus-row"/);
+          const outsideRow = focus.replace(/<div class="focus-row">[\s\S]*?<\/div>/, '');
+          assert.equal(outsideRow.includes('focus-pager'), false);
+        },
+      );
+    });
+
+    scenario('The header pin and the right-rim solid are not', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {
+              comments: [
+                {body: 'sdd:focus:plan\nOlder plan note.\n'},
+                {body: 'sdd:focus:code\nNewest code focus.\n'},
+              ],
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const side = bandOf(await pageHtml(page.url), '1');
+          const scrollAt = side.indexOf('<div class="side-scroll">');
+          assert.ok(scrollAt >= 0);
+          const pinned = side.slice(0, scrollAt);
+          assert.equal(pinned.includes('focus-pager'), false);
+          assert.equal(between(side, '<header>', '</header>').includes('focus-pager'), false);
+        },
+      );
+    });
+  });
+});
+
 function initIssueBranch(arcadia: string): void {
   const checkout = path.join(arcadia, 'services', 'billing');
   git(checkout, ['init', '-b', 'master']);

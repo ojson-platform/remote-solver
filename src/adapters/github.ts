@@ -96,14 +96,17 @@ export type ThreadNode = {
 
 /** The handles a skill answers with: the thread id resolves, the latest comment id takes the reply. */
 export function threadRecord(node: ThreadNode): ThreadRecord {
-  const comment = node.comments.nodes[0];
+  const nodes = node.comments.nodes;
+  const latest = nodes.at(-1);
+  const comments = nodes.map(item => item.body);
   return {
     id: node.id,
-    comment: comment ? String(comment.databaseId) : '',
+    comment: latest ? String(latest.databaseId) : '',
     path: node.path,
     line: node.line,
     resolved: node.isResolved,
-    body: comment?.body ?? '',
+    body: latest?.body ?? '',
+    comments,
   };
 }
 
@@ -962,7 +965,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
                 isResolved
                 path
                 line
-                comments(last:1) { nodes { databaseId author { login } body } }
+                comments(first:100) { nodes { databaseId author { login } body } }
               }
             }
           }
@@ -992,8 +995,14 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       };
       const nodes = data.data.repository.pullRequest?.reviewThreads.nodes ?? [];
       return nodes.flatMap(node => {
-        const record = threadRecord(node);
-        return authorIgnored(node.comments.nodes[0]?.author?.login ?? '', ignored) ? [] : [record];
+        const commentNodes = node.comments.nodes;
+        if (commentNodes.length === 0) {
+          return [];
+        }
+        if (commentNodes.every(item => authorIgnored(item.author?.login ?? '', ignored))) {
+          return [];
+        }
+        return [threadRecord(node)];
       });
     },
     async comments(pull) {
@@ -1339,6 +1348,7 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
         comment: `C${index + 1}`,
         path: '',
         line: null,
+        comments: [thread.body],
       }));
     },
     async comments(pull) {

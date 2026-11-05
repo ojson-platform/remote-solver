@@ -128,6 +128,64 @@ spec('thread-line', () => {
       );
     });
 
+    scenario('One line holds more than one comment', async () => {
+      const anchorLine = 'Якорная строка в файле задачи.';
+      const taskBody = ['## Source', '', anchorLine, '', '## Proof', '', 'Команда одна.', ''].join(
+        '\n',
+      );
+      const at = scopeLineNumber(taskBody, anchorLine);
+      const file = `${changeDir(KEY)}/tasks/stack-on-line.md`.replace(/\\/g, '/');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'implementing', {openPullRequests: 1, pull: '58'})],
+          review: () => ({
+            threads: [
+              {
+                marker: null,
+                file,
+                line: at,
+                lines: ['первый тред', 'ответ в первом'],
+                comments: ['первый тред', 'ответ в первом'],
+              },
+              {
+                marker: null,
+                file,
+                line: at,
+                lines: ['второй тред'],
+                comments: ['второй тред'],
+              },
+            ],
+          }),
+        },
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            KEY,
+            'tasks.md',
+            '- [ ] `stack-on-line` — One line holds more than one comment\n',
+          );
+          writeChange(paths.arcadia, KEY, 'tasks/stack-on-line.md', taskBody);
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: KEY}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          const tasks = spineOf(html, KEY, 'Tasks');
+          const anchor = tasks.indexOf(`data-at="${at}"`);
+          assert.ok(anchor >= 0);
+          const lineSlice = tasks.slice(anchor, anchor + 1200);
+          const firstAt = lineSlice.indexOf('первый тред');
+          const replyAt = lineSlice.indexOf('ответ в первом');
+          const secondAt = lineSlice.indexOf('второй тред');
+          assert.ok(firstAt >= 0 && replyAt > firstAt && secondAt > replyAt);
+          assert.equal(lineSlice.match(/class="posted-comment"/g)?.length, 3);
+          assert.equal(bandOf(html, KEY).includes('ревью'), false);
+        },
+      );
+    });
+
     scenario('A thread that is already on the pull request is visible this way', async () => {
       const scopeLine = 'Уже на pull request.';
       const body = proposalBody(scopeLine);

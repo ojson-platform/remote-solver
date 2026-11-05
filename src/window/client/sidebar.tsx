@@ -562,11 +562,22 @@ function PlanDocument({
   );
 }
 
-function TaskFile({task}: {task: SpineTask}): ReactNode {
+function TaskFile({
+  task,
+  pull,
+  root,
+  blocks,
+}: {
+  task: SpineTask;
+  pull: boolean;
+  root: string;
+  blocks: readonly SidebarBlock[];
+}): ReactNode {
   const sections = task.sections.filter(section => section.lines.some(line => line.text.trim() !== ''));
   if (sections.length === 0) {
     return null;
   }
+  const path = `${root}/tasks/${task.id}.md`;
   return (
     <div className="doc">
       {sections.map(section => (
@@ -575,10 +586,24 @@ function TaskFile({task}: {task: SpineTask}): ReactNode {
           {section.lines.map(line =>
             line.text.trim() === '' ? (
               <span className="gap" key={line.line} />
-            ) : (
+            ) : !pull ? (
               <p className="line" key={line.line}>
                 {line.text}
               </p>
+            ) : (
+              <span key={line.line}>
+                <button
+                  type="button"
+                  className="line"
+                  data-line={line.text}
+                  data-path={path}
+                  data-at={line.line}
+                  data-side="right"
+                >
+                  {line.text}
+                </button>
+                <PostedComments comments={commentsOnLine(blocks, path, line.line)} />
+              </span>
             ),
           )}
         </section>
@@ -1204,7 +1229,12 @@ export function Sidebar({
                     {scene.name}
                   </button>
                 ))}
-                <TaskFile task={task} />
+                <TaskFile
+                  task={task}
+                  pull={model.pull}
+                  root={model.readPath}
+                  blocks={opened.blocks}
+                />
               </details>
             ))}
           </SpineRow>

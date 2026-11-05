@@ -16,7 +16,12 @@ export function tick(
   state: State,
   decisions: Decision[],
   parallel: number,
-): {state: State; start: Extract<Decision, {kind: 'agent'}>[]; report: Report[]} {
+): {
+  state: State;
+  start: Extract<Decision, {kind: 'agent'}>[];
+  held: Extract<Decision, {kind: 'agent'}>[];
+  report: Report[];
+} {
   const idle = {...state.idle};
   const reported = {...state.reported};
   const report: Report[] = [];
@@ -43,8 +48,22 @@ export function tick(
     ready.push(decision);
   }
   const start: Extract<Decision, {kind: 'agent'}>[] = [];
-  for (const decision of ready) {
+  const held: Extract<Decision, {kind: 'agent'}>[] = [];
+  for (let index = 0; index < ready.length; index += 1) {
+    const decision = ready[index];
     if (state.running.length + start.length >= parallel) {
+      for (let rest = index; rest < ready.length; rest += 1) {
+        const waiting = ready[rest];
+        if (start.some(item => item.issue === waiting.issue)) {
+          continue;
+        }
+        const sig = signature(waiting);
+        if (idle[waiting.issue] === sig) {
+          say(waiting.issue, `idle ${waiting.action}: ${waiting.reason}`);
+          continue;
+        }
+        held.push(waiting);
+      }
       break;
     }
     const sig = signature(decision);
@@ -54,7 +73,7 @@ export function tick(
     }
     start.push(decision);
   }
-  return {state: {running: state.running, idle, reported}, start, report};
+  return {state: {running: state.running, idle, reported}, start, held, report};
 }
 
 export function exited(state: State, issue: string, code: number | null, sig: string): State {

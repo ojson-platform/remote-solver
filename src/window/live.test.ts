@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import {rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {test} from 'vitest';
@@ -6,11 +7,17 @@ import {test} from 'vitest';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {machine} from '../adapters/compose.ts';
-import {memoryPorts} from '../adapters/github.ts';
+import {clearGithubPause, memoryPorts} from '../adapters/github.ts';
 import type {Runtime, Vcs} from '../machine/port.ts';
 import type {ThreadTarget} from '../machine/port.ts';
-import {openLiveBoard, watchSpy, type LiveReview} from './live.ts';
-import {yard} from './live.harness.ts';
+import {
+  createBoardSpyState,
+  openLiveBoard,
+  serveLiveBoard,
+  watchSpy,
+  type LiveReview,
+} from './live.ts';
+import {readSnapshot, yard} from './live.harness.ts';
 
 const MANAGER = 'ada';
 
@@ -307,24 +314,26 @@ spec('parallel-cap', () => {
       const box = spyMachine(ports, runtime);
       const controller = new AbortController();
       let starts = 0;
+      let resolveFilled: () => void = () => {};
       const filled = new Promise<void>(resolve => {
-        void watchSpy(
-          box,
-          {
-            running: new Set<string>(),
-            setNote(line: string) {
-              if (line.includes(' start proposing → create-proposal')) {
-                starts += 1;
-                if (starts >= 20) {
-                  resolve();
-                }
-              }
-            },
-            refresh: async () => {},
-          },
-          controller.signal,
-        );
+        resolveFilled = resolve;
       });
+      const done = watchSpy(
+        box,
+        {
+          running: new Set<string>(),
+          setNote(line: string) {
+            if (line.includes(' start proposing → create-proposal')) {
+              starts += 1;
+              if (starts >= 20) {
+                resolveFilled();
+              }
+            }
+          },
+          refresh: async () => {},
+        },
+        controller.signal,
+      );
       await filled;
       await new Promise<void>(resolve => {
         const wait = setInterval(() => {
@@ -351,7 +360,88 @@ spec('parallel-cap', () => {
         }),
       ]);
       controller.abort();
+      await done;
       assert.equal(started, true);
+    });
+  });
+});
+
+spec('live-focus-page', () => {
+  requirement('The row knows a ready action is waiting for a free slot', () => {
+    scenario('The row shows a ready action waiting for a free slot beside the parallel cap', async () => {
+      clearGithubPause();
+      const ports = twentyOneReadyCycles();
+      const runs: string[] = [];
+      const releases = new Map<string, () => void>();
+      const runtime: Runtime = {
+        async run(skill) {
+          runs.push(skill.key);
+          if (runs.length <= 20) {
+            await new Promise<void>(resolve => {
+              releases.set(skill.key, resolve);
+            });
+          }
+          return {commits: 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
+      };
+      const box = spyMachine(ports, runtime);
+      let pageNote: () => void = () => {};
+      const spy = createBoardSpyState(() => {
+        pageNote();
+      });
+      const page = await serveLiveBoard({
+        homePath: path.join(tmpdir(), `live-held-${Date.now()}`),
+        repo: 'acme/billing',
+        tracker: ports.tracker,
+        review: ports.review,
+        leading: spy.leading,
+        turn: spy.turn,
+      });
+      pageNote = () => {
+        page.note();
+      };
+      const controller = new AbortController();
+      let resolveSeen: () => void = () => {};
+      const seen = new Promise<void>(resolve => {
+        resolveSeen = resolve;
+      });
+      const spyDone = watchSpy(
+        box,
+        {
+          ...spy.sink,
+          onHeld(list) {
+            spy.sink.onHeld(list);
+            if (list.some(item => item.issue === '21')) {
+              resolveSeen();
+            }
+          },
+          refresh: async () => {},
+          apply(snapshot) {
+            page.apply(snapshot);
+          },
+        },
+        controller.signal,
+      );
+      try {
+        await seen;
+        assert.equal(runs.includes('21'), false);
+        const shot = await readSnapshot(page.url);
+        const heldRow = shot.rows.find(row => row.key === '21');
+        assert.ok(heldRow);
+        assert.equal(heldRow.action, 'create-proposal');
+        assert.equal(heldRow.running, undefined);
+        const workingRow = shot.rows.find(row => row.key === '1');
+        assert.ok(workingRow);
+        assert.equal(workingRow.running, true);
+        assert.equal(workingRow.action, 'create-proposal');
+      } finally {
+        controller.abort();
+        await spyDone;
+        await page.close();
+      }
     });
   });
 });

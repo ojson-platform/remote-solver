@@ -1,15 +1,17 @@
-import type {
-  BoardState,
-  ColumnName,
-  GateStation,
-  OverlayGroup,
-  PhaseRow,
-  RoleOutcome,
-  ServiceConfigGroup,
-  SettingsState,
-  LinkMark,
-  SidebarBlock,
-  StationDoor,
+import {
+  turnAction,
+  type BoardState,
+  type BoardTurn,
+  type ColumnName,
+  type GateStation,
+  type OverlayGroup,
+  type PhaseRow,
+  type RoleOutcome,
+  type ServiceConfigGroup,
+  type SettingsState,
+  type LinkMark,
+  type SidebarBlock,
+  type StationDoor,
 } from './types.ts';
 
 import {specsReady} from '../machine/change.ts';
@@ -107,7 +109,7 @@ type SnapshotSurface = {
   checkouts(): string[];
   shelf(): {name: string; outcome: RoleOutcome}[];
   spyNote(): string;
-  turn(key: string): string | undefined;
+  turn(key: string): BoardTurn | undefined;
   running(key: string): boolean;
   sidebar(): SidebarBlock[];
   openTicket?: () => {comments?: readonly {body: string; manager?: boolean}[]; body?: string} | undefined;
@@ -396,7 +398,7 @@ function openCycle(
     model = surface.spine() ?? unread();
     spineReady = true;
   }
-  const action = surface.turn(row.key);
+  const action = turnAction(surface.turn(row.key));
   return {
     key: row.key,
     title: row.title,
@@ -442,7 +444,12 @@ export function snapshot(surface: SnapshotSurface, view: SnapshotView): WindowSn
     roles: surface.shelf(),
     reviewPlaces,
     rows: drawn.map(row =>
-      publish(row, surface.turn(row.key), surface.running(row.key), file => surface.doorPlace(file)),
+      publish(
+        row,
+        turnAction(surface.turn(row.key)),
+        surface.running(row.key),
+        file => surface.doorPlace(file),
+      ),
     ),
     ...(view.status !== undefined ? {status: view.status} : {}),
     ...(view.show !== undefined && view.show !== '' ? {show: view.show} : {}),

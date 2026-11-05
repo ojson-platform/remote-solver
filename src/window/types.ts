@@ -23,6 +23,26 @@ export function stringList(value: unknown): string[] {
 
 export type AdapterKind = 'tracker' | 'github';
 
+/** Worker action alone, or phase and action from the spy. */
+export type BoardTurn = string | {action: string; phase?: string};
+
+export function turnAction(turn: BoardTurn | undefined): string | undefined {
+  if (turn === undefined) {
+    return undefined;
+  }
+  if (typeof turn === 'string') {
+    return turn === '' ? undefined : turn;
+  }
+  return turn.action === '' ? undefined : turn.action;
+}
+
+export function turnPhase(turn: BoardTurn | undefined): string | undefined {
+  if (turn === undefined || typeof turn === 'string') {
+    return undefined;
+  }
+  return turn.phase;
+}
+
 /** The working checkout for one GitHub `owner/repo`. It wins over the GitHub root. */
 export type RepoCheckout = {repo: string; dir: string};
 
@@ -96,8 +116,8 @@ export type WindowOutside = {
   leading?: (key: string) => boolean;
   /** The spy's latest line. Empty when the spy has not spoken. */
   spyNote?: () => string;
-  /** Action token while a worker is on a turn for this key. */
-  turn?: (key: string) => string | undefined;
+  /** Action token, or phase and action, while the spy leads or holds this key. */
+  turn?: (key: string) => BoardTurn | undefined;
   /** Write `sddService`. The next read sees it. */
   writeService?: (key: string, service: string) => void;
   /**

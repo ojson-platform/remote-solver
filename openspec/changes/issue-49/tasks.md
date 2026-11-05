@@ -1,4 +1,4 @@
-- [ ] `thread-record` — threadList asks for comments(first:100); threadRecord keeps every comment body in host order while body and comment stay the last node
+- [x] `thread-record` — threadList asks for comments(first:100); threadRecord keeps every comment body in host order while body and comment stay the last node
 - [ ] `anchor-on-line` — The sidebar shows each review thread of the open pull request on the line it anchors; A thread that is already on the pull request is visible this way
 - [ ] `phase-remark` — A remark with no line stands on the phase
 - [ ] `stack-on-line` — One line holds more than one comment

@@ -58,6 +58,8 @@ export type ThreadRecord = Thread & {
   comment: string;
   path: string;
   line: number | null;
+  /** Every comment body in host order. Omitted only on older memory seeds without a list. */
+  comments?: string[];
 };
 
 /** A conversation comment. `robot` is a spy mark or an ignored commenter. */

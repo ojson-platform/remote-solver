@@ -105,16 +105,130 @@ test('a thread record carries the handles a skill replies and resolves with', ()
       line: 7,
       comments: {nodes: [{databaseId: 4094804166, author: {login: 'me'}, body: 'why?'}]},
     }),
-    {id: 'PRRT_1', comment: '4094804166', path: 'src/a.ts', line: 7, resolved: false, body: 'why?'},
+    {
+      id: 'PRRT_1',
+      comment: '4094804166',
+      path: 'src/a.ts',
+      line: 7,
+      resolved: false,
+      body: 'why?',
+      comments: ['why?'],
+    },
   );
   const empty = threadRecord({id: 'PRRT_2', isResolved: true, path: 'f', line: null, comments: {nodes: []}});
-  assert.deepEqual(empty, {id: 'PRRT_2', comment: '', path: 'f', line: null, resolved: true, body: ''});
+  assert.deepEqual(empty, {
+    id: 'PRRT_2',
+    comment: '',
+    path: 'f',
+    line: null,
+    resolved: true,
+    body: '',
+    comments: [],
+  });
+});
+
+spec('thread-line', () => {
+  requirement('Each review thread stands on the line it anchors', () => {
+    scenario('A thread that is already on the pull request is visible this way', () => {
+      assert.deepEqual(
+        threadRecord({
+          id: 'PRRT_3',
+          isResolved: false,
+          path: 'openspec/changes/issue-49/tasks.md',
+          line: 4,
+          comments: {
+            nodes: [
+              {databaseId: 1, author: {login: 'human'}, body: 'sdd:layer=spec → specifying'},
+              {databaseId: 2, author: {login: 'robot'}, body: 'sdd:fixed abc123'},
+            ],
+          },
+        }),
+        {
+          id: 'PRRT_3',
+          comment: '2',
+          path: 'openspec/changes/issue-49/tasks.md',
+          line: 4,
+          resolved: false,
+          body: 'sdd:fixed abc123',
+          comments: ['sdd:layer=spec → specifying', 'sdd:fixed abc123'],
+        },
+      );
+    });
+  });
+});
+
+test('threadList drops ignored-only threads and keeps a person with a later ignored fixed reply', async () => {
+  const calls: string[][] = [];
+  const {review} = githubAdapters({
+    ignoreComments: [/^dependabot$/],
+    run: async args => {
+      calls.push(args);
+      const joined = args.join(' ');
+      if (joined.includes('reviewThreads')) {
+        return JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                reviewThreads: {
+                  nodes: [
+                    {
+                      id: 'PRRT_ignored',
+                      isResolved: false,
+                      path: 'a.ts',
+                      line: 1,
+                      comments: {
+                        nodes: [{databaseId: 9, author: {login: 'dependabot'}, body: 'noise'}],
+                      },
+                    },
+                    {
+                      id: 'PRRT_stays',
+                      isResolved: false,
+                      path: 'b.ts',
+                      line: 2,
+                      comments: {
+                        nodes: [
+                          {databaseId: 10, author: {login: 'human'}, body: 'sdd:layer=code'},
+                          {databaseId: 11, author: {login: 'dependabot'}, body: 'sdd:fixed deadbeef'},
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        });
+      }
+      throw new Error(joined);
+    },
+  });
+  const listed = await review.threadList('58');
+  assert.match(calls.find(args => args.join(' ').includes('reviewThreads'))?.join(' ') ?? '', /comments\(first:100\)/);
+  assert.deepEqual(listed, [
+    {
+      id: 'PRRT_stays',
+      comment: '11',
+      path: 'b.ts',
+      line: 2,
+      resolved: false,
+      body: 'sdd:fixed deadbeef',
+      comments: ['sdd:layer=code', 'sdd:fixed deadbeef'],
+    },
+  ]);
 });
 
 test('memory ports serve thread records from a plain thread seed', async () => {
   const {review} = memoryPorts({threads: {5: [{resolved: false, body: 'sdd:layer=spec'}]}});
   assert.deepEqual(await review.threadList('5'), [
-    {resolved: false, body: 'sdd:layer=spec', id: 'T1', comment: 'C1', path: '', line: null},
+    {
+      resolved: false,
+      body: 'sdd:layer=spec',
+      id: 'T1',
+      comment: 'C1',
+      path: '',
+      line: null,
+      comments: ['sdd:layer=spec'],
+    },
   ]);
   assert.deepEqual(await review.threads('5'), [{resolved: false, body: 'sdd:layer=spec'}]);
 });

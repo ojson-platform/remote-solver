@@ -41,7 +41,7 @@ The `sdd:` token a reply carries: a layer, `note`, or `fixed`. The machine reads
 _Avoid_: Tag, label (that is the tracker's)
 
 **Focus**:
-Prose on the issue for one phase, or for the whole pull request. The first line is the marker. The skill of the phase writes it when that phase's artifact is published. The machine does not append a layer ledger as this comment.
+Prose on the issue for one phase, or for the whole pull request. The first line is the marker. The skill of the phase writes it when a visit leaves something a person will read later. The machine does not append a layer ledger as this comment. The window does not rewrite the prose.
 _Avoid_: Ledger, plaque, gap list
 
 **Thread**:

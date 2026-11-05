@@ -284,12 +284,13 @@ export function blocksFor(
     running?: () => boolean;
     turn?: () => BoardTurn | undefined;
     settledDecision?: () => Decision | undefined;
-    reviewGate?: () => boolean;
   },
 ): SidebarBlock[] {
   const blocks: SidebarBlock[] = [];
+  const phase = phaseOf([...item.labels]);
   const live = liveFocus({
-    reviewGate: ctx.reviewGate?.() ?? false,
+    phase,
+    ask: item.labels.includes('sdd:wait-human'),
     running: ctx.running?.() ?? false,
     turn: ctx.turn?.(),
     decision: ctx.settledDecision?.(),

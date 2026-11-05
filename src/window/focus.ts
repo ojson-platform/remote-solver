@@ -2,6 +2,7 @@ import type {Decision} from '../machine/policy.ts';
 
 import type {BoardTurn, WindowComment} from './types.ts';
 import {turnAction, turnPhase} from './types.ts';
+import {reviewGateForPhase} from './spine.ts';
 
 import {firstFocusSentence, FOCUS_LAYERS, latestFocusComment} from '../machine/focus.ts';
 import {
@@ -14,12 +15,25 @@ import {
 export type LiveFocus = {badge: string; text: string};
 
 export type LiveFocusInput = {
-  reviewGate?: boolean;
+  phase?: string | null;
+  ask?: boolean;
   running?: boolean;
   turn?: BoardTurn;
   decision?: Decision;
   checks?: 'green' | 'red' | 'pending' | 'none';
 };
+
+/** True while a review gate or an ask should keep the written focus as the open page. */
+export function liveFocusReviewGate(input: LiveFocusInput): boolean {
+  const decision = input.decision;
+  if (decision?.kind === 'wait' && decision.gate !== undefined) {
+    return reviewGateForPhase(decision.gate.from) !== undefined;
+  }
+  if (input.phase === 'accepting' && decision?.kind === 'wait') {
+    return true;
+  }
+  return false;
+}
 
 function waitLiveSentence(reason: string): string | undefined {
   if (!reason.startsWith('wait for children') && !reason.startsWith('wait for blockers')) {
@@ -47,7 +61,7 @@ function waitLiveSentence(reason: string): string | undefined {
 
 /** Chooses the live pager sentence from spy inputs. Review gate suppression is the caller's job. */
 export function liveFocus(input: LiveFocusInput): LiveFocus | undefined {
-  if (input.reviewGate) {
+  if (input.ask || liveFocusReviewGate(input)) {
     return undefined;
   }
   if (input.running) {

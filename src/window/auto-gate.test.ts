@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
+import {rmSync} from 'node:fs';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
+import type {IssueRecord} from '../machine/port.ts';
+import {openLiveBoard} from './live.ts';
+import {yard} from './live.harness.ts';
 import {
   MANAGER,
   bare,
+  beginPost,
   glineOf,
   held,
   hosted,
@@ -14,6 +19,33 @@ import {
   stationOf,
   writeChange,
 } from './page.harness.ts';
+
+function copyIssue(issue: IssueRecord): IssueRecord {
+  return {
+    ...issue,
+    labels: [...issue.labels],
+    dependsOn: [...issue.dependsOn],
+    blockedBy: [...(issue.blockedBy ?? [])],
+    blocks: [...(issue.blocks ?? [])],
+  };
+}
+
+function readingOf(issue: IssueRecord) {
+  return {
+    issues: [issue],
+    cycles: [issue],
+    pulls: new Map(),
+    changes: new Map(),
+  };
+}
+
+function designingOff(window: ReturnType<typeof openLiveBoard>['window']): boolean {
+  const board = window.board();
+  const card =
+    board.columns.flatMap(column => column.cards).find(item => item.key === '6') ??
+    board.pool.find(item => item.key === '6');
+  return card?.gateOff?.designing === true;
+}
 
 spec('auto-gate', () => {
   requirement('A future gate sets or clears one auto label', () => {
@@ -209,6 +241,111 @@ spec('auto-gate', () => {
           assert.equal(station.includes('<a '), false);
         },
       );
+    });
+    scenario(
+      'A second station is cleared while the first click is still being accepted',
+      async () => {
+        const tickets = [held('1', 'proposing')];
+        await hosted(
+          {
+            login: () => MANAGER,
+            tickets: () => tickets,
+            editLabels: (_key, add, remove) => {
+              const item = tickets[0];
+              if (!item) {
+                return;
+              }
+              item.labels = item.labels.filter(label => !remove?.includes(label));
+              for (const label of add) {
+                if (!item.labels.includes(label)) {
+                  item.labels = [...item.labels, label];
+                }
+              }
+            },
+          },
+          async (page, window) => {
+            window.chooseAgent('cursor');
+            const finish = await beginPost(
+              page.url,
+              'act',
+              new URLSearchParams({act: 'gate', key: '1', station: 'designing'}).toString(),
+            );
+            const second = await post(
+              page.url,
+              'act',
+              new URLSearchParams({act: 'gate', key: '1', station: 'specifying'}).toString(),
+            );
+            const first = await finish();
+            assert.equal(second.status, 200);
+            assert.equal(first.status, 200);
+            assert.ok(tickets[0]?.labels.includes('sdd:auto-design'));
+            assert.ok(tickets[0]?.labels.includes('sdd:auto-spec'));
+          },
+        );
+      },
+    );
+    scenario('A reading from before the click leaves the gate off', async () => {
+      const staged = yard();
+      staged.cycle.assignee = MANAGER;
+      staged.cycle.labels = ['sdd:cycle', 'remote-solver', 'sdd:proposing'];
+      let release: () => void = () => {};
+      const hung = new Promise<void>(resolve => {
+        release = resolve;
+      });
+      staged.tracker.editLabels = async () => {
+        await hung;
+      };
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      const stale = copyIssue(staged.cycle);
+      try {
+        await live.refresh();
+        live.window.gateMark('6', 'designing');
+        assert.equal(designingOff(live.window), true);
+        live.apply(readingOf(stale));
+        assert.equal(designingOff(live.window), true);
+        const seen = copyIssue(stale);
+        seen.labels = [...seen.labels, 'sdd:auto-design'];
+        live.apply(readingOf(seen));
+        assert.equal(designingOff(live.window), true);
+        live.apply(readingOf(stale));
+        assert.equal(designingOff(live.window), false);
+      } finally {
+        release();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+    scenario('A failed write restores the gate', async () => {
+      const staged = yard();
+      staged.cycle.assignee = MANAGER;
+      staged.cycle.labels = ['sdd:cycle', 'remote-solver', 'sdd:proposing'];
+      staged.tracker.editLabels = async () => {
+        throw new Error('rate');
+      };
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      const stale = copyIssue(staged.cycle);
+      try {
+        await live.refresh();
+        live.window.gateMark('6', 'designing');
+        assert.equal(designingOff(live.window), true);
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(designingOff(live.window), false);
+        live.apply(readingOf(stale));
+        assert.equal(designingOff(live.window), false);
+      } finally {
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
     });
     scenario('A pool cycle sets a gate', async () => {
       const tickets = [bare('1', 'Quiet')];

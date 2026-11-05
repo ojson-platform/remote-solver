@@ -712,15 +712,16 @@ async function handle(
   if (req.method === 'POST' && (url.pathname === '/take' || url.pathname === '/act')) {
     const mine = ++epoch.n;
     const body = await readBody(req);
-    if (mine !== epoch.n) {
+    const params = body.kind === 'text' ? new URLSearchParams(body.text) : undefined;
+    const gateAct = url.pathname === '/act' && params?.get('act') === 'gate';
+    if (mine !== epoch.n && !gateAct) {
       text(res, 409, 'устарело');
       return;
     }
-    if (body.kind === 'too-big') {
+    if (body.kind === 'too-big' || !params) {
       text(res, 413, 'тело слишком большое');
       return;
     }
-    const params = new URLSearchParams(body.text);
     if (url.pathname === '/take') {
       const taken = params.get('key');
       if (!surface.take(taken ?? undefined)) {

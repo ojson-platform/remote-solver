@@ -254,6 +254,10 @@ export function openLiveBoard(options: LiveBoardOptions) {
   let generation = 0;
   const services = new Map<string, string>();
   let gatheredOf: (ticket: WindowTicket) => string | undefined = () => undefined;
+  type LabelWish = {token: number; key: string; label: string; on: boolean};
+  let wishToken = 0;
+  let wishes: LabelWish[] = [];
+  let onPaint: () => void = () => {};
 
   function bump(): void {
     generation += 1;
@@ -263,8 +267,70 @@ export function openLiveBoard(options: LiveBoardOptions) {
     store.patch(key, change);
   }
 
+  function retire(issues: readonly {key: string; labels: readonly string[]}[]): void {
+    const raw = new Map(issues.map(issue => [issue.key, issue.labels]));
+    wishes = wishes.filter(wish => {
+      const labels = raw.get(wish.key);
+      if (!labels) {
+        return true;
+      }
+      return labels.includes(wish.label) !== wish.on;
+    });
+  }
+
+  function project(key: string, labels: readonly string[]): string[] {
+    let next = [...labels];
+    for (const wish of wishes) {
+      if (wish.key !== key) {
+        continue;
+      }
+      const has = next.includes(wish.label);
+      if (has === wish.on) {
+        continue;
+      }
+      if (wish.on) {
+        next.push(wish.label);
+      } else {
+        next = next.filter(label => label !== wish.label);
+      }
+    }
+    return next;
+  }
+
+  function paintTickets(
+    tickets: WindowTicket[],
+    raw: ReadonlyMap<string, readonly string[]>,
+  ): WindowTicket[] {
+    return tickets.map(ticket => {
+      const labels = raw.get(ticket.key);
+      if (!labels) {
+        return ticket;
+      }
+      return {...ticket, labels: project(ticket.key, labels)};
+    });
+  }
+
+  function wishFor(key: string, label: string, on: boolean): number {
+    const token = ++wishToken;
+    const wish = {token, key, label, on};
+    const index = wishes.findIndex(item => item.key === key && item.label === label);
+    if (index >= 0) {
+      wishes[index] = wish;
+    } else {
+      wishes.push(wish);
+    }
+    return token;
+  }
+
   function changeLabels(key: string, add: readonly string[], remove: readonly string[]): void {
     bump();
+    const tokens: number[] = [];
+    for (const label of remove) {
+      tokens.push(wishFor(key, label, false));
+    }
+    for (const label of add) {
+      tokens.push(wishFor(key, label, true));
+    }
     patch(key, ticket => {
       const labels = ticket.labels.filter(label => !remove.includes(label));
       for (const label of add) {
@@ -274,7 +340,43 @@ export function openLiveBoard(options: LiveBoardOptions) {
       }
       return {...ticket, labels};
     });
-    forget(tracker.editLabels(key, [...add], [...remove]));
+    void Promise.resolve()
+      .then(() => tracker.editLabels(key, [...add], [...remove]))
+      .catch(error => {
+        logProblem(error);
+        const undone: LabelWish[] = [];
+        for (const token of tokens) {
+          const index = wishes.findIndex(item => item.token === token);
+          if (index < 0) {
+            continue;
+          }
+          const wish = wishes[index];
+          if (!wish) {
+            continue;
+          }
+          undone.push(wish);
+          wishes.splice(index, 1);
+        }
+        if (undone.length === 0) {
+          return;
+        }
+        bump();
+        patch(key, ticket => {
+          let labels = [...ticket.labels];
+          for (const wish of undone) {
+            if (wishes.some(item => item.key === key && item.label === wish.label)) {
+              continue;
+            }
+            if (wish.on) {
+              labels = labels.filter(label => label !== wish.label);
+            } else if (!labels.includes(wish.label)) {
+              labels.push(wish.label);
+            }
+          }
+          return {...ticket, labels};
+        });
+        onPaint();
+      });
   }
 
   async function oneTicket(
@@ -441,14 +543,17 @@ export function openLiveBoard(options: LiveBoardOptions) {
     if (gen !== generation) {
       return false;
     }
-    const read = factsFor(tickets);
+    retire(issues);
+    const painted = paintTickets(tickets, new Map(issues.map(issue => [issue.key, issue.labels])));
+    const read = factsFor(painted);
     const nextLogin = login ?? store.login();
-    const changed = store.changed(tickets, nextReviews, read.facts, nextLogin);
-    remember(tickets, nextPulls, nextReviews, store.copySpyPulls(), read, login);
+    const changed = store.changed(painted, nextReviews, read.facts, nextLogin);
+    remember(painted, nextPulls, nextReviews, store.copySpyPulls(), read, login);
     return changed;
   }
 
   function apply(snapshot: CycleSnapshot): boolean {
+    retire(snapshot.issues);
     const prior = new Map(store.tickets().map(ticket => [ticket.key, ticket]));
     const nextPulls = store.copyPulls();
     const nextReviews = store.copyReviews();
@@ -459,7 +564,10 @@ export function openLiveBoard(options: LiveBoardOptions) {
         continue;
       }
       const previous = prior.get(issue.key);
-      const ticket = ticketFrom(issue, repo, services.get(issue.key));
+      const ticket = {
+        ...ticketFrom(issue, repo, services.get(issue.key)),
+        labels: project(issue.key, issue.labels),
+      };
       const listed = snapshot.pulls.get(issue.key);
       const open = listed?.filter(pull => pull.state === 'OPEN');
       let openCount = previous?.openPullRequests;
@@ -606,7 +714,14 @@ export function openLiveBoard(options: LiveBoardOptions) {
     view.leaveRoots({github: options.githubRoot});
   }
   gatheredOf = ticket => view.gatheredOf(ticket);
-  return {window: view, refresh, apply};
+  return {
+    window: view,
+    refresh,
+    apply,
+    whenPainted(listener: () => void) {
+      onPaint = listener;
+    },
+  };
 }
 
 /** Serve the board and keep the ticket cache fresh. The URL is the page. */
@@ -620,6 +735,9 @@ export async function serveLiveBoard(options: LiveBoardOptions): Promise<{
   const live = openLiveBoard(options);
   await live.refresh();
   const page = await serveBoard(live.window, options.port ?? 0);
+  live.whenPainted(() => {
+    page.note();
+  });
   const refresh = async () => {
     const wrote = await live.refresh();
     if (wrote) {

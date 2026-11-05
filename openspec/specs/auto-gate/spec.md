@@ -8,7 +8,7 @@ A human gate on `proposing`, `specifying`, `designing`, and `accepting` is one a
 
 ### Requirement: A future gate sets or clears one auto label
 
-A human gate exists on `proposing`, `specifying`, `designing`, and `accepting`. On a row that has a plaque, the sign SHALL stand only ahead of the plaque and only while that station has no file. On a pool cycle with no plaque, the sign SHALL stand on each of those four stations. When the gate is on, the sign SHALL be Gandalf and its accessible name SHALL be «Снять гейт» plus the station name. A click SHALL write that one label: `sdd:auto-plan`, `sdd:auto-spec`, `sdd:auto-design`, or `sdd:auto-merge`. The click SHALL NOT write a phase, `proposed`, `specified`, `designed`, or `accepted`. When the gate is off, the sign SHALL be an empty circle and its accessible name SHALL be «Поставить гейт» plus the station name. A click SHALL remove that one label. A started or passed station SHALL NOT show the button on the board, and a board click SHALL NOT change the label there. When a future station already has a door, the board SHALL show the door. A click SHALL NOT remove `sdd:wait-human`. A station with no gate and no file SHALL be a dot, including a station behind the plaque. A dot SHALL NOT be a button. `accepted` SHALL NOT be set by this button. Removing the last gate that is still on SHALL ask before the write. The question SHALL say that the cycle will be left without control. Dismissing it SHALL leave the label as it was. Confirming it SHALL write that one label.
+A human gate exists on `proposing`, `specifying`, `designing`, and `accepting`. On a row that has a plaque, the sign SHALL stand only ahead of the plaque and only while that station has no file. On a pool cycle with no plaque, the sign SHALL stand on each of those four stations. When the gate is on, the sign SHALL be Gandalf and its accessible name SHALL be «Снять гейт» plus the station name. A click SHALL write that one label: `sdd:auto-plan`, `sdd:auto-spec`, `sdd:auto-design`, or `sdd:auto-merge`. The click SHALL NOT write a phase, `proposed`, `specified`, `designed`, or `accepted`. When the gate is off, the sign SHALL be an empty circle and its accessible name SHALL be «Поставить гейт» plus the station name. A click SHALL remove that one label. A started or passed station SHALL NOT show the button on the board, and a board click SHALL NOT change the label there. When a future station already has a door, the board SHALL show the door. A click SHALL NOT remove `sdd:wait-human`. A station with no gate and no file SHALL be a dot, including a station behind the plaque. A dot SHALL NOT be a button. `accepted` SHALL NOT be set by this button. Removing the last gate that is still on SHALL ask before the write. The question SHALL say that the cycle will be left without control. Dismissing it SHALL leave the label as it was. Confirming it SHALL write that one label. A click SHALL be written for its station when an earlier click on another station has not yet been accepted. Both clicks SHALL write their own labels. A tracker reading that does not yet contain a label this click wrote SHALL leave that gate off. Once a reading contains that label, the click is confirmed. A later reading that lacks it SHALL show the gate on again. When the write fails and no later click has replaced that label, the gate SHALL return to the sign it had before the click.
 
 #### Scenario: Gandalf writes one auto label and does not write a phase
 
@@ -54,6 +54,21 @@ A human gate exists on `proposing`, `specifying`, `designing`, and `accepting`. 
 
 - **WHEN** the plaque is on `implementing` and `tasking` has no file
 - **THEN** `tasking` is a dot and is not a button
+
+#### Scenario: A second station is cleared while the first click is still being accepted
+
+- **WHEN** the plaque is on `proposing` and the manager clears `designing`, then clears `specifying` before the first request is accepted
+- **THEN** both requests succeed, and the cycle has `sdd:auto-design` and `sdd:auto-spec`
+
+#### Scenario: A reading from before the click leaves the gate off
+
+- **WHEN** the manager has cleared `designing` and a tracker reading still lacks `sdd:auto-design`
+- **THEN** `designing` stays off, a reading that contains `sdd:auto-design` confirms the click, and a later reading that lacks it shows the gate on
+
+#### Scenario: A failed write restores the gate
+
+- **WHEN** clearing `designing` fails and no later click has replaced that label
+- **THEN** `designing` is on again
 
 ### Requirement: The open row shows three gate lines
 

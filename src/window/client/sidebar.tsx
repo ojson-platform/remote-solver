@@ -801,25 +801,38 @@ export function FocusBlocks({
   }
   const index = clampFocusPageIndex(pageIndex, pages.length);
   const page = pages[index];
-  const showBack = pages.length > 1 && index < pages.length - 1;
-  const showForward = pages.length > 1 && index > 0;
+  const pageCount = pages.length;
+  const currentPage = pageCount - index;
   return (
     <section className="block focus-block">
-      {showBack || showForward ? (
-        <div className="focus-pager">
-          {showBack ? (
-            <button className="quiet" type="button" data-focus="back">
-              назад
+      {pageCount > 1 ? (
+        <div className="focus-row">
+          <span className="badge">{page.marker}</span>
+          <div className="focus-pager">
+            <button
+              className="quiet"
+              type="button"
+              data-focus="back"
+              disabled={index >= pageCount - 1}
+            >
+              {'<'}
             </button>
-          ) : null}
-          {showForward ? (
-            <button className="quiet" type="button" data-focus="forward">
-              вперёд
+            <span className="focus-pager-count">
+              {currentPage}/{pageCount}
+            </span>
+            <button
+              className="quiet"
+              type="button"
+              data-focus="forward"
+              disabled={index <= 0}
+            >
+              {'>'}
             </button>
-          ) : null}
+          </div>
         </div>
-      ) : null}
-      <span className="badge">{page.marker}</span>
+      ) : (
+        <span className="badge">{page.marker}</span>
+      )}
       <pre>
         <FocusProse display={page.display} capabilities={capabilities} />
       </pre>

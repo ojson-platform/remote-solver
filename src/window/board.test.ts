@@ -2788,4 +2788,185 @@ spec('link-mark', () => {
       );
     });
   });
+
+  requirement('A chip shows its kind, wraps, and follows key order', () => {
+    scenario('Chips wrap onto the next line and are not cut off', () => {
+      const css = readFileSync(new URL('./face.css', import.meta.url), 'utf8');
+      assert.match(css, /\.ident \.link-marks\s*\{[^}]*flex-wrap:\s*wrap/);
+      assert.match(css, /\.ident \.link-marks\s*\{[^}]*overflow:\s*visible/);
+      assert.doesNotMatch(css, /\.link-mark\s*\{[^}]*overflow:\s*hidden/);
+      assert.doesNotMatch(css, /\.link-mark\s*\{[^}]*-webkit-line-clamp/);
+    });
+
+    scenario('Within one kind the numbers follow key order', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing'),
+            ticket({
+              key: '10',
+              parent: '1',
+              queue: 'alpha',
+              sddService: 'services/billing',
+              labels: ['sdd:cycle', 'sdd:tasking'],
+              assignee: '',
+            }),
+            ticket({
+              key: '2',
+              parent: '1',
+              queue: 'alpha',
+              sddService: 'services/billing',
+              labels: ['sdd:cycle', 'sdd:tasking'],
+              assignee: '',
+            }),
+            ticket({
+              key: '3',
+              parent: '1',
+              queue: 'alpha',
+              sddService: 'services/billing',
+              labels: ['sdd:cycle', 'sdd:tasking'],
+              assignee: '',
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          assert.equal(
+            parsedLinkMarks(articleOf(html, '1'))
+              .filter(mark => mark.kind === 'child')
+              .map(mark => mark.key)
+              .join(','),
+            '2,3,10',
+          );
+        },
+      );
+    });
+
+    scenario(
+      'A light corner, down and then right, with no arrowhead, is a child and stands only on the parent',
+      async () => {
+        const css = readFileSync(new URL('./face.css', import.meta.url), 'utf8');
+        assert.match(
+          css,
+          /\.link-mark\[data-kind="child"\]::before\s*\{[^}]*border-right[^}]*border-bottom/,
+        );
+        assert.doesNotMatch(css, /\.link-mark\[data-kind="child"\]::before\s*\{[^}]*border-left/);
+        await hosted(
+          {
+            login: () => MANAGER,
+            tickets: () => [
+              held('1', 'implementing'),
+              ticket({
+                key: '2',
+                parent: '1',
+                queue: 'alpha',
+                sddService: 'services/billing',
+                labels: ['sdd:cycle', 'sdd:tasking'],
+                assignee: '',
+              }),
+            ],
+          },
+          async (page, window) => {
+            window.chooseAgent('cursor');
+            const html = await pageHtml(page.url);
+            assert.equal(marksSignature(articleOf(html, '1')), 'child:2');
+            assert.equal(marksSignature(articleOf(html, '2')), '');
+          },
+        );
+      },
+    );
+
+    scenario('The child has no chip pointing back at the parent', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing'),
+            ticket({
+              key: '2',
+              parent: '1',
+              queue: 'alpha',
+              sddService: 'services/billing',
+              labels: ['sdd:cycle', 'sdd:tasking'],
+              assignee: '',
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          assert.equal(parsedLinkMarks(articleOf(html, '2')).length, 0);
+        },
+      );
+    });
+
+    scenario('A muted arrow to the left is an issue this one waits on', async () => {
+      const css = readFileSync(new URL('./face.css', import.meta.url), 'utf8');
+      assert.match(
+        css,
+        /\.link-mark\[data-kind="wait"\]::before\s*\{[^}]*border-right[^}]*var\(--muted\)/,
+      );
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'implementing', {dependsOn: ['9']}), held('9', 'specifying')],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          assert.equal(marksSignature(articleOf(html, '1')), 'wait:9');
+        },
+      );
+    });
+
+    scenario('A brass arrow to the right is an issue this one holds', async () => {
+      const css = readFileSync(new URL('./face.css', import.meta.url), 'utf8');
+      assert.match(
+        css,
+        /\.link-mark\[data-kind="hold"\]::before\s*\{[^}]*border-left[^}]*var\(--brass\)/,
+      );
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {blocks: ['2']}),
+            ticket({key: '2', queue: 'alpha', sddService: 'services/billing', title: 'Held'}),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          assert.equal(marksSignature(articleOf(html, '1')), 'hold:2');
+        },
+      );
+    });
+
+    scenario('Children come first, then the issues it waits on, then the issues it holds', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {dependsOn: ['8'], blocks: ['9']}),
+            ticket({
+              key: '2',
+              parent: '1',
+              queue: 'alpha',
+              sddService: 'services/billing',
+              labels: ['sdd:cycle', 'sdd:tasking'],
+              assignee: '',
+            }),
+            held('8', 'specifying'),
+            ticket({key: '9', queue: 'alpha', sddService: 'services/billing', title: 'Held'}),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          assert.equal(marksSignature(articleOf(html, '1')), 'child:2,wait:8,hold:9');
+        },
+      );
+    });
+  });
 });

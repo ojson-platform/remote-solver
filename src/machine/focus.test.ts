@@ -176,33 +176,33 @@ spec('focus', () => {
     });
 
     scenario('A published proposal uses sdd:focus:plan', async () => {
-      const {posted} = await runPostFocus('sdd:focus:plan\nИсход и отказ.\n');
+      const {posted} = await runPostFocus(FOCUS_BODIES.planClean);
       assert.equal(focusMarkerLine(posted[0] ?? ''), 'sdd:focus:plan');
     });
 
     scenario('A published delta spec uses sdd:focus:spec', async () => {
-      const {posted} = await runPostFocus('sdd:focus:spec\nНовое и изменённое обещание.\n', {
+      const {posted} = await runPostFocus(FOCUS_BODIES.spec, {
         files: [file('specs/focus/spec.md')],
       });
       assert.equal(focusMarkerLine(posted[0] ?? ''), 'sdd:focus:spec');
     });
 
     scenario('A published design uses sdd:focus:design', async () => {
-      const {posted} = await runPostFocus('sdd:focus:design\nГде живёт поведение.\n', {
+      const {posted} = await runPostFocus(FOCUS_BODIES.designClean, {
         files: [file('design.md')],
       });
       assert.equal(focusMarkerLine(posted[0] ?? ''), 'sdd:focus:design');
     });
 
     scenario('Published tasks use sdd:focus:tasks', async () => {
-      const {posted} = await runPostFocus('sdd:focus:tasks\nСлайсы по порядку заметности.\n', {
+      const {posted} = await runPostFocus(FOCUS_BODIES.tasksClean, {
         files: [file('tasks.md')],
       });
       assert.equal(focusMarkerLine(posted[0] ?? ''), 'sdd:focus:tasks');
     });
 
     scenario('A code slice, or a code change that answers a review thread, uses sdd:focus:code', async () => {
-      const {posted} = await runPostFocus('sdd:focus:code\nПосле коммита верно следующее.\n');
+      const {posted} = await runPostFocus(FOCUS_BODIES.code);
       assert.equal(focusMarkerLine(posted[0] ?? ''), 'sdd:focus:code');
     });
 
@@ -517,6 +517,19 @@ spec('focus', () => {
       const paras = focusProseParagraphs(focusProse(posted[0] ?? '') ?? '');
       assert.equal(paras.length, 3);
       assert.match(paras[2] ?? '', /смотреть|window-focus/i);
+    });
+
+    scenario('Marker shape rejects a single token instead of the full phase paragraph', () => {
+      assert.equal(validateFocusBody('sdd:focus:plan\nотказ\n'), 'prose missing required shape for marker');
+      assert.equal(validateFocusBody('sdd:focus:accept\nесть\n'), 'prose missing required shape for marker');
+    });
+
+    scenario('A thread-fix visit on plan allows remarks in the second paragraph', () => {
+      assert.equal(validateFocusBody(FOCUS_BODIES.planThreadFix), undefined);
+    });
+
+    scenario('A first visit spec allows a refusal in the second paragraph', () => {
+      assert.equal(validateFocusBody(FOCUS_BODIES.specRefusalSecond), undefined);
     });
   });
 

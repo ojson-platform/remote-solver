@@ -130,9 +130,17 @@ spec('hammer', () => {
     scenario('The hammer knocks about 45 degrees and repeats while the worker stays', () => {
       const css = faceCss();
       assert.match(css, /\.plaque svg\.hammer\.mark\s*\{[^}]*transform-origin:\s*43\.75%\s+93\.75%/);
-      assert.match(css, /@keyframes hammer-knock[\s\S]*rotate\([^)]*45deg/);
-      assert.match(css, /\.plaque svg\.hammer\.mark\s*\{[^}]*animation:[^;]*hammer-knock[^;]*infinite/);
+      assert.match(css, /@keyframes hammer-knock[\s\S]*rotate\(\s*22deg\)/);
+      assert.match(css, /@keyframes hammer-knock[\s\S]*rotate\(\s*-45deg\)/);
+      assert.match(css, /\.plaque svg\.hammer\.mark\s*\{[^}]*animation:[^;]*hammer-knock[^;]*1\.35s[^;]*infinite/);
       assert.doesNotMatch(css, /@keyframes hammer-knock[\s\S]*rotate\([^)]*360deg/);
+    });
+    scenario('The hammer stands past the plaque top-right corner', () => {
+      const css = faceCss();
+      assert.match(
+        css,
+        /\.plaque svg\.hammer\.mark\s*\{[^}]*top:\s*-8px;[^}]*right:\s*-14px;[^}]*width:\s*22px;[^}]*color:\s*var\(--brass\);[^}]*pointer-events:\s*none/,
+      );
     });
   });
 });

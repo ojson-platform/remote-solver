@@ -1,6 +1,6 @@
 import {type FileSource, type Review, type Tracker, type Vcs} from './port.ts';
 
-import {isFocusRecord, unmarkedLine} from './marker.ts';
+import {focusMarkerLine, isFocusRecord, type FocusMarkerLine, unmarkedLine} from './marker.ts';
 import {changeDir} from './naming.ts';
 import {markerOf} from './review.ts';
 
@@ -138,6 +138,117 @@ export function focusProse(body: string): string | undefined {
   }
   const prose = body.split('\n').slice(1).join('\n').replace(/\s+$/, '');
   return prose === '' ? undefined : prose;
+}
+
+/** Paragraphs separated by a blank line; trailing empty segments dropped. */
+export function focusProseParagraphs(prose: string): string[] {
+  return prose
+    .split(/\n\s*\n/)
+    .map(part => part.trim())
+    .filter(part => part.length > 0);
+}
+
+const PHASE_NEXT =
+  /\b(proposing|specifying|designing|tasking|implementing|accepting)\b|следующ(?:ая|ую)\s+фаз/i;
+const DIFF_MARK = /^(\+\+\+|---|@@|\s*diff )/m;
+const OPEN_ITEM = /-\s*\[\s*[ xX]\]/;
+const LEDGER_MARK = /Plan solid|thread PRRT|^## /m;
+const CYRILLIC = /[\u0400-\u04FF]/;
+
+const MARKER_SHAPE: Record<
+  FocusMarkerLine,
+  {need: RegExp[]; maxParas: number; minParas?: number}
+> = {
+  'sdd:focus:plan': {
+    need: [/читател|тикет|отказ/i, /reader of the ticket|refused/i],
+    maxParas: 2,
+  },
+  'sdd:focus:spec': {
+    need: [/нов|измен|обещан|сценар/i, /не даём|does not make/i],
+    maxParas: 3,
+  },
+  'sdd:focus:design': {
+    need: [/жив|отверг|не стро|наблюд/i],
+    maxParas: 2,
+  },
+  'sdd:focus:tasks': {
+    need: [/слайс|порядок|ждёт|waits/i],
+    maxParas: 2,
+  },
+  'sdd:focus:code': {
+    need: [/после коммита|стало|не трог|не доказ/i],
+    maxParas: 3,
+  },
+  'sdd:focus:accept': {
+    need: [/есть|намерен|capabilit|сценари/i],
+    maxParas: 2,
+  },
+  'sdd:focus': {
+    need: [/pull request|PR|весь/i],
+    maxParas: 2,
+  },
+};
+
+function markerContentOk(marker: FocusMarkerLine, prose: string): boolean {
+  const shape = MARKER_SHAPE[marker];
+  return shape.need.some(re => re.test(prose));
+}
+
+/**
+ * When prose breaks Publish paragraph rules, a short reason; otherwise undefined.
+ * Skills pass bodies the focus verb posts unchanged.
+ */
+export function validateFocusBody(body: string): string | undefined {
+  const marker = focusMarkerLine(body);
+  const prose = focusProse(body);
+  if (marker === null || prose === undefined) {
+    return 'focus body needs a recognized marker and prose';
+  }
+  if (!CYRILLIC.test(prose)) {
+    return 'prose must be Russian';
+  }
+  if (prose.length > 900) {
+    return 'prose must stay short';
+  }
+  if (LEDGER_MARK.test(prose) || DIFF_MARK.test(prose) || OPEN_ITEM.test(prose)) {
+    return 'prose must not include ledger, diff, or open-question text';
+  }
+  if (PHASE_NEXT.test(prose)) {
+    return 'prose must not choose the next phase';
+  }
+  const paras = focusProseParagraphs(prose);
+  const shape = MARKER_SHAPE[marker];
+  if (paras.length > shape.maxParas) {
+    return 'too many paragraphs for this marker';
+  }
+  if (!markerContentOk(marker, prose)) {
+    return 'prose missing required shape for marker';
+  }
+  if (marker === 'sdd:focus:plan') {
+    const hasPointer = /\d+\s+открыт|open questions/i.test(prose);
+    if (hasPointer && paras.length !== 2) {
+      return 'plan with open questions needs two paragraphs';
+    }
+    if (!hasPointer && paras.length !== 1) {
+      return 'clean plan focus is one paragraph';
+    }
+    if (hasPointer && paras[1] && OPEN_ITEM.test(paras[1])) {
+      return 'open-question pointer must not restate items';
+    }
+    const weak = /слаб|weak|посмотреть/i.test(prose);
+    if (!weak && /слабое место/i.test(prose)) {
+      return 'clean phase omits weak-spot wording';
+    }
+  }
+  if (marker === 'sdd:focus:spec' && paras.length >= 2) {
+    if (!/замечан|remark|ревью/i.test(paras[1] ?? '')) {
+      return 'thread-fix second paragraph names remarks';
+    }
+    if (paras.length === 3 && !/смотреть|look at/i.test(paras[2] ?? '')) {
+      return 'last paragraph must say what to look at';
+    }
+  }
+  return undefined;
 }
 
 /** First sentence of focus prose through `.`, `!`, or `?`, or the first line when none appear. */

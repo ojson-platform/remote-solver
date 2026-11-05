@@ -168,6 +168,7 @@ function phaseThreadBlocks(reading: WindowReview | undefined): SidebarBlock[] {
       layer: layerOfPath(thread.file!),
       file: thread.file!,
       comments: humanComments(thread),
+      ...(thread.fixedCommit !== undefined ? {fixedCommit: thread.fixedCommit} : {}),
     });
   }
   return out;
@@ -187,6 +188,7 @@ function lineThreadBlocks(reading: WindowReview | undefined): SidebarBlock[] {
       file: thread.file!,
       line: thread.line!,
       comments: humanComments(thread),
+      ...(thread.fixedCommit !== undefined ? {fixedCommit: thread.fixedCommit} : {}),
     });
   }
   return out;

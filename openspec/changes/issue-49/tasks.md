@@ -2,4 +2,4 @@
 - [x] `anchor-on-line` — The sidebar shows each review thread of the open pull request on the line it anchors; A thread that is already on the pull request is visible this way
 - [x] `phase-remark` — A remark with no line stands on the phase
 - [x] `stack-on-line` — One line holds more than one comment
-- [ ] `fixed-status` — A reply whose marker is sdd:fixed is a status on the original comment, with the commit when the reply has one; It is not a second comment
+- [x] `fixed-status` — A reply whose marker is sdd:fixed is a status on the original comment, with the commit when the reply has one; It is not a second comment

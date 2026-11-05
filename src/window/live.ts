@@ -209,20 +209,34 @@ function ticketFrom(issue: IssueRecord, repo: string, service: string | undefine
   };
 }
 
+function windowThread(thread: ThreadRecord): WindowReview['threads'][number] {
+  const bodies = thread.comments ?? (thread.body === '' ? [] : [thread.body]);
+  const comments: string[] = [];
+  let fixedCommit: string | null | undefined;
+  for (const body of bodies) {
+    const marker = parseMarker(body);
+    if (marker?.kind === 'fixed') {
+      fixedCommit = marker.commit;
+      continue;
+    }
+    if (marker === null) {
+      comments.push(body);
+    }
+  }
+  return {
+    marker: markerName(parseMarker(thread.body)),
+    file: thread.path,
+    line: thread.line,
+    lines: thread.body === '' ? [] : thread.body.split('\n'),
+    comments,
+    ...(fixedCommit !== undefined ? {fixedCommit} : {}),
+  };
+}
+
 function reviewOf(threads: readonly ThreadRecord[], notes: readonly Conversation[]): WindowReview {
   const last = [...notes].reverse().find(note => !note.robot);
   return {
-    threads: threads.map(thread => {
-      const comments =
-        thread.comments ?? (thread.body === '' ? [] : [thread.body]);
-      return {
-        marker: markerName(parseMarker(thread.body)),
-        file: thread.path,
-        line: thread.line,
-        lines: thread.body === '' ? [] : thread.body.split('\n'),
-        comments,
-      };
-    }),
+    threads: threads.map(windowThread),
     conversation: last
       ? {last: {marker: markerName(parseMarker(last.body)), body: last.body}}
       : undefined,

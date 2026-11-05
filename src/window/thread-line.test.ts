@@ -227,6 +227,14 @@ spec('thread-line', () => {
                   comments: ['без коммита'],
                   fixedCommit: null,
                 },
+                {
+                  marker: 'fixed',
+                  file,
+                  line: null,
+                  lines: ['sdd:fixed phasefeed'],
+                  comments: ['на фазе со статусом'],
+                  fixedCommit: 'phasefeed',
+                },
               ],
             }),
           },
@@ -253,6 +261,9 @@ spec('thread-line', () => {
             assert.match(withoutCommit, /без коммита/);
             assert.equal(withoutCommit.match(/cafebabe/g)?.length ?? 0, 0);
             assert.equal(withoutCommit.includes('sdd:fixed'), false);
+            const foot = plan.match(/<div class="plan-foot">[\s\S]*?<\/div>\s*<\/div>/)?.[0] ?? '';
+            assert.match(foot, /на фазе со статусом/);
+            assert.match(foot, /phasefeed/);
             assert.equal(bandOf(html, KEY).includes('ревью'), false);
           },
         );

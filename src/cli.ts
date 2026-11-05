@@ -4,14 +4,13 @@ import {solverRoot, type Machine} from './adapters/compose.ts';
 import {repo} from './adapters/github.ts';
 import {openMachine} from './adapters/load.ts';
 import {agentRuntime, type AgentRuntimeConfig} from './adapters/runtime.ts';
-import {runIssue, runSpy, type RunningTurn} from './main.ts';
+import {runIssue, runSpy} from './main.ts';
 import {runReview} from './reviewer/run.ts';
 import {
   boardModel,
   defaultHomePath,
   serveLiveBoard,
-  noteTurn,
-  turnsLine,
+  createBoardSpyState,
   watchSpy,
 } from './window/live.ts';
 
@@ -147,8 +146,10 @@ async function runBoard(home: string | undefined, port: number | undefined): Pro
   const box = await openMachine(root, {
     runtime: built => launcherRuntime(built, mode => boardModel(homePath, root, mode)),
   });
-  const running = new Set<string>();
-  const turns = new Map<string, RunningTurn>();
+  let pageNote: () => void = () => {};
+  const spy = createBoardSpyState(() => {
+    pageNote();
+  });
   const page = await serveLiveBoard({
     homePath,
     repo: repo().slug,
@@ -156,19 +157,17 @@ async function runBoard(home: string | undefined, port: number | undefined): Pro
     review: box.review,
     vcs: box.vcs,
     checkout: root,
-    leading: key => running.has(key),
-    spyNote: () => turnsLine([...turns.values()]),
-    turn: key => turns.get(key)?.action,
+    leading: spy.leading,
+    spyNote: () => spy.turnsLine(),
+    turn: spy.turn,
     ...(port !== undefined ? {port} : {}),
   });
+  pageNote = () => {
+    page.note();
+  };
   console.log(page.url);
   void watchSpy(box, {
-    running,
-    setTurn(issue, turn) {
-      noteTurn(turns, issue, turn, () => {
-        page.note();
-      });
-    },
+    ...spy.sink,
     refresh: () => page.refresh(),
     apply: snapshot => {
       page.apply(snapshot);

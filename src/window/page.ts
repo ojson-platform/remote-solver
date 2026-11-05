@@ -1,6 +1,7 @@
 import type {Spine} from './spine.ts';
 import type {
   BoardState,
+  BoardTurn,
   OverlayGroup,
   RoleOutcome,
   RoleRecord,
@@ -73,7 +74,7 @@ type Surface = {
   closeCard: () => void;
   checkouts: () => string[];
   spyNote: () => string;
-  turn: (key: string) => string | undefined;
+  turn: (key: string) => BoardTurn | undefined;
   running: (key: string) => boolean;
   openReviewPlace: (file: string, line: number) => string | undefined;
   doorPlace: (file: string) => string | undefined;

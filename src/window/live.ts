@@ -20,13 +20,14 @@ import {readBranch, type BranchFacts, type BranchText} from '../machine/change.t
 import {markerName, parseMarker} from '../machine/marker.ts';
 import {phaseOf} from '../machine/phase.ts';
 import {modelFor, type SkillMode} from '../machine/skill.ts';
+import type {Decision} from '../machine/policy.ts';
 import {runSpy, type RunningTurn} from '../main.ts';
 
 import {changeFiles, contentChangeFiles} from './change-files.ts';
 import {createBoardStore} from './store.ts';
 import {FACTORY_AGENTS, mergeFactory, readOverlayDoc} from './factory.ts';
 import {serveBoard} from './page.ts';
-import {isDoc, type WindowReview, type WindowTicket} from './types.ts';
+import {isDoc, type BoardTurn, type WindowReview, type WindowTicket} from './types.ts';
 import {openWindow} from './window.ts';
 
 /** How often the served page reads the tracker again. */
@@ -38,6 +39,54 @@ export function turnsLine(turns: readonly RunningTurn[]): string {
     .sort((left, right) => left.issue.localeCompare(right.issue))
     .map(turn => `#${turn.issue} ${turn.phase} → ${turn.action}`)
     .join(' · ');
+}
+
+/** Spy memory the tracker's refresh does not clear. */
+export function createBoardSpyState(note: () => void): {
+  running: Set<string>;
+  leading: (key: string) => boolean;
+  turnsLine: () => string;
+  turn: (key: string) => BoardTurn | undefined;
+  sink: {
+    running: Set<string>;
+    setTurn: (issue: string, turn: RunningTurn | undefined) => void;
+    onHeld: (held: readonly {issue: string; action: string}[]) => void;
+    onDecision: (issue: string, decision: Decision) => void;
+  };
+} {
+  const running = new Set<string>();
+  const turns = new Map<string, RunningTurn>();
+  const heldActions = new Map<string, string>();
+  const decisions = new Map<string, Decision>();
+  return {
+    running,
+    leading: key => running.has(key),
+    turnsLine: () => turnsLine([...turns.values()]),
+    turn: key => {
+      const turn = turns.get(key);
+      if (turn !== undefined) {
+        return {action: turn.action, phase: turn.phase};
+      }
+      const held = heldActions.get(key);
+      return held === undefined ? undefined : {action: held};
+    },
+    sink: {
+      running,
+      setTurn(issue, turn) {
+        noteTurn(turns, issue, turn, note);
+      },
+      onHeld(held) {
+        heldActions.clear();
+        for (const item of held) {
+          heldActions.set(item.issue, item.action);
+        }
+        note();
+      },
+      onDecision(issue, decision) {
+        decisions.set(issue, decision);
+      },
+    },
+  };
 }
 
 /** Remember one issue's turn. Clearing an issue leaves every other turn in place. */
@@ -104,6 +153,8 @@ export function watchSpy(
     setNote?: (line: string) => void;
     /** One issue's turn, or none when that worker has left it. */
     setTurn?: (issue: string, turn: RunningTurn | undefined) => void;
+    onHeld?: (held: readonly {issue: string; action: string}[]) => void;
+    onDecision?: (issue: string, decision: Decision) => void;
     refresh: () => Promise<void>;
     /** Paint from a poll that already read the tracker. */
     apply?: (snapshot: CycleSnapshot) => void;
@@ -123,6 +174,12 @@ export function watchSpy(
     },
     onTurn(issue: string, turn: RunningTurn | undefined) {
       sink.setTurn?.(issue, turn);
+    },
+    onHeld(held: readonly {issue: string; action: string}[]) {
+      sink.onHeld?.(held);
+    },
+    onDecision(issue: string, decision: Decision) {
+      sink.onDecision?.(issue, decision);
     },
     onCycle(snapshot?: CycleSnapshot) {
       if (snapshot) {
@@ -175,8 +232,8 @@ export type LiveBoardOptions = {
   leading?: (key: string) => boolean;
   /** Latest spy line drawn in the page header. */
   spyNote?: () => string;
-  /** Action token while a worker is on a turn for this key. */
-  turn?: (key: string) => string | undefined;
+  /** Action token, or phase and action, while the spy leads or holds this key. */
+  turn?: (key: string) => BoardTurn | undefined;
   /** TCP port. Absent means the system chooses one. */
   port?: number;
 };

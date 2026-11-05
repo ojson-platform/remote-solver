@@ -5,6 +5,7 @@ import {ghErrorLine, githubPauseRemaining} from './adapters/github.ts';
 import {tryHoldIssue} from './adapters/lock.ts';
 import {claimChat, clearChat} from './adapters/session.ts';
 import {performCycle} from './machine/flow.ts';
+import type {Decision} from './machine/policy.ts';
 import {endStep, observedSignal, runMarks} from './machine/focus.ts';
 import {exited, signature, tick, type State} from './machine/scheduler.ts';
 import {modeOfSkill} from './machine/skill.ts';
@@ -126,6 +127,10 @@ export type SpyWatch = {
   onTurn?: (issue: string, turn: RunningTurn | undefined) => void;
   /** A poll finished. The snapshot is the reading that poll already made. */
   onCycle?: (snapshot?: CycleSnapshot) => void;
+  /** Ready agent turns the cap did not start on this poll. */
+  onHeld?: (held: readonly {issue: string; action: string}[]) => void;
+  /** The decision `performCycle` settled for one issue this poll. */
+  onDecision?: (issue: string, decision: Decision) => void;
   /** Stops the loop at the next wait. */
   signal?: AbortSignal;
 };
@@ -186,10 +191,17 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
         );
         const turned = tick(state, decisions, parallel);
         state = turned.state;
+        watch?.onHeld?.(turned.held.map(item => ({issue: item.issue, action: item.action})));
+        for (const decision of decisions) {
+          if (decision.issue !== null) {
+            watch?.onDecision?.(decision.issue, decision);
+          }
+        }
         for (const line of turned.report) {
           say(watch, line.issue === null ? line.reason : `#${line.issue}: ${line.reason}`);
         }
         for (const decision of turned.start) {
+          watch?.onDecision?.(decision.issue, decision);
           say(watch, `#${decision.issue} start ${decision.phase} → ${decision.action}`);
           watch?.onTurn?.(decision.issue, {
             issue: decision.issue,

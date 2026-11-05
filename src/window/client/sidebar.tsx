@@ -736,13 +736,65 @@ function reviewFold(
   );
 }
 
-function FocusBlocks({blocks}: {blocks: readonly SidebarBlock[]}): ReactNode {
-  const page = blocks.find(block => block.kind === 'focus');
-  if (page === undefined || page.kind !== 'focus') {
+export function clampFocusPageIndex(index: number, pageCount: number): number {
+  if (pageCount <= 0) {
+    return 0;
+  }
+  return Math.min(Math.max(0, index), pageCount - 1);
+}
+
+export function focusIndexAfterSnapshot(input: {
+  prevKey: string | undefined;
+  nextKey: string | undefined;
+  prevLatestBody: string | undefined;
+  nextLatestBody: string | undefined;
+  index: number;
+  pageCount: number;
+}): number {
+  if (input.prevKey !== input.nextKey) {
+    return 0;
+  }
+  if (input.prevLatestBody !== input.nextLatestBody) {
+    return 0;
+  }
+  return clampFocusPageIndex(input.index, input.pageCount);
+}
+
+function focusPages(blocks: readonly SidebarBlock[]): Extract<SidebarBlock, {kind: 'focus'}>[] {
+  return blocks.filter((block): block is Extract<SidebarBlock, {kind: 'focus'}> => block.kind === 'focus');
+}
+
+export function FocusBlocks({
+  blocks,
+  pageIndex = 0,
+}: {
+  blocks: readonly SidebarBlock[];
+  pageIndex?: number;
+}): ReactNode {
+  const pages = focusPages(blocks);
+  if (pages.length === 0) {
     return null;
   }
+  const index = clampFocusPageIndex(pageIndex, pages.length);
+  const page = pages[index];
+  const showBack = pages.length > 1 && index < pages.length - 1;
+  const showForward = pages.length > 1 && index > 0;
   return (
     <section className="block focus-block">
+      {showBack || showForward ? (
+        <div className="focus-pager">
+          {showBack ? (
+            <button className="quiet" type="button" data-focus="back">
+              назад
+            </button>
+          ) : null}
+          {showForward ? (
+            <button className="quiet" type="button" data-focus="forward">
+              вперёд
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <span className="badge">{page.marker}</span>
       <pre>{page.display}</pre>
     </section>
@@ -1027,6 +1079,7 @@ export function Sidebar({
   openCaps = [],
   specOpen = [],
   busy,
+  focusPageIndex = 0,
 }: {
   snapshot: WindowSnapshot;
   layer: SpineLayer | '' | undefined;
@@ -1036,6 +1089,7 @@ export function Sidebar({
   openCaps?: readonly string[];
   specOpen?: readonly SpecOpen[];
   busy?: boolean;
+  focusPageIndex?: number;
 }): ReactNode {
   const opened = snapshot.opened;
   if (!opened) {
@@ -1117,7 +1171,7 @@ export function Sidebar({
         </ActForm>
       </header>
       <div className="side-scroll">
-        <FocusBlocks blocks={opened.blocks} />
+        <FocusBlocks blocks={opened.blocks} pageIndex={focusPageIndex} />
         {opened.blocks
           .filter(block => block.kind === 'description')
           .map((block, index) =>

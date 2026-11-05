@@ -2,10 +2,17 @@ import assert from 'node:assert/strict';
 import {rmSync} from 'node:fs';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
+import {createElement} from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
 
+import {
+  clampFocusPageIndex,
+  FocusBlocks,
+  focusIndexAfterSnapshot,
+} from './client/sidebar.tsx';
 import {renderWindow} from './client/render.ts';
 import {focusBlockProse} from './focus.ts';
-import {bandOf, hosted, post} from './page.harness.ts';
+import {bandOf, held, hosted, MANAGER, post} from './page.harness.ts';
 import type {WindowSnapshot} from './snapshot.ts';
 import {
   columnCards,
@@ -18,6 +25,16 @@ import {
   writeChange,
   yard,
 } from './window.harness.ts';
+
+function focusPagerHtml(snapshot: WindowSnapshot, pageIndex: number): string {
+  const opened = snapshot.opened;
+  if (!opened) {
+    return '';
+  }
+  return renderToStaticMarkup(
+    createElement(FocusBlocks, {blocks: opened.blocks, pageIndex}),
+  );
+}
 
 function focusBlock(marker: string, body: string) {
   return {
@@ -736,6 +753,107 @@ spec('written-focus-page', () => {
     scenario('Another ticket shows its own latest focus', () => {
       proveAnotherTicketShowsItsOwnLatestFocus();
     });
+    scenario('Back walks the older written comments, newest first, each in full', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {
+              comments: [
+                {body: 'sdd:focus:plan\nOlder plan note.\nSecond plan line.\n'},
+                {body: 'sdd:focus:spec\nSpecify boundaries hold.\n'},
+                {body: 'sdd:focus:code\nCode slice landed.\n'},
+              ],
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const snapshot = (await (
+            await fetch(new URL('/snapshot', page.url))
+          ).json()) as import('./snapshot.ts').WindowSnapshot;
+          const now = focusPagerHtml(snapshot, 0);
+          assert.match(now, />sdd:focus:code</);
+          assert.match(now, /Code slice landed\./);
+          assert.equal(now.includes('Older plan note'), false);
+          const older = focusPagerHtml(snapshot, 1);
+          assert.match(older, />sdd:focus:spec</);
+          assert.match(older, /Specify boundaries hold\./);
+          const oldest = focusPagerHtml(snapshot, 2);
+          assert.match(oldest, />sdd:focus:plan</);
+          assert.match(oldest, /Older plan note\./);
+          assert.match(oldest, /Second plan line\./);
+          assert.equal(oldest.includes('data-focus="back"'), false);
+        },
+      );
+    });
+    scenario('Forward returns toward now', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {
+              comments: [
+                {body: 'sdd:focus:plan\nOlder plan note.\n'},
+                {body: 'sdd:focus:code\nCode slice landed.\n'},
+              ],
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const snapshot = (await (
+            await fetch(new URL('/snapshot', page.url))
+          ).json()) as import('./snapshot.ts').WindowSnapshot;
+          const onOlder = focusPagerHtml(snapshot, 1);
+          assert.match(onOlder, />sdd:focus:plan</);
+          assert.match(onOlder, /data-focus="forward"/);
+          const towardNow = focusPagerHtml(snapshot, 0);
+          assert.match(towardNow, />sdd:focus:code</);
+          assert.equal(towardNow.includes('data-focus="forward"'), false);
+        },
+      );
+    });
+    scenario('Switching tickets lands on now for that ticket', () => {
+      assert.equal(
+        focusIndexAfterSnapshot({
+          prevKey: '1',
+          nextKey: '2',
+          prevLatestBody: 'a',
+          nextLatestBody: 'b',
+          index: 2,
+          pageCount: 3,
+        }),
+        0,
+      );
+      assert.equal(clampFocusPageIndex(4, 3), 2);
+    });
+    scenario(
+      'While an older page is open and a new focus comment appears, the block returns to now',
+      () => {
+        assert.equal(
+          focusIndexAfterSnapshot({
+            prevKey: '1',
+            nextKey: '1',
+            prevLatestBody: 'Old code note.\n',
+            nextLatestBody: 'Fresh code note.\n',
+            index: 2,
+            pageCount: 3,
+          }),
+          0,
+        );
+      },
+    );
   });
 });
 

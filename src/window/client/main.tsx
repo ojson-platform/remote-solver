@@ -9,6 +9,7 @@ import {flushSync} from 'react-dom';
 import {createRoot} from 'react-dom/client';
 
 import {App} from './app.tsx';
+import {focusIndexAfterSnapshot} from './sidebar.tsx';
 import {postForm} from './forms.tsx';
 import {
   beginRead,
@@ -59,7 +60,39 @@ type Memory = {
   openCaps: string[];
   specs: SpecOpen[];
   scroll?: {id: string; name: string};
+  focusPageIndex: number;
+  focusLatestBody?: string;
 };
+
+function focusPageCount(opened: WindowSnapshot['opened']): number {
+  if (opened === undefined) {
+    return 0;
+  }
+  return opened.blocks.filter(block => block.kind === 'focus').length;
+}
+
+function focusLatestBody(opened: WindowSnapshot['opened']): string | undefined {
+  if (opened === undefined) {
+    return undefined;
+  }
+  const page = opened.blocks.find(block => block.kind === 'focus');
+  return page?.kind === 'focus' ? page.body : undefined;
+}
+
+function reconcileFocusPage(memory: Memory, opened: WindowSnapshot['opened']): void {
+  const nextKey = opened?.key;
+  const pageCount = focusPageCount(opened);
+  const nextLatest = focusLatestBody(opened);
+  memory.focusPageIndex = focusIndexAfterSnapshot({
+    prevKey: memory.key,
+    nextKey,
+    prevLatestBody: memory.focusLatestBody,
+    nextLatestBody: nextLatest,
+    index: memory.focusPageIndex,
+    pageCount,
+  });
+  memory.focusLatestBody = nextLatest;
+}
 
 function lineDrafts(): LineDraft[] {
   return Array.from(document.querySelectorAll('.spine form.line-note')).map(form => {
@@ -255,6 +288,8 @@ function copyMemory(memory: Memory): Memory {
     })),
     openCaps: [...memory.openCaps],
     specs: memory.specs.map(spec => ({id: spec.id, open: spec.open})),
+    focusPageIndex: memory.focusPageIndex,
+    focusLatestBody: memory.focusLatestBody,
   };
   if (memory.scroll !== undefined) {
     saved.scroll = {id: memory.scroll.id, name: memory.scroll.name};
@@ -272,6 +307,8 @@ function restoreMemory(memory: Memory, saved: Memory): void {
   memory.openCaps = saved.openCaps;
   memory.specs = saved.specs;
   memory.scroll = saved.scroll;
+  memory.focusPageIndex = saved.focusPageIndex;
+  memory.focusLatestBody = saved.focusLatestBody;
 }
 
 function keptLayer(memory: Memory, next: WindowSnapshot): SpineLayer | '' | undefined {
@@ -325,6 +362,7 @@ function boot(): void {
     folds: [],
     openCaps: [],
     specs: [],
+    focusPageIndex: 0,
   };
   const draw = () => {
     if (base === undefined) {
@@ -342,6 +380,7 @@ function boot(): void {
       keptDrawers.set(frame.opened.key, frame.opened);
     }
     shot = frame;
+    reconcileFocusPage(memory, frame.opened);
     const layer = keptLayer(memory, frame);
     memory.key = frame.opened?.key;
     memory.station = frame.opened?.spine.station;
@@ -366,6 +405,7 @@ function boot(): void {
           openCaps={memory.openCaps}
           specOpen={memory.specs}
           busy={busy}
+          focusPageIndex={memory.focusPageIndex}
         />,
       );
     });
@@ -608,6 +648,25 @@ function boot(): void {
   );
   document.addEventListener('click', event => {
     const target = event.target instanceof Element ? event.target : null;
+    const focusBack = target?.closest('[data-focus="back"]');
+    if (focusBack) {
+      event.preventDefault();
+      const pageCount = focusPageCount(shot?.opened);
+      if (pageCount > 1 && memory.focusPageIndex < pageCount - 1) {
+        memory.focusPageIndex += 1;
+        draw();
+      }
+      return;
+    }
+    const focusForward = target?.closest('[data-focus="forward"]');
+    if (focusForward) {
+      event.preventDefault();
+      if (memory.focusPageIndex > 0) {
+        memory.focusPageIndex -= 1;
+        draw();
+      }
+      return;
+    }
     const row = target?.closest('.spine .row');
     const toggles =
       target !== null && (headClickToggles(target) || target.closest('label') !== null);

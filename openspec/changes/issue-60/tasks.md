@@ -1,4 +1,4 @@
 - [x] `archive-fold` The OpenSpec CLI applies a change delta onto baselines with openspec archive; The archive applies RENAMED, then REMOVED, then MODIFIED, then ADDED; Remote-solver assumes the CLI already behaves this way
 - [x] `archive-park` The OpenSpec CLI parks the change under the dated archive path
 - [x] `archive-purpose` On a spec that did not exist, the archive writes placeholder Purpose; The archive leaves an existing spec's Purpose unchanged
-- [ ] `archive-refusal` The archive refuses with a non-zero exit and does not commit
+- [x] `archive-refusal` The archive refuses with a non-zero exit and does not commit

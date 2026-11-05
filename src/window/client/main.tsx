@@ -9,7 +9,13 @@ import {flushSync} from 'react-dom';
 import {createRoot} from 'react-dom/client';
 
 import {App} from './app.tsx';
-import {focusIndexAfterSnapshot} from './sidebar.tsx';
+import {
+  focusHasLive,
+  focusIndexAfterSnapshot,
+  focusLatestWrittenBody,
+  focusLiveTurn,
+  focusPagerPageCount,
+} from './sidebar.tsx';
 import {postForm} from './forms.tsx';
 import {
   beginRead,
@@ -62,36 +68,35 @@ type Memory = {
   scroll?: {id: string; name: string};
   focusPageIndex: number;
   focusLatestBody?: string;
+  focusLiveTurn?: string;
+  focusHadLive?: boolean;
+  focusPageCount?: number;
 };
-
-function focusPageCount(opened: WindowSnapshot['opened']): number {
-  if (opened === undefined) {
-    return 0;
-  }
-  return opened.blocks.filter(block => block.kind === 'focus').length;
-}
-
-function focusLatestBody(opened: WindowSnapshot['opened']): string | undefined {
-  if (opened === undefined) {
-    return undefined;
-  }
-  const page = opened.blocks.find(block => block.kind === 'focus');
-  return page?.kind === 'focus' ? page.body : undefined;
-}
 
 function reconcileFocusPage(memory: Memory, opened: WindowSnapshot['opened']): void {
   const nextKey = opened?.key;
-  const pageCount = focusPageCount(opened);
-  const nextLatest = focusLatestBody(opened);
+  const blocks = opened?.blocks ?? [];
+  const pageCount = focusPagerPageCount(blocks);
+  const nextLatest = focusLatestWrittenBody(blocks);
+  const nextLiveTurn = focusLiveTurn(blocks);
+  const nextHadLive = focusHasLive(blocks);
   memory.focusPageIndex = focusIndexAfterSnapshot({
     prevKey: memory.key,
     nextKey,
     prevLatestBody: memory.focusLatestBody,
     nextLatestBody: nextLatest,
+    prevLiveTurn: memory.focusLiveTurn,
+    nextLiveTurn,
+    prevHadLive: memory.focusHadLive,
+    nextHadLive,
+    prevPageCount: memory.focusPageCount,
     index: memory.focusPageIndex,
     pageCount,
   });
   memory.focusLatestBody = nextLatest;
+  memory.focusLiveTurn = nextLiveTurn;
+  memory.focusHadLive = nextHadLive;
+  memory.focusPageCount = pageCount;
 }
 
 function lineDrafts(): LineDraft[] {
@@ -290,6 +295,9 @@ function copyMemory(memory: Memory): Memory {
     specs: memory.specs.map(spec => ({id: spec.id, open: spec.open})),
     focusPageIndex: memory.focusPageIndex,
     focusLatestBody: memory.focusLatestBody,
+    focusLiveTurn: memory.focusLiveTurn,
+    focusHadLive: memory.focusHadLive,
+    focusPageCount: memory.focusPageCount,
   };
   if (memory.scroll !== undefined) {
     saved.scroll = {id: memory.scroll.id, name: memory.scroll.name};
@@ -309,6 +317,9 @@ function restoreMemory(memory: Memory, saved: Memory): void {
   memory.scroll = saved.scroll;
   memory.focusPageIndex = saved.focusPageIndex;
   memory.focusLatestBody = saved.focusLatestBody;
+  memory.focusLiveTurn = saved.focusLiveTurn;
+  memory.focusHadLive = saved.focusHadLive;
+  memory.focusPageCount = saved.focusPageCount;
 }
 
 function keptLayer(memory: Memory, next: WindowSnapshot): SpineLayer | '' | undefined {
@@ -651,7 +662,7 @@ function boot(): void {
     const focusBack = target?.closest('[data-focus="back"]');
     if (focusBack instanceof HTMLButtonElement && !focusBack.disabled) {
       event.preventDefault();
-      const pageCount = focusPageCount(shot?.opened);
+      const pageCount = shot?.opened ? focusPagerPageCount(shot.opened.blocks) : 0;
       if (pageCount > 1 && memory.focusPageIndex < pageCount - 1) {
         memory.focusPageIndex += 1;
         draw();

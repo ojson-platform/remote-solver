@@ -425,6 +425,9 @@ spec('focus', () => {
         assert.equal(paras.length, 2);
         assert.match(paras[1] ?? '', /proposal\.md|2/i);
         assert.equal(paras[1]?.includes('- [ ]'), false);
+        const refusalSecond =
+          'sdd:focus:plan\nДля читателя тикета scope ясен; отказались от ledger.\n\nОтказались включать пагинацию в proposal.\n';
+        assert.equal(validateFocusBody(refusalSecond), 'clean plan focus is one paragraph');
       },
     );
 

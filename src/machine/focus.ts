@@ -263,7 +263,7 @@ export function validateFocusBody(body: string): string | undefined {
     if (hasPointer && paras.length !== 2) {
       return 'plan with open questions needs two paragraphs';
     }
-    if (!hasPointer && paras.length !== 1 && !(paras.length === 2 && FURTHER_PARA.test(paras[1] ?? ''))) {
+    if (!hasPointer && paras.length !== 1) {
       return 'clean plan focus is one paragraph';
     }
     if (hasPointer && paras[1] && OPEN_ITEM.test(paras[1])) {

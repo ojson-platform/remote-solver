@@ -67,9 +67,9 @@ The system SHALL apply extra behavior.
         });
         const text = baselineSpec(box.root, 'fold-order-cap');
         assert.doesNotMatch(text, /### Requirement: Alpha/);
-        assert.doesNotMatch(text, /### Requirement: Beta/);
-        assert.match(text, /### Requirement: Gamma/);
-        assert.match(text, /SHALL apply gamma modified behavior/);
+        assert.doesNotMatch(text, /### Requirement: Gamma/);
+        assert.match(text, /### Requirement: Beta/);
+        assert.match(text, /SHALL apply beta modified behavior/);
         assert.match(text, /### Requirement: Delta/);
         assert.match(text, /SHALL apply delta behavior/);
       } finally {

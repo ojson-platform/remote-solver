@@ -269,6 +269,36 @@ function lineTemplate(keyName: string): ReactNode {
   );
 }
 
+function commentsOnLine(
+  blocks: readonly SidebarBlock[],
+  path: string,
+  line: number,
+): readonly string[] {
+  const out: string[] = [];
+  for (const block of blocks) {
+    if (block.kind !== 'line-thread' || block.file !== path || block.line !== line) {
+      continue;
+    }
+    out.push(...block.comments);
+  }
+  return out;
+}
+
+function PostedComments({comments}: {comments: readonly string[]}): ReactNode {
+  if (comments.length === 0) {
+    return null;
+  }
+  return (
+    <>
+      {comments.map((body, index) => (
+        <div className="posted-comment" key={index}>
+          <pre>{body}</pre>
+        </div>
+      ))}
+    </>
+  );
+}
+
 function partsOf(lines: readonly SpineSourceLine[]): {heading: string; lines: SpineSourceLine[]}[] {
   const parts: {heading: string; lines: SpineSourceLine[]}[] = [{heading: '', lines: []}];
   for (const line of lines) {
@@ -290,6 +320,7 @@ function PlanLines({
   keyName,
   file,
   root,
+  blocks,
 }: {
   lines: readonly SpineSourceLine[];
   pull: boolean;
@@ -298,6 +329,7 @@ function PlanLines({
   keyName: string;
   file: 'proposal.md' | 'design.md';
   root: string;
+  blocks: readonly SidebarBlock[];
 }): ReactNode {
   let gap = false;
   const out: ReactNode[] = [];
@@ -348,6 +380,7 @@ function PlanLines({
             side="right"
           />
         ) : null}
+        <PostedComments comments={commentsOnLine(blocks, path, line.line)} />
       </span>,
     );
   });
@@ -358,10 +391,12 @@ function PlanDocument({
   model,
   keyName,
   drafts,
+  blocks,
 }: {
   model: Spine;
   keyName: string;
   drafts: readonly LineDraft[];
+  blocks: readonly SidebarBlock[];
 }): ReactNode {
   const body = model.proposal.sections.map(section => {
     const lines = section.lines;
@@ -384,6 +419,7 @@ function PlanDocument({
             keyName={keyName}
             root={model.readPath}
             file="proposal.md"
+            blocks={blocks}
           />
         </section>
       );
@@ -406,6 +442,7 @@ function PlanDocument({
               keyName={keyName}
               root={model.readPath}
               file="proposal.md"
+              blocks={blocks}
             />
           </div>
         ))}
@@ -449,10 +486,12 @@ function DesignDocument({
   model,
   keyName,
   drafts,
+  blocks,
 }: {
   model: Spine;
   keyName: string;
   drafts: readonly LineDraft[];
+  blocks: readonly SidebarBlock[];
 }): ReactNode {
   const body = model.design.sections.map(section => {
     const lines = section.lines;
@@ -471,6 +510,7 @@ function DesignDocument({
             keyName={keyName}
             root={model.readPath}
             file="design.md"
+            blocks={blocks}
           />
         </section>
       );
@@ -493,6 +533,7 @@ function DesignDocument({
               keyName={keyName}
               root={model.readPath}
               file="design.md"
+              blocks={blocks}
             />
           </div>
         ))}
@@ -673,12 +714,14 @@ function DiffRow({
   pull,
   drafts,
   keyName,
+  blocks,
   plain = false,
 }: {
   row: SpecRow;
   pull: boolean;
   drafts: readonly LineDraft[];
   keyName: string;
+  blocks: readonly SidebarBlock[];
   plain?: boolean;
 }): ReactNode {
   const scene = scenarioOf(row.text);
@@ -735,6 +778,11 @@ function DiffRow({
         <span className="diff-text">{body}</span>
       </button>
       {note}
+      {anchor === undefined ? null : (
+        <PostedComments
+          comments={commentsOnLine(blocks, anchor.path, Number(anchor.at))}
+        />
+      )}
     </>
   );
 }
@@ -746,6 +794,7 @@ function SpecRows({
   gaps,
   drafts,
   keyName,
+  blocks,
 }: {
   id: string;
   rows: readonly SpecEntry[];
@@ -753,13 +802,22 @@ function SpecRows({
   gaps: readonly OpenFold[];
   drafts: readonly LineDraft[];
   keyName: string;
+  blocks: readonly SidebarBlock[];
 }): ReactNode {
   const open = gaps.find(item => item.id === id)?.open ?? [];
   const plain = specIsPlain(rows);
   return rows.map((entry, index) => {
     if (entry.kind !== 'gap') {
       return (
-        <DiffRow key={index} row={entry} pull={pull} drafts={drafts} keyName={keyName} plain={plain} />
+        <DiffRow
+          key={index}
+          row={entry}
+          pull={pull}
+          drafts={drafts}
+          keyName={keyName}
+          blocks={blocks}
+          plain={plain}
+        />
       );
     }
     const shown = open.includes(index);
@@ -776,6 +834,7 @@ function SpecRows({
                 pull={pull}
                 drafts={drafts}
                 keyName={keyName}
+                blocks={blocks}
                 plain={plain}
               />
             ))
@@ -928,7 +987,12 @@ export function Sidebar({
             control={hereControl('Plan', 'proposing', planAct)}
           >
             {model.proposal.present ? (
-              <PlanDocument model={model} keyName={row.key} drafts={drafts} />
+              <PlanDocument
+                model={model}
+                keyName={row.key}
+                drafts={drafts}
+                blocks={opened.blocks}
+              />
             ) : null}
             {reviewFold(model, row.key, 'proposed', model.proposal.present, remark.Plan)}
           </SpineRow>
@@ -958,6 +1022,7 @@ export function Sidebar({
                   gaps={gaps}
                   drafts={drafts}
                   keyName={row.key}
+                  blocks={opened.blocks}
                 />
               </details>
             ))}
@@ -972,7 +1037,12 @@ export function Sidebar({
             control={hereControl('Design', 'designing', designAct)}
           >
             {model.design.present ? (
-              <DesignDocument model={model} keyName={row.key} drafts={drafts} />
+              <DesignDocument
+                model={model}
+                keyName={row.key}
+                drafts={drafts}
+                blocks={opened.blocks}
+              />
             ) : null}
             {reviewFold(model, row.key, 'designed', model.design.present, remark.Design)}
           </SpineRow>

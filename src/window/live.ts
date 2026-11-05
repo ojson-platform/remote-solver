@@ -212,11 +212,17 @@ function ticketFrom(issue: IssueRecord, repo: string, service: string | undefine
 function reviewOf(threads: readonly ThreadRecord[], notes: readonly Conversation[]): WindowReview {
   const last = [...notes].reverse().find(note => !note.robot);
   return {
-    threads: threads.map(thread => ({
-      marker: markerName(parseMarker(thread.body)),
-      file: thread.path,
-      lines: thread.body === '' ? [] : thread.body.split('\n'),
-    })),
+    threads: threads.map(thread => {
+      const comments =
+        thread.comments ?? (thread.body === '' ? [] : [thread.body]);
+      return {
+        marker: markerName(parseMarker(thread.body)),
+        file: thread.path,
+        line: thread.line,
+        lines: thread.body === '' ? [] : thread.body.split('\n'),
+        comments,
+      };
+    }),
     conversation: last
       ? {last: {marker: markerName(parseMarker(last.body)), body: last.body}}
       : undefined,

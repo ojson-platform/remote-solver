@@ -1,4 +1,4 @@
-import {isFocusRecord} from '../machine/marker.ts';
+import {isFocusRecord, parseMarker} from '../machine/marker.ts';
 import {phaseOf} from '../machine/phase.ts';
 
 import {decisionCount, questionCount, reasonParts, slotOf} from './board.ts';
@@ -101,12 +101,51 @@ function hasMarker(marker: string | null | undefined): boolean {
   return typeof marker === 'string' && marker !== '';
 }
 
+function humanComments(thread: {comments?: readonly string[]; lines: readonly string[]}): string[] {
+  const bodies = thread.comments ?? [...thread.lines];
+  return bodies.filter(body => parseMarker(body) === null);
+}
+
+function anchoredOnLine(thread: {
+  file?: string;
+  line?: number | null;
+  comments?: readonly string[];
+  lines: readonly string[];
+}): boolean {
+  return (
+    typeof thread.file === 'string' &&
+    thread.file !== '' &&
+    thread.line != null &&
+    humanComments(thread).length > 0
+  );
+}
+
+function lineThreadBlocks(reading: WindowReview | undefined): SidebarBlock[] {
+  if (!reading) {
+    return [];
+  }
+  const out: SidebarBlock[] = [];
+  for (const thread of reading.threads ?? []) {
+    if (!anchoredOnLine(thread)) {
+      continue;
+    }
+    out.push({
+      kind: 'line-thread',
+      file: thread.file!,
+      line: thread.line!,
+      comments: humanComments(thread),
+    });
+  }
+  return out;
+}
+
 function unansweredBlock(reading: WindowReview | undefined): SidebarBlock | undefined {
   if (!reading) {
     return undefined;
   }
   const threads = (reading.threads ?? [])
     .filter(thread => !hasMarker(thread.marker))
+    .filter(thread => !anchoredOnLine(thread))
     .map(thread => ({lines: thread.lines}));
   const last = reading.conversation?.last;
   const comment = last && !hasMarker(last.marker) ? last.body : undefined;
@@ -204,7 +243,9 @@ export function blocksFor(
       display: focusBlockProse(focus.marker, focus.body),
     });
   }
-  const unanswered = unansweredBlock(ctx.review());
+  const reading = ctx.review();
+  blocks.push(...lineThreadBlocks(reading));
+  const unanswered = unansweredBlock(reading);
   if (unanswered) {
     blocks.push(unanswered);
   }

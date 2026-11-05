@@ -144,7 +144,14 @@ export type WindowOutside = {
 
 /** Threads and the last conversation comment the review port already returned. */
 export type WindowReview = {
-  threads: readonly {marker?: string | null; file?: string; lines: readonly string[]}[];
+  threads: readonly {
+    marker?: string | null;
+    file?: string;
+    line?: number | null;
+    lines: readonly string[];
+    /** Every comment body in host order. Omitted when only the latest body is known. */
+    comments?: readonly string[];
+  }[];
   conversation?: {last?: {marker?: string | null; body: string} | null} | null;
 };
 
@@ -161,6 +168,7 @@ export type SidebarBlock =
       threads?: readonly {lines: readonly string[]}[];
       comment?: string;
     }
+  | {kind: 'line-thread'; file: string; line: number; comments: readonly string[]}
   | {kind: 'hook'; line: string}
   | {kind: 'hook'; points: readonly SidebarHookPoint[]};
 

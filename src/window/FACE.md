@@ -52,6 +52,10 @@ The top bar is transparent, so the ground shows through it. The drawer is a roun
 
 The pool card and a comment field share one quiet frame. A focused field turns its hairline brass. The acceptance control uses the plaque's frame. The set gate sign is larger than the empty circle. A task's open or done mark is a short chip, not a pill.
 
+A **posted comment** on a document line is that same quiet frame without a field, without a send mark, and without a close circle. It uses no new colour.
+
+A **posted comment** on a document line is that same quiet frame without a field, without a send mark, and without a close circle. It uses no new colour.
+
 The edge is a bright line with light inside the shape. A task chip wears it, brass when open and green when done.
 
 A link chip is that same short chip with a key for its number. It sits under the title on the column card and the pool card, and under the title in the sidebar header. The chips wrap onto the next line. They are not clamped and not cut off. A child is a corner of the edge, down and then right, with no arrowhead, and it stands only on the parent. An issue this one waits on is a muted arrow to the left. An issue this one holds is a brass arrow to the right. Children come first, then the waits, then the holds.

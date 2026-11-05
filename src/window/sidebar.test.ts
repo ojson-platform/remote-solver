@@ -55,6 +55,26 @@ function focusBlock(marker: string, body: string) {
   };
 }
 
+function reviewGateWait(from: 'proposing' | 'specifying' | 'designing'): Decision {
+  const gate = {
+    proposing: {artifact: 'proposal', from: 'proposing' as const, to: 'proposed' as const},
+    specifying: {artifact: 'spec', from: 'specifying' as const, to: 'specified' as const},
+    designing: {artifact: 'design', from: 'designing' as const, to: 'designed' as const},
+  };
+  const row = gate[from];
+  return {
+    kind: 'wait',
+    issue: '1',
+    reason: `review the ${row.artifact}`,
+    gate: row,
+  };
+}
+
+function assertWrittenFocusIsOpen(blocks: SidebarBlock[]): void {
+  assert.equal(blocks.some(block => block.kind === 'live'), false);
+  assert.equal(blocks[0]?.kind, 'focus');
+}
+
 function sidebarBlocks(
   item: WindowTicket,
   over: {
@@ -1321,6 +1341,131 @@ spec('live-focus-page', () => {
       );
       assert.match(html, />checks</);
       assert.equal(html.includes('sdd:focus:spec'), false);
+    });
+  });
+
+  requirement('A review gate keeps the written focus and the ask', () => {
+    scenario(
+      'On the review gate for the proposal, the spec, the design, or accepting, the open page stays the written focus of that stop',
+      () => {
+        const cases = [
+          {
+            phase: 'proposing',
+            marker: 'sdd:focus:plan',
+            decision: reviewGateWait('proposing'),
+          },
+          {
+            phase: 'specifying',
+            marker: 'sdd:focus:spec',
+            decision: reviewGateWait('specifying'),
+          },
+          {
+            phase: 'designing',
+            marker: 'sdd:focus:design',
+            decision: reviewGateWait('designing'),
+          },
+          {
+            phase: 'accepting',
+            marker: 'sdd:focus:accept',
+            decision: {kind: 'wait' as const, issue: '1', reason: 'wait for a person'},
+          },
+        ];
+        for (const row of cases) {
+          const item = cycle('1', row.phase, {
+            comments: [{body: `${row.marker}\nWritten focus of ${row.phase}.\n`}],
+          });
+          const blocks = sidebarBlocks(item, {
+            running: true,
+            turn: {phase: 'implementing', action: 'implement-next-task'},
+            decision: row.decision,
+          });
+          assertWrittenFocusIsOpen(blocks);
+          const html = openLivePage(blocks);
+          assert.match(html, new RegExp(`>${row.marker}<`));
+          assert.match(html, new RegExp(`Written focus of ${row.phase}\\.`));
+        }
+      },
+    );
+    scenario('Accepting keeps the written focus while checks are still running', () => {
+      const item = cycle('1', 'accepting', {
+        comments: [{body: 'sdd:focus:accept\nAccepting written focus.\n'}],
+        checks: 'pending',
+      });
+      const blocks = sidebarBlocks(item, {
+        decision: {kind: 'wait', issue: '1', reason: 'checks before merge'},
+      });
+      assertWrittenFocusIsOpen(blocks);
+      const html = openLivePage(blocks);
+      assert.match(html, />sdd:focus:accept</);
+      assert.equal(html.includes('checks are still running'), false);
+    });
+    scenario('The proposal gate keeps the written focus of that stop', () => {
+      const item = cycle('1', 'proposing', {
+        comments: [{body: 'sdd:focus:plan\nProposal written focus.\n'}],
+      });
+      const blocks = sidebarBlocks(item, {
+        running: false,
+        turn: {action: 'create-design'},
+        decision: reviewGateWait('proposing'),
+      });
+      assertWrittenFocusIsOpen(blocks);
+      assert.match(openLivePage(blocks), />sdd:focus:plan</);
+      assert.equal(openLivePage(blocks).includes('create-design'), false);
+    });
+    scenario('The spec gate keeps the written focus of that stop', () => {
+      const item = cycle('1', 'specifying', {
+        comments: [{body: 'sdd:focus:spec\nSpec written focus.\n'}],
+      });
+      const blocks = sidebarBlocks(item, {
+        decision: reviewGateWait('specifying'),
+      });
+      assertWrittenFocusIsOpen(blocks);
+      assert.match(openLivePage(blocks), />sdd:focus:spec</);
+    });
+    scenario('The design gate keeps the written focus of that stop', () => {
+      const item = cycle('1', 'designing', {
+        comments: [{body: 'sdd:focus:design\nDesign written focus.\n'}],
+      });
+      const blocks = sidebarBlocks(item, {
+        running: true,
+        turn: {phase: 'designing', action: 'create-design'},
+        decision: reviewGateWait('designing'),
+      });
+      assertWrittenFocusIsOpen(blocks);
+      assert.match(openLivePage(blocks), />sdd:focus:design</);
+      assert.equal(openLivePage(blocks).includes('create-design'), false);
+    });
+    scenario('The ask block stays its own block and is not copied into the live page', () => {
+      const item = cycle('1', 'implementing', {
+        comments: [comments[0]!, {body: 'please decide'}],
+        labels: ['sdd:cycle', 'sdd:implementing', 'sdd:wait-human'],
+        checks: 'pending',
+      });
+      const blocks = sidebarBlocks(item, {
+        running: true,
+        turn: {phase: 'implementing', action: 'implement-next-task'},
+      });
+      assertWrittenFocusIsOpen(blocks);
+      assert.deepEqual(blocks.find(block => block.kind === 'ask'), {
+        kind: 'ask',
+        body: 'please decide',
+      });
+      const html = openLivePage(blocks);
+      assert.equal(html.includes('please decide'), false);
+      assert.equal(html.includes('checks are still running'), false);
+    });
+    scenario('The live sentence does not replace an ask', () => {
+      const item = cycle('1', 'implementing', {
+        comments: [comments[0]!, {body: 'please decide'}],
+        labels: ['sdd:cycle', 'sdd:implementing', 'sdd:wait-human'],
+      });
+      const blocks = sidebarBlocks(item, {
+        running: true,
+        turn: {phase: 'implementing', action: 'implement-next-task'},
+      });
+      assert.equal(blocks.some(block => block.kind === 'live'), false);
+      assert.equal(blocks.some(block => block.kind === 'ask'), true);
+      assert.equal(blocks.some(block => block.kind === 'focus'), true);
     });
   });
 });

@@ -35,7 +35,7 @@ Files are named only in the task card. The cut follows the caller path.
 - Every Scenario is in exactly one task
 - Each task is one caller-visible path, or a design item
 - The seams of this change are computed. A seam has no child issue of its own
-- Every foreign contract has a child or a `Depends`
+- Every foreign contract has a child with a parent link, or a depends-on link on this issue
 
 ## Stop
 

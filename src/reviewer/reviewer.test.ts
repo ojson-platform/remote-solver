@@ -6,6 +6,7 @@ import {machine} from '../adapters/compose.ts';
 import {memoryPorts} from '../adapters/github.ts';
 import {files} from '../machine/harness.ts';
 import type {FileSource} from '../machine/port.ts';
+import {archiveChangePath} from '../machine/naming.ts';
 import {applyReview, passReview} from './act.ts';
 import {assembleDossier} from './dossier.ts';
 import {placeOnDiff} from './place.ts';
@@ -565,6 +566,25 @@ spec('reviewer', () => {
       );
       assert.deepEqual(verdict, {kind: 'unjudged', reason: 'tag <verdict> not found'});
       assert.equal(asks, 1);
+    });
+  });
+});
+
+spec('spec-archive', () => {
+  requirement('One commit holds the fold', () => {
+    scenario('The machine, the window, review, and unarchive keep reading archive/issue-<key>', () => {
+      assert.equal(
+        archiveChangePath('11', 'openspec/changes/issue-11/proposal.md'),
+        'openspec/changes/archive/issue-11/proposal.md',
+      );
+      assert.doesNotMatch(
+        archiveChangePath('11', 'openspec/changes/issue-11/proposal.md'),
+        /\d{4}-\d{2}-\d{2}-issue/,
+      );
+      assert.equal(
+        archiveChangePath('11', 'openspec/changes/archive/2025-11-05-issue-11/proposal.md'),
+        'openspec/changes/archive/2025-11-05-issue-11/proposal.md',
+      );
     });
   });
 });

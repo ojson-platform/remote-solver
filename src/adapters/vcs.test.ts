@@ -5,6 +5,8 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {test} from 'vitest';
 
+import {requirement, scenario, spec} from '@ojson/spec-coverage';
+
 import {
   contentBranchFiles,
   ensureIssueBranch,
@@ -214,4 +216,33 @@ test('packageLinks keeps the directories that exist', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'sdd-links-'));
   mkdirSync(path.join(root, 'skills'));
   assert.deepEqual(packageLinks(root), [{from: path.join(root, 'skills'), to: 'skills'}]);
+});
+
+spec('spec-archive', () => {
+  requirement('One commit holds the fold', () => {
+    scenario('The machine, the window, review, and unarchive keep reading archive/issue-<key>', () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-vcs-archive-read-'));
+      execFileSync('git', ['init', '-b', 'sdd/7'], {cwd: root, stdio: 'ignore'});
+      const undated = path.join(root, 'openspec', 'changes', 'archive', 'issue-7', 'proposal.md');
+      mkdirSync(path.dirname(undated), {recursive: true});
+      writeFileSync(undated, 'undated archive\n');
+      git(root, ['add', 'openspec']);
+      git(root, [
+        '-c',
+        'user.name=test',
+        '-c',
+        'user.email=test@example.com',
+        'commit',
+        '-m',
+        'archive',
+        '-m',
+        'Sdd-Archive: issue-7',
+      ]);
+      const files = contentBranchFiles(root, '7', 'sdd');
+      assert.ok(files);
+      assert.match(files.read('openspec/changes/archive/issue-7/proposal.md'), /undated archive/);
+      assert.equal(files.read('openspec/changes/archive/2025-11-05-issue-7/proposal.md'), '');
+      assert.equal(files.exists('openspec/changes/archive/2025-11-05-issue-7/proposal.md'), false);
+    });
+  });
 });

@@ -1827,3 +1827,21 @@ spec('spec-diff', () => {
     });
   });
 });
+
+spec('spec-archive', () => {
+  requirement('One commit holds the fold', () => {
+    scenario('The machine, the window, review, and unarchive keep reading archive/issue-<key>', () => {
+      const root = addedArchive();
+      try {
+        const files = gitFiles(root, '7', 'sdd');
+        assert.ok(files.exists('openspec/changes/archive/issue-7/specs/fresh/spec.md'));
+        assert.equal(files.exists('openspec/changes/archive/2025-11-05-issue-7/specs/fresh/spec.md'), false);
+        const capability = freshCapability(root);
+        assert.ok(capability);
+        assert.doesNotMatch(JSON.stringify(capability), /\d{4}-\d{2}-\d{2}-issue-7/);
+      } finally {
+        rmSync(root, {recursive: true, force: true});
+      }
+    });
+  });
+});

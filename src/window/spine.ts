@@ -375,12 +375,16 @@ export function focusSpineLines(
   }
   const {phaseSentences, latestWholeFocusBody} = scanFocusComments(comments);
   const lines = applyPhaseSentences(linesFromIssue(issueBody), phaseSentences);
-  const ledger = latestWholeFocusBody
-    ? linesFromFocus(latestWholeFocusBody)
-    : {lines: [], rest: []};
+  if (phaseSentences.size === 0 && latestWholeFocusBody) {
+    const ledger = linesFromFocus(latestWholeFocusBody);
+    return {
+      lines: mergeLines(lines, ledger.lines),
+      rest: ledger.rest.filter(line => !line.includes('sdd:begin') && !line.includes('sdd:end')),
+    };
+  }
   return {
-    lines: mergeLines(lines, ledger.lines),
-    rest: ledger.rest.filter(line => !line.includes('sdd:begin') && !line.includes('sdd:end')),
+    lines,
+    rest: [],
   };
 }
 

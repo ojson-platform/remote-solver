@@ -180,7 +180,11 @@ export function scanFocusComments(
     }
     const layer = focusMirrorName(marker);
     const sentence = firstFocusSentence(comment.body);
-    if (layer && sentence) {
+    if (
+      layer &&
+      sentence &&
+      (FOCUS_LAYERS as readonly string[]).includes(layer)
+    ) {
       phaseSentences.set(layer, sentence);
     }
   }

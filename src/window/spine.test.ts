@@ -4,14 +4,26 @@ import assert from 'node:assert/strict';
 import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
+import {createElement} from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
+
+import {FocusBlocks} from './client/sidebar.tsx';
+import type {WindowSnapshot} from './snapshot.ts';
 
 import {readBranch} from '../machine/change.ts';
 import {changeDir} from '../machine/naming.ts';
 import {changeFiles} from './change-files.ts';
 import {headClickToggles, keptSpineLayer, rowHeadOpens, toggledSpineLayer} from './client/gesture.ts';
-import {buildSpine, layerForStation, linesFromFocus, linesFromIssue, projectSpine} from './spine.ts';
+import {
+  buildSpine,
+  focusSpineLines,
+  layerForStation,
+  linesFromFocus,
+  linesFromIssue,
+  projectSpine,
+} from './spine.ts';
 import {
   MANAGER,
   bandOf,
@@ -875,4 +887,131 @@ spec('issue-description', () => {
       proveTheSpineOfATakenCycleStaysAsItIs();
     });
   });
+});
+
+function mirrorIssueBody(): string {
+  return [
+    '<!-- sdd:begin -->',
+    'Plan: Mirror plan line.',
+    'Specify: Mirror specify line.',
+    'Design: Mirror design line.',
+    'Tasks: 1/6',
+    'Code: Mirror code line.',
+    '<!-- sdd:end -->',
+  ].join('\n');
+}
+
+function spineRowSentence(html: string, key: string, layer: string): string {
+  const head = spineOf(html, key, layer).split('<div class="fold">')[0] ?? '';
+  const sentence = head.match(/<span class="sentence">([^<]*)<\/span>/)?.[1];
+  if (sentence) {
+    return sentence;
+  }
+  const excerpt = head.match(/<span class="excerpt">([^<]*)<\/span>/)?.[1];
+  return excerpt ?? '';
+}
+
+function focusPagerHtml(snapshot: WindowSnapshot, pageIndex: number): string {
+  const opened = snapshot.opened;
+  if (!opened) {
+    return '';
+  }
+  return renderToStaticMarkup(
+    createElement(FocusBlocks, {blocks: opened.blocks, pageIndex}),
+  );
+}
+
+function proveEachSpineRowKeepsTheFirstSentenceOfTheLatestWrittenFocusOfThatPhase(): void {
+  const issueBody = mirrorIssueBody();
+  const comments = [
+    {body: 'sdd:focus:plan\nOlder plan sentence. Older tail.\n'},
+    {body: 'sdd:focus:plan\nLatest plan sentence. Latest tail.\n'},
+    {body: 'sdd:focus:spec\nSpecify holds the boundary. More spec prose.\n'},
+    {body: 'sdd:focus:design\nDesign is bounded. Extra design.\n'},
+    {body: 'sdd:focus:tasks\nTasks are three of six. More tasks.\n'},
+    {body: 'sdd:focus:code\nCode slice landed. More code.\n'},
+    {body: 'sdd:focus:accept\nAccept gate is ready. Not a spine row.\n'},
+    {body: 'sdd:focus\nPlan: Ledger plan must stay off rows.\nSpecify: Ledger specify.\n'},
+  ];
+  const {lines} = focusSpineLines(comments, issueBody);
+  assert.equal(lines.find(line => line.layer === 'Plan')?.text, 'Latest plan sentence.');
+  assert.equal(lines.find(line => line.layer === 'Specify')?.text, 'Specify holds the boundary.');
+  assert.equal(lines.find(line => line.layer === 'Design')?.text, 'Design is bounded.');
+  assert.equal(lines.find(line => line.layer === 'Tasks')?.text, 'Tasks are three of six.');
+  assert.equal(lines.find(line => line.layer === 'Code')?.text, 'Code slice landed.');
+  assert.equal(lines.some(line => line.text.includes('Ledger')), false);
+  assert.equal(lines.some(line => line.text.includes('Accept gate')), false);
+}
+
+spec('written-focus-page', () => {
+  requirement(
+    'Each spine row keeps the first sentence of the latest written focus of that phase',
+    () => {
+      scenario(
+        'Each spine row keeps the first sentence of the latest written focus of that phase',
+        async () => {
+          proveEachSpineRowKeepsTheFirstSentenceOfTheLatestWrittenFocusOfThatPhase();
+          await hosted(
+            {
+              login: () => MANAGER,
+              tickets: () => [
+                held('1', 'implementing', {
+                  body: mirrorIssueBody(),
+                  comments: [
+                    {body: 'sdd:focus:plan\nOlder plan sentence. Older tail.\n'},
+                    {body: 'sdd:focus:plan\nLatest plan sentence. Latest tail.\n'},
+                    {body: 'sdd:focus:spec\nSpecify holds the boundary. More spec prose.\n'},
+                    {body: 'sdd:focus:design\nDesign is bounded. Extra design.\n'},
+                    {body: 'sdd:focus:tasks\nTasks are three of six. More tasks.\n'},
+                    {body: 'sdd:focus:code\nCode slice landed. More code.\n'},
+                    {body: 'sdd:focus\nPlan: Ledger plan must stay off rows.\n'},
+                  ],
+                }),
+              ],
+            },
+            async (page, window) => {
+              window.chooseAgent('cursor');
+              assert.equal(
+                (
+                  await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())
+                ).status,
+                200,
+              );
+              const snapshot = (await (
+                await fetch(new URL('/snapshot', page.url))
+              ).json()) as WindowSnapshot;
+              const spineLines = snapshot.opened?.spine.lines ?? [];
+              assert.equal(
+                spineLines.find(line => line.layer === 'Plan')?.text,
+                'Latest plan sentence.',
+              );
+              assert.equal(
+                spineLines.find(line => line.layer === 'Specify')?.text,
+                'Specify holds the boundary.',
+              );
+              assert.equal(
+                spineLines.find(line => line.layer === 'Design')?.text,
+                'Design is bounded.',
+              );
+              assert.equal(
+                spineLines.find(line => line.layer === 'Tasks')?.text,
+                'Tasks are three of six.',
+              );
+              assert.equal(
+                spineLines.find(line => line.layer === 'Code')?.text,
+                'Code slice landed.',
+              );
+              const html = await pageHtml(page.url);
+              assert.equal(spineRowSentence(html, '1', 'Plan'), 'Latest plan sentence.');
+              const onOlderPlan = focusPagerHtml(snapshot, 6);
+              assert.match(onOlderPlan, />sdd:focus:plan</);
+              assert.match(onOlderPlan, /Older plan sentence\./);
+              assert.match(onOlderPlan, /Older tail\./);
+              assert.equal(spineRowSentence(html, '1', 'Plan'), 'Latest plan sentence.');
+            },
+          );
+        },
+      );
+    },
+  );
 });

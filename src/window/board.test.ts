@@ -2893,6 +2893,10 @@ spec('link-mark', () => {
         const css = readFileSync(new URL('./face.css', import.meta.url), 'utf8');
         assert.match(
           css,
+          /\.link-mark\[data-kind="child"\] \.link-mark-open::before\s*\{[^}]*border-left[^}]*border-bottom/,
+        );
+        assert.doesNotMatch(
+          css,
           /\.link-mark\[data-kind="child"\] \.link-mark-open::before\s*\{[^}]*border-right[^}]*border-bottom/,
         );
         await hosted(

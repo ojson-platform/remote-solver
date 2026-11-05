@@ -303,9 +303,10 @@
   .link-mark[data-kind="child"] .link-mark-open::before {
     width: 7px;
     height: 7px;
-    border-right: 2px solid rgba(244, 240, 230, 0.75);
+    border-left: 2px solid rgba(244, 240, 230, 0.75);
     border-bottom: 2px solid rgba(244, 240, 230, 0.75);
     border-top: 0;
+    border-right: 0;
     transform: translateY(-65%);
   }
   .link-mark[data-kind="wait"] .link-mark-open::before {

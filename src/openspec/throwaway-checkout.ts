@@ -42,6 +42,10 @@ export function foldOrderDelta(): string {
 
 The system SHALL apply gamma modified behavior.
 
+#### Scenario: alpha
+- **WHEN** a
+- **THEN** a
+
 #### Scenario: gamma scenario
 - **WHEN** x
 - **THEN** y

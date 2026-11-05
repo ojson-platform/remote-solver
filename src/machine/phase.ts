@@ -34,6 +34,9 @@ export function phaseOf(labels: string[]): Phase | null {
   if (found.includes('accepted')) {
     return 'accepted';
   }
+  if (found.includes('cancelled')) {
+    return 'cancelled';
+  }
   // A person who adds the gate label may leave the phase it closes on.
   const kept = found.filter(phase => !found.some(gate => GATE_CLOSES[gate] === phase));
   return kept[0] ?? null;

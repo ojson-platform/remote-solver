@@ -36,6 +36,12 @@ function focusPagerHtml(snapshot: WindowSnapshot, pageIndex: number): string {
   );
 }
 
+function manyWrittenFocusPages(count: number) {
+  return Array.from({length: count}, (_, index) =>
+    focusBlock('sdd:focus:code', `Written page ${count - index}.\n`),
+  );
+}
+
 function focusBlock(marker: string, body: string) {
   return {
     kind: 'focus' as const,
@@ -818,7 +824,7 @@ spec('written-focus-page', () => {
           assert.match(oldest, />sdd:focus:plan</);
           assert.match(oldest, /Older plan note\./);
           assert.match(oldest, /Second plan line\./);
-          assert.equal(oldest.includes('data-focus="back"'), false);
+          assert.match(oldest, /data-focus="back" disabled/);
         },
       );
     });
@@ -850,7 +856,7 @@ spec('written-focus-page', () => {
           assert.match(onOlder, /data-focus="forward"/);
           const towardNow = focusPagerHtml(snapshot, 0);
           assert.match(towardNow, />sdd:focus:code</);
-          assert.equal(towardNow.includes('data-focus="forward"'), false);
+          assert.match(towardNow, /data-focus="forward" disabled/);
         },
       );
     });
@@ -884,6 +890,158 @@ spec('written-focus-page', () => {
         );
       },
     );
+  });
+});
+
+spec('focus-pager', () => {
+  requirement('The focus pager is one control on the focus row, opposite the badge', () => {
+    scenario(
+      'One control on the focus row, opposite the badge, shows a back chevron, the current page and the count, and a forward chevron, in the form `< 11/12 >`',
+      () => {
+        const blocks = manyWrittenFocusPages(12);
+        const html = renderToStaticMarkup(
+          createElement(FocusBlocks, {blocks, pageIndex: 1}),
+        );
+        assert.match(html, /class="focus-row"/);
+        assert.match(html, /class="focus-pager"/);
+        assert.match(html, /data-focus="back"/);
+        assert.match(html, /data-focus="forward"/);
+        assert.match(html, />11\/12</);
+        assert.equal(html.includes('назад'), false);
+        assert.equal(html.includes('вперёд'), false);
+        const badgeAt = html.indexOf('class="badge"');
+        const pagerAt = html.indexOf('class="focus-pager"');
+        assert.ok(badgeAt >= 0 && pagerAt > badgeAt);
+      },
+    );
+    scenario('The count runs from the oldest page, so the latest page reads `12/12`', () => {
+      const blocks = manyWrittenFocusPages(12);
+      const latest = renderToStaticMarkup(
+        createElement(FocusBlocks, {blocks, pageIndex: 0}),
+      );
+      assert.match(latest, />12\/12</);
+      const oldest = renderToStaticMarkup(
+        createElement(FocusBlocks, {blocks, pageIndex: 11}),
+      );
+      assert.match(oldest, />1\/12</);
+    });
+    scenario(
+      'A chevron that cannot move stays in place and goes quiet, so the number does not jump',
+      () => {
+        const blocks = manyWrittenFocusPages(3);
+        const latest = renderToStaticMarkup(
+          createElement(FocusBlocks, {blocks, pageIndex: 0}),
+        );
+        assert.match(latest, /data-focus="forward" disabled/);
+        assert.match(latest, />3\/3</);
+        const oldest = renderToStaticMarkup(
+          createElement(FocusBlocks, {blocks, pageIndex: 2}),
+        );
+        assert.match(oldest, /data-focus="back" disabled/);
+        assert.match(oldest, />1\/3</);
+        assert.match(oldest, /data-focus="forward"/);
+      },
+    );
+    scenario('A single written focus leaves the control out', () => {
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:plan', 'One page.\n')],
+          pageIndex: 0,
+        }),
+      );
+      assert.equal(html.includes('focus-pager'), false);
+    });
+    scenario('The row is the badge and the prose', () => {
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:plan', 'One page.\n')],
+          pageIndex: 0,
+        }),
+      );
+      assert.equal(html.includes('focus-row'), false);
+      assert.match(html, /class="badge"/);
+      assert.match(html, /<pre>/);
+    });
+    scenario('Back still walks older written comments, newest first', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {
+              comments: [
+                {body: 'sdd:focus:plan\nOlder plan note.\n'},
+                {body: 'sdd:focus:spec\nSpecify boundaries hold.\n'},
+                {body: 'sdd:focus:code\nCode slice landed.\n'},
+              ],
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const snapshot = (await (
+            await fetch(new URL('/snapshot', page.url))
+          ).json()) as WindowSnapshot;
+          const now = focusPagerHtml(snapshot, 0);
+          assert.match(now, />3\/3</);
+          assert.match(now, />sdd:focus:code</);
+          const older = focusPagerHtml(snapshot, 1);
+          assert.match(older, />2\/3</);
+          assert.match(older, />sdd:focus:spec</);
+          const oldest = focusPagerHtml(snapshot, 2);
+          assert.match(oldest, />1\/3</);
+          assert.match(oldest, />sdd:focus:plan</);
+          assert.match(oldest, /data-focus="back" disabled/);
+        },
+      );
+    });
+    scenario('Forward still returns toward now', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {
+              comments: [
+                {body: 'sdd:focus:plan\nOlder plan note.\n'},
+                {body: 'sdd:focus:code\nCode slice landed.\n'},
+              ],
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const snapshot = (await (
+            await fetch(new URL('/snapshot', page.url))
+          ).json()) as WindowSnapshot;
+          const onOlder = focusPagerHtml(snapshot, 1);
+          assert.match(onOlder, />1\/2</);
+          assert.match(onOlder, /data-focus="forward"/);
+          assert.equal(onOlder.includes('data-focus="forward" disabled'), false);
+          const towardNow = focusPagerHtml(snapshot, 0);
+          assert.match(towardNow, />2\/2</);
+          assert.match(towardNow, />sdd:focus:code</);
+          assert.match(towardNow, /data-focus="forward" disabled/);
+        },
+      );
+    });
+    scenario('The badge and the prose stay as they are', () => {
+      const blocks = [
+        focusBlock('sdd:focus:spec', 'Prose stays verbatim.\n'),
+        focusBlock('sdd:focus:plan', 'Older plan.\n'),
+      ];
+      const html = renderToStaticMarkup(createElement(FocusBlocks, {blocks, pageIndex: 0}));
+      assert.match(html, />sdd:focus:spec</);
+      assert.match(html, /Prose stays verbatim\./);
+    });
   });
 });
 

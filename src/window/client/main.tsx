@@ -649,7 +649,7 @@ function boot(): void {
   document.addEventListener('click', event => {
     const target = event.target instanceof Element ? event.target : null;
     const focusBack = target?.closest('[data-focus="back"]');
-    if (focusBack) {
+    if (focusBack instanceof HTMLButtonElement && !focusBack.disabled) {
       event.preventDefault();
       const pageCount = focusPageCount(shot?.opened);
       if (pageCount > 1 && memory.focusPageIndex < pageCount - 1) {
@@ -659,7 +659,7 @@ function boot(): void {
       return;
     }
     const focusForward = target?.closest('[data-focus="forward"]');
-    if (focusForward) {
+    if (focusForward instanceof HTMLButtonElement && !focusForward.disabled) {
       event.preventDefault();
       if (memory.focusPageIndex > 0) {
         memory.focusPageIndex -= 1;

@@ -889,7 +889,25 @@
   .hint, .empty, .path { font-size: 12px; }
   .sheet h2 { font-family: "Iowan Old Style", Palatino, Georgia, serif; }
   .block { margin-top: 16px; }
+  .focus-block .focus-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .focus-block .focus-row .badge { margin-bottom: 0; }
   .focus-block .badge { display: inline-block; margin-bottom: 8px; font-family: var(--mono); font-size: 12px; }
+  .focus-block .focus-pager {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .focus-block .focus-pager .quiet[disabled] { opacity: 0.35; cursor: default; }
   .block h3, .group h3, .roles h3 { margin: 0 0 8px; font-size: 13px; }
   .block pre, .popup pre {
     margin: 0;

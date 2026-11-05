@@ -131,7 +131,7 @@ function layerOfPath(file: string): PhaseLayer {
   if (base === 'design.md') {
     return 'Design';
   }
-  if (base === 'tasks.md' || base.startsWith('tasks/')) {
+  if (base === 'tasks.md' || normalized.includes('/tasks/')) {
     return 'Tasks';
   }
   if (normalized.includes('/specs/') && normalized.endsWith('/spec.md')) {

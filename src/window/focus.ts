@@ -89,6 +89,9 @@ export function liveFocus(input: LiveFocusInput): LiveFocus | undefined {
     return {badge: 'checks', text: 'checks are still running'};
   }
   if (input.checks === 'red') {
+    if (decision?.kind === 'agent') {
+      return undefined;
+    }
     return {
       badge: 'checks',
       text: 'checks are red and the failure has not been handed to a worker yet',

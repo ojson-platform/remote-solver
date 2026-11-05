@@ -30,7 +30,7 @@ The command applies RENAMED, then REMOVED, then MODIFIED, then ADDED. The step s
 
 ### Modified
 
-- `spec-archive` the accept step folds a delta with `openspec archive` instead of editing the baseline by hand
+- `spec-archive` the accept step folds a delta into the baseline by editing it, in one commit
 
 ## Open questions
 

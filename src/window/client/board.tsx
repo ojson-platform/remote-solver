@@ -41,7 +41,7 @@ export function LinkMarks({
         const title = linkMarkTitle(rows, mark.key);
         return (
           <li className="link-mark" data-kind={mark.kind} key={`${mark.kind}-${mark.key}`}>
-            <ActForm act="open" className="open">
+            <ActForm act="open" className="open link-mark-open">
               <Hidden name="key" value={mark.key} />
               <button className="link-mark-key" type="submit" title={title}>
                 {mark.key}

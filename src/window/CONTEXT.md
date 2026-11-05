@@ -37,7 +37,7 @@ A quiet card for writing. Choosing a line of a change document opens one. The se
 _Avoid_: Textarea, input
 
 **Focus block**:
-The sidebar block of the latest focus comment. The marker is the badge. The prose sits under it. The window does not recompute the prose. An ask, a role outcome, and a manager's comment are not this block.
+The sidebar pager of the written focus comments. It opens on the latest comment, in full. Back walks the older comments, newest first, each in full. Forward returns toward that latest. The marker is the badge. The prose sits under it. A scenario name in the prose links to that scenario's row lower in the sidebar. The window does not recompute the prose. An ask, a role outcome, and a manager comment stay out of this block. The chips stay in the header.
 _Avoid_: Summary, status
 
 **Hammer**:
@@ -45,5 +45,5 @@ The chosen filled mark on the plaque of the phase a worker is in. It leaves when
 _Avoid_: Step mark, pool icon
 
 **Spine sentence**:
-The first sentence of that row's latest phase focus. A whole-pull-request focus belongs to the focus block and to no row.
+The first sentence of that row's latest phase focus. A whole-pull-request focus belongs to the focus block and to no row. The Accept row's caption is the first sentence of the latest `sdd:focus:accept` comment, and the auto-merge sentence until that comment exists.
 _Avoid_: Layer line, solid

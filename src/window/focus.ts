@@ -10,6 +10,27 @@ import {
 
 export type FocusSidebar = {marker: FocusMarkerLine; body: string};
 
+export type WrittenFocusPage = {marker: FocusMarkerLine; body: string};
+
+/** Written focus comments, newest first. Manager comments and non-focus records stay out. */
+export function writtenFocusPages(
+  comments: readonly WindowComment[] | undefined,
+): WrittenFocusPage[] {
+  const pages: WrittenFocusPage[] = [];
+  for (const comment of comments ?? []) {
+    if (comment.manager || !isFocusRecord(comment.body)) {
+      continue;
+    }
+    const marker = focusMarkerLine(comment.body);
+    if (marker === null) {
+      continue;
+    }
+    pages.push({marker, body: comment.body.split('\n').slice(1).join('\n')});
+  }
+  pages.reverse();
+  return pages;
+}
+
 /** Latest non-manager focus comment body, in tracker order. */
 export function latestFocusRecord(comments: readonly WindowComment[] | undefined): string | undefined {
   return latestFocusComment(comments ?? []);

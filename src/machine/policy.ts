@@ -127,9 +127,19 @@ function children(parent: string, issues: IssueRecord[]): IssueRecord[] {
 }
 
 function blockers(issue: IssueRecord, issues: IssueRecord[]): IssueRecord[] {
-  return issue.dependsOn
-    .map(id => issues.find(item => item.key === id))
-    .filter((item): item is IssueRecord => Boolean(item));
+  const seen = new Set<string>();
+  const out: IssueRecord[] = [];
+  for (const id of [...(issue.blockedBy ?? []), ...(issue.dependsOn ?? [])]) {
+    if (seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    const item = issues.find(entry => entry.key === id);
+    if (item) {
+      out.push(item);
+    }
+  }
+  return out;
 }
 
 function atLeast(issue: IssueRecord, phase: Phase): boolean {

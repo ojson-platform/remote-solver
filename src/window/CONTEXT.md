@@ -21,7 +21,7 @@ An open cycle issue this card parents. The child mark is a light corner, down an
 _Avoid_: Parent chip on the child card
 
 **Blocker**:
-An issue on the board this card waits on, named by blocked-by or depends-on. The wait mark is a muted arrow to the left. An issue this card holds wears a brass arrow to the right.
+An issue on the board this card waits on, named by blocked-by or depends-on. The wait mark is a muted arrow to the left with a head and a shaft. An issue this card holds wears a brass arrow to the right with a head and a shaft.
 _Avoid_: An edge drawn between cards, listing an issue past the direct link
 
 **Pill**:

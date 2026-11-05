@@ -3279,6 +3279,156 @@ spec('link-mark', () => {
   });
 });
 
+spec('link-arrow', () => {
+  requirement('The wait mark and the hold mark are arrows with a shaft and a head', () => {
+    scenario(
+      'The mark for an issue this one waits on, and the mark for an issue this one holds, are arrows with a shaft and a head',
+      () => {
+        const css = readFileSync(new URL('./face.css', import.meta.url), 'utf8');
+        assert.match(
+          css,
+          /\.link-mark\[data-kind="wait"\][\s\S]*?\.link-mark-key::before\s*\{[^}]*\}/,
+        );
+        assert.match(
+          css,
+          /\.link-mark\[data-kind="wait"\][\s\S]*?\.link-mark-key::after\s*\{[^}]*content[^}]*\}/,
+        );
+        assert.match(
+          css,
+          /\.link-mark\[data-kind="hold"\][\s\S]*?\.link-mark-key::before\s*\{[^}]*\}/,
+        );
+        assert.match(
+          css,
+          /\.link-mark\[data-kind="hold"\][\s\S]*?\.link-mark-key::after\s*\{[^}]*content[^}]*\}/,
+        );
+      },
+    );
+
+    scenario('A naked triangle is not the mark, so neither reads as the play control', () => {
+      const css = readFileSync(new URL('./face.css', import.meta.url), 'utf8');
+      assert.match(
+        css,
+        /\.link-mark\[data-kind="wait"\][\s\S]*?\.link-mark-key::after\s*\{[^}]*width:\s*[1-9]/,
+      );
+      assert.match(
+        css,
+        /\.link-mark\[data-kind="hold"\][\s\S]*?\.link-mark-key::after\s*\{[^}]*width:\s*[1-9]/,
+      );
+      assert.match(css, /\.round\.play/);
+      const waitStyles = css.match(
+        /\.link-mark\[data-kind="wait"\][\s\S]*?\.link-mark-key::after\s*\{[^}]*\}/,
+      )?.[0];
+      const holdStyles = css.match(
+        /\.link-mark\[data-kind="hold"\][\s\S]*?\.link-mark-key::after\s*\{[^}]*\}/,
+      )?.[0];
+      assert.ok(waitStyles);
+      assert.ok(holdStyles);
+      assert.doesNotMatch(waitStyles!, /\.round\.play/);
+      assert.doesNotMatch(holdStyles!, /\.round\.play/);
+    });
+
+    scenario('The wait stays a muted arrow to the left', () => {
+      const css = readFileSync(new URL('./face.css', import.meta.url), 'utf8');
+      assert.match(
+        css,
+        /\.link-mark\[data-kind="wait"\][\s\S]*?\.link-mark-key::before\s*\{[^}]*border-right[^}]*var\(--muted\)/,
+      );
+      assert.match(
+        css,
+        /\.link-mark\[data-kind="wait"\][\s\S]*?\.link-mark-key::after\s*\{[^}]*var\(--muted\)/,
+      );
+    });
+
+    scenario('The hold stays a brass arrow to the right', () => {
+      const css = readFileSync(new URL('./face.css', import.meta.url), 'utf8');
+      assert.match(
+        css,
+        /\.link-mark\[data-kind="hold"\][\s\S]*?\.link-mark-key::before\s*\{[^}]*border-left[^}]*var\(--brass\)/,
+      );
+      assert.match(
+        css,
+        /\.link-mark\[data-kind="hold"\][\s\S]*?\.link-mark-key::after\s*\{[^}]*var\(--brass\)/,
+      );
+    });
+
+    scenario(
+      'The child stays a light corner, down and then right, with no arrowhead, and it still stands only on the parent',
+      async () => {
+        const css = readFileSync(new URL('./face.css', import.meta.url), 'utf8');
+        assert.match(
+          css,
+          /\.link-mark\[data-kind="child"\] \.link-mark-key::before\s*\{[^}]*border-left[^}]*border-bottom/,
+        );
+        assert.doesNotMatch(
+          css,
+          /\.link-mark\[data-kind="child"\] \.link-mark-key::after\s*\{/,
+        );
+        await hosted(
+          {
+            login: () => MANAGER,
+            tickets: () => [
+              held('1', 'implementing'),
+              ticket({
+                key: '2',
+                parent: '1',
+                queue: 'alpha',
+                sddService: 'services/billing',
+                labels: ['sdd:cycle', 'sdd:tasking'],
+                assignee: '',
+              }),
+            ],
+          },
+          async (page, window) => {
+            window.chooseAgent('cursor');
+            const html = await pageHtml(page.url);
+            assert.equal(marksSignature(articleOf(html, '1')), 'child:2');
+            assert.equal(marksSignature(articleOf(html, '2')), '');
+          },
+        );
+      },
+    );
+  });
+
+  requirement('Both marks stand on the chip under the title', () => {
+    scenario(
+      'Both stand on the chip under the title, on a column card, a pool card, and in the sidebar',
+      async () => {
+        await hosted(
+          {
+            login: () => MANAGER,
+            tickets: () => [
+              held('1', 'implementing', {dependsOn: ['9'], blocks: ['2']}),
+              held('9', 'specifying'),
+              ticket({key: '2', queue: 'alpha', sddService: 'services/billing', title: 'Held'}),
+            ],
+          },
+          async (page, window) => {
+            window.chooseAgent('cursor');
+            const html = await pageHtml(page.url);
+            const column = articleOf(html, '1');
+            assert.match(column, /class="link-marks"/);
+            assert.match(column, /data-kind="wait"/);
+            assert.match(column, /data-kind="hold"/);
+            const pool = articleOf(html, '2');
+            assert.doesNotMatch(pool, /class="link-marks"/);
+            const opened = await post(
+              page.url,
+              'act',
+              new URLSearchParams({act: 'open', key: '1'}).toString(),
+            );
+            assert.equal(opened.status, 200);
+            const side = bandOf(await pageHtml(page.url), '1');
+            const header = between(side, '<header>', '</header>');
+            assert.match(header, /class="link-marks"/);
+            assert.match(header, /data-kind="wait"/);
+            assert.match(header, /data-kind="hold"/);
+          },
+        );
+      },
+    );
+  });
+});
+
 function sideScrollHtml(side: string): string {
   const start = side.indexOf('<div class="side-scroll">');
   assert.ok(start >= 0, 'side-scroll missing');

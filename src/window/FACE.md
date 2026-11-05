@@ -56,7 +56,7 @@ A **posted comment** on a document line is that same quiet frame without a field
 
 The edge is a bright line with light inside the shape. A task chip wears it, brass when open and green when done.
 
-A link chip is that same short chip with a key for its number. It sits under the title on the column card and the pool card, and under the title in the sidebar header. The chips wrap onto the next line. They are not clamped and not cut off. A child is a corner of the edge, down and then right, with no arrowhead, and it stands only on the parent. An issue this one waits on is a muted arrow to the left. An issue this one holds is a brass arrow to the right. Children come first, then the waits, then the holds.
+A link chip is that same short chip with a key for its number. It sits under the title on the column card and the pool card, and under the title in the sidebar header. The chips wrap onto the next line. They are not clamped and not cut off. A child is a corner of the edge, down and then right, with no arrowhead, and it stands only on the parent. An issue this one waits on wears a muted arrow to the left: a head and a shaft, not a naked triangle. An issue this one holds wears a brass arrow to the right: a head and a shaft. Children come first, then the waits, then the holds.
 
 The **focus block** is the first row in the scrolling sidebar body, directly under the title. The chips stay in the header and do not scroll with it. The marker line is a monospaced badge; the prose is a quiet pre under it. The pager shows one written focus page at a time; reason, ask, review, and hook blocks sit under it and before the spine.
 

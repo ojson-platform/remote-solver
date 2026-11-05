@@ -38,6 +38,7 @@
     "yaml": "^2.8.0"
   },
   "devDependencies": {
+    "@fission-ai/openspec": "1.16.0",
     "@ojson/infra": "^1.0.1",
     "@ojson/spec-coverage": "^0.0.3",
     "@types/node": "^26.6.2",

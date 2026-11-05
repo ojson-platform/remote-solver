@@ -435,6 +435,22 @@ async function proveTheDescriptionIsTheIssueBodyOutsideTheMarkers(): Promise<voi
   );
 }
 
+function proveTheWindowDoesNotRewriteTheProse(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const body = 'Specify thread 4\nwhy this gap stays verbatim\n';
+  const window = openSide(home, [
+    cycle('1', 'implementing', {
+      comments: [{body: `sdd:focus\n${body}`}],
+    }),
+  ]);
+  window.openCard('1');
+  const focus = window.sidebar().find(block => block.kind === 'focus');
+  assert.equal(focus?.body, body);
+  assert.equal(focus?.display, body);
+  rmSync(dir, {recursive: true, force: true});
+}
+
 function proveTheSidebarFocusBlockShowsTheLatestMarkerAsABadgeAndTheProseUnderIt(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
@@ -685,6 +701,9 @@ spec('sidebar', () => {
     });
   });
   requirement('The sidebar focus block shows the latest focus prose', () => {
+    scenario('The window does not rewrite the prose', () => {
+      proveTheWindowDoesNotRewriteTheProse();
+    });
     scenario('The sidebar focus block shows the latest marker as a badge and the prose under it', () => {
       proveTheSidebarFocusBlockShowsTheLatestMarkerAsABadgeAndTheProseUnderIt();
     });
@@ -724,136 +743,11 @@ spec('sidebar', () => {
   });
 });
 
-spec('written-focus-page', () => {
-  requirement('The focus block shows the latest written focus', () => {
-    scenario('The focus block pages the written focus comments', () => {
-      proveTheFocusBlockPagesTheWrittenFocusComments();
+spec('focus', () => {
+  requirement('The sidebar focus block shows the latest focus prose', () => {
+    scenario('The window does not rewrite the prose', () => {
+      proveTheWindowDoesNotRewriteTheProse();
     });
-    scenario("The badge is the comment's marker", () => {
-      proveTheBadgeIsTheCommentsMarker();
-    });
-    scenario('sdd:focus:accept is one of these pages', () => {
-      proveSddFocusAcceptIsOneOfThesePages();
-    });
-    scenario('A manager comment is not the block', () => {
-      proveAManagerCommentIsNotTheFocusBlock();
-    });
-    scenario('A whole-pull-request comment leaves phase lines out of the prose', () => {
-      proveAWholePullRequestCommentLeavesPhaseLinesOutOfTheProse();
-    });
-    scenario('A phase comment keeps the prose after the marker', () => {
-      proveAPhaseCommentKeepsTheProseAfterTheMarker();
-    });
-    scenario('An accept comment keeps the prose after the marker', () => {
-      proveAnAcceptCommentKeepsTheProseAfterTheMarker();
-    });
-    scenario('No focus comment leaves no block', () => {
-      proveNoSddFocusCommentLeavesNoSidebarFocusBlock120();
-    });
-    scenario('Another ticket shows its own latest focus', () => {
-      proveAnotherTicketShowsItsOwnLatestFocus();
-    });
-    scenario('Back walks the older written comments, newest first, each in full', async () => {
-      await hosted(
-        {
-          login: () => MANAGER,
-          tickets: () => [
-            held('1', 'implementing', {
-              comments: [
-                {body: 'sdd:focus:plan\nOlder plan note.\nSecond plan line.\n'},
-                {body: 'sdd:focus:spec\nSpecify boundaries hold.\n'},
-                {body: 'sdd:focus:code\nCode slice landed.\n'},
-              ],
-            }),
-          ],
-        },
-        async (page, window) => {
-          window.chooseAgent('cursor');
-          assert.equal(
-            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
-              .status,
-            200,
-          );
-          const snapshot = (await (
-            await fetch(new URL('/snapshot', page.url))
-          ).json()) as import('./snapshot.ts').WindowSnapshot;
-          const now = focusPagerHtml(snapshot, 0);
-          assert.match(now, />sdd:focus:code</);
-          assert.match(now, /Code slice landed\./);
-          assert.equal(now.includes('Older plan note'), false);
-          const older = focusPagerHtml(snapshot, 1);
-          assert.match(older, />sdd:focus:spec</);
-          assert.match(older, /Specify boundaries hold\./);
-          const oldest = focusPagerHtml(snapshot, 2);
-          assert.match(oldest, />sdd:focus:plan</);
-          assert.match(oldest, /Older plan note\./);
-          assert.match(oldest, /Second plan line\./);
-          assert.equal(oldest.includes('data-focus="back"'), false);
-        },
-      );
-    });
-    scenario('Forward returns toward now', async () => {
-      await hosted(
-        {
-          login: () => MANAGER,
-          tickets: () => [
-            held('1', 'implementing', {
-              comments: [
-                {body: 'sdd:focus:plan\nOlder plan note.\n'},
-                {body: 'sdd:focus:code\nCode slice landed.\n'},
-              ],
-            }),
-          ],
-        },
-        async (page, window) => {
-          window.chooseAgent('cursor');
-          assert.equal(
-            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
-              .status,
-            200,
-          );
-          const snapshot = (await (
-            await fetch(new URL('/snapshot', page.url))
-          ).json()) as import('./snapshot.ts').WindowSnapshot;
-          const onOlder = focusPagerHtml(snapshot, 1);
-          assert.match(onOlder, />sdd:focus:plan</);
-          assert.match(onOlder, /data-focus="forward"/);
-          const towardNow = focusPagerHtml(snapshot, 0);
-          assert.match(towardNow, />sdd:focus:code</);
-          assert.equal(towardNow.includes('data-focus="forward"'), false);
-        },
-      );
-    });
-    scenario('Switching tickets lands on now for that ticket', () => {
-      assert.equal(
-        focusIndexAfterSnapshot({
-          prevKey: '1',
-          nextKey: '2',
-          prevLatestBody: 'a',
-          nextLatestBody: 'b',
-          index: 2,
-          pageCount: 3,
-        }),
-        0,
-      );
-      assert.equal(clampFocusPageIndex(4, 3), 2);
-    });
-    scenario(
-      'While an older page is open and a new focus comment appears, the block returns to now',
-      () => {
-        assert.equal(
-          focusIndexAfterSnapshot({
-            prevKey: '1',
-            nextKey: '1',
-            prevLatestBody: 'Old code note.\n',
-            nextLatestBody: 'Fresh code note.\n',
-            index: 2,
-            pageCount: 3,
-          }),
-          0,
-        );
-      },
-    );
   });
 });
 

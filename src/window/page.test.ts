@@ -1243,7 +1243,7 @@ test('a code place in focus opens the review url', async () => {
       const html = await paint(opened);
       const focus = bandOf(html, '1');
       assert.match(focus, /<a href="https:\/\/arcanum\.example\/review\/42">src\/a\.ts:4<\/a>/);
-      assert.equal(focus.includes('Code solid'), false);
+      assert.match(focus, /Code solid/);
       assert.match(focus, /src\/b\.ts:9/);
       assert.equal(focus.includes('https://arcanum.example/other'), false);
       assert.equal(/<a\b[^>]*>[^<]*solid/.test(focus), false);

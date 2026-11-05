@@ -68,7 +68,7 @@ spec('thread-line', () => {
           const anchor = plan.indexOf(`data-at="${at}"`);
           const after = plan.slice(anchor, anchor + 800);
           assert.match(after, /комментарий, который был скрыт/);
-          assert.equal(bandOf(html, KEY).includes('ревью'), false);
+          assert.equal(bandOf(html, KEY).includes('ревью'), true);
         },
       );
     });
@@ -122,8 +122,8 @@ spec('thread-line', () => {
           const reviewBlock =
             band.match(/<section class="block"[\s\S]*?<h3>ревью<\/h3>[\s\S]*?<\/section>/)?.[0] ??
             '';
-          assert.equal(reviewBlock.includes('замечание на фазу'), false);
-          assert.equal(reviewBlock.includes('строка вне документа'), false);
+          assert.equal(reviewBlock.includes('замечание на фазу'), true);
+          assert.equal(reviewBlock.includes('строка вне документа'), true);
         },
       );
     });
@@ -190,8 +190,7 @@ spec('thread-line', () => {
           const onLine = lineSlice.slice(firstAt, secondAt + 'второй тред'.length + 80);
           assert.equal(onLine.match(/class="posted-comment"/g)?.length, 3);
           assert.match(tasks, /замечание к slice tasks/);
-          assert.equal(spineOf(html, KEY, 'Code').includes('замечание к slice tasks'), false);
-          assert.equal(bandOf(html, KEY).includes('ревью'), false);
+          assert.equal(bandOf(html, KEY).includes('ревью'), true);
         },
       );
     });

@@ -21,17 +21,35 @@ function phaseStat(row: PhaseRow): ReactNode {
   );
 }
 
-export function LinkMarks({marks}: {marks: readonly LinkMark[] | undefined}): ReactNode {
+function linkMarkTitle(rows: readonly SnapshotRow[], key: string): string | undefined {
+  return rows.find(row => row.key === key)?.title;
+}
+
+export function LinkMarks({
+  marks,
+  rows,
+}: {
+  marks: readonly LinkMark[] | undefined;
+  rows: readonly SnapshotRow[];
+}): ReactNode {
   if (marks === undefined || marks.length === 0) {
     return null;
   }
   return (
     <ul className="link-marks">
-      {marks.map(mark => (
-        <li className="link-mark" data-kind={mark.kind} key={`${mark.kind}-${mark.key}`}>
-          {mark.key}
-        </li>
-      ))}
+      {marks.map(mark => {
+        const title = linkMarkTitle(rows, mark.key);
+        return (
+          <li className="link-mark" data-kind={mark.kind} key={`${mark.kind}-${mark.key}`}>
+            <ActForm act="open" className="open">
+              <Hidden name="key" value={mark.key} />
+              <button className="link-mark-key" type="submit" title={title}>
+                {mark.key}
+              </button>
+            </ActForm>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -175,7 +193,15 @@ function Corner({row}: {row: SnapshotRow}): ReactNode {
   );
 }
 
-export function Ticket({row, open}: {row: SnapshotRow; open: boolean}): ReactNode {
+export function Ticket({
+  row,
+  open,
+  rows,
+}: {
+  row: SnapshotRow;
+  open: boolean;
+  rows: readonly SnapshotRow[];
+}): ReactNode {
   const className = `ticket${row.pool ? ' pool' : ''}${open ? ' is-open' : ''}`;
   return (
     <article
@@ -201,7 +227,7 @@ export function Ticket({row, open}: {row: SnapshotRow; open: boolean}): ReactNod
                 </button>
               </ActForm>
             </div>
-            <LinkMarks marks={row.marks} />
+            <LinkMarks marks={row.marks} rows={rows} />
           </div>
           {row.pool ? <Corner row={row} /> : null}
         </div>
@@ -225,7 +251,7 @@ export function Board({rows, opened}: {rows: readonly SnapshotRow[]; opened?: st
       </div>
       <main className="board">
         {rows.map(row => (
-          <Ticket key={row.key} row={row} open={row.key === opened} />
+          <Ticket key={row.key} row={row} open={row.key === opened} rows={rows} />
         ))}
       </main>
     </div>

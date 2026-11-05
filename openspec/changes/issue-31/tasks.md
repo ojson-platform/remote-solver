@@ -4,4 +4,4 @@
 - [x] `marks-chip-face` — Chips wrap onto the next line and are not cut off; Within one kind the numbers follow key order; A light corner, down and then right, with no arrowhead, is a child and stands only on the parent; The child has no chip pointing back at the parent; A muted arrow to the left is an issue this one waits on; A brass arrow to the right is an issue this one holds; Children come first, then the issues it waits on, then the issues it holds
 - [x] `marks-sidebar-scroll` — In the sidebar the chips sit under the title and stay in place while the body scrolls
 - [x] `reason-block` — The reason block no longer names children or blockers; Open questions, Ask, and the merge stay in that block
-- [ ] `chip-opens-issue` — Clicking a chip opens that issue the way clicking its card does; Hovering the chip shows that issue's title; The click does not open the card the chip stands on
+- [x] `chip-opens-issue` — Clicking a chip opens that issue the way clicking its card does; Hovering the chip shows that issue's title; The click does not open the card the chip stands on

@@ -349,6 +349,9 @@ spec('focus', () => {
       const prose = focusProse(posted[0] ?? '') ?? '';
       assert.equal(/слаб|weak|посмотреть/i.test(prose), false);
       assert.equal(validateFocusBody(posted[0] ?? ''), undefined);
+      const withWeakSpot =
+        'sdd:focus:plan\nДля читателя тикета появится фокус-комментарий; отказались от diff; слабое место — Outcome для archive.\n';
+      assert.equal(validateFocusBody(withWeakSpot), 'clean phase omits weak-spot wording');
     });
 
     scenario('A phase with no open questions omits the pointer', async () => {

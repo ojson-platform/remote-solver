@@ -17,7 +17,7 @@ export const FOCUS_BODIES = {
   whole:
     'sdd:focus\nВесь PR закрывает gap «focus a person reads» без ledger в комментарии.\n',
   specThreadFix:
-    'sdd:focus:spec\nДельта фиксирует форму прозы на issue; первый абзац отвечает на вопрос фазы Specify.\n\nЗамечание «нужен русский текст» — добавили проверку кириллицы; сценарий «The prose is Russian, short, and has no headings».\n\nЕщё смотреть window-focus-display.\n',
+    'sdd:focus:spec\nНовое обещание — проза на issue; изменено обещание о форме комментария. Без сценария «The prose is Russian, short, and has no headings» решение непонятно. Обещание про пагинацию не даём.\n\nЗамечание «нужен русский текст» — добавили проверку кириллицы; сценарий «The prose is Russian, short, and has no headings».\n\nЕщё смотреть window-focus-display.\n',
   planWeak:
     'sdd:focus:plan\nДля читателя тикета scope ясен; отказались от ledger; слабое место — формулировка Outcome для archive.\n',
   tasksClean:

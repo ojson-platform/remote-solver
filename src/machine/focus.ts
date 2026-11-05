@@ -247,6 +247,9 @@ export function validateFocusBody(body: string): string | undefined {
     return 'prose missing required shape for marker';
   }
   if (threadFix) {
+    if (!markerContentOk(marker, paras[0] ?? '')) {
+      return 'thread-fix first paragraph answers the phase question';
+    }
     if (paras.length >= 2 && !THREAD_FIX_REMARK.test(paras[1] ?? '')) {
       return 'thread-fix second paragraph names remarks';
     }

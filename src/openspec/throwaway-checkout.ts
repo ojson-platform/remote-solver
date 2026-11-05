@@ -35,18 +35,18 @@ export function foldOrderDelta(): string {
 - TO: \`### Requirement: Gamma\`
 
 ## REMOVED Requirements
-### Requirement: Beta
-
-## MODIFIED Requirements
 ### Requirement: Gamma
 
-The system SHALL apply gamma modified behavior.
+## MODIFIED Requirements
+### Requirement: Beta
 
-#### Scenario: alpha
-- **WHEN** a
-- **THEN** a
+The system SHALL apply beta modified behavior.
 
-#### Scenario: gamma scenario
+#### Scenario: beta
+- **WHEN** b
+- **THEN** b
+
+#### Scenario: beta modified scenario
 - **WHEN** x
 - **THEN** y
 

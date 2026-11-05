@@ -10,6 +10,7 @@ import {
   focusMarkerLine,
   focusMirrorName,
   FOCUS_MARKER_LINES,
+  isFocusRecord,
   markerName,
   mentionsGrammar,
   parseMarker,
@@ -492,5 +493,31 @@ spec('focus', () => {
       assert.equal(focusMarkerLine('sdd:focus:change\nprose'), null);
       assert.equal(mentionsGrammar('sdd:layer=change'), true);
     });
+  });
+
+  requirement('The skill writes a focus comment when the artifact is published', () => {
+    scenario(
+      'The first line is the marker sdd:focus:plan, sdd:focus:spec, sdd:focus:design, sdd:focus:tasks, sdd:focus:code, sdd:focus:accept, or sdd:focus',
+      () => {
+        const closed = [
+          'sdd:focus:plan',
+          'sdd:focus:spec',
+          'sdd:focus:design',
+          'sdd:focus:tasks',
+          'sdd:focus:code',
+          'sdd:focus:accept',
+        ] as const;
+        for (const marker of closed) {
+          assert.equal(focusMarkerLine(`${marker}\nprose`), marker);
+          assert.equal(isFocusRecord(`${marker}\nprose`), true);
+          assert.equal(parseMarker(`${marker}\nprose`), null);
+        }
+        assert.equal(focusMarkerLine('sdd:focus\nwhole pull request prose'), 'sdd:focus');
+        assert.equal(focusMirrorName('sdd:focus:accept'), 'Accept');
+        assert.deepEqual([...FOCUS_MARKER_LINES], ['sdd:focus', ...closed]);
+        assert.equal(focusMarkerLine('sdd:focus:phase\nprose'), null);
+        assert.equal(isFocusRecord('sdd:focus:phase\nprose'), false);
+      },
+    );
   });
 });

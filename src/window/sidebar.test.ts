@@ -11,9 +11,13 @@ import {
   focusIndexAfterSnapshot,
 } from './client/sidebar.tsx';
 import {renderWindow} from './client/render.ts';
-import {focusBlockProse} from './focus.ts';
+import type {Decision} from '../machine/policy.ts';
+
+import {focusBlockProse, liveFocus} from './focus.ts';
 import {bandOf, held, hosted, MANAGER, post} from './page.harness.ts';
+import {blocksFor} from './sidebar.ts';
 import type {WindowSnapshot} from './snapshot.ts';
+import type {BoardTurn, SidebarBlock, WindowTicket} from './types.ts';
 import {
   columnCards,
   cycle,
@@ -49,6 +53,32 @@ function focusBlock(marker: string, body: string) {
     body,
     display: focusBlockProse(marker as import('../machine/marker.ts').FocusMarkerLine, body),
   };
+}
+
+function sidebarBlocks(
+  item: WindowTicket,
+  over: {
+    running?: boolean;
+    turn?: BoardTurn;
+    decision?: Decision;
+  } = {},
+): SidebarBlock[] {
+  return blocksFor(item, {
+    inPool: false,
+    manager: () => undefined,
+    review: () => undefined,
+    reading: () => [],
+    gathered: () => undefined,
+    serviceBroken: () => false,
+    cardOf: () => ({checkout: '', reason: ''}),
+    running: () => over.running ?? false,
+    turn: () => over.turn,
+    settledDecision: () => over.decision,
+  });
+}
+
+function openLivePage(blocks: readonly SidebarBlock[], pageIndex = 0): string {
+  return renderToStaticMarkup(createElement(FocusBlocks, {blocks, pageIndex}));
 }
 
 async function sidebarHtml(url: string): Promise<string> {
@@ -1041,6 +1071,256 @@ spec('focus-pager', () => {
       const html = renderToStaticMarkup(createElement(FocusBlocks, {blocks, pageIndex: 0}));
       assert.match(html, />sdd:focus:spec</);
       assert.match(html, /Prose stays verbatim\./);
+    });
+  });
+});
+
+spec('live-focus-page', () => {
+  const written = focusBlock('sdd:focus:code', 'Latest written page.\n');
+  const comments = [{body: 'sdd:focus:code\nLatest written page.\n'}];
+
+  requirement('The open page is a live page in four cases', () => {
+    scenario("The pager's open page is a live page in four cases", () => {
+      for (const turn of [
+        {running: true, turn: {phase: 'specifying', action: 'create-initial-specs'}},
+        {running: false, turn: {action: 'create-design'}},
+        {
+          decision: {
+            kind: 'wait',
+            issue: '1',
+            reason: 'wait for children to reach specified: #12',
+          } as Decision,
+        },
+        {checks: 'pending' as const},
+      ]) {
+        const item = cycle('1', 'implementing', {comments, ...('checks' in turn ? {checks: turn.checks} : {})});
+        const blocks = sidebarBlocks(item, turn);
+        const html = openLivePage(blocks);
+        assert.match(html, /class="badge"/);
+        assert.equal(blocks.some(block => block.kind === 'live'), true);
+      }
+    });
+    scenario('The window computes it from the current decision and from whether a worker is on this issue', () => {
+      const item = cycle('1', 'implementing', {comments});
+      const blocks = sidebarBlocks(item, {
+        running: true,
+        turn: {phase: 'specifying', action: 'create-initial-specs'},
+      });
+      assert.equal(blocks[0]?.kind, 'live');
+      assert.equal(blocks.some(block => block.kind === 'focus'), true);
+    });
+    scenario('It is not an issue comment, it is not a history slot, and it disappears when the reason passes', () => {
+      const item = cycle('1', 'implementing', {comments});
+      const live = sidebarBlocks(item, {running: true, turn: {phase: 'specifying', action: 'create-initial-specs'}});
+      assert.deepEqual(live[0], {
+        kind: 'live',
+        badge: 'working',
+        text: 'specifying → create-initial-specs',
+      });
+      const gone = sidebarBlocks(item, {});
+      assert.equal(gone.some(block => block.kind === 'live'), false);
+      assert.deepEqual(gone[0], written);
+    });
+    scenario('Past live reasons are not pages', () => {
+      const item = cycle('1', 'implementing', {comments});
+      const blocks = sidebarBlocks(item, {running: false, turn: {action: 'create-design'}});
+      const html = openLivePage(blocks, 1);
+      assert.match(html, />sdd:focus:code</);
+      assert.equal(html.includes('create-design'), false);
+      assert.match(html, /data-focus="back" disabled/);
+    });
+  });
+
+  requirement('The live text is the case that holds', () => {
+    scenario('A worker on this issue shows the phase and the action', () => {
+      const live = liveFocus({
+        running: true,
+        turn: {phase: 'specifying', action: 'create-initial-specs'},
+      });
+      assert.match(live?.text, /specifying/);
+      assert.match(live?.text, /create-initial-specs/);
+    });
+    scenario('A full cap shows the next action', () => {
+      const live = liveFocus({running: false, turn: {action: 'create-design'}});
+      assert.equal(live?.text, 'create-design');
+    });
+    scenario('A wait on another issue names who and until which phase', () => {
+      const live = liveFocus({
+        decision: {
+          kind: 'wait',
+          issue: '1',
+          reason: 'wait for children to reach specified: #12',
+        },
+      });
+      assert.match(live?.text, /12/);
+      assert.match(live?.text, /specified/);
+    });
+    scenario('An implementing child is named until accepted', () => {
+      const live = liveFocus({
+        decision: {
+          kind: 'wait',
+          issue: '1',
+          reason: 'wait for children to be accepted: #12',
+        },
+      });
+      assert.match(live?.text, /12/);
+      assert.match(live?.text, /accepted/);
+    });
+    scenario('A child and a blocker are named the way the decision names them', () => {
+      const live = liveFocus({
+        decision: {
+          kind: 'wait',
+          issue: '1',
+          reason: 'wait for blockers: #12, #7',
+        },
+      });
+      assert.match(live?.text, /12/);
+      assert.match(live?.text, /7/);
+    });
+    scenario('One number is named once', () => {
+      const live = liveFocus({
+        decision: {
+          kind: 'wait',
+          issue: '1',
+          reason: 'wait for blockers: #12, wait for children to be accepted: #12',
+        },
+      });
+      assert.equal(live?.text.match(/12/g)?.length, 1);
+      assert.match(live?.text, /accepted/);
+    });
+    scenario('Checks still running', () => {
+      const live = liveFocus({checks: 'pending'});
+      assert.equal(live?.text, 'checks are still running');
+    });
+    scenario('Checks are red and the failure has not been handed to a worker yet', () => {
+      const live = liveFocus({checks: 'red'});
+      assert.equal(live?.text, 'checks are red and the failure has not been handed to a worker yet');
+    });
+  });
+
+  requirement('The live page is the open page only in that order', () => {
+    scenario('A worker on this issue wins', () => {
+      const live = liveFocus({
+        running: true,
+        turn: {phase: 'specifying', action: 'create-initial-specs'},
+        decision: {
+          kind: 'wait',
+          issue: '1',
+          reason: 'wait for children to reach specified: #12',
+        },
+        checks: 'pending',
+      });
+      assert.match(live?.text, /specifying/);
+      assert.match(live?.text, /create-initial-specs/);
+      const item = cycle('1', 'implementing', {comments, checks: 'pending'});
+      const html = openLivePage(
+        sidebarBlocks(item, {
+          running: true,
+          turn: {phase: 'specifying', action: 'create-initial-specs'},
+          decision: {
+            kind: 'wait',
+            issue: '1',
+            reason: 'wait for children to reach specified: #12',
+          },
+        }),
+      );
+      assert.match(html, /working/);
+      assert.match(html, /create-initial-specs/);
+    });
+    scenario('A ready action that the cap held back is the open page', () => {
+      const live = liveFocus({
+        running: false,
+        turn: {action: 'create-design'},
+        decision: {
+          kind: 'wait',
+          issue: '1',
+          reason: 'wait for children to reach specified: #12',
+        },
+        checks: 'pending',
+      });
+      assert.equal(live?.text, 'create-design');
+      const html = openLivePage(
+        sidebarBlocks(cycle('1', 'implementing', {comments, checks: 'pending'}), {
+          running: false,
+          turn: {action: 'create-design'},
+          decision: {
+            kind: 'wait',
+            issue: '1',
+            reason: 'wait for children to reach specified: #12',
+          },
+        }),
+      );
+      assert.match(html, /waiting for a slot/);
+      assert.match(html, /create-design/);
+    });
+    scenario('A wait on another issue is the open page', () => {
+      const live = liveFocus({
+        decision: {
+          kind: 'wait',
+          issue: '1',
+          reason: 'wait for children to reach specified: #12',
+        },
+      });
+      assert.match(live?.text, /12/);
+      assert.match(live?.text, /specified/);
+    });
+    scenario('Checks are the open page', () => {
+      const live = liveFocus({checks: 'pending'});
+      assert.equal(live?.text, 'checks are still running');
+      const html = openLivePage(
+        sidebarBlocks(cycle('1', 'implementing', {comments, checks: 'pending'}), {}),
+      );
+      assert.match(html, />checks</);
+      assert.match(html, /checks are still running/);
+    });
+    scenario('The latest written page stays open', () => {
+      const blocks = sidebarBlocks(cycle('1', 'implementing', {comments}), {});
+      assert.equal(blocks[0]?.kind, 'focus');
+      const html = openLivePage(blocks);
+      assert.match(html, />sdd:focus:code</);
+      assert.match(html, /Latest written page\./);
+    });
+  });
+
+  requirement('The live badge is not a phase marker', () => {
+    scenario('The badge is working', () => {
+      const html = openLivePage(
+        sidebarBlocks(cycle('1', 'implementing', {comments}), {
+          running: true,
+          turn: {phase: 'specifying', action: 'create-initial-specs'},
+        }),
+      );
+      assert.match(html, />working</);
+      assert.equal(html.includes('sdd:focus'), false);
+    });
+    scenario('The badge is waiting for a slot', () => {
+      const html = openLivePage(
+        sidebarBlocks(cycle('1', 'implementing', {comments}), {
+          running: false,
+          turn: {action: 'create-design'},
+        }),
+      );
+      assert.match(html, />waiting for a slot</);
+      assert.equal(html.includes('sdd:focus:spec'), false);
+    });
+    scenario('The badge is waiting on an issue', () => {
+      const html = openLivePage(
+        sidebarBlocks(cycle('1', 'implementing', {comments}), {
+          decision: {
+            kind: 'wait',
+            issue: '1',
+            reason: 'wait for children to reach specified: #12',
+          },
+        }),
+      );
+      assert.match(html, />waiting on an issue</);
+    });
+    scenario('The badge is checks', () => {
+      const html = openLivePage(
+        sidebarBlocks(cycle('1', 'implementing', {comments, checks: 'pending'}), {}),
+      );
+      assert.match(html, />checks</);
+      assert.equal(html.includes('sdd:focus:spec'), false);
     });
   });
 });

@@ -47,6 +47,7 @@ export function createBoardSpyState(note: () => void): {
   leading: (key: string) => boolean;
   turnsLine: () => string;
   turn: (key: string) => BoardTurn | undefined;
+  decision: (key: string) => Decision | undefined;
   sink: {
     running: Set<string>;
     setTurn: (issue: string, turn: RunningTurn | undefined) => void;
@@ -70,6 +71,7 @@ export function createBoardSpyState(note: () => void): {
       const held = heldActions.get(key);
       return held === undefined ? undefined : {action: held};
     },
+    decision: key => decisions.get(key),
     sink: {
       running,
       setTurn(issue, turn) {
@@ -234,6 +236,8 @@ export type LiveBoardOptions = {
   spyNote?: () => string;
   /** Action token, or phase and action, while the spy leads or holds this key. */
   turn?: (key: string) => BoardTurn | undefined;
+  /** Settled decision the spy published for this key. */
+  decision?: (key: string) => Decision | undefined;
   /** TCP port. Absent means the system chooses one. */
   port?: number;
 };
@@ -708,6 +712,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
       leading: options.leading,
       spyNote: options.spyNote,
       turn: options.turn,
+      decision: options.decision,
       writeAssignee(key, login) {
         bump();
         patch(key, ticket => ({...ticket, assignee: login}));

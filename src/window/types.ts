@@ -118,6 +118,8 @@ export type WindowOutside = {
   spyNote?: () => string;
   /** Action token, or phase and action, while the spy leads or holds this key. */
   turn?: (key: string) => BoardTurn | undefined;
+  /** Settled decision the spy published for this key. */
+  decision?: (key: string) => import('../machine/policy.ts').Decision | undefined;
   /** Write `sddService`. The next read sees it. */
   writeService?: (key: string, service: string) => void;
   /**
@@ -184,6 +186,7 @@ export type SidebarBlock =
   | {kind: 'description'; text: string}
   | {kind: 'reason'; line: string}
   | {kind: 'ask'; body: string}
+  | {kind: 'live'; badge: string; text: string}
   | {kind: 'focus'; marker: string; body: string; display: string}
   | {
       kind: 'unanswered';

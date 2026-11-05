@@ -1,7 +1,7 @@
 import {type FileSource, type Review, type Tracker, type Vcs} from './port.ts';
 
 import {focusMarkerLine, isFocusRecord, type FocusMarkerLine, unmarkedLine} from './marker.ts';
-import {changeDir} from './naming.ts';
+import {archiveDir, changeDir} from './naming.ts';
 import {markerOf} from './review.ts';
 
 /** How a step run ended. A run with none leaves the record unchanged. */
@@ -19,8 +19,11 @@ type StepDeps = {
 };
 
 function hasChangeDir(key: string, files: FileSource): boolean {
-  const root = changeDir(key);
-  return files.list(root).length > 0;
+  const active = changeDir(key);
+  if (files.list(active).length > 0) {
+    return true;
+  }
+  return files.list(archiveDir(key)).length > 0;
 }
 
 function canonical(body: string): string {

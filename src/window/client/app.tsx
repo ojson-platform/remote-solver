@@ -124,6 +124,7 @@ export function App({
   openCaps = [],
   specOpen = [],
   busy,
+  focusPageIndex = 0,
 }: {
   snapshot: WindowSnapshot;
   layer?: SpineLayer | '';
@@ -133,6 +134,7 @@ export function App({
   openCaps?: readonly string[];
   specOpen?: readonly SpecOpen[];
   busy?: BusyEdges;
+  focusPageIndex?: number;
 }): ReactNode {
   const lamp = snapshot.lamp ? (
     <p className="lamp on">шаги идут</p>
@@ -181,6 +183,7 @@ export function App({
         openCaps={openCaps}
         specOpen={specOpen}
         busy={busy?.drawer}
+        focusPageIndex={focusPageIndex}
       />
       <Settings snapshot={snapshot} busy={busy?.settings} />
       <Popup text={snapshot.popup} />

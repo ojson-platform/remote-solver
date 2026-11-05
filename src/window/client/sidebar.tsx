@@ -1133,6 +1133,9 @@ export function Sidebar({
   const unanswered = opened.blocks.some(block => block.kind === 'unanswered');
   const hook = opened.blocks.some(block => block.kind === 'hook');
   const quiet = (name: SpineLayer): boolean => !layerHasFold(name, model, {unanswered, hook});
+  const acceptAutoMergeCaption =
+    model.accept === 'На приёмке машина мержит сама.' ||
+    model.accept === 'На приёмке мерж ждёт человека.';
   const acceptNote = model.accept.startsWith('На приёмке машина')
     ? 'Метка sdd:auto-merge стоит. Машина мержит сама, когда проверки зелёные.'
     : 'Метки sdd:auto-merge нет. Машина мержит только с этой меткой.';
@@ -1365,7 +1368,7 @@ export function Sidebar({
             sentenceNode={<span className="sentence">{model.accept}</span>}
             control={hereControl('Accept', 'accepting', acceptAct)}
           >
-            <p>{acceptNote}</p>
+            {acceptAutoMergeCaption ? <p>{acceptNote}</p> : null}
           </SpineRow>
         </div>
       </div>

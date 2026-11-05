@@ -155,6 +155,13 @@ spec('thread-line', () => {
                 lines: ['второй тред'],
                 comments: ['второй тред'],
               },
+              {
+                marker: null,
+                file,
+                line: null,
+                lines: ['замечание к slice tasks'],
+                comments: ['замечание к slice tasks'],
+              },
             ],
           }),
         },
@@ -180,7 +187,10 @@ spec('thread-line', () => {
           const replyAt = lineSlice.indexOf('ответ в первом');
           const secondAt = lineSlice.indexOf('второй тред');
           assert.ok(firstAt >= 0 && replyAt > firstAt && secondAt > replyAt);
-          assert.equal(lineSlice.match(/class="posted-comment"/g)?.length, 3);
+          const onLine = lineSlice.slice(firstAt, secondAt + 'второй тред'.length + 80);
+          assert.equal(onLine.match(/class="posted-comment"/g)?.length, 3);
+          assert.match(tasks, /замечание к slice tasks/);
+          assert.equal(spineOf(html, KEY, 'Code').includes('замечание к slice tasks'), false);
           assert.equal(bandOf(html, KEY).includes('ревью'), false);
         },
       );

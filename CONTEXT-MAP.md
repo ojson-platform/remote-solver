@@ -19,3 +19,4 @@
 - **Reviewer → Adapters**: the reviewer uses the same ports. The judge is a runtime ask, not a skill action.
 - **Skill → Tracker**: a phase skill writes a focus through an sdd verb when its artifact is published. The machine does not append the layer ledger. Phase movement stays on layer threads.
 - **Window → focus**: the focus block and the spine sentence read that comment and do not recompute it.
+- **Window → review**: the sidebar places each review thread of the open pull request on the line it anchors. A thread with no line stands on the phase. The review port supplies the thread's comments, the path, and the line. The window does not call the host. The latest comment stays the machine's marker.

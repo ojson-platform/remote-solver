@@ -2789,6 +2789,36 @@ spec('link-mark', () => {
     });
   });
 
+  requirement('The sidebar chips stay under the title', () => {
+    scenario(
+      'In the sidebar the chips sit under the title and stay in place while the body scrolls',
+      async () => {
+        await hosted(
+          {
+            login: () => MANAGER,
+            tickets: () => [held('1', 'implementing', {dependsOn: ['9']}), held('9', 'specifying')],
+          },
+          async (page, window) => {
+            window.chooseAgent('cursor');
+            const opened = await post(
+              page.url,
+              'act',
+              new URLSearchParams({act: 'open', key: '1'}).toString(),
+            );
+            assert.equal(opened.status, 200);
+            const side = bandOf(await pageHtml(page.url), '1');
+            const header = between(side, '<header>', '</header>');
+            assert.match(header, /class="link-marks"/);
+            assert.ok(header.indexOf('class="name"') < header.indexOf('class="link-marks"'));
+            const scrollAt = side.indexOf('<div class="side-scroll">');
+            assert.ok(scrollAt >= 0);
+            assert.doesNotMatch(side.slice(scrollAt), /class="link-marks"/);
+          },
+        );
+      },
+    );
+  });
+
   requirement('A chip shows its kind, wraps, and follows key order', () => {
     scenario('Chips wrap onto the next line and are not cut off', () => {
       const css = readFileSync(new URL('./face.css', import.meta.url), 'utf8');

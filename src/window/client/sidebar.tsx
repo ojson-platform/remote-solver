@@ -881,8 +881,8 @@ export function Sidebar({
               {row.project.name}
             </a>
           ) : null}
+          <LinkMarks marks={row.marks} />
         </div>
-        <LinkMarks marks={row.marks} />
         <ActForm act="close-card">
           <button className="x" type="submit" aria-label="Закрыть">
             <Cross />

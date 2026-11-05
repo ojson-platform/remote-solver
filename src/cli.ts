@@ -160,6 +160,7 @@ async function runBoard(home: string | undefined, port: number | undefined): Pro
     leading: spy.leading,
     spyNote: () => spy.turnsLine(),
     turn: spy.turn,
+    decision: spy.decision,
     ...(port !== undefined ? {port} : {}),
   });
   pageNote = () => {

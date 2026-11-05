@@ -224,7 +224,7 @@ function mixedDeltaFixture(): string {
       '',
       'The system SHALL keep old behavior.',
       '',
-      '#### Scenario: Old scenario',
+      '#### Scenario: New scenario',
       '',
       '- **WHEN** old',
       '- **THEN** old',

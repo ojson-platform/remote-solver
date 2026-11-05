@@ -486,3 +486,47 @@ spec('hook', () => {
     });
   });
 });
+
+function acceptStepPath(): string {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+  return path.join(root, 'skills/sdd-flow/steps/accept.md');
+}
+
+function readAcceptStep(): string {
+  return readFileSync(acceptStepPath(), 'utf8');
+}
+
+function stepSection(body: string, name: string): string {
+  const section = body.split(/^## /m).find(part => part.startsWith(`${name}\n`));
+  assert.ok(section, `accept step has ## ${name}`);
+  return section;
+}
+
+function proveUnarchiveStaysARevertOfTheArchiveCommit(): void {
+  const body = readAcceptStep();
+  assert.ok(body.indexOf('## archive') < body.indexOf('## unarchive'));
+  assert.ok(body.indexOf('## unarchive') < body.indexOf('## Check'));
+  const archive = stepSection(body, 'archive');
+  const unarchive = stepSection(body, 'unarchive');
+  assert.match(archive, /openspec archive issue-<issue> --yes/);
+  assert.match(unarchive, /Revert that commit/i);
+  assert.match(unarchive, /Sdd-Archive: issue-<issue>/);
+  assert.doesNotMatch(unarchive, /openspec archive issue-<issue> --yes/);
+  assert.doesNotMatch(unarchive, /Fold with `openspec archive/);
+}
+
+function proveTheStepDoesNotMergeThePullRequest(): void {
+  const archive = stepSection(readAcceptStep(), 'archive');
+  assert.match(archive, /does not merge the pull request/i);
+}
+
+spec('spec-archive', () => {
+  requirement('One commit holds the fold', () => {
+    scenario('Unarchive stays a revert of the archive commit', () => {
+      proveUnarchiveStaysARevertOfTheArchiveCommit();
+    });
+    scenario('The step does not merge the pull request', () => {
+      proveTheStepDoesNotMergeThePullRequest();
+    });
+  });
+});

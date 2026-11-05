@@ -63,12 +63,12 @@ The service's label an issue wears, together with the cycle label, to be in the 
 _Avoid_: Board, column, backlog
 
 **Child**:
-A cycle that names this issue as its parent.
-_Avoid_: Sub-issue, subtask
+An open cycle issue this issue is the parent of, by the host parent link.
+_Avoid_: Sub-issue, subtask, a Parent line
 
 **Blocker**:
-An issue this cycle says it depends on, while that issue is still open.
-_Avoid_: Dependency, link
+An issue this cycle waits on, by a host blocked-by link or a depends-on link, while that issue is still open. A blocks link is the other side and does not hold this cycle.
+_Avoid_: Dependency, a Depends line
 
 ### The pull request
 

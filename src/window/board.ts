@@ -7,11 +7,13 @@ import {isFocusRecord} from '../machine/marker.ts';
 import {GATE_CLOSES, GATE_PHASES, phaseOf, phaseRank, type Phase} from '../machine/phase.ts';
 
 import {changeFiles, changeRel, listedSpecs} from './change-files.ts';
-import {focusLayers} from './focus.ts';
+import {focusLayers, liveFocus} from './focus.ts';
+import type {Decision} from '../machine/policy.ts';
 import {
   COLUMN_NAMES,
   GATE_LABEL,
   GATE_STATIONS,
+  type BoardTurn,
   type CardState,
   type ColumnName,
   type CycleCard,
@@ -494,8 +496,25 @@ export function plaqueLines(input: {
   reason?: string;
   /** Action of the worker on this cycle. Used only when the plaque would otherwise be empty. */
   action?: string;
+  /** Ticket phase label for the live sentence. */
+  phase?: string | null;
+  running?: boolean;
+  turn?: BoardTurn;
+  decision?: Decision;
+  checks?: 'green' | 'red' | 'pending' | 'none';
 }): {top?: string; bottom?: string} {
   const phase = input.phaseRow === undefined ? undefined : phaseText(input.phaseRow);
+  const liveSentence =
+    input.ask === undefined
+      ? liveFocus({
+          phase: input.phase ?? null,
+          ask: false,
+          running: input.running === true,
+          turn: input.turn ?? input.action,
+          decision: input.decision,
+          checks: input.checks,
+        })?.text
+      : undefined;
   const check =
     (input.station === 'verifying' || input.station === 'accepting') &&
     (input.phaseRow === 'red' || input.phaseRow === 'green' || input.phaseRow === 'pending')
@@ -513,7 +532,7 @@ export function plaqueLines(input: {
   }
   const candidates = [
     top === 'ask' ? input.ask : undefined,
-    phase,
+    liveSentence ?? phase,
     input.reason,
     top === 'ревью' ? input.unanswered : undefined,
   ];

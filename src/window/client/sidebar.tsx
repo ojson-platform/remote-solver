@@ -284,6 +284,89 @@ function commentsOnLine(
   return out;
 }
 
+type PhaseLayer = Exclude<SpineLayer, 'Accept'>;
+
+function layerOfPath(file: string): PhaseLayer {
+  const normalized = file.replace(/\\/g, '/');
+  const base = normalized.split('/').pop() ?? '';
+  if (base === 'proposal.md') {
+    return 'Plan';
+  }
+  if (base === 'design.md') {
+    return 'Design';
+  }
+  if (base === 'tasks.md' || base.startsWith('tasks/')) {
+    return 'Tasks';
+  }
+  if (normalized.includes('/specs/') && normalized.endsWith('/spec.md')) {
+    return 'Specify';
+  }
+  return 'Code';
+}
+
+function drawnLineKeys(model: Spine): Set<string> {
+  const keys = new Set<string>();
+  const root = model.readPath;
+  const markFile = (file: string, line: number): void => {
+    keys.add(`${root}/${file}:${line}`);
+  };
+  const markLines = (file: 'proposal.md' | 'design.md', sections: Spine['proposal']['sections']): void => {
+    for (const section of sections) {
+      for (const line of section.lines) {
+        if (line.text.trim() !== '') {
+          markFile(file, line.line);
+        }
+      }
+    }
+  };
+  markLines('proposal.md', model.proposal.sections);
+  markLines('design.md', model.design.sections);
+  for (const capability of model.capabilities) {
+    for (const entry of capability.rows) {
+      if (entry.kind === 'gap') {
+        for (const row of entry.hidden) {
+          const anchor = row.anchor;
+          if (anchor !== undefined) {
+            keys.add(`${anchor.path}:${anchor.line}`);
+          }
+        }
+        continue;
+      }
+      const anchor = entry.anchor;
+      if (anchor !== undefined) {
+        keys.add(`${anchor.path}:${anchor.line}`);
+      }
+    }
+  }
+  return keys;
+}
+
+type PhaseCommentEntry = {file: string; line?: number; comments: readonly string[]};
+
+function phaseComments(
+  blocks: readonly SidebarBlock[],
+  model: Spine,
+  layer: PhaseLayer,
+): PhaseCommentEntry[] {
+  const drawn = drawnLineKeys(model);
+  const out: PhaseCommentEntry[] = [];
+  for (const block of blocks) {
+    if (block.kind === 'phase-thread' && block.layer === layer) {
+      out.push({file: block.file, comments: block.comments});
+      continue;
+    }
+    if (block.kind !== 'line-thread' || layerOfPath(block.file) !== layer) {
+      continue;
+    }
+    const key = `${block.file}:${block.line}`;
+    if (drawn.has(key)) {
+      continue;
+    }
+    out.push({file: block.file, line: block.line, comments: block.comments});
+  }
+  return out;
+}
+
 function PostedComments({comments}: {comments: readonly string[]}): ReactNode {
   if (comments.length === 0) {
     return null;
@@ -295,6 +378,28 @@ function PostedComments({comments}: {comments: readonly string[]}): ReactNode {
           <pre>{body}</pre>
         </div>
       ))}
+    </>
+  );
+}
+
+function PostedPhaseComments({entries}: {entries: readonly PhaseCommentEntry[]}): ReactNode {
+  if (entries.length === 0) {
+    return null;
+  }
+  return (
+    <>
+      {entries.flatMap((entry, entryIndex) =>
+        entry.comments.map((body, commentIndex) => (
+          <div
+            className="posted-comment"
+            key={`${entryIndex}-${commentIndex}`}
+            data-path={entry.file}
+            {...(entry.line === undefined ? {} : {'data-at': String(entry.line)})}
+          >
+            <pre>{body}</pre>
+          </div>
+        )),
+      )}
     </>
   );
 }
@@ -554,6 +659,8 @@ function reviewFold(
   gate: NonNullable<Spine['reviewGate']>,
   shown: boolean,
   remark: string,
+  layer: 'Plan' | 'Specify' | 'Design',
+  blocks: readonly SidebarBlock[],
 ): ReactNode {
   if (!model.pull) {
     return null;
@@ -563,6 +670,7 @@ function reviewFold(
   }
   return (
     <div className="plan-foot">
+      <PostedPhaseComments entries={phaseComments(blocks, model, layer)} />
       <Remark keyName={keyName} text={remark} />
     </div>
   );
@@ -994,7 +1102,15 @@ export function Sidebar({
                 blocks={opened.blocks}
               />
             ) : null}
-            {reviewFold(model, row.key, 'proposed', model.proposal.present, remark.Plan)}
+            {reviewFold(
+              model,
+              row.key,
+              'proposed',
+              model.proposal.present,
+              remark.Plan,
+              'Plan',
+              opened.blocks,
+            )}
           </SpineRow>
           <SpineRow
             layer="Specify"
@@ -1026,7 +1142,15 @@ export function Sidebar({
                 />
               </details>
             ))}
-            {reviewFold(model, row.key, 'specified', model.capabilities.length > 0, remark.Specify)}
+            {reviewFold(
+              model,
+              row.key,
+              'specified',
+              model.capabilities.length > 0,
+              remark.Specify,
+              'Specify',
+              opened.blocks,
+            )}
           </SpineRow>
           <SpineRow
             layer="Design"
@@ -1044,7 +1168,15 @@ export function Sidebar({
                 blocks={opened.blocks}
               />
             ) : null}
-            {reviewFold(model, row.key, 'designed', model.design.present, remark.Design)}
+            {reviewFold(
+              model,
+              row.key,
+              'designed',
+              model.design.present,
+              remark.Design,
+              'Design',
+              opened.blocks,
+            )}
           </SpineRow>
           <SpineRow
             layer="Tasks"
@@ -1053,6 +1185,7 @@ export function Sidebar({
             quiet={quiet('Tasks')}
             sentenceNode={tasksSummary(model, places)}
           >
+            <PostedPhaseComments entries={phaseComments(opened.blocks, model, 'Tasks')} />
             {model.tasks.map(task => (
               <details className="task" key={task.id}>
                 <summary>
@@ -1082,6 +1215,7 @@ export function Sidebar({
             quiet={quiet('Code')}
             sentenceNode={sentence(model, 'Code', places)}
           >
+            <PostedPhaseComments entries={phaseComments(opened.blocks, model, 'Code')} />
             {model.checks === undefined ? null : (
               <p
                 className={

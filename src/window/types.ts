@@ -169,6 +169,12 @@ export type SidebarBlock =
       comment?: string;
     }
   | {kind: 'line-thread'; file: string; line: number; comments: readonly string[]}
+  | {
+      kind: 'phase-thread';
+      layer: 'Plan' | 'Specify' | 'Design' | 'Tasks' | 'Code';
+      file: string;
+      comments: readonly string[];
+    }
   | {kind: 'hook'; line: string}
   | {kind: 'hook'; points: readonly SidebarHookPoint[]};
 

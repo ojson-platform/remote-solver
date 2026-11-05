@@ -120,6 +120,59 @@ function anchoredOnLine(thread: {
   );
 }
 
+type PhaseLayer = 'Plan' | 'Specify' | 'Design' | 'Tasks' | 'Code';
+
+function layerOfPath(file: string): PhaseLayer {
+  const normalized = file.replace(/\\/g, '/');
+  const base = normalized.split('/').pop() ?? '';
+  if (base === 'proposal.md') {
+    return 'Plan';
+  }
+  if (base === 'design.md') {
+    return 'Design';
+  }
+  if (base === 'tasks.md' || base.startsWith('tasks/')) {
+    return 'Tasks';
+  }
+  if (normalized.includes('/specs/') && normalized.endsWith('/spec.md')) {
+    return 'Specify';
+  }
+  return 'Code';
+}
+
+function onPhase(thread: {
+  file?: string;
+  line?: number | null;
+  comments?: readonly string[];
+  lines: readonly string[];
+}): boolean {
+  return (
+    typeof thread.file === 'string' &&
+    thread.file !== '' &&
+    humanComments(thread).length > 0 &&
+    !anchoredOnLine(thread)
+  );
+}
+
+function phaseThreadBlocks(reading: WindowReview | undefined): SidebarBlock[] {
+  if (!reading) {
+    return [];
+  }
+  const out: SidebarBlock[] = [];
+  for (const thread of reading.threads ?? []) {
+    if (!onPhase(thread)) {
+      continue;
+    }
+    out.push({
+      kind: 'phase-thread',
+      layer: layerOfPath(thread.file!),
+      file: thread.file!,
+      comments: humanComments(thread),
+    });
+  }
+  return out;
+}
+
 function lineThreadBlocks(reading: WindowReview | undefined): SidebarBlock[] {
   if (!reading) {
     return [];
@@ -146,6 +199,7 @@ function unansweredBlock(reading: WindowReview | undefined): SidebarBlock | unde
   const threads = (reading.threads ?? [])
     .filter(thread => !hasMarker(thread.marker))
     .filter(thread => !anchoredOnLine(thread))
+    .filter(thread => !onPhase(thread))
     .map(thread => ({lines: thread.lines}));
   const last = reading.conversation?.last;
   const comment = last && !hasMarker(last.marker) ? last.body : undefined;
@@ -245,6 +299,7 @@ export function blocksFor(
   }
   const reading = ctx.review();
   blocks.push(...lineThreadBlocks(reading));
+  blocks.push(...phaseThreadBlocks(reading));
   const unanswered = unansweredBlock(reading);
   if (unanswered) {
     blocks.push(unanswered);

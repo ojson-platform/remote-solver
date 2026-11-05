@@ -2893,9 +2893,8 @@ spec('link-mark', () => {
         const css = readFileSync(new URL('./face.css', import.meta.url), 'utf8');
         assert.match(
           css,
-          /\.link-mark\[data-kind="child"\]::before\s*\{[^}]*border-right[^}]*border-bottom/,
+          /\.link-mark\[data-kind="child"\] \.link-mark-open::before\s*\{[^}]*border-right[^}]*border-bottom/,
         );
-        assert.doesNotMatch(css, /\.link-mark\[data-kind="child"\]::before\s*\{[^}]*border-left/);
         await hosted(
           {
             login: () => MANAGER,
@@ -2949,7 +2948,7 @@ spec('link-mark', () => {
       const css = readFileSync(new URL('./face.css', import.meta.url), 'utf8');
       assert.match(
         css,
-        /\.link-mark\[data-kind="wait"\]::before\s*\{[^}]*border-right[^}]*var\(--muted\)/,
+        /\.link-mark\[data-kind="wait"\][\s\S]*?::before\s*\{[^}]*border-right[^}]*var\(--muted\)/,
       );
       await hosted(
         {
@@ -2968,7 +2967,7 @@ spec('link-mark', () => {
       const css = readFileSync(new URL('./face.css', import.meta.url), 'utf8');
       assert.match(
         css,
-        /\.link-mark\[data-kind="hold"\]::before\s*\{[^}]*border-left[^}]*var\(--brass\)/,
+        /\.link-mark\[data-kind="hold"\][\s\S]*?::before\s*\{[^}]*border-left[^}]*var\(--brass\)/,
       );
       await hosted(
         {

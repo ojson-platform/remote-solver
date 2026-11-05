@@ -4,7 +4,7 @@ import {test} from 'vitest';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import type {FileSource, Tracker} from './port.ts';
-import {changeDir} from './naming.ts';
+import {archiveDir, changeDir} from './naming.ts';
 import {focusMarkerLine, focusMirrorName, FOCUS_MARKER_LINES, isFocusRecord} from './marker.ts';
 import {memoryPorts} from '../adapters/github.ts';
 import {
@@ -212,10 +212,12 @@ spec('focus', () => {
     });
 
     scenario('The archive writes this comment every time, including when sdd:auto-merge is set', async () => {
-      const first = await runPostFocus(FOCUS_BODIES.accept);
+      const archivedOnly = [`${archiveDir(KEY)}/proposal.md`];
+      const first = await runPostFocus(FOCUS_BODIES.accept, {files: archivedOnly});
       const secondBody =
         'sdd:focus:accept\nЕсть архив и фокус; окно намеренно вне PR. Одна capability focus, 24 сценария, тесты покрывают.\n';
       const second = await runPostFocus(secondBody, {
+        files: archivedOnly,
         comments: [{body: first.posted[0] ?? ''}],
       });
       assert.equal(first.posted.length, 1);

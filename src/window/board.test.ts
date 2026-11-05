@@ -2628,10 +2628,16 @@ spec('finished-cycle', () => {
 
 function parsedLinkMarks(fragment: string): {kind: string; key: string}[] {
   const found: {kind: string; key: string}[] = [];
-  const re = /<li class="link-mark" data-kind="([^"]+)">([^<]+)<\/li>/g;
+  const re = /<li class="link-mark" data-kind="([^"]+)"[^>]*>([\s\S]*?)<\/li>/g;
   for (const match of fragment.matchAll(re)) {
-    if (match[1] && match[2]) {
-      found.push({kind: match[1], key: match[2]});
+    const kind = match[1];
+    const body = match[2];
+    if (!kind || !body) {
+      continue;
+    }
+    const key = body.match(/name="key" value="([^"]+)"/)?.[1];
+    if (key) {
+      found.push({kind, key});
     }
   }
   return found;
@@ -2692,7 +2698,10 @@ spec('link-mark', () => {
           const html = await pageHtml(page.url);
           const marks = parsedLinkMarks(articleOf(html, '1'));
           assert.deepEqual(marks, [{kind: 'wait', key: '9'}]);
-          assert.match(html, /<li class="link-mark" data-kind="wait">9<\/li>/);
+          assert.match(
+            html,
+            /<li class="link-mark" data-kind="wait"[\s\S]*?name="key" value="9"[\s\S]*?>9<\//,
+          );
         },
       );
     });
@@ -3080,6 +3089,115 @@ spec('link-mark', () => {
           assert.match(line, /Ask/);
           assert.match(line, /вопросы 1/);
           assert.match(line, /мерж/);
+        },
+      );
+    });
+  });
+
+  requirement('A chip opens the issue it names', () => {
+    scenario('Clicking a chip opens that issue the way clicking its card does', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {dependsOn: ['9']}),
+            held('9', 'specifying', {title: 'Spec side'}),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '9'}).toString()))
+              .status,
+            200,
+          );
+          const fromChip = await pageHtml(page.url);
+          assert.match(fromChip, /<aside class="sidebar" data-key="9"/);
+          assert.match(articleOf(fromChip, '9'), /class="ticket is-open"/);
+
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '9'}).toString()))
+              .status,
+            200,
+          );
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '9'}).toString()))
+              .status,
+            200,
+          );
+          const fromCard = await pageHtml(page.url);
+          assert.match(fromCard, /<aside class="sidebar" data-key="9"/);
+          assert.match(articleOf(fromCard, '9'), /class="ticket is-open"/);
+          const chip = articleOf(html, '1').match(
+            /<li class="link-mark" data-kind="wait"[\s\S]*?name="key" value="9"/,
+          );
+          assert.ok(chip, 'chip form names issue 9');
+        },
+      );
+    });
+
+    scenario('Hovering the chip shows that issue\'s title', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {dependsOn: ['9']}),
+            held('9', 'specifying', {title: 'Spec side'}),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          const chip = articleOf(html, '1');
+          assert.match(
+            chip,
+            /<li class="link-mark" data-kind="wait"[\s\S]*?title="Spec side"[\s\S]*?>9<\//,
+          );
+          const opened = await post(
+            page.url,
+            'act',
+            new URLSearchParams({act: 'open', key: '1'}).toString(),
+          );
+          assert.equal(opened.status, 200);
+          const side = bandOf(await pageHtml(page.url), '1');
+          assert.match(
+            side,
+            /<li class="link-mark" data-kind="wait"[\s\S]*?title="Spec side"[\s\S]*?>9<\//,
+          );
+        },
+      );
+    });
+
+    scenario('The click does not open the card the chip stands on', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {dependsOn: ['9']}),
+            held('9', 'specifying', {title: 'Spec side'}),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const opened = await pageHtml(page.url);
+          assert.match(opened, /<aside class="sidebar" data-key="1"/);
+          const chipClick = await post(
+            page.url,
+            'act',
+            new URLSearchParams({act: 'open', key: '9'}).toString(),
+          );
+          assert.equal(chipClick.status, 200);
+          const after = await pageHtml(page.url);
+          assert.match(after, /<aside class="sidebar" data-key="9"/);
+          assert.equal(after.includes('<aside class="sidebar" data-key="1"'), false);
+          assert.equal(articleOf(after, '1').includes('is-open'), false);
+          assert.match(articleOf(after, '9'), /class="ticket is-open"/);
         },
       );
     });

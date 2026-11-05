@@ -743,23 +743,6 @@ export function clampFocusPageIndex(index: number, pageCount: number): number {
   return Math.min(Math.max(0, index), pageCount - 1);
 }
 
-export function focusIndexAfterSnapshot(input: {
-  prevKey: string | undefined;
-  nextKey: string | undefined;
-  prevLatestBody: string | undefined;
-  nextLatestBody: string | undefined;
-  index: number;
-  pageCount: number;
-}): number {
-  if (input.prevKey !== input.nextKey) {
-    return 0;
-  }
-  if (input.prevLatestBody !== input.nextLatestBody) {
-    return 0;
-  }
-  return clampFocusPageIndex(input.index, input.pageCount);
-}
-
 type FocusPagerPage =
   | Extract<SidebarBlock, {kind: 'live'}>
   | Extract<SidebarBlock, {kind: 'focus'}>;
@@ -772,6 +755,61 @@ function focusPages(blocks: readonly SidebarBlock[]): FocusPagerPage[] {
     }
   }
   return out;
+}
+
+export function focusPagerPageCount(blocks: readonly SidebarBlock[]): number {
+  return focusPages(blocks).length;
+}
+
+export function focusLatestWrittenBody(blocks: readonly SidebarBlock[]): string | undefined {
+  const page = blocks.find(block => block.kind === 'focus');
+  return page?.kind === 'focus' ? page.body : undefined;
+}
+
+export function focusLiveTurn(blocks: readonly SidebarBlock[]): string | undefined {
+  const live = blocks.find(block => block.kind === 'live');
+  if (live?.kind !== 'live' || live.badge !== 'working') {
+    return undefined;
+  }
+  return live.text;
+}
+
+export function focusHasLive(blocks: readonly SidebarBlock[]): boolean {
+  return blocks.some(block => block.kind === 'live');
+}
+
+export function focusIndexAfterSnapshot(input: {
+  prevKey: string | undefined;
+  nextKey: string | undefined;
+  prevLatestBody: string | undefined;
+  nextLatestBody: string | undefined;
+  prevLiveTurn?: string | undefined;
+  nextLiveTurn?: string | undefined;
+  prevHadLive?: boolean;
+  nextHadLive?: boolean;
+  prevPageCount?: number;
+  index: number;
+  pageCount: number;
+}): number {
+  if (input.prevKey !== input.nextKey) {
+    return 0;
+  }
+  if (input.prevLatestBody !== input.nextLatestBody) {
+    return 0;
+  }
+  if (input.prevLiveTurn !== input.nextLiveTurn) {
+    return 0;
+  }
+  const prevHadLive = input.prevHadLive ?? false;
+  const nextHadLive = input.nextHadLive ?? false;
+  const prevPageCount = input.prevPageCount ?? input.pageCount;
+  if (!prevHadLive && nextHadLive && prevPageCount > 0) {
+    return clampFocusPageIndex(input.index + 1, input.pageCount);
+  }
+  if (prevHadLive && !nextHadLive) {
+    return clampFocusPageIndex(Math.max(0, input.index - 1), input.pageCount);
+  }
+  return clampFocusPageIndex(input.index, input.pageCount);
 }
 
 function FocusProse({

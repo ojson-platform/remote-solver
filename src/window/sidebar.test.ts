@@ -1468,6 +1468,98 @@ spec('live-focus-page', () => {
       assert.equal(blocks.some(block => block.kind === 'focus'), true);
     });
   });
+
+  requirement('No written page leaves the live page as the only page', () => {
+    scenario('While no written page exists, the live page is the only page and Back does nothing', () => {
+      const blocks = sidebarBlocks(cycle('1', 'implementing'), {
+        running: true,
+        turn: {phase: 'specifying', action: 'create-initial-specs'},
+      });
+      assert.equal(blocks.some(block => block.kind === 'focus'), false);
+      assert.equal(blocks.filter(block => block.kind === 'live').length, 1);
+      const html = openLivePage(blocks, 0);
+      assert.match(html, />working</);
+      assert.match(html, /create-initial-specs/);
+      assert.equal(html.includes('focus-pager'), false);
+      assert.equal(html.includes('data-focus="back"'), false);
+    });
+  });
+
+  requirement('Opening the sidebar, a worker starting, and a new written comment return the block to now', () => {
+    scenario('Opening the sidebar returns the block to now', () => {
+      const blocks = sidebarBlocks(cycle('1', 'implementing', {comments}), {
+        running: true,
+        turn: {phase: 'implementing', action: 'implement-next-task'},
+      });
+      const index = focusIndexAfterSnapshot({
+        prevKey: undefined,
+        nextKey: '1',
+        prevLatestBody: undefined,
+        nextLatestBody: 'Latest written page.\n',
+        prevHadLive: true,
+        nextHadLive: true,
+        index: 2,
+        pageCount: 4,
+        prevPageCount: 4,
+      });
+      assert.equal(index, 0);
+      const html = openLivePage(blocks, index);
+      assert.match(html, />working</);
+      assert.match(html, /implement-next-task/);
+      assert.equal(html.includes('Older plan note'), false);
+    });
+    scenario('A worker starting returns the block to now', () => {
+      const blocks = sidebarBlocks(cycle('1', 'implementing', {comments}), {
+        running: true,
+        turn: {phase: 'specifying', action: 'create-initial-specs'},
+      });
+      const index = focusIndexAfterSnapshot({
+        prevKey: '1',
+        nextKey: '1',
+        prevLatestBody: 'Latest written page.\n',
+        nextLatestBody: 'Latest written page.\n',
+        prevLiveTurn: undefined,
+        nextLiveTurn: 'specifying → create-initial-specs',
+        prevHadLive: false,
+        nextHadLive: true,
+        prevPageCount: 3,
+        index: 2,
+        pageCount: 4,
+      });
+      assert.equal(index, 0);
+      const html = openLivePage(blocks, index);
+      assert.match(html, /specifying/);
+      assert.match(html, /create-initial-specs/);
+    });
+    scenario('A new written comment returns the block to now', () => {
+      const blocks = sidebarBlocks(
+        cycle('1', 'implementing', {
+          comments: [{body: 'sdd:focus:code\nFresh written page.\n'}],
+        }),
+        {
+          running: true,
+          turn: {phase: 'implementing', action: 'implement-next-task'},
+        },
+      );
+      const index = focusIndexAfterSnapshot({
+        prevKey: '1',
+        nextKey: '1',
+        prevLatestBody: 'Latest written page.\n',
+        nextLatestBody: 'Fresh written page.\n',
+        prevHadLive: true,
+        nextHadLive: true,
+        index: 2,
+        pageCount: 4,
+        prevPageCount: 4,
+      });
+      assert.equal(index, 0);
+      const html = openLivePage(blocks, index);
+      assert.match(html, />working</);
+      assert.match(html, /implement-next-task/);
+      const older = openLivePage(blocks, 1);
+      assert.match(older, /Fresh written page\./);
+    });
+  });
 });
 
 spec('issue-description', () => {

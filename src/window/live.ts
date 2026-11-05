@@ -86,6 +86,7 @@ export function createBoardSpyState(note: () => void): {
       },
       onDecision(issue, decision) {
         decisions.set(issue, decision);
+        note();
       },
     },
   };

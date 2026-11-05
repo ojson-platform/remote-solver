@@ -797,14 +797,14 @@ test('the sidebar lists the blocks that exist from reason through hook', () => {
   });
   window.openCard('1');
   assert.deepEqual(window.sidebar(), [
-    {kind: 'reason', line: 'proposed · Ask'},
-    {kind: 'ask', body: 'please decide'},
     {
       kind: 'focus',
       marker: 'sdd:focus',
       body: 'Plan gap\n',
       display: focusBlockProse('sdd:focus', 'Plan gap\n'),
     },
+    {kind: 'reason', line: 'proposed · Ask'},
+    {kind: 'ask', body: 'please decide'},
     {kind: 'unanswered', threads: [{lines: ['please look']}]},
     {kind: 'hook', points: [{action: 'archive', point: 'before', paragraph: 'keep'}]},
   ]);

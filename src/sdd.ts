@@ -8,7 +8,7 @@ import {solverRoot, turn, type Machine} from './adapters/compose.ts';
 import {openMachine} from './adapters/load.ts';
 import {packageLinks} from './adapters/vcs.ts';
 import {readChange} from './machine/change.ts';
-import {postFocusComment} from './machine/focus.ts';
+import {postFocusComment, validateFocusBody} from './machine/focus.ts';
 import {focusMarkerLine} from './machine/marker.ts';
 import {applyLabels, pick, resolveCycle} from './machine/flow.ts';
 import {openWait, setPhase, setWait} from './machine/labels.ts';
@@ -424,6 +424,10 @@ export async function postFocus(
     throw new Error(
       'Focus comment must start with a recognized sdd:focus marker (sdd:focus, sdd:focus:plan, sdd:focus:spec, sdd:focus:design, sdd:focus:tasks, sdd:focus:code, or sdd:focus:accept) on the first line.',
     );
+  }
+  const proseIssue = validateFocusBody(args.body);
+  if (proseIssue !== undefined) {
+    throw new Error(`Focus prose: ${proseIssue}`);
   }
   const posted = await postFocusComment(args.key, args.body, deps);
   return posted ? `#${args.key}: focus comment posted` : `#${args.key}: focus comment unchanged`;

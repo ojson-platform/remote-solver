@@ -29,6 +29,14 @@ const FIXTURE_KEY = '88';
 const FIXTURE_CAPABILITY = 'archive-fold-cap';
 const REMOVAL_MARKER = 'REMOVAL-PROSE-SHOULD-NOT-COPY-TO-BASELINE';
 
+const NEW_CAP_FIXTURE_KEY = '89';
+const NEW_CAP_CAPABILITY = 'archive-purpose-new';
+const NEW_CAP_PROPOSAL_GIST = 'gist words after the capability id in the proposal';
+const EXISTING_BASELINE_PURPOSE =
+  'Baseline purpose stays on this capability after archive folds the delta into the spec.';
+
+const ARCHIVE_PLACEHOLDER_PURPOSE = /TBD - created by archiving change/;
+
 function git(root: string, args: string[]): string {
   return execFileSync('git', args, {cwd: root, encoding: 'utf8'});
 }
@@ -56,11 +64,12 @@ function findDatedArchiveDir(root: string, key: string): string | undefined {
 
 /** Accept archive path through one commit, as `accept.md` ## archive describes. */
 function acceptArchiveCommit(root: string, key: string): void {
-  runAcceptArchivePath(root);
+  runAcceptArchivePath(root, key);
   const dated = findDatedArchiveDir(root, key);
   assert.ok(dated, 'openspec archive writes a dated archive directory');
   const archiveRoot = path.join(root, 'openspec', 'changes', 'archive');
   renameSync(path.join(archiveRoot, dated), path.join(archiveRoot, `issue-${key}`));
+  applyPurposeFromProposal(root, key);
   execFileSync('openspec', ['validate', '--all', '--strict', '--no-interactive'], {
     cwd: root,
     stdio: 'ignore',
@@ -77,6 +86,111 @@ function archiveSection(body: string): string {
 
 function requirementHeadings(specText: string): string[] {
   return [...specText.matchAll(/^### Requirement: (.+)$/gm)].map(match => match[1].trim());
+}
+
+function purposeLine(specText: string): string {
+  const match = specText.match(/(?:^|\n)## Purpose\r?\n(?:\r?\n)?(.+?)(?:\r?\n## |\s*$)/s);
+  assert.ok(match, 'spec has a Purpose section');
+  return match[1].trim();
+}
+
+function capabilityGistsFromProposal(proposalText: string): Map<string, string> {
+  const gists = new Map<string, string>();
+  for (const match of proposalText.matchAll(/^- `([^`]+)` (.+)$/gm)) {
+    gists.set(match[1], match[2].trim());
+  }
+  return gists;
+}
+
+function replacePurpose(specText: string, purpose: string): string {
+  return specText.replace(
+    /(?:^|\n)## Purpose\r?\n(?:\r?\n)?.+?(?=\r?\n## Requirements)/s,
+    `\n## Purpose\n\n${purpose}`,
+  );
+}
+
+/** Proposal gist on new specs only, as `accept.md` ## archive describes. */
+function applyPurposeFromProposal(root: string, key: string): void {
+  const proposalPath = path.join(
+    root,
+    'openspec',
+    'changes',
+    'archive',
+    `issue-${key}`,
+    'proposal.md',
+  );
+  if (!existsSync(proposalPath)) {
+    return;
+  }
+  const gists = capabilityGistsFromProposal(readFileSync(proposalPath, 'utf8'));
+  for (const [capability, gist] of gists) {
+    const specPath = path.join(root, 'openspec', 'specs', capability, 'spec.md');
+    if (!existsSync(specPath)) {
+      continue;
+    }
+    const specText = readFileSync(specPath, 'utf8');
+    if (!ARCHIVE_PLACEHOLDER_PURPOSE.test(purposeLine(specText))) {
+      continue;
+    }
+    writeFileSync(specPath, replacePurpose(specText, gist));
+  }
+}
+
+function newCapabilityOnlyFixture(): string {
+  const root = mkdtempSync(path.join(tmpdir(), 'sandcastle-archive-purpose-'));
+  git(root, ['init', '-b', 'master']);
+  git(root, ['config', 'user.email', 'archive@test.example']);
+  git(root, ['config', 'user.name', 'Archive Test']);
+
+  mkdirSync(
+    path.join(root, 'openspec', 'changes', `issue-${NEW_CAP_FIXTURE_KEY}`, 'specs', NEW_CAP_CAPABILITY),
+    {recursive: true},
+  );
+  copyFileSync(openspecConfig, path.join(root, 'openspec', 'config.yaml'));
+
+  writeFileSync(
+    path.join(root, 'openspec', 'changes', `issue-${NEW_CAP_FIXTURE_KEY}`, 'proposal.md'),
+    [
+      '## Capabilities',
+      '',
+      '### Added',
+      '',
+      `- \`${NEW_CAP_CAPABILITY}\` ${NEW_CAP_PROPOSAL_GIST}`,
+      '',
+      '### Modified',
+      '',
+    ].join('\n'),
+  );
+
+  writeFileSync(
+    path.join(
+      root,
+      'openspec',
+      'changes',
+      `issue-${NEW_CAP_FIXTURE_KEY}`,
+      'specs',
+      NEW_CAP_CAPABILITY,
+      'spec.md',
+    ),
+    [
+      '## ADDED Requirements',
+      '',
+      '### Requirement: First req',
+      '',
+      'The system SHALL apply the added requirement after archive.',
+      '',
+      '#### Scenario: Added only',
+      '',
+      '- **WHEN** added',
+      '- **THEN** added',
+      '',
+    ].join('\n'),
+  );
+
+  writeFileSync(path.join(root, 'README.md'), 'fixture\n');
+  git(root, ['add', '-A']);
+  git(root, ['commit', '-m', 'init']);
+  return root;
 }
 
 function mixedDeltaFixture(): string {
@@ -167,8 +281,8 @@ function mixedDeltaFixture(): string {
   return root;
 }
 
-function runAcceptArchivePath(root: string): string {
-  return execFileSync('openspec', ['archive', `issue-${FIXTURE_KEY}`, '--yes'], {
+function runAcceptArchivePath(root: string, key: string = FIXTURE_KEY): string {
+  return execFileSync('openspec', ['archive', `issue-${key}`, '--yes'], {
     cwd: root,
     encoding: 'utf8',
   });
@@ -339,6 +453,67 @@ spec('spec-archive', () => {
           existsSync(path.join(root, 'openspec', 'changes', 'archive', `issue-${FIXTURE_KEY}`)),
         );
         assert.equal(existsSync(path.join(root, 'openspec', 'changes', `issue-${FIXTURE_KEY}`)), false);
+      } finally {
+        rmSync(root, {recursive: true, force: true});
+      }
+    });
+  });
+
+  requirement("A new spec's Purpose is the proposal line", () => {
+    scenario('A new spec does not keep the Purpose the command writes', () => {
+      const root = newCapabilityOnlyFixture();
+      try {
+        acceptArchiveCommit(root, NEW_CAP_FIXTURE_KEY);
+        const baseline = readFileSync(
+          path.join(root, 'openspec', 'specs', NEW_CAP_CAPABILITY, 'spec.md'),
+          'utf8',
+        );
+        assert.doesNotMatch(purposeLine(baseline), ARCHIVE_PLACEHOLDER_PURPOSE);
+      } finally {
+        rmSync(root, {recursive: true, force: true});
+      }
+    });
+
+    scenario(
+      'In the same commit the step sets Purpose to the one line under that capability in the proposal',
+      () => {
+        const root = newCapabilityOnlyFixture();
+        try {
+          acceptArchiveCommit(root, NEW_CAP_FIXTURE_KEY);
+          const baseline = readFileSync(
+            path.join(root, 'openspec', 'specs', NEW_CAP_CAPABILITY, 'spec.md'),
+            'utf8',
+          );
+          assert.equal(purposeLine(baseline), NEW_CAP_PROPOSAL_GIST);
+        } finally {
+          rmSync(root, {recursive: true, force: true});
+        }
+      },
+    );
+
+    scenario('An existing spec keeps its Purpose', () => {
+      const root = mixedDeltaFixture();
+      try {
+        acceptArchiveCommit(root, FIXTURE_KEY);
+        const baseline = readFileSync(
+          path.join(root, 'openspec', 'specs', FIXTURE_CAPABILITY, 'spec.md'),
+          'utf8',
+        );
+        assert.equal(purposeLine(baseline), EXISTING_BASELINE_PURPOSE);
+      } finally {
+        rmSync(root, {recursive: true, force: true});
+      }
+    });
+
+    scenario('The command does not change it', () => {
+      const root = mixedDeltaFixture();
+      try {
+        const specPath = path.join(root, 'openspec', 'specs', FIXTURE_CAPABILITY, 'spec.md');
+        const before = purposeLine(readFileSync(specPath, 'utf8'));
+        runAcceptArchivePath(root);
+        const after = purposeLine(readFileSync(specPath, 'utf8'));
+        assert.equal(after, before);
+        assert.equal(after, EXISTING_BASELINE_PURPOSE);
       } finally {
         rmSync(root, {recursive: true, force: true});
       }

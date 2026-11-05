@@ -14,8 +14,9 @@ Folds the delta into the baseline on the same PR, by `CONTEXT.md` § Delta. A pe
 
 1. Fold with `openspec archive issue-<issue> --yes` instead of editing each baseline by hand. The command applies RENAMED, then REMOVED, then MODIFIED, then ADDED. The command archives to `openspec/changes/archive/<date>-issue-<issue>/`. Keep the scenario meaning.
 2. Move `openspec/changes/archive/<date>-issue-<issue>/` to `openspec/changes/archive/issue-<issue>/`.
-3. Run `openspec validate --all --strict --no-interactive`.
-4. Publish (`CONTEXT.md`). One commit holds the fold and the move. Its body contains a line `Sdd-Archive: issue-<issue>`. That commit is the tip of `sdd/<issue>`. Nothing is committed after it until unarchive. Focus with marker `sdd:focus:accept`. Mirror: `Change`, pointing at the archive path.
+3. In the same commit as the fold and move, for each line under `## Capabilities` in `openspec/changes/archive/issue-<issue>/proposal.md`, when `openspec/specs/<capability>/spec.md` still has Purpose `TBD - created by archiving change ...`, set Purpose to the gist words after the capability id on that line. Do not open or rewrite Purpose on a spec that did not get that placeholder, including an existing baseline such as `spec-archive`.
+4. Run `openspec validate --all --strict --no-interactive`.
+5. Publish (`CONTEXT.md`). One commit holds the fold, the move, and any Purpose lines. Its body contains a line `Sdd-Archive: issue-<issue>`. That commit is the tip of `sdd/<issue>`. Nothing is committed after it until unarchive. Focus with marker `sdd:focus:accept`. Mirror: `Change`, pointing at the archive path.
 
 ## unarchive
 

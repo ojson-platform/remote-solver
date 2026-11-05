@@ -8,7 +8,7 @@ The focus block pages the written focus comments and opens on the latest, in ful
 
 ### Requirement: The focus block shows the latest written focus
 
-The focus block SHALL page the written focus comments. A written focus comment SHALL be a focus comment that is not a manager comment, and a comment whose first line is `sdd:focus:accept` SHALL be one of those pages. Opening the sidebar SHALL land on now: the latest written focus, in full. Back SHALL walk the older written comments, newest first, each in full. Forward SHALL return toward now. Switching tickets SHALL land on now for that ticket. While an older page is open and a new focus comment appears, the block SHALL return to now. The badge SHALL be that comment's marker. The prose under the badge SHALL be the comment after the marker line. When the marker is `sdd:focus`, a line whose first word is Change, Plan, Specify, Design, Tasks, or Code SHALL stay out of that prose, and the other lines SHALL remain. When the marker is `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, `sdd:focus:code`, or `sdd:focus:accept`, the prose SHALL be the comment after the marker as written. When the issue has no focus comment, the block SHALL be absent.
+The focus block SHALL page the written focus comments. A written focus comment SHALL be a focus comment that is not a manager comment, and a comment whose first line is `sdd:focus:accept` SHALL be one of those pages. Opening the sidebar SHALL land on now: the latest written focus, in full. Back SHALL walk the older written comments, newest first, each in full. Forward SHALL return toward now. Switching tickets SHALL land on now for that ticket. While an older page is open and a new focus comment appears, the block SHALL return to now. The badge SHALL be that comment's marker. The prose under the badge SHALL be the comment after the marker line. When the marker is `sdd:focus`, a line whose first word is Change, Plan, Specify, Design, Tasks, or Code SHALL stay in that prose, and the other lines SHALL remain. When the marker is `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, `sdd:focus:code`, or `sdd:focus:accept`, the prose SHALL be the comment after the marker as written. When the issue has no focus comment, the block SHALL be absent.
 
 #### Scenario: The focus block pages the written focus comments
 
@@ -55,10 +55,10 @@ The focus block SHALL page the written focus comments. A written focus comment S
 - **WHEN** the last comment is a manager comment that begins with `sdd:focus`, and an earlier comment begins with `sdd:focus:code`
 - **THEN** opening the sidebar lands on the earlier comment, the badge is `sdd:focus:code`, and the prose is that comment after the marker
 
-#### Scenario: A whole-pull-request comment leaves phase lines out of the prose
+#### Scenario: A whole-pull-request comment keeps a following Plan line in the prose
 
-- **WHEN** the page is a comment that begins with `sdd:focus`, the next line begins with Plan, and the line after that names no phase
-- **THEN** the badge is `sdd:focus` and the prose is the line that names no phase
+- **WHEN** the page is a comment that begins with `sdd:focus`, the next line begins with Plan, and the line after that names no phase, together with leaving that Plan line out of the prose as the limit that can replace keeping it
+- **THEN** the badge is `sdd:focus` and the prose is the Plan line and the line that names no phase
 
 #### Scenario: A phase comment keeps the prose after the marker
 
@@ -79,7 +79,6 @@ The focus block SHALL page the written focus comments. A written focus comment S
 
 - **WHEN** one ticket's latest focus comment begins with `sdd:focus:plan` and another ticket's begins with `sdd:focus:code`, and the sidebar opens the second ticket
 - **THEN** the focus block's badge is `sdd:focus:code` and the prose is that comment in full
-
 ### Requirement: The focus block sits in the scrolling body
 
 The title and the chips SHALL sit in the sidebar header. The focus block SHALL sit in the scrolling body, directly under the title and above the reason and the ask. The chips SHALL stay in the header and SHALL NOT scroll with the block. The reason, the ask, an unmarked review, and a hook SHALL stay their own blocks under the pager.
@@ -98,7 +97,6 @@ The title and the chips SHALL sit in the sidebar header. The focus block SHALL s
 
 - **WHEN** the reason, the ask, an unmarked review, a hook, and the pager are already visible, and those four already stay their own blocks under the pager, together with those blocks inside the pager as the limit that can replace that
 - **THEN** the reason, the ask, an unmarked review, and a hook stay their own blocks under the pager
-
 ### Requirement: Each spine row keeps the first sentence of the latest written focus of that phase
 
 Each spine row SHALL keep the first sentence of the latest written focus of that phase.

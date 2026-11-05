@@ -3,4 +3,4 @@
 - [x] `archive-purpose` — A new spec does not keep the Purpose the command writes; In the same commit the step sets Purpose to the one line under that capability in the proposal; An existing spec keeps its Purpose; The command does not change it
 - [x] `archive-refusal` — When the command refuses, the step does not publish; A refusal because a baseline would have no requirement is a Wait that names that baseline
 - [x] `archive-readers` — The machine, the window, review, and unarchive keep reading archive/issue-<key>
-- [ ] `accept-limits` — Unarchive stays a revert of the archive commit; The step does not merge the pull request
+- [x] `accept-limits` — Unarchive stays a revert of the archive commit; The step does not merge the pull request

@@ -17,6 +17,7 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {memoryPorts} from '../adapters/github.ts';
 import {change} from '../machine/harness.ts';
 import {resolveIssue} from '../machine/flow.ts';
+import {changeDir} from '../machine/naming.ts';
 import type {FileSource} from '../machine/port.ts';
 
 import {gesture} from './client/gesture.ts';
@@ -32,6 +33,7 @@ import {
   formsOf,
   glineOf,
   held,
+  git,
   hosted,
   pageHtml,
   post,
@@ -3350,5 +3352,151 @@ spec('written-focus-page', () => {
         );
       },
     );
+  });
+});
+
+function focusBlockHtml(side: string): string {
+  const scroll = sideScrollHtml(side);
+  const focus = scroll.match(/<section class="block focus-block">[\s\S]*?<\/section>/)?.[0];
+  assert.ok(focus, 'focus block missing');
+  return focus;
+}
+
+function writeFoldedScenarioChange(arcadia: string): void {
+  const checkout = path.join(arcadia, 'services', 'billing');
+  const baseline = [
+    '### Requirement: Чтение',
+    'Тело требования.',
+    '#### Scenario: Первый',
+    '- **WHEN** первый',
+    '- **THEN** первый',
+    '#### Scenario: Второй',
+    '- **WHEN** второй',
+    '- **THEN** было',
+    '',
+  ].join('\n');
+  mkdirSync(path.join(checkout, 'openspec', 'specs', 'case-read'), {recursive: true});
+  writeFileSync(path.join(checkout, 'openspec', 'specs', 'case-read', 'spec.md'), baseline);
+  pageWrite(
+    arcadia,
+    '1',
+    'proposal.md',
+    [
+      '# Change',
+      '',
+      '## Capabilities',
+      '',
+      '### Modified',
+      '',
+      '- case-read',
+      '',
+    ].join('\n'),
+  );
+  pageWrite(
+    arcadia,
+    '1',
+    'specs/case-read/spec.md',
+    [
+      '## MODIFIED Requirements',
+      '',
+      '### Requirement: Чтение',
+      'Тело требования.',
+      '#### Scenario: Первый',
+      '- **WHEN** первый',
+      '- **THEN** первый',
+      '#### Scenario: Второй',
+      '- **WHEN** второй',
+      '- **THEN** стало',
+      '',
+    ].join('\n'),
+  );
+}
+
+function initIssueBranch(arcadia: string): void {
+  const checkout = path.join(arcadia, 'services', 'billing');
+  git(checkout, ['init', '-b', 'master']);
+  git(checkout, ['config', 'user.email', 'test@example.com']);
+  git(checkout, ['config', 'user.name', 'Test']);
+  git(checkout, ['add', 'openspec']);
+  git(checkout, ['commit', '-m', 'init']);
+  git(checkout, ['checkout', '-b', 'sdd/1']);
+  writeFoldedScenarioChange(arcadia);
+  git(checkout, ['add', changeDir('1')]);
+  git(checkout, ['commit', '-m', 'change']);
+  git(checkout, ['checkout', 'master']);
+}
+
+spec('scenario-name-link', () => {
+  requirement('A scenario name in the prose links to its row', () => {
+    scenario(
+      "A scenario name in the prose is a link to that scenario's row lower in the sidebar",
+      async () => {
+        await hosted(
+          {
+            login: () => MANAGER,
+            tickets: () => [
+              held('1', 'implementing', {
+                openPullRequests: 1,
+                pull: '59',
+                comments: [
+                  {
+                    body: 'sdd:focus:spec\nСмотри Первый и Второй в тексте.\n',
+                  },
+                ],
+              }),
+            ],
+          },
+          async (page, window, paths) => {
+            initIssueBranch(paths.arcadia);
+            window.chooseAgent('cursor');
+            assert.equal(
+              (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+                .status,
+              200,
+            );
+            const side = bandOf(await pageHtml(page.url), '1');
+            const focus = focusBlockHtml(side);
+            assert.match(
+              focus,
+              /<button type="button" class="jump" data-cap="case-read">Первый<\/button>/,
+            );
+            assert.match(
+              focus,
+              /<button type="button" class="jump" data-cap="case-read">Второй<\/button>/,
+            );
+            assert.match(side, /data-scenario="Второй"/);
+            assert.equal(focus.includes('>sdd:focus:spec<'), true);
+            assert.equal(focus.match(/class="jump"/g)?.length, 2);
+          },
+        );
+      },
+    );
+
+    scenario('A name that is not a row stays text', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {
+              openPullRequests: 1,
+              pull: '59',
+              comments: [{body: 'sdd:focus:code\nПро произвольное имя без строки.\n'}],
+            }),
+          ],
+        },
+        async (page, window, paths) => {
+          initIssueBranch(paths.arcadia);
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const focus = focusBlockHtml(bandOf(await pageHtml(page.url), '1'));
+          assert.match(focus, /произвольное имя без строки/);
+          assert.equal(focus.includes('class="jump"'), false);
+        },
+      );
+    });
   });
 });

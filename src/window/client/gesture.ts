@@ -113,8 +113,93 @@ export function foldsAfterSpec<T extends {id: string}>(
   return folds.filter(item => item.id !== id);
 }
 
+function scenarioNameFromLine(text: string): string | undefined {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith(SCENARIO_PREFIX)) {
+    return undefined;
+  }
+  const name = trimmed.slice(SCENARIO_PREFIX.length);
+  return name === '' ? undefined : name;
+}
+
 function scenarioLine(text: string, name: string): boolean {
-  return text.trim() === `${SCENARIO_PREFIX}${name}`;
+  return scenarioNameFromLine(text) === name;
+}
+
+function scenarioNamesInRows(rows: readonly SpecEntry[]): string[] {
+  const names: string[] = [];
+  for (const entry of rows) {
+    if (entry.kind === 'gap') {
+      for (const row of entry.hidden) {
+        const name = scenarioNameFromLine(row.text);
+        if (name !== undefined) {
+          names.push(name);
+        }
+      }
+      continue;
+    }
+    const name = scenarioNameFromLine(entry.text);
+    if (name !== undefined) {
+      names.push(name);
+    }
+  }
+  return names;
+}
+
+export type FocusProsePart =
+  | {kind: 'text'; text: string}
+  | {kind: 'jump'; capability: string; name: string};
+
+/** Longest scenario name first; the first capability in spine order owns a name. */
+export function linkFocusProseParts(
+  prose: string,
+  capabilities: readonly {id: string; rows: readonly SpecEntry[]}[],
+): FocusProsePart[] {
+  const owner = new Map<string, string>();
+  for (const cap of capabilities) {
+    for (const name of scenarioNamesInRows(cap.rows)) {
+      if (!owner.has(name)) {
+        owner.set(name, cap.id);
+      }
+    }
+  }
+  const names = [...owner.keys()].sort((left, right) => right.length - left.length);
+  const spans: {start: number; end: number; capability: string; name: string}[] = [];
+  for (const name of names) {
+    const capability = owner.get(name);
+    if (capability === undefined) {
+      continue;
+    }
+    let from = 0;
+    while (from <= prose.length - name.length) {
+      const at = prose.indexOf(name, from);
+      if (at === -1) {
+        break;
+      }
+      const end = at + name.length;
+      if (!spans.some(span => at < span.end && end > span.start)) {
+        spans.push({start: at, end, capability, name});
+      }
+      from = at + 1;
+    }
+  }
+  spans.sort((left, right) => left.start - right.start);
+  if (spans.length === 0) {
+    return prose === '' ? [] : [{kind: 'text', text: prose}];
+  }
+  const parts: FocusProsePart[] = [];
+  let cursor = 0;
+  for (const span of spans) {
+    if (span.start > cursor) {
+      parts.push({kind: 'text', text: prose.slice(cursor, span.start)});
+    }
+    parts.push({kind: 'jump', capability: span.capability, name: span.name});
+    cursor = span.end;
+  }
+  if (cursor < prose.length) {
+    parts.push({kind: 'text', text: prose.slice(cursor)});
+  }
+  return parts;
 }
 
 /** The first matching row wins. A hidden row names its fold; a visible row does not. */

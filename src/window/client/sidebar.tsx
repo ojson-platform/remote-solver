@@ -13,7 +13,7 @@ import {unchangedLabel} from '../spec-diff.ts';
 import {Gate, LinkMarks} from './board.tsx';
 import {BusyEdge} from './busy.tsx';
 import {ActForm, Hidden} from './forms.tsx';
-import {capIsOpen, layerHasFold} from './gesture.ts';
+import {capIsOpen, layerHasFold, linkFocusProseParts, type FocusProsePart} from './gesture.ts';
 import {Cross, SendMark} from './marks.tsx';
 
 function codeLine(line: string, places: Record<string, string>): ReactNode {
@@ -764,12 +764,36 @@ function focusPages(blocks: readonly SidebarBlock[]): Extract<SidebarBlock, {kin
   return blocks.filter((block): block is Extract<SidebarBlock, {kind: 'focus'}> => block.kind === 'focus');
 }
 
+function FocusProse({
+  display,
+  capabilities,
+}: {
+  display: string;
+  capabilities: readonly {id: string; rows: readonly SpecEntry[]}[];
+}): ReactNode {
+  const parts = linkFocusProseParts(display, capabilities);
+  if (parts.length === 1 && parts[0]?.kind === 'text') {
+    return parts[0].text;
+  }
+  return parts.map((part: FocusProsePart, index) =>
+    part.kind === 'text' ? (
+      <Fragment key={index}>{part.text}</Fragment>
+    ) : (
+      <button key={index} type="button" className="jump" data-cap={part.capability}>
+        {part.name}
+      </button>
+    ),
+  );
+}
+
 export function FocusBlocks({
   blocks,
   pageIndex = 0,
+  capabilities = [],
 }: {
   blocks: readonly SidebarBlock[];
   pageIndex?: number;
+  capabilities?: readonly {id: string; rows: readonly SpecEntry[]}[];
 }): ReactNode {
   const pages = focusPages(blocks);
   if (pages.length === 0) {
@@ -796,7 +820,9 @@ export function FocusBlocks({
         </div>
       ) : null}
       <span className="badge">{page.marker}</span>
-      <pre>{page.display}</pre>
+      <pre>
+        <FocusProse display={page.display} capabilities={capabilities} />
+      </pre>
     </section>
   );
 }
@@ -1174,7 +1200,11 @@ export function Sidebar({
         </ActForm>
       </header>
       <div className="side-scroll">
-        <FocusBlocks blocks={opened.blocks} pageIndex={focusPageIndex} />
+        <FocusBlocks
+          blocks={opened.blocks}
+          pageIndex={focusPageIndex}
+          capabilities={model.capabilities}
+        />
         {opened.blocks
           .filter(block => block.kind === 'description')
           .map((block, index) =>

@@ -3,4 +3,4 @@
 - [x] `written-focus-pager` Back walks the older written comments, newest first, each in full; Forward returns toward now; Switching tickets lands on now for that ticket; While an older page is open and a new focus comment appears, the block returns to now
 - [x] `spine-phase-sentences` Each spine row keeps the first sentence of the latest written focus of that phase
 - [x] `accept-caption` The Accept row's caption becomes the first sentence of that comment; Until the comment exists, the row keeps the sentence about auto-merge; Auto-merge sets the machine sentence; No auto-merge sets the person sentence; Before the spine is read the caption waits for a person; A focus comment leaves the caption
-- [ ] `scenario-name-link` A scenario name in the prose is a link to that scenario's row lower in the sidebar; A name that is not a row stays text
+- [x] `scenario-name-link` A scenario name in the prose is a link to that scenario's row lower in the sidebar; A name that is not a row stays text

@@ -85,7 +85,7 @@ The system SHALL apply extra behavior.
       assert.equal(runOpenspec(process.cwd(), ['--version']).status, 0);
       assert.equal(runOpenspec(process.cwd(), ['validate', '--help']).status, 0);
       const cli = readFileSync(new URL('./openspec-cli.ts', import.meta.url), 'utf8');
-      assert.match(cli, /spawnSync\(\s*['"]openspec['"]/);
+      assert.match(cli, /spawnSync\(\s*openspecExecutable\(\)/);
       assert.doesNotMatch(cli, /RENAMED Requirements/);
       assert.doesNotMatch(cli, /MODIFIED Requirements/);
     });

@@ -200,6 +200,24 @@ const MARKER_SHAPE: Record<FocusMarkerLine, {need: RegExp[]; maxParas: number}> 
 const THREAD_FIX_REMARK = /замечан|remark|ревью/i;
 const FURTHER_PARA = /отказ|refused|слаб|weak|слабое место|открыт|open questions/i;
 const LOOK_AT = /смотреть|look at/i;
+const WEAK_SPOT_SENTENCE = /слабое\s+место/i;
+
+/** Clean visit: one paragraph, or plan with open questions as the only second paragraph. */
+function isCleanPhaseVisit(
+  marker: FocusMarkerLine,
+  paras: readonly string[],
+  prose: string,
+  threadFix: boolean,
+): boolean {
+  if (threadFix) {
+    return false;
+  }
+  if (marker === 'sdd:focus:plan') {
+    const hasPointer = /\d+\s+открыт|open questions/i.test(prose);
+    return paras.length === 1 && !hasPointer;
+  }
+  return paras.length === 1;
+}
 
 function markerContentOk(marker: FocusMarkerLine, prose: string): boolean {
   const shape = MARKER_SHAPE[marker];
@@ -272,9 +290,9 @@ export function validateFocusBody(body: string): string | undefined {
     if (hasPointer && paras[1] && OPEN_ITEM.test(paras[1])) {
       return 'open-question pointer must not restate items';
     }
-    if (paras.length === 1 && /слабое\s+место/i.test(prose)) {
-      return 'clean phase omits weak-spot wording';
-    }
+  }
+  if (isCleanPhaseVisit(marker, paras, prose, threadFix) && WEAK_SPOT_SENTENCE.test(prose)) {
+    return 'clean phase omits weak-spot wording';
   }
   if (paras.length === 2 && marker !== 'sdd:focus:plan') {
     const second = paras[1] ?? '';

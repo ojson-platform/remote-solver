@@ -12,7 +12,7 @@ Folds the delta into the baseline on the same PR, by `CONTEXT.md` § Delta. A pe
 
 ## archive
 
-1. Fold `openspec/changes/issue-<issue>/specs/` into `openspec/specs/<capability>/spec.md`: RENAMED, REMOVED, MODIFIED, ADDED, in that order. Keep the scenario meaning.
+1. Fold with `openspec archive issue-<issue> --yes` instead of editing each baseline by hand. The command applies RENAMED, then REMOVED, then MODIFIED, then ADDED. Keep the scenario meaning.
 2. Move the change directory to `openspec/changes/archive/issue-<issue>/`.
 3. Publish (`CONTEXT.md`). One commit holds the fold and the move. Its body contains a line `Sdd-Archive: issue-<issue>`. That commit is the tip of `sdd/<issue>`. Nothing is committed after it until unarchive. Focus with marker `sdd:focus:accept`. Mirror: `Change`, pointing at the archive path.
 

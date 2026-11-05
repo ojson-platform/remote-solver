@@ -269,8 +269,7 @@ export function validateFocusBody(body: string): string | undefined {
     if (hasPointer && paras[1] && OPEN_ITEM.test(paras[1])) {
       return 'open-question pointer must not restate items';
     }
-    const weak = /слаб|weak|посмотреть/i.test(prose);
-    if (!weak && /слабое место/i.test(prose)) {
+    if (paras.length === 1 && /слабое\s+место/i.test(prose)) {
       return 'clean phase omits weak-spot wording';
     }
   }

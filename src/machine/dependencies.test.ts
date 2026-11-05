@@ -32,7 +32,7 @@ spec('dependencies', () => {
     });
     scenario('A cancelled child does not count as specified', () => {
       const parent = issue(1, ['sdd:tasking']);
-      const child = issue(2, ['sdd:cycle', 'sdd:cancelled'], {parent: '1'});
+      const child = issue(2, ['sdd:cycle', 'sdd:cancelled', 'sdd:tasking'], {parent: '1'});
       const decision = decide(parent, [parent, child], [pull(9)], ready);
       assert.equal(decision.kind, 'wait');
       if (decision.kind === 'wait') {
@@ -54,7 +54,7 @@ spec('dependencies', () => {
     });
     scenario('A cancelled child still holds that wait, and the machine still names that child', () => {
       const parent = issue(1, ['sdd:tasking']);
-      const child = issue(2, ['sdd:cycle', 'sdd:cancelled'], {parent: '1'});
+      const child = issue(2, ['sdd:cycle', 'sdd:cancelled', 'sdd:tasking'], {parent: '1'});
       const decision = decide(parent, [parent, child], [pull(9)], ready);
       assert.equal(decision.kind, 'wait');
       if (decision.kind === 'wait') {
@@ -63,7 +63,7 @@ spec('dependencies', () => {
     });
     scenario('A cancelled child still holds the tasking wait, and the machine still names that child', () => {
       const parent = issue(1, ['sdd:tasking']);
-      const child = issue(2, ['sdd:cycle', 'sdd:cancelled'], {parent: '1'});
+      const child = issue(2, ['sdd:cycle', 'sdd:cancelled', 'sdd:tasking'], {parent: '1'});
       const decision = decide(parent, [parent, child], [pull(9)], ready);
       assert.equal(decision.kind, 'wait');
       if (decision.kind === 'wait') {

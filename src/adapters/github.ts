@@ -2,6 +2,7 @@ import type {ReviewNote} from '../machine/port.ts';
 import type {
   CheckState,
   Conversation,
+  IssueLinkKind,
   IssueRecord,
   Pull,
   Review,
@@ -498,20 +499,38 @@ export function linkedTitle(key: string, title: string): boolean {
   return title.startsWith(pullTitlePrefix(key)) || title.startsWith(`#${key} `);
 }
 
-/** Parent and Depends are body lines on GitHub. Tracker will read its own link fields. */
-export function linksFrom(body: string): {parent?: string; dependsOn: string[]} {
-  const parent = /^Parent:\s*#(\S+)/m.exec(body)?.[1];
-  const dependsOn = [...body.matchAll(/^Depends:\s*#(\S+)/gm)].map(match => match[1]);
-  return {parent, dependsOn};
+export type IssueLinks = {
+  parent?: string;
+  dependsOn: string[];
+  blockedBy: string[];
+  blocks: string[];
+};
+
+function emptyLinks(): IssueLinks {
+  return {dependsOn: [], blockedBy: [], blocks: []};
+}
+
+function issueNumbers(nodes: unknown): string[] {
+  if (!Array.isArray(nodes)) {
+    return [];
+  }
+  return nodes
+    .map(node => {
+      if (!node || typeof node !== 'object' || !('number' in node)) {
+        return undefined;
+      }
+      const number = (node as {number?: unknown}).number;
+      return typeof number === 'number' ? String(number) : undefined;
+    })
+    .filter((key): key is string => key !== undefined);
 }
 
 function carriesCycle(issue: RawIssue): boolean {
   return (issue.labels ?? []).some(label => label.name === 'sdd:cycle');
 }
 
-function asRecord(issue: RawIssue, sddHooks?: unknown): IssueRecord {
+function asRecord(issue: RawIssue, links: IssueLinks, sddHooks?: unknown): IssueRecord {
   const body = issue.body ?? '';
-  const links = linksFrom(body);
   return {
     key: String(issue.number),
     title: issue.title,
@@ -522,7 +541,9 @@ function asRecord(issue: RawIssue, sddHooks?: unknown): IssueRecord {
     service: '',
     ...(sddHooks !== undefined ? {sddHooks} : {}),
     parent: links.parent,
-    dependsOn: links.dependsOn,
+    dependsOn: [...links.dependsOn],
+    blockedBy: [...links.blockedBy],
+    blocks: [...links.blocks],
   };
 }
 
@@ -643,8 +664,120 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       return undefined;
     }
   };
+
+  const readLinks = async (key: string): Promise<IssueLinks> => {
+    const [owner, name] = repoSlug().split('/');
+    const query = [
+      'query($owner:String!,$name:String!,$number:Int!){',
+      'repository(owner:$owner,name:$name){',
+      'issue(number:$number){',
+      'parent{number}',
+      'blockedBy(first:100){nodes{number}}',
+      'blocking(first:100){nodes{number}}',
+      '}',
+      '}',
+      '}',
+    ].join('');
+    const raw = JSON.parse(
+      await run([
+        'api',
+        'graphql',
+        '-f',
+        `query=${query}`,
+        '-f',
+        `owner=${owner}`,
+        '-f',
+        `name=${name}`,
+        '-F',
+        `number=${key}`,
+      ]),
+    ) as {
+      data?: {
+        repository?: {
+          issue?: {
+            parent?: {number?: number} | null;
+            blockedBy?: {nodes?: {number?: number}[]};
+            blocking?: {nodes?: {number?: number}[]};
+          };
+        };
+      };
+    };
+    const issue = raw.data?.repository?.issue;
+    if (!issue) {
+      return emptyLinks();
+    }
+    const blockedBy = issueNumbers(issue.blockedBy?.nodes);
+    return {
+      parent: issue.parent?.number === undefined ? undefined : String(issue.parent.number),
+      dependsOn: [],
+      blockedBy,
+      blocks: issueNumbers(issue.blocking?.nodes),
+    };
+  };
+
+  const issueNodeId = async (key: string): Promise<string> => {
+    const [owner, name] = repoSlug().split('/');
+    const query = 'query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issue(number:$number){id}}}';
+    const raw = JSON.parse(
+      await run([
+        'api',
+        'graphql',
+        '-f',
+        `query=${query}`,
+        '-f',
+        `owner=${owner}`,
+        '-f',
+        `name=${name}`,
+        '-F',
+        `number=${key}`,
+      ]),
+    ) as {data?: {repository?: {issue?: {id?: string}}}};
+    const id = raw.data?.repository?.issue?.id;
+    if (!id) {
+      throw new Error(`GitHub issue ${key} has no node id`);
+    }
+    return id;
+  };
+
+  const writeLink = async (key: string, kind: IssueLinkKind, other: string): Promise<void> => {
+    const [issueId, otherId] = await Promise.all([issueNodeId(key), issueNodeId(other)]);
+    if (kind === 'parent') {
+      const mutation =
+        'mutation($issueId:ID!,$subIssueId:ID!){addSubIssue(input:{issueId:$issueId,subIssueId:$subIssueId}){clientMutationId}}';
+      await run([
+        'api',
+        'graphql',
+        '-f',
+        `query=${mutation}`,
+        '-f',
+        `issueId=${otherId}`,
+        '-f',
+        `subIssueId=${issueId}`,
+      ]);
+      return;
+    }
+    const blockedId = kind === 'blocks' ? otherId : issueId;
+    const blockerId = kind === 'blocks' ? issueId : otherId;
+    const mutation =
+      'mutation($issueId:ID!,$blockingIssueId:ID!){addBlockedBy(input:{issueId:$issueId,blockingIssueId:$blockingIssueId}){clientMutationId}}';
+    await run([
+      'api',
+      'graphql',
+      '-f',
+      `query=${mutation}`,
+      '-f',
+      `issueId=${blockedId}`,
+      '-f',
+      `blockingIssueId=${blockerId}`,
+    ]);
+  };
+
   const withField = async (issue: RawIssue): Promise<IssueRecord> =>
-    asRecord(issue, cycleField(await readFields(String(issue.number))));
+    asRecord(
+      issue,
+      await readLinks(String(issue.number)),
+      cycleField(await readFields(String(issue.number))),
+    );
 
   const tracker: Tracker = {
     login,
@@ -655,14 +788,18 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       return Promise.all(
         found
           .filter(issue => issue.pull_request === undefined)
-          .map(issue => (carriesCycle(issue) ? withField(issue) : Promise.resolve(asRecord(issue)))),
+          .map(async issue =>
+            carriesCycle(issue)
+              ? withField(issue)
+              : asRecord(issue, await readLinks(String(issue.number))),
+          ),
       );
     },
     issue: async key => withField(await readIssue(key)),
     async assign(key, login) {
       await run(['issue', 'edit', key, '--repo', repoSlug(), '--add-assignee', login]);
     },
-    labels: async key => asRecord(await readIssue(key)).labels,
+    labels: async key => asRecord(await readIssue(key), await readLinks(key)).labels,
     async editLabels(key, add, remove) {
       if (add.length === 0 && remove.length === 0) {
         return;
@@ -691,6 +828,7 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
     async close(key, comment) {
       await run(['issue', 'close', key, '--repo', repoSlug(), '--comment', markRobot(comment)]);
     },
+    link: writeLink,
     phaseHint: labelHint,
   };
 
@@ -1048,6 +1186,8 @@ export type MemoryIssue = {
   labels: string[];
   parent?: string;
   dependsOn?: string[];
+  blockedBy?: string[];
+  blocks?: string[];
   /** Absent means the runner. Empty string means nobody. */
   assignee?: string;
   /** Directory of the service. Empty or absent means the chat's directory. */
@@ -1076,6 +1216,8 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
     ...issue,
     labels: [...issue.labels],
     dependsOn: issue.dependsOn ? [...issue.dependsOn] : undefined,
+    blockedBy: issue.blockedBy ? [...issue.blockedBy] : undefined,
+    blocks: issue.blocks ? [...issue.blocks] : undefined,
   }));
   const calls: string[] = [];
   const issueComments = new Map<string, {body: string}[]>();
@@ -1086,21 +1228,20 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
     }
     return issue;
   };
-  const record = (issue: MemoryIssue): IssueRecord => {
-    const links = linksFrom(issue.body);
-    return {
-      key: issue.key,
-      title: issue.title,
-      body: issue.body,
-      state: issue.state,
-      labels: [...issue.labels],
-      assignee: issue.assignee ?? seed.user ?? 'robot',
-      service: issue.service ?? '',
-      ...(issue.sddHooks !== undefined ? {sddHooks: issue.sddHooks} : {}),
-      parent: issue.parent ?? links.parent,
-      dependsOn: issue.dependsOn ?? links.dependsOn,
-    };
-  };
+  const record = (issue: MemoryIssue): IssueRecord => ({
+    key: issue.key,
+    title: issue.title,
+    body: issue.body,
+    state: issue.state,
+    labels: [...issue.labels],
+    assignee: issue.assignee ?? seed.user ?? 'robot',
+    service: issue.service ?? '',
+    ...(issue.sddHooks !== undefined ? {sddHooks: issue.sddHooks} : {}),
+    parent: issue.parent,
+    dependsOn: issue.dependsOn ?? [],
+    blockedBy: issue.blockedBy ?? [],
+    blocks: issue.blocks ?? [],
+  });
   const tracker: Tracker = {
     login: async () => {
       calls.push('login');
@@ -1152,6 +1293,23 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
       calls.push(`close:${comment}`);
       calls.push(`body:${markRobot(comment)}`);
       find(key).state = 'CLOSED';
+    },
+    async link(key, kind, other) {
+      calls.push(`link:${kind}:${other}`);
+      const issue = find(key);
+      if (kind === 'parent') {
+        issue.parent = other;
+        return;
+      }
+      if (kind === 'blocked-by') {
+        issue.blockedBy = [...(issue.blockedBy ?? []), other];
+        return;
+      }
+      if (kind === 'depends-on') {
+        issue.dependsOn = [...(issue.dependsOn ?? []), other];
+        return;
+      }
+      issue.blocks = [...(issue.blocks ?? []), other];
     },
     phaseHint: labelHint,
   };

@@ -40,6 +40,8 @@ export function yard(): {
     labels: ['sdd:cycle', 'remote-solver'],
     assignee: '',
     dependsOn: [],
+    blockedBy: [],
+    blocks: [],
   };
   const other: IssueRecord = {
     key: '9',
@@ -49,6 +51,8 @@ export function yard(): {
     labels: ['remote-solver'],
     assignee: '',
     dependsOn: [],
+    blockedBy: [],
+    blocks: [],
   };
   const tracker: LiveTracker = {
     login: async () => MANAGER,

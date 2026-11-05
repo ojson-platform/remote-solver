@@ -1,4 +1,4 @@
-import {contentFiles, type Review, type Vcs} from './machine/port.ts';
+import {contentFiles, type IssueLinkKind, type Review, type Tracker, type Vcs} from './machine/port.ts';
 
 import {spawnSync} from 'node:child_process';
 import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
@@ -35,6 +35,7 @@ import {loadCycle} from './machine/snapshot.ts';
 //   sdd thread fix <key> <pull> <thread> | thread fix <key> <pull> --conversation
 //   sdd mirror <key> <Layer> <text>
 //   sdd focus <key> '<body>'
+//   sdd link <key> <kind> <other>
 
 function fail(message: string): never {
   console.error(message);
@@ -49,7 +50,9 @@ function need(value: string | undefined, usage: string): string {
 }
 
 const usage =
-  'Usage: sdd plan | step <key> [--auto-plan] [--auto-spec] [--auto-design] | worktree <key> | assign <key> | set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key> | publish <key> "<title>" | focus <key> "<body>" | checks <pull> | threads <pull> [--layer <layer>] [--unmarked] | thread open|reply|say|resolve ... | thread fix <key> <pull> <thread>|--conversation | mirror <key> <Layer> <text>';
+  'Usage: sdd plan | step <key> [--auto-plan] [--auto-spec] [--auto-design] | worktree <key> | assign <key> | set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key> | publish <key> "<title>" | focus <key> "<body>" | link <key> <kind> <other> | checks <pull> | threads <pull> [--layer <layer>] [--unmarked] | thread open|reply|say|resolve ... | thread fix <key> <pull> <thread>|--conversation | mirror <key> <Layer> <text>';
+
+const LINK_KINDS = new Set<IssueLinkKind>(['parent', 'blocks', 'blocked-by', 'depends-on']);
 
 const AUTO_LABEL: Record<string, string> = {
   '--auto-plan': 'sdd:auto-plan',
@@ -100,6 +103,28 @@ export function threadsArgs(
     }
   }
   return {pull, layer, unmarked};
+}
+
+/** `link <key> <kind> <other>`. */
+export function linkArgs(
+  rest: string[],
+): {key: string; kind: IssueLinkKind; other: string} | null {
+  const [key, kind, other] = rest;
+  if (!key || !kind || !other || key.startsWith('-')) {
+    return null;
+  }
+  if (!LINK_KINDS.has(kind as IssueLinkKind)) {
+    return null;
+  }
+  return {key, kind: kind as IssueLinkKind, other};
+}
+
+export async function linkIssue(
+  args: {key: string; kind: IssueLinkKind; other: string},
+  tracker: Pick<Tracker, 'link'>,
+): Promise<string> {
+  await tracker.link(args.key, args.kind, args.other);
+  return `#${args.key}: link ${args.kind} ${args.other}`;
 }
 
 /** `thread fix <key> <pull> <thread>`, or `--conversation` in place of the thread. */
@@ -228,6 +253,7 @@ const verbs: Record<string, Verb> = {
   threads,
   thread,
   mirror,
+  link: linkCommand,
 };
 
 async function plan(box: Machine): Promise<void> {
@@ -509,6 +535,14 @@ async function threadFix(box: Machine, rest: string[]): Promise<void> {
       readFile: rel => (files.exists(rel) ? files.read(rel) : undefined),
     }),
   );
+}
+
+async function linkCommand(box: Machine, rest: string[]): Promise<void> {
+  const args = linkArgs(rest);
+  if (!args) {
+    fail(usage);
+  }
+  console.log(await linkIssue(args, box.tracker));
 }
 
 async function mirror(box: Machine, rest: string[]): Promise<void> {

@@ -135,24 +135,9 @@ export function focusNamesPlace(
   return false;
 }
 
-/** Prose the drawer shows under the badge. Mirror layer lines stay on the spine. */
-export function focusBlockProse(marker: FocusMarkerLine, body: string): string {
-  if (marker !== 'sdd:focus') {
-    return body;
-  }
-  const rest: string[] = [];
-  for (const raw of body.split('\n')) {
-    const trimmed = raw.trim();
-    if (trimmed === '') {
-      continue;
-    }
-    const token = trimmed.split(/\s+/)[0]?.replace(/:$/, '') ?? '';
-    if ((FOCUS_LAYERS as readonly string[]).includes(token)) {
-      continue;
-    }
-    rest.push(raw.trimEnd());
-  }
-  return rest.length === 0 ? '' : `${rest.join('\n')}\n`;
+/** Prose the drawer shows under the badge. The window does not rewrite comment text. */
+export function focusBlockProse(_marker: FocusMarkerLine, body: string): string {
+  return body;
 }
 
 export type FocusCommentScan = {
@@ -180,11 +165,7 @@ export function scanFocusComments(
     }
     const layer = focusMirrorName(marker);
     const sentence = firstFocusSentence(comment.body);
-    if (
-      layer &&
-      sentence &&
-      (FOCUS_LAYERS as readonly string[]).includes(layer)
-    ) {
+    if (layer && layer !== 'Accept' && sentence) {
       phaseSentences.set(layer, sentence);
     }
   }

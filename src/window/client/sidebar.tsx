@@ -350,7 +350,12 @@ function drawnLineKeys(model: Spine): Set<string> {
   return keys;
 }
 
-type PhaseCommentEntry = {file: string; line?: number; comments: readonly string[]};
+type PhaseCommentEntry = {
+  file: string;
+  line?: number;
+  comments: readonly string[];
+  fixedCommit?: string | null;
+};
 
 function phaseComments(
   blocks: readonly SidebarBlock[],
@@ -361,7 +366,11 @@ function phaseComments(
   const out: PhaseCommentEntry[] = [];
   for (const block of blocks) {
     if (block.kind === 'phase-thread' && block.layer === layer) {
-      out.push({file: block.file, comments: block.comments});
+      out.push({
+        file: block.file,
+        comments: block.comments,
+        ...(block.fixedCommit !== undefined ? {fixedCommit: block.fixedCommit} : {}),
+      });
       continue;
     }
     if (block.kind !== 'line-thread' || layerOfPath(block.file) !== layer) {
@@ -371,7 +380,12 @@ function phaseComments(
     if (drawn.has(key)) {
       continue;
     }
-    out.push({file: block.file, line: block.line, comments: block.comments});
+    out.push({
+      file: block.file,
+      line: block.line,
+      comments: block.comments,
+      ...(block.fixedCommit !== undefined ? {fixedCommit: block.fixedCommit} : {}),
+    });
   }
   return out;
 }
@@ -415,6 +429,9 @@ function PostedPhaseComments({entries}: {entries: readonly PhaseCommentEntry[]})
             {...(entry.line === undefined ? {} : {'data-at': String(entry.line)})}
           >
             <pre>{body}</pre>
+            {commentIndex === 0 && entry.fixedCommit !== undefined ? (
+              <FixedStatus commit={entry.fixedCommit} />
+            ) : null}
           </div>
         )),
       )}

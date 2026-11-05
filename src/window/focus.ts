@@ -23,7 +23,7 @@ export type LiveFocusInput = {
   checks?: 'green' | 'red' | 'pending' | 'none';
 };
 
-/** True while a review gate or an ask should keep the written focus as the open page. */
+/** True while a review gate should keep the written focus as the open page. */
 export function liveFocusReviewGate(input: LiveFocusInput): boolean {
   const decision = input.decision;
   if (decision?.kind === 'wait' && decision.gate !== undefined) {
@@ -61,7 +61,7 @@ function waitLiveSentence(reason: string): string | undefined {
 
 /** Chooses the live pager sentence from spy inputs. Review gate suppression is the caller's job. */
 export function liveFocus(input: LiveFocusInput): LiveFocus | undefined {
-  if (input.ask || liveFocusReviewGate(input)) {
+  if (liveFocusReviewGate(input)) {
     return undefined;
   }
   if (input.running) {

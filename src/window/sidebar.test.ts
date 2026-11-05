@@ -1445,13 +1445,15 @@ spec('live-focus-page', () => {
         running: true,
         turn: {phase: 'implementing', action: 'implement-next-task'},
       });
-      assertWrittenFocusIsOpen(blocks);
+      assert.equal(blocks[0]?.kind, 'live');
+      assert.equal(blocks.some(block => block.kind === 'focus'), true);
       assert.deepEqual(blocks.find(block => block.kind === 'ask'), {
         kind: 'ask',
         body: 'please decide',
       });
       const html = openLivePage(blocks);
       assert.equal(html.includes('please decide'), false);
+      assert.match(html, /implement-next-task/);
       assert.equal(html.includes('checks are still running'), false);
     });
     scenario('The live sentence does not replace an ask', () => {
@@ -1463,7 +1465,7 @@ spec('live-focus-page', () => {
         running: true,
         turn: {phase: 'implementing', action: 'implement-next-task'},
       });
-      assert.equal(blocks.some(block => block.kind === 'live'), false);
+      assert.equal(blocks[0]?.kind, 'live');
       assert.equal(blocks.some(block => block.kind === 'ask'), true);
       assert.equal(blocks.some(block => block.kind === 'focus'), true);
     });

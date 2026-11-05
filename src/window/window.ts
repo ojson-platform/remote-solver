@@ -310,6 +310,14 @@ export function openWindow(
     spyNote: () => outside.spyNote?.() ?? '',
     turn: (key: string) => outside.turn?.(key),
     running: (key: string) => outside.leading?.(key) === true,
+    decision: (key: string) => outside.decision?.(key),
+    cycleLabel(key: string) {
+      const item = checkout.sorted().find(ticket => ticket.key === key);
+      return item ? phaseOf([...item.labels]) : null;
+    },
+    checks(key: string) {
+      return checkout.sorted().find(ticket => ticket.key === key)?.checks;
+    },
     shelf: () => shelfOf(roles.list()),
     settings: () => home.settings(settingsOpen),
     addRole: (role: RoleRecord) => roles.add(role),

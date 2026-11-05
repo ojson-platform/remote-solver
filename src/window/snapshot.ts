@@ -15,6 +15,7 @@ import {
 } from './types.ts';
 
 import {specsReady} from '../machine/change.ts';
+import type {Decision} from '../machine/policy.ts';
 
 import {plaqueLines} from './board.ts';
 import {
@@ -111,6 +112,9 @@ type SnapshotSurface = {
   spyNote(): string;
   turn(key: string): BoardTurn | undefined;
   running(key: string): boolean;
+  decision?(key: string): Decision | undefined;
+  cycleLabel?(key: string): string | null;
+  checks?(key: string): 'green' | 'red' | 'pending' | 'none' | undefined;
   sidebar(): SidebarBlock[];
   openTicket?: () => {comments?: readonly {body: string; manager?: boolean}[]; body?: string} | undefined;
   spine(): Spine | undefined;
@@ -308,11 +312,13 @@ function publishedDoors(
 
 function publish(
   row: Fact,
-  action: string | undefined,
-  inRunning: boolean,
+  surface: SnapshotSurface,
   place: (file: string) => string | undefined,
 ): SnapshotRow {
+  const turn = surface.turn(row.key);
+  const action = turnAction(turn);
   const shown = action === '' ? undefined : action;
+  const inRunning = surface.running(row.key);
   return {
     key: row.key,
     title: row.title,
@@ -337,6 +343,11 @@ function publish(
       station: row.station,
       phaseRow: row.phaseRow,
       reason: row.reason,
+      phase: surface.cycleLabel?.(row.key) ?? null,
+      running: inRunning,
+      turn,
+      decision: surface.decision?.(row.key),
+      checks: surface.checks?.(row.key),
       action: shown,
     }),
   };
@@ -443,14 +454,7 @@ export function snapshot(surface: SnapshotSurface, view: SnapshotView): WindowSn
     banners: board.rows,
     roles: surface.shelf(),
     reviewPlaces,
-    rows: drawn.map(row =>
-      publish(
-        row,
-        turnAction(surface.turn(row.key)),
-        surface.running(row.key),
-        file => surface.doorPlace(file),
-      ),
-    ),
+    rows: drawn.map(row => publish(row, surface, file => surface.doorPlace(file))),
     ...(view.status !== undefined ? {status: view.status} : {}),
     ...(view.show !== undefined && view.show !== '' ? {show: view.show} : {}),
     ...(view.popup !== undefined ? {popup: view.popup} : {}),

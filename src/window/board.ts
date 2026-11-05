@@ -172,18 +172,6 @@ function phaseRowOf(
   return undefined;
 }
 
-function childKeys(item: WindowTicket, reading: readonly WindowTicket[]): string[] {
-  return reading
-    .filter(
-      record =>
-        record.key !== item.key &&
-        record.labels.includes('sdd:cycle') &&
-        record.parent === item.key,
-    )
-    .map(record => record.key)
-    .sort(keyOrder);
-}
-
 /** Direct link chips for one card from the tickets that have a tile on the board. */
 export function linkMarks(
   item: WindowTicket,
@@ -222,17 +210,6 @@ export function linkMarks(
     row.push({kind: 'hold', key});
   }
   return row;
-}
-
-function blockerKeys(item: WindowTicket, reading: readonly WindowTicket[]): string[] {
-  const known = new Set(reading.map(record => record.key));
-  const found = new Set<string>();
-  for (const key of item.dependsOn ?? []) {
-    if (known.has(key)) {
-      found.add(key);
-    }
-  }
-  return [...found].sort(keyOrder);
 }
 
 /** The phase row already shows this count, so the card keeps the occasion and drops the line. */
@@ -281,14 +258,6 @@ export function reasonParts(
   }
   if (item.mergeAhead === true) {
     parts.push('мерж');
-  }
-  const children = childKeys(item, reading);
-  if (children.length > 0) {
-    parts.push(`дети ${children.join(' ')}`);
-  }
-  const blockers = blockerKeys(item, reading);
-  if (blockers.length > 0) {
-    parts.push(`блокеры ${blockers.join(' ')}`);
   }
   if ((item.openPullRequests ?? 0) > 1) {
     parts.push('несколько pull request');

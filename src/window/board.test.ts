@@ -551,8 +551,7 @@ function proveAChildRecordPutsAndThatKeyOnTheReason63(): void {
     ticket({key: 'no', parent: 'p', queue: 'other', labels: ['other']}),
   ]);
   const card = columnCards(window.board(), 'implementing')?.[0];
-  assert.equal(card?.reason, 'дети c-1 c-2');
-  assert.equal(card?.reason?.includes('no'), false);
+  assert.equal(card?.reason, undefined);
   rmSync(dir, {recursive: true, force: true});
 }
 
@@ -1429,15 +1428,15 @@ spec('board', () => {
           window.chooseAgent('cursor');
           const html = await pageHtml(page.url);
           const plaque = stationOf(html, '1', 'specifying');
-          assert.match(plaque, /блокеры 9/);
-          assert.equal(plaque.includes('restore-baseline'), false);
+          assert.equal(plaque.includes('блокеры'), false);
+          assert.match(plaque, /restore-baseline/);
           assert.match(plaqueButton(plaque), /<svg class="hammer mark"/);
           const card = window
             .board()
             .columns.find(column => column.name === 'specifying')
             ?.cards.find(item => item.key === '1');
           assert.equal(card?.icon, undefined);
-          assert.equal(card?.reason, 'блокеры 9');
+          assert.equal(card?.reason, undefined);
         },
       );
     });
@@ -2644,6 +2643,11 @@ function marksSignature(fragment: string): string {
     .join(',');
 }
 
+function reasonParagraphOf(side: string): string | undefined {
+  const match = side.match(/<h3>повод<\/h3>\s*<p>([^<]*)<\/p>/);
+  return match?.[1];
+}
+
 spec('link-mark', () => {
   requirement('Every card and the open sidebar show the same marks', () => {
     scenario('Every card, in a column and in the pool, and the open sidebar show the same marks', async () => {
@@ -2995,6 +2999,87 @@ spec('link-mark', () => {
           window.chooseAgent('cursor');
           const html = await pageHtml(page.url);
           assert.equal(marksSignature(articleOf(html, '1')), 'child:2,wait:8,hold:9');
+        },
+      );
+    });
+  });
+
+  requirement('The reason block no longer names children or blockers', () => {
+    scenario('The reason block no longer names children or blockers', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'accepting', {
+              labels: ['sdd:cycle', 'sdd:proposed', 'sdd:wait-human'],
+              open: true,
+              mergeAhead: true,
+              dependsOn: ['a'],
+              comments: [{body: 'please decide'}],
+            }),
+            ticket({
+              key: 'c-1',
+              parent: '1',
+              queue: 'alpha',
+              sddService: 'services/billing',
+              labels: ['sdd:cycle', 'sdd:tasking'],
+            }),
+            ticket({key: 'a', queue: 'alpha', sddService: 'services/billing', labels: ['note']}),
+          ],
+        },
+        async (page, window, paths) => {
+          pageWrite(paths.arcadia, '1', 'proposal.md', '## Open questions\n\n- [ ] one\n');
+          window.chooseAgent('cursor');
+          const opened = await post(
+            page.url,
+            'act',
+            new URLSearchParams({act: 'open', key: '1'}).toString(),
+          );
+          assert.equal(opened.status, 200);
+          const line = reasonParagraphOf(bandOf(await pageHtml(page.url), '1'));
+          assert.ok(line !== undefined);
+          assert.equal(line.includes('дети'), false);
+          assert.equal(line.includes('блокеры'), false);
+        },
+      );
+    });
+
+    scenario('Open questions, Ask, and the merge stay in that block', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'accepting', {
+              labels: ['sdd:cycle', 'sdd:proposed', 'sdd:wait-human'],
+              open: true,
+              mergeAhead: true,
+              dependsOn: ['a'],
+              comments: [{body: 'please decide'}],
+            }),
+            ticket({
+              key: 'c-1',
+              parent: '1',
+              queue: 'alpha',
+              sddService: 'services/billing',
+              labels: ['sdd:cycle', 'sdd:tasking'],
+            }),
+            ticket({key: 'a', queue: 'alpha', sddService: 'services/billing', labels: ['note']}),
+          ],
+        },
+        async (page, window, paths) => {
+          pageWrite(paths.arcadia, '1', 'proposal.md', '## Open questions\n\n- [ ] one\n');
+          window.chooseAgent('cursor');
+          const opened = await post(
+            page.url,
+            'act',
+            new URLSearchParams({act: 'open', key: '1'}).toString(),
+          );
+          assert.equal(opened.status, 200);
+          const line = reasonParagraphOf(bandOf(await pageHtml(page.url), '1'));
+          assert.ok(line !== undefined);
+          assert.match(line, /Ask/);
+          assert.match(line, /вопросы 1/);
+          assert.match(line, /мерж/);
         },
       );
     });

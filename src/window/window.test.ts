@@ -350,8 +350,7 @@ test('blockers are dependsOn keys found in this reading, in key order', () => {
     ticket({key: 'a', queue: 'other', labels: ['note']}),
   ]);
   const card = columnCards(window.board(), 'implementing')?.[0];
-  assert.equal(card?.reason, 'блокеры a z');
-  assert.equal(card?.reason?.includes('missing'), false);
+  assert.equal(card?.reason, undefined);
   rmSync(dir, {recursive: true, force: true});
 });
 
@@ -647,7 +646,7 @@ test('the sidebar reason is the card full line', () => {
     ticket({key: 'a', queue: 'other', labels: ['note']}),
   ]);
   const card = columnCards(window.board(), 'accepting')?.find(item => item.key === 'p');
-  const line = 'proposed · Ask · вопросы 1 · мерж · дети c-1 · блокеры a';
+  const line = 'proposed · Ask · вопросы 1 · мерж';
   assert.equal(card?.reason, line);
   window.openCard('p');
   assert.deepEqual(window.sidebar()[0], {kind: 'reason', line});

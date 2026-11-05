@@ -61,8 +61,12 @@ import {
   visibleKeys,
   yard,
 } from './window.harness.ts';
+import {plaqueLines} from './board.ts';
+import {liveFocus} from './focus.ts';
 import {openWindow} from './window.ts';
+import type {BoardTurn} from './types.ts';
 import type {WindowTicket} from './types.ts';
+import type {Decision} from '../machine/policy.ts';
 
 const finishedCycleChange = change({
   proposal: true,
@@ -2589,6 +2593,119 @@ spec('hammer', () => {
           }
         },
       );
+    });
+  });
+});
+
+function reviewGateWait(from: 'proposing' | 'specifying' | 'designing'): Decision {
+  const gate = {
+    proposing: {artifact: 'proposal', from: 'proposing' as const, to: 'proposed' as const},
+    specifying: {artifact: 'spec', from: 'specifying' as const, to: 'specified' as const},
+    designing: {artifact: 'design', from: 'designing' as const, to: 'designed' as const},
+  };
+  const row = gate[from];
+  return {
+    kind: 'wait',
+    issue: '1',
+    reason: `review the ${row.artifact}`,
+    gate: row,
+  };
+}
+
+function plaqueLiveInput(
+  over: {
+    phase?: string;
+    running?: boolean;
+    turn?: BoardTurn;
+    decision?: Decision;
+    checks?: 'green' | 'red' | 'pending' | 'none';
+    ask?: string;
+    phaseRow?: {done: number; open: number} | {waits: string[]};
+  } = {},
+) {
+  const phase = over.phase ?? 'implementing';
+  const focusCtx = {
+    phase,
+    ask: over.ask !== undefined,
+    running: over.running ?? false,
+    turn: over.turn,
+    decision: over.decision,
+    checks: over.checks,
+  };
+  return {
+    focusCtx,
+    plaque: plaqueLines({
+      phase,
+      running: over.running,
+      turn: over.turn,
+      decision: over.decision,
+      checks: over.checks,
+      ask: over.ask,
+      phaseRow: over.phaseRow,
+    }),
+    live: liveFocus(focusCtx),
+  };
+}
+
+spec('live-focus-page', () => {
+  requirement('The closed plaque shows the live sentence until the reason passes', () => {
+    scenario('The plaque shows the same live sentence as the open page', () => {
+      const {live, plaque} = plaqueLiveInput({
+        running: true,
+        turn: {phase: 'implementing', action: 'implement-next-task'},
+        phaseRow: {done: 1, open: 3},
+      });
+      assert.ok(live);
+      assert.equal(plaque.bottom, live.text);
+      assert.equal(plaque.bottom?.includes('Done'), false);
+    });
+    scenario('That sentence leaves when the reason passes', () => {
+      const whileRunning = plaqueLiveInput({
+        running: true,
+        turn: {phase: 'implementing', action: 'implement-next-task'},
+      });
+      assert.ok(whileRunning.live);
+      assert.equal(whileRunning.plaque.bottom, whileRunning.live.text);
+      const after = plaqueLiveInput({
+        running: false,
+        turn: undefined,
+        phaseRow: {done: 0, open: 2},
+      });
+      assert.equal(after.live, undefined);
+      assert.equal(after.plaque.bottom, 'Done 0/2');
+      assert.equal(after.plaque.bottom?.includes('implement-next-task') ?? false, false);
+    });
+    scenario('The Done count stays when no live reason applies', () => {
+      const {live, plaque} = plaqueLiveInput({
+        phaseRow: {done: 1, open: 3},
+      });
+      assert.equal(live, undefined);
+      assert.equal(plaque.bottom, 'Done 1/4');
+    });
+    scenario('The narrow Waits for line is only the child wait at tasking', () => {
+      const {plaque} = plaqueLiveInput({
+        phase: 'tasking',
+        phaseRow: {waits: ['12']},
+      });
+      assert.equal(plaque.bottom, 'Waits for 12');
+      assert.equal(plaque.bottom?.includes('7'), false);
+      assert.equal(plaque.bottom?.includes('until'), false);
+      assert.equal(plaque.bottom?.includes('create-tasks'), false);
+      assert.equal(plaque.bottom?.includes('slot'), false);
+      assert.equal(plaque.bottom?.includes('checks'), false);
+    });
+  });
+  requirement('A review gate keeps the written focus and the ask', () => {
+    scenario('On a review gate the plaque does not take the live sentence', () => {
+      const {live, plaque} = plaqueLiveInput({
+        phase: 'specifying',
+        running: true,
+        turn: {phase: 'implementing', action: 'implement-next-task'},
+        decision: reviewGateWait('specifying'),
+      });
+      assert.equal(live, undefined);
+      assert.equal(plaque.bottom?.includes('implement-next-task') ?? false, false);
+      assert.equal(plaque.bottom?.includes('→') ?? false, false);
     });
   });
 });

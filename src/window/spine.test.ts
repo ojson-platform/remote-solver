@@ -1015,3 +1015,172 @@ spec('written-focus-page', () => {
     },
   );
 });
+
+const ACCEPT_MACHINE = 'На приёмке машина мержит сама.';
+const ACCEPT_PERSON = 'На приёмке мерж ждёт человека.';
+const ACCEPT_MARK_ON = 'Метка sdd:auto-merge стоит. Машина мержит сама, когда проверки зелёные.';
+const ACCEPT_MARK_OFF = 'Метки sdd:auto-merge нет. Машина мержит только с этой меткой.';
+
+function acceptRowSentence(html: string, key: string): string {
+  return spineRowSentence(html, key, 'Accept');
+}
+
+function acceptFold(html: string, key: string): string {
+  return spineOf(html, key, 'Accept');
+}
+
+spec('accept-caption', () => {
+  requirement('The Accept row caption is the auto-merge sentence', () => {
+    scenario("The Accept row's caption becomes the first sentence of that comment", async () => {
+      const spine = buildSpine({
+        key: '1',
+        station: 'accepting',
+        gateOff: {accepting: true},
+        focusComments: [{body: 'sdd:focus:accept\nAccept gate is ready. Not a spine row.\n'}],
+      });
+      assert.equal(spine.accept, 'Accept gate is ready.');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'accepting', {
+              openPullRequests: 1,
+              labels: ['sdd:cycle', 'sdd:accepting', 'sdd:auto-merge'],
+              comments: [{body: 'sdd:focus:accept\nAccept gate is ready. Not a spine row.\n'}],
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          assert.equal(acceptRowSentence(html, '1'), 'Accept gate is ready.');
+          assert.equal(acceptFold(html, '1').includes(ACCEPT_MARK_ON), false);
+          assert.equal(acceptFold(html, '1').includes(ACCEPT_MARK_OFF), false);
+        },
+      );
+    });
+
+    scenario('Until the comment exists, the row keeps the sentence about auto-merge', async () => {
+      const spine = buildSpine({
+        key: '1',
+        station: 'accepting',
+        gateOff: {accepting: true},
+        focusComments: [],
+      });
+      assert.equal(spine.accept, ACCEPT_MACHINE);
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'accepting', {
+              openPullRequests: 1,
+              labels: ['sdd:cycle', 'sdd:accepting', 'sdd:auto-merge'],
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          assert.equal(acceptRowSentence(html, '1'), ACCEPT_MACHINE);
+        },
+      );
+    });
+
+    scenario('Auto-merge sets the machine sentence', async () => {
+      const spine = buildSpine({
+        key: '1',
+        station: 'accepting',
+        gateOff: {accepting: true},
+      });
+      assert.equal(spine.accept, ACCEPT_MACHINE);
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'accepting', {
+              openPullRequests: 1,
+              labels: ['sdd:cycle', 'sdd:accepting', 'sdd:auto-merge'],
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          assert.equal(acceptRowSentence(html, '1'), ACCEPT_MACHINE);
+          assert.match(acceptFold(html, '1'), new RegExp(ACCEPT_MARK_ON.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+        },
+      );
+    });
+
+    scenario('No auto-merge sets the person sentence', async () => {
+      const spine = buildSpine({
+        key: '1',
+        station: 'accepting',
+      });
+      assert.equal(spine.accept, ACCEPT_PERSON);
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'accepting', {openPullRequests: 1})],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          assert.equal(acceptRowSentence(html, '1'), ACCEPT_PERSON);
+          assert.match(acceptFold(html, '1'), new RegExp(ACCEPT_MARK_OFF.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+        },
+      );
+    });
+
+    scenario('A focus comment leaves the caption', async () => {
+      const spine = buildSpine({
+        key: '1',
+        station: 'accepting',
+        focusComments: [{body: 'sdd:focus:plan\nPlan must not touch Accept.\n'}],
+      });
+      assert.equal(spine.accept, ACCEPT_PERSON);
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'accepting', {
+              openPullRequests: 1,
+              comments: [{body: 'sdd:focus:plan\nPlan must not touch Accept.\n'}],
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          assert.equal(acceptRowSentence(html, '1'), ACCEPT_PERSON);
+          assert.match(acceptFold(html, '1'), new RegExp(ACCEPT_MARK_OFF.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+        },
+      );
+    });
+  });
+});

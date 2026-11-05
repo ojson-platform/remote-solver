@@ -26,7 +26,7 @@ import {
   wantsSnapshot,
   type ReadSlot,
 } from './client/frame.ts';
-import {openedShot, shot, spineReady, withGate} from './client/frame.fixture.ts';
+import {openedShot, rowOf, shot, spineReady, withGate} from './client/frame.fixture.ts';
 
 const SPEC_ID = 'case-read';
 
@@ -706,6 +706,23 @@ spec('live-frame', () => {
       assert.equal(second.sections.plan, first.sections.plan);
       assert.notEqual(second.sections.focus, first.sections.focus);
       assert.notEqual(second.lines, first.lines);
+    });
+  });
+});
+
+spec('accept-caption', () => {
+  requirement('The Accept row caption is the auto-merge sentence', () => {
+    scenario('Before the spine is read the caption waits for a person', () => {
+      const base = withGate({proposing: true, designing: true, accepting: true});
+      const row = rowOf(base);
+      const accepting = {...row, station: 'accepting'};
+      const board = {...base, rows: [accepting]};
+      const hold = holdGesture(emptyHold(), 1, 'open', new URLSearchParams('key=7'), board);
+      const opened = paintFrame(board, hold).opened;
+      assert.ok(opened);
+      assert.equal(spineReady(opened), false);
+      assert.equal(opened.spine.open, 'Accept');
+      assert.equal(opened.spine.accept, 'На приёмке мерж ждёт человека.');
     });
   });
 });

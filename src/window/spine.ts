@@ -9,7 +9,8 @@ import {changeDir} from '../machine/naming.ts';
 
 import {strictChangeFiles, strictContentChangeFiles} from './change-files.ts';
 import {scanFocusComments} from './focus.ts';
-import {isFocusRecord} from '../machine/marker.ts';
+import {firstFocusSentence} from '../machine/focus.ts';
+import {focusMarkerLine, isFocusRecord} from '../machine/marker.ts';
 import {specDiff} from './spec-diff.ts';
 import type {WindowComment} from './types.ts';
 
@@ -393,6 +394,41 @@ function baselineListed(rel: string, baselines: readonly string[]): boolean {
   return match !== null && baselines.includes(match[1] ?? '');
 }
 
+const ACCEPT_MACHINE = 'На приёмке машина мержит сама.';
+const ACCEPT_PERSON = 'На приёмке мерж ждёт человека.';
+
+function autoMergeAcceptCaption(gateOff?: Partial<Record<GateStation, true>>): string {
+  return gateOff?.accepting ? ACCEPT_MACHINE : ACCEPT_PERSON;
+}
+
+function latestAcceptFocusCaption(comments: readonly WindowComment[] | undefined): string | undefined {
+  let caption: string | undefined;
+  for (const comment of comments ?? []) {
+    if (comment.manager || !isFocusRecord(comment.body)) {
+      continue;
+    }
+    if (focusMarkerLine(comment.body) !== 'sdd:focus:accept') {
+      continue;
+    }
+    const sentence = firstFocusSentence(comment.body);
+    if (sentence) {
+      caption = sentence;
+    }
+  }
+  return caption;
+}
+
+function acceptCaptionOf(input: {
+  focusComments?: readonly WindowComment[];
+  gateOff?: Partial<Record<GateStation, true>>;
+}): string {
+  const fromFocus = latestAcceptFocusCaption(input.focusComments);
+  if (fromFocus) {
+    return fromFocus;
+  }
+  return autoMergeAcceptCaption(input.gateOff);
+}
+
 /** The spine of one ticket from branch bytes already read, plus the ticket fields the row shows. */
 export function projectSpine(
   text: BranchText,
@@ -497,9 +533,7 @@ export function projectSpine(
     pull: input.pull === true,
     ...(input.reviewGate ? {reviewGate: input.reviewGate} : {}),
     readPath: (text.root && text.root !== '' ? text.root : changeDir(input.key)).split('\\').join('/'),
-    accept: input.gateOff?.accepting
-      ? 'На приёмке машина мержит сама.'
-      : 'На приёмке мерж ждёт человека.',
+    accept: acceptCaptionOf(input),
     sections,
   };
 }

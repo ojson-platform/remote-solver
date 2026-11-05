@@ -26,8 +26,11 @@ Implementation in remote-solver assumes the CLI already behaves this way (same t
 
 ### Added
 
-### Modified
+- `archive-fold`: The OpenSpec CLI applies a change delta onto baselines with `openspec archive issue-<key> --yes`, RENAMED, then REMOVED, then MODIFIED, then ADDED.
+- `archive-park`: The OpenSpec CLI parks the change under `openspec/changes/archive/<date>-issue-<key>/`.
+- `archive-purpose`: On a spec that did not exist, the archive writes placeholder Purpose (`TBD - created by archiving change ...`), and it leaves an existing spec's Purpose unchanged.
+- `archive-refusal`: The archive refuses with a non-zero exit when a baseline would have no requirement after the fold, and it does not commit.
 
-- `archive-fold`: The OpenSpec CLI applies a change delta onto baselines with `openspec archive issue-<key> --yes` and refuses an empty baseline without committing.
+### Modified
 
 ## Open questions

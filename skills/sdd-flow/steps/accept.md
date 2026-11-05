@@ -12,7 +12,7 @@ Folds the delta into the baseline on the same PR, by `CONTEXT.md` § Delta. A pe
 
 ## archive
 
-1. Fold with `openspec archive issue-<issue> --yes` instead of editing each baseline by hand. The command applies RENAMED, then REMOVED, then MODIFIED, then ADDED. The command archives to `openspec/changes/archive/<date>-issue-<issue>/`. Keep the scenario meaning.
+1. Fold with `openspec archive issue-<issue> --yes` instead of editing each baseline by hand. The command applies RENAMED, then REMOVED, then MODIFIED, then ADDED. The command archives to `openspec/changes/archive/<date>-issue-<issue>/`. Keep the scenario meaning. When the command exits non-zero, or prints `Aborted. No files were changed.`, stop. Do not commit and do not publish. When the output says the rebuilt spec would have no requirement (`Spec must have at least one requirement`), Wait naming that baseline (`openspec/specs/<capability>/spec.md`).
 2. Move `openspec/changes/archive/<date>-issue-<issue>/` to `openspec/changes/archive/issue-<issue>/`.
 3. In the same commit as the fold and move, for each line under `## Capabilities` in `openspec/changes/archive/issue-<issue>/proposal.md`, when `openspec/specs/<capability>/spec.md` still has Purpose `TBD - created by archiving change ...`, set Purpose to the gist words after the capability id on that line. Do not open or rewrite Purpose on a spec that did not get that placeholder, including an existing baseline such as `spec-archive`.
 4. Run `openspec validate --all --strict --no-interactive`.

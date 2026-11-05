@@ -29,6 +29,9 @@ const FIXTURE_KEY = '88';
 const FIXTURE_CAPABILITY = 'archive-fold-cap';
 const REMOVAL_MARKER = 'REMOVAL-PROSE-SHOULD-NOT-COPY-TO-BASELINE';
 
+const EMPTY_BASELINE_FIXTURE_KEY = '90';
+const EMPTY_BASELINE_CAPABILITY = 'archive-refusal-cap';
+
 const NEW_CAP_FIXTURE_KEY = '89';
 const NEW_CAP_CAPABILITY = 'archive-purpose-new';
 const NEW_CAP_PROPOSAL_GIST = 'gist words after the capability id in the proposal';
@@ -288,6 +291,82 @@ function runAcceptArchivePath(root: string, key: string = FIXTURE_KEY): string {
   });
 }
 
+function runArchiveMaybeRefused(root: string, key: string): {status: number | null; output: string} {
+  try {
+    const output = execFileSync('openspec', ['archive', `issue-${key}`, '--yes'], {
+      cwd: root,
+      encoding: 'utf8',
+    });
+    return {status: 0, output};
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException & {status?: number; stdout?: string; stderr?: string};
+    const output = `${err.stdout ?? ''}${err.stderr ?? ''}`;
+    return {status: err.status ?? null, output};
+  }
+}
+
+function emptyBaselineFixture(): string {
+  const root = mkdtempSync(path.join(tmpdir(), 'sandcastle-archive-refusal-'));
+  git(root, ['init', '-b', 'master']);
+  git(root, ['config', 'user.email', 'archive@test.example']);
+  git(root, ['config', 'user.name', 'Archive Test']);
+
+  mkdirSync(path.join(root, 'openspec', 'specs', EMPTY_BASELINE_CAPABILITY), {recursive: true});
+  mkdirSync(
+    path.join(
+      root,
+      'openspec',
+      'changes',
+      `issue-${EMPTY_BASELINE_FIXTURE_KEY}`,
+      'specs',
+      EMPTY_BASELINE_CAPABILITY,
+    ),
+    {recursive: true},
+  );
+  copyFileSync(openspecConfig, path.join(root, 'openspec/config.yaml'));
+
+  writeFileSync(
+    path.join(root, 'openspec/specs', EMPTY_BASELINE_CAPABILITY, 'spec.md'),
+    [
+      `# ${EMPTY_BASELINE_CAPABILITY}`,
+      '',
+      '## Purpose',
+      '',
+      'Baseline purpose long enough that openspec validation accepts this fixture spec file.',
+      '',
+      '## Requirements',
+      '',
+      '### Requirement: Only requirement',
+      '',
+      'The system SHALL keep this sole requirement until archive refuses the fold.',
+      '',
+      '#### Scenario: Sole scenario',
+      '',
+      '- **WHEN** sole',
+      '- **THEN** sole',
+      '',
+    ].join('\n'),
+  );
+
+  writeFileSync(
+    path.join(
+      root,
+      'openspec',
+      'changes',
+      `issue-${EMPTY_BASELINE_FIXTURE_KEY}`,
+      'specs',
+      EMPTY_BASELINE_CAPABILITY,
+      'spec.md',
+    ),
+    ['## REMOVED Requirements', '', '### Requirement: Only requirement', ''].join('\n'),
+  );
+
+  writeFileSync(path.join(root, 'README.md'), 'fixture\n');
+  git(root, ['add', '-A']);
+  git(root, ['commit', '-m', 'init']);
+  return root;
+}
+
 spec('spec-archive', () => {
   requirement('The accept step folds a delta with the archive command', () => {
     scenario(
@@ -514,6 +593,51 @@ spec('spec-archive', () => {
         const after = purposeLine(readFileSync(specPath, 'utf8'));
         assert.equal(after, before);
         assert.equal(after, EXISTING_BASELINE_PURPOSE);
+      } finally {
+        rmSync(root, {recursive: true, force: true});
+      }
+    });
+  });
+
+  requirement('A refusal does not publish', () => {
+    scenario('When the command refuses, the step does not publish', () => {
+      const section = archiveSection(readFileSync(acceptStep, 'utf8'));
+      assert.match(
+        section,
+        /openspec archive issue-<issue> --yes[\s\S]*?(?:exits non-zero|non-zero exit)[\s\S]*?do not (?:commit and )?publish/i,
+      );
+      assert.doesNotMatch(section, /openspec archive[\s\S]*?Publish[\s\S]*?(?:exits non-zero|non-zero|Aborted)/i);
+
+      const root = emptyBaselineFixture();
+      try {
+        const before = commitCount(root);
+        const {output} = runArchiveMaybeRefused(root, EMPTY_BASELINE_FIXTURE_KEY);
+        assert.match(output, /Aborted\. No files were changed\.|at least one requirement/i);
+        assert.equal(commitCount(root), before);
+        assert.ok(
+          existsSync(
+            path.join(root, 'openspec', 'changes', `issue-${EMPTY_BASELINE_FIXTURE_KEY}`),
+          ),
+        );
+      } finally {
+        rmSync(root, {recursive: true, force: true});
+      }
+    });
+
+    scenario('A refusal because a baseline would have no requirement is a Wait that names that baseline', () => {
+      const body = readFileSync(acceptStep, 'utf8');
+      const section = archiveSection(body);
+      const stop = body.split(/^## Stop/m)[1] ?? '';
+      assert.match(
+        section,
+        /(?:no requirement|at least one requirement)[\s\S]*?Wait[\s\S]*?openspec\/specs\/<capability>\/spec\.md/i,
+      );
+      assert.match(stop, /(?:no requirement|baseline)[\s\S]*?Wait[\s\S]*?baseline/i);
+
+      const root = emptyBaselineFixture();
+      try {
+        const {output} = runArchiveMaybeRefused(root, EMPTY_BASELINE_FIXTURE_KEY);
+        assert.match(output, /at least one requirement/i);
       } finally {
         rmSync(root, {recursive: true, force: true});
       }

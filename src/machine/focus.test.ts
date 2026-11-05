@@ -498,8 +498,14 @@ spec('focus', () => {
     scenario('The first paragraph is the updated answer to the phase question', async () => {
       const {posted} = await runPostFocus(FOCUS_BODIES.specThreadFix, {files: [file('specs/focus/spec.md')]});
       const first = focusProseParagraphs(focusProse(posted[0] ?? '') ?? '')[0] ?? '';
-      assert.match(first, /дельта|Specify|проз/i);
-      assert.equal(firstFocusSentence(posted[0] ?? ''), first.split('\n')[0]);
+      assert.match(first, /нов|измен|сценар/i);
+      assert.equal(
+        firstFocusSentence(posted[0] ?? ''),
+        'Новое обещание — проза на issue; изменено обещание о форме комментария.',
+      );
+      const weakThreadFix =
+        'sdd:focus:plan\nотказ\n\nЗамечание про ledger — убрали из прозы.\n';
+      assert.equal(validateFocusBody(weakThreadFix), 'thread-fix first paragraph answers the phase question');
     });
 
     scenario(

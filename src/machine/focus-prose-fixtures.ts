@@ -21,7 +21,11 @@ export const FOCUS_BODIES = {
   planWeak:
     'sdd:focus:plan\nДля читателя тикета scope ясен; отказались от ledger; слабое место — формулировка Outcome для archive.\n',
   tasksClean:
-    'sdd:focus:tasks\nТри слайса: маркеры, проза, окно.\n',
+    'sdd:focus:tasks\nТри слайса по порядку: маркеры, проза, окно; window-focus-display ждёт focus-prose-comment.\n',
+  planThreadFix:
+    'sdd:focus:plan\nДля читателя тикета уточнили отказ от diff; первый абзац отвечает на вопрос Plan.\n\nЗамечание про ledger — убрали из прозы.\n',
+  specRefusalSecond:
+    'sdd:focus:spec\nНовое обещание — проза; изменено обещание о маркере. Сценарий «The prose is Russian» без него непонятен. Пагинацию не даём.\n\nОтказались включать пагинацию комментариев в этот PR.\n',
   designClean:
     'sdd:focus:design\nПоведение живёт в focus.ts; отвергли ledger в комментарии. Окно не переписывает — сознательно не строим. Наблюдаем в focus.test.ts.\n',
 } as const;

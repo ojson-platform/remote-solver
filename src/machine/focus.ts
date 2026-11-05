@@ -155,43 +155,63 @@ const OPEN_ITEM = /-\s*\[\s*[ xX]\]/;
 const LEDGER_MARK = /Plan solid|thread PRRT|^## /m;
 const CYRILLIC = /[\u0400-\u04FF]/;
 
-const MARKER_SHAPE: Record<
-  FocusMarkerLine,
-  {need: RegExp[]; maxParas: number; minParas?: number}
-> = {
+const MARKER_SHAPE: Record<FocusMarkerLine, {need: RegExp[]; maxParas: number}> = {
   'sdd:focus:plan': {
-    need: [/читател|тикет|отказ/i, /reader of the ticket|refused/i],
+    need: [/читател|тикет|reader of the ticket/i, /отказ|refused/i],
     maxParas: 2,
   },
   'sdd:focus:spec': {
-    need: [/нов|измен|обещан|сценар/i, /не даём|does not make/i],
-    maxParas: 3,
+    need: [
+      /нов|измен|new|existing promise changed/i,
+      /сценар|scenario without/i,
+      /не даём|does not make/i,
+    ],
+    maxParas: 2,
   },
   'sdd:focus:design': {
-    need: [/жив|отверг|не стро|наблюд/i],
+    need: [/жив|behavior lives/i, /отверг|rejected/i, /не стро|deliberately not/i, /наблюд|observed/i],
     maxParas: 2,
   },
   'sdd:focus:tasks': {
-    need: [/слайс|порядок|ждёт|waits/i],
+    need: [/слайс|slice/i, /порядок|порядк|order|Сначала|затем/i, /ждёт|waits/i],
     maxParas: 2,
   },
   'sdd:focus:code': {
-    need: [/после коммита|стало|не трог|не доказ/i],
-    maxParas: 3,
+    need: [/после коммита|became true/i, /не трог|left untouched/i, /не доказ|does not prove/i],
+    maxParas: 2,
   },
   'sdd:focus:accept': {
-    need: [/есть|намерен|capabilit|сценари/i],
+    need: [
+      /есть|has now|person has now/i,
+      /намерен|left out on purpose/i,
+      /capabilit|сценари|тест|scenarios.*test/i,
+    ],
     maxParas: 2,
   },
   'sdd:focus': {
-    need: [/pull request|PR|весь/i],
+    need: [/pull request|PR|whole|весь/i],
     maxParas: 2,
   },
 };
 
+const THREAD_FIX_REMARK = /замечан|remark|ревью/i;
+const FURTHER_PARA = /отказ|refused|слаб|weak|слабое место|открыт|open questions/i;
+const LOOK_AT = /смотреть|look at/i;
+
 function markerContentOk(marker: FocusMarkerLine, prose: string): boolean {
   const shape = MARKER_SHAPE[marker];
-  return shape.need.some(re => re.test(prose));
+  return shape.need.every(re => re.test(prose));
+}
+
+/** Thread-fix visits name remarks in the second paragraph or add a third look-at paragraph. */
+function isThreadFixVisit(paras: readonly string[]): boolean {
+  if (paras.length >= 3) {
+    return true;
+  }
+  if (paras.length >= 2 && THREAD_FIX_REMARK.test(paras[1] ?? '')) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -218,18 +238,29 @@ export function validateFocusBody(body: string): string | undefined {
   }
   const paras = focusProseParagraphs(prose);
   const shape = MARKER_SHAPE[marker];
-  if (paras.length > shape.maxParas) {
+  const threadFix = isThreadFixVisit(paras);
+  const maxParas = threadFix ? 3 : shape.maxParas;
+  if (paras.length > maxParas) {
     return 'too many paragraphs for this marker';
   }
-  if (!markerContentOk(marker, prose)) {
+  if (!threadFix && !markerContentOk(marker, prose)) {
     return 'prose missing required shape for marker';
+  }
+  if (threadFix) {
+    if (paras.length >= 2 && !THREAD_FIX_REMARK.test(paras[1] ?? '')) {
+      return 'thread-fix second paragraph names remarks';
+    }
+    if (paras.length === 3 && !LOOK_AT.test(paras[2] ?? '')) {
+      return 'last paragraph must say what to look at';
+    }
+    return undefined;
   }
   if (marker === 'sdd:focus:plan') {
     const hasPointer = /\d+\s+открыт|open questions/i.test(prose);
     if (hasPointer && paras.length !== 2) {
       return 'plan with open questions needs two paragraphs';
     }
-    if (!hasPointer && paras.length !== 1) {
+    if (!hasPointer && paras.length !== 1 && !(paras.length === 2 && FURTHER_PARA.test(paras[1] ?? ''))) {
       return 'clean plan focus is one paragraph';
     }
     if (hasPointer && paras[1] && OPEN_ITEM.test(paras[1])) {
@@ -240,12 +271,10 @@ export function validateFocusBody(body: string): string | undefined {
       return 'clean phase omits weak-spot wording';
     }
   }
-  if (marker === 'sdd:focus:spec' && paras.length >= 2) {
-    if (!/замечан|remark|ревью/i.test(paras[1] ?? '')) {
-      return 'thread-fix second paragraph names remarks';
-    }
-    if (paras.length === 3 && !/смотреть|look at/i.test(paras[2] ?? '')) {
-      return 'last paragraph must say what to look at';
+  if (paras.length === 2 && marker !== 'sdd:focus:plan') {
+    const second = paras[1] ?? '';
+    if (!FURTHER_PARA.test(second)) {
+      return 'further paragraph must be refusal, open questions, or weak check';
     }
   }
   return undefined;

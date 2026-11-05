@@ -54,6 +54,8 @@ export type WindowTicket = {
   checks?: 'green' | 'red' | 'pending' | 'none';
   parent?: string;
   dependsOn?: readonly string[];
+  blockedBy?: readonly string[];
+  blocks?: readonly string[];
   openPullRequests?: number;
   /** Id of the single open pull request. */
   pull?: string;
@@ -289,6 +291,8 @@ export type PoolCard = {
   service?: string;
   /** Id of the single open pull request. */
   pull?: string;
+  /** Direct link chips derived from the board. */
+  marks?: readonly LinkMark[];
 };
 
 export const COLUMN_NAMES = [
@@ -320,6 +324,11 @@ export function isGateStation(name: string): name is GateStation {
 }
 
 export type PhaseRow = number | {done: number; open: number} | 'green' | 'red' | 'pending';
+
+export type LinkMarkKind = 'child' | 'wait' | 'hold';
+
+/** One direct link chip on a card or in the sidebar header. */
+export type LinkMark = {kind: LinkMarkKind; key: string};
 
 export type DoorKind = 'plan' | 'spec' | 'design' | 'tasks' | 'code' | 'check';
 
@@ -357,6 +366,8 @@ export type CycleCard = {
   service?: string;
   /** Id of the single open pull request. */
   pull?: string;
+  /** Direct link chips derived from the board. */
+  marks?: readonly LinkMark[];
 };
 
 export type BoardState = {

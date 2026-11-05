@@ -19,6 +19,7 @@ import {
   type PhaseRow,
   type PoolCard,
   type StationDoor,
+  type LinkMark,
   type WindowReview,
   type WindowTicket,
 } from './types.ts';
@@ -181,6 +182,46 @@ function childKeys(item: WindowTicket, reading: readonly WindowTicket[]): string
     )
     .map(record => record.key)
     .sort(keyOrder);
+}
+
+/** Direct link chips for one card from the tickets that have a tile on the board. */
+export function linkMarks(
+  item: WindowTicket,
+  onBoard: readonly WindowTicket[],
+): LinkMark[] {
+  const keys = new Set(onBoard.map(record => record.key));
+  const children = onBoard
+    .filter(
+      record =>
+        record.labels.includes('sdd:cycle') &&
+        record.parent === item.key,
+    )
+    .map(record => record.key)
+    .sort(keyOrder);
+  const waitKeys = new Set<string>();
+  for (const key of item.blockedBy ?? []) {
+    if (keys.has(key)) {
+      waitKeys.add(key);
+    }
+  }
+  for (const key of item.dependsOn ?? []) {
+    if (keys.has(key)) {
+      waitKeys.add(key);
+    }
+  }
+  const waits = [...waitKeys].sort(keyOrder);
+  const holds = (item.blocks ?? []).filter(key => keys.has(key)).sort(keyOrder);
+  const row: LinkMark[] = [];
+  for (const key of children) {
+    row.push({kind: 'child', key});
+  }
+  for (const key of waits) {
+    row.push({kind: 'wait', key});
+  }
+  for (const key of holds) {
+    row.push({kind: 'hold', key});
+  }
+  return row;
 }
 
 function blockerKeys(item: WindowTicket, reading: readonly WindowTicket[]): string[] {
@@ -773,6 +814,33 @@ export function lay(input: {
     buckets.set(column, list);
   }
   pool.sort(byKey);
+  const onBoardKeys = new Set<string>(pool.map(card => card.key));
+  for (const list of buckets.values()) {
+    for (const placed of list) {
+      onBoardKeys.add(placed.card.key);
+    }
+  }
+  const onBoard = reading.filter(record => onBoardKeys.has(record.key));
+  for (const card of pool) {
+    const item = reading.find(record => record.key === card.key);
+    if (item) {
+      const marks = linkMarks(item, onBoard);
+      if (marks.length > 0) {
+        card.marks = marks;
+      }
+    }
+  }
+  for (const list of buckets.values()) {
+    for (const placed of list) {
+      const item = reading.find(record => record.key === placed.card.key);
+      if (item) {
+        const marks = linkMarks(item, onBoard);
+        if (marks.length > 0) {
+          placed.card.marks = marks;
+        }
+      }
+    }
+  }
   return {
     taken,
     pool,

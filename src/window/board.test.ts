@@ -2626,3 +2626,166 @@ spec('finished-cycle', () => {
     });
   });
 });
+
+function parsedLinkMarks(fragment: string): {kind: string; key: string}[] {
+  const found: {kind: string; key: string}[] = [];
+  const re = /<li class="link-mark" data-kind="([^"]+)">([^<]+)<\/li>/g;
+  for (const match of fragment.matchAll(re)) {
+    if (match[1] && match[2]) {
+      found.push({kind: match[1], key: match[2]});
+    }
+  }
+  return found;
+}
+
+function marksSignature(fragment: string): string {
+  return parsedLinkMarks(fragment)
+    .map(mark => `${mark.kind}:${mark.key}`)
+    .join(',');
+}
+
+spec('link-mark', () => {
+  requirement('Every card and the open sidebar show the same marks', () => {
+    scenario('Every card, in a column and in the pool, and the open sidebar show the same marks', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {blocks: ['2']}),
+            ticket({key: '2', queue: 'alpha', sddService: 'services/billing', title: 'Held'}),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const column = await pageHtml(page.url);
+          const columnSig = marksSignature(articleOf(column, '1'));
+          const poolSig = marksSignature(articleOf(column, '2'));
+          assert.equal(columnSig, 'hold:2');
+          assert.equal(poolSig, '');
+          const opened = await post(
+            page.url,
+            'act',
+            new URLSearchParams({act: 'open', key: '1'}).toString(),
+          );
+          assert.equal(opened.status, 200);
+          const html = await pageHtml(page.url);
+          const sidebarSig = marksSignature(bandOf(html, '1'));
+          assert.equal(columnSig, sidebarSig);
+        },
+      );
+    });
+    scenario('A mark is a chip with a number', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {dependsOn: ['9']}),
+            held('9', 'specifying'),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          const marks = parsedLinkMarks(articleOf(html, '1'));
+          assert.deepEqual(marks, [{kind: 'wait', key: '9'}]);
+          assert.match(html, /<li class="link-mark" data-kind="wait">9<\/li>/);
+        },
+      );
+    });
+    scenario('A mark is shown only when the other issue is on the board', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'implementing', {blockedBy: ['99'], dependsOn: ['98']})],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          assert.equal(parsedLinkMarks(articleOf(html, '1')).length, 0);
+        },
+      );
+    });
+    scenario('A closed issue and a cancelled issue are absent, so they have no mark', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing'),
+            ticket({
+              key: '2',
+              parent: '1',
+              queue: 'alpha',
+              sddService: 'services/billing',
+              labels: ['sdd:cycle', 'sdd:cancelled'],
+            }),
+            cycle('3', 'tasking', {parent: '1', open: false, labels: ['sdd:cycle', 'sdd:accepted']}),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          assert.equal(marksSignature(articleOf(html, '1')), '');
+        },
+      );
+    });
+    scenario('A mark is direct', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {blocks: ['9']}),
+            held('9', 'specifying', {blocks: ['10']}),
+            held('10', 'tasking'),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          assert.equal(marksSignature(articleOf(html, '1')), 'hold:9');
+          assert.equal(marksSignature(articleOf(html, '9')), 'hold:10');
+        },
+      );
+    });
+    scenario('The issue that holds another lists that next issue, not the issues beyond it', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {blocks: ['9']}),
+            held('9', 'specifying', {blocks: ['10']}),
+            held('10', 'tasking'),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          assert.equal(parsedLinkMarks(articleOf(html, '1')).map(mark => mark.key).join(','), '9');
+        },
+      );
+    });
+    scenario('When one issue is both a child and a blocker, the card shows both marks', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {blockedBy: ['5']}),
+            ticket({
+              key: '5',
+              parent: '1',
+              queue: 'alpha',
+              sddService: 'services/billing',
+              labels: ['sdd:cycle', 'sdd:specifying'],
+              assignee: '',
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const html = await pageHtml(page.url);
+          assert.equal(marksSignature(articleOf(html, '1')), 'child:5,wait:5');
+          assert.equal(marksSignature(articleOf(html, '5')), '');
+        },
+      );
+    });
+  });
+});

@@ -1,6 +1,6 @@
 import type {ReactNode} from 'react';
 
-import type {ColumnName, GateStation, PhaseRow} from '../types.ts';
+import type {ColumnName, GateStation, LinkMark, PhaseRow} from '../types.ts';
 import {COLUMN_NAMES, isGateStation} from '../types.ts';
 import type {SnapshotRow} from '../snapshot.ts';
 
@@ -18,6 +18,21 @@ function phaseStat(row: PhaseRow): ReactNode {
     <div className="stat">
       {row.done} сделано · {row.open} открыто
     </div>
+  );
+}
+
+export function LinkMarks({marks}: {marks: readonly LinkMark[] | undefined}): ReactNode {
+  if (marks === undefined || marks.length === 0) {
+    return null;
+  }
+  return (
+    <ul className="link-marks">
+      {marks.map(mark => (
+        <li className="link-mark" data-kind={mark.kind} key={`${mark.kind}-${mark.key}`}>
+          {mark.key}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -186,6 +201,7 @@ export function Ticket({row, open}: {row: SnapshotRow; open: boolean}): ReactNod
                 </button>
               </ActForm>
             </div>
+            <LinkMarks marks={row.marks} />
           </div>
           {row.pool ? <Corner row={row} /> : null}
         </div>

@@ -7,6 +7,7 @@ import type {
   RoleOutcome,
   ServiceConfigGroup,
   SettingsState,
+  LinkMark,
   SidebarBlock,
   StationDoor,
 } from './types.ts';
@@ -57,6 +58,7 @@ export type SnapshotRow = {
   occasion?: true;
   doors?: Partial<Record<ColumnName, SnapshotDoor>>;
   gateOff?: Partial<Record<GateStation, true>>;
+  marks?: readonly LinkMark[];
 };
 
 export type WindowSnapshot = {
@@ -146,6 +148,7 @@ type Fact = {
   repo?: string;
   service?: string;
   pull?: string;
+  marks?: readonly LinkMark[];
 };
 
 export function ticketLinks(input: {key: string; repo?: string; service?: string; pull?: string}): {
@@ -243,6 +246,7 @@ function facts(board: BoardState): Fact[] {
       ...(card.repo !== undefined ? {repo: card.repo} : {}),
       ...(card.service !== undefined ? {service: card.service} : {}),
       ...(card.pull !== undefined ? {pull: card.pull} : {}),
+      ...(card.marks !== undefined && card.marks.length > 0 ? {marks: card.marks} : {}),
     })),
   );
   taken.sort((left, right) => {
@@ -270,6 +274,7 @@ function facts(board: BoardState): Fact[] {
     ...(card.repo !== undefined ? {repo: card.repo} : {}),
     ...(card.service !== undefined ? {service: card.service} : {}),
     ...(card.pull !== undefined ? {pull: card.pull} : {}),
+    ...(card.marks !== undefined && card.marks.length > 0 ? {marks: card.marks} : {}),
   }));
   return [...taken, ...pool];
 }
@@ -322,6 +327,7 @@ function publish(
     ...(row.occasion === true ? {occasion: true} : {}),
     ...(row.gateOff !== undefined ? {gateOff: row.gateOff} : {}),
     ...(row.doors !== undefined ? {doors: publishedDoors(row.doors, place)} : {}),
+    ...(row.marks !== undefined && row.marks.length > 0 ? {marks: row.marks} : {}),
     plaque: plaqueLines({
       ask: row.ask,
       gaps: row.layers,

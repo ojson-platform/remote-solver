@@ -6,8 +6,9 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import type {FileSource, Tracker} from './port.ts';
 import {changeDir} from './naming.ts';
 import {focusMarkerLine, focusMirrorName, FOCUS_MARKER_LINES, isFocusRecord} from './marker.ts';
-import {firstFocusSentence, focusProse, latestFocusComment, postFocusComment} from './focus.ts';
-import {focusArgs, postFocus} from '../sdd.ts';
+import {memoryPorts} from '../adapters/github.ts';
+import {endStep, firstFocusSentence, focusProse, latestFocusComment, postFocusComment} from './focus.ts';
+import {focusArgs, postFocus, publish} from '../sdd.ts';
 import {focusPlaque} from '../window/focus.ts';
 
 const KEY = '26';
@@ -51,12 +52,43 @@ async function runFocus(
   return {posted, comments};
 }
 
+async function runPostFocus(
+  body: string,
+  over: Run = {},
+): Promise<{posted: string[]; comments: {body: string; manager?: boolean}[]; message: string}> {
+  const comments = (over.comments ?? []).map(comment => ({...comment}));
+  const posted: string[] = [];
+  const tracker = {
+    async comments() {
+      return comments.map(comment => ({...comment}));
+    },
+    async comment(_key: string, text: string) {
+      posted.push(text);
+      comments.push({body: text});
+    },
+  } as Pick<Tracker, 'comments' | 'comment'>;
+  const message = await postFocus(
+    {key: KEY, body},
+    {tracker, vcs: {filesAt: () => source(over.files ?? [file('proposal.md')])}},
+  );
+  return {posted, comments, message};
+}
+
 spec('focus', () => {
   requirement('The skill writes a focus comment when the artifact is published', () => {
     scenario('The skill of the phase writes this comment when the artifact is published', async () => {
       const {posted} = await runFocus('sdd:focus:plan\nThe proposal names scope and one capability.\n');
       assert.equal(posted.length, 1);
       assert.equal(posted[0]?.startsWith('sdd:focus:plan\n'), true);
+    });
+
+    scenario('The skill writes a focus comment when a visit leaves something a person will read later', async () => {
+      const {posted, message} = await runPostFocus('sdd:focus:design\nГраница и команды.\n', {
+        files: [file('design.md')],
+      });
+      assert.equal(posted.length, 1);
+      assert.equal(isFocusRecord(posted[0] ?? ''), true);
+      assert.match(message, /posted/);
     });
 
     scenario('A focus comment is prose for one phase or the whole pull request', async () => {
@@ -95,6 +127,26 @@ spec('focus', () => {
       assert.equal(comments.length, 2);
     });
 
+    scenario('Older comments remain', async () => {
+      const older = 'person note without a marker';
+      const {comments, posted} = await runFocus('sdd:focus:tasks\nСлайсы в порядке заметности.\n', {
+        comments: [{body: older}],
+        files: [file('tasks.md')],
+      });
+      assert.equal(comments[0]?.body, older);
+      assert.equal(posted.length, 1);
+      assert.equal(comments.length, 2);
+    });
+
+    scenario('There is no ledger and no fixed heading', async () => {
+      const {posted} = await runFocus('sdd:focus:plan\nИсход для читателя тикета.\n');
+      const body = posted[0] ?? '';
+      assert.equal(body.includes('Plan solid'), false);
+      assert.equal(body.includes('thread PRRT'), false);
+      assert.equal(/^## /m.test(body), false);
+      assert.equal(body.includes('Weak spot:'), false);
+    });
+
     scenario('The same text does not add another comment', async () => {
       const same = 'sdd:focus:design\nBoundary names focus tests.\n';
       const first = await runFocus(same);
@@ -112,6 +164,143 @@ spec('focus', () => {
     scenario('No change file means no focus comment', async () => {
       const focus = await runFocus('sdd:focus:plan\nNo directory.\n', {files: []});
       assert.deepEqual(focus.posted, []);
+    });
+
+    scenario('A published proposal uses sdd:focus:plan', async () => {
+      const {posted} = await runPostFocus('sdd:focus:plan\nИсход и отказ.\n');
+      assert.equal(focusMarkerLine(posted[0] ?? ''), 'sdd:focus:plan');
+    });
+
+    scenario('A published delta spec uses sdd:focus:spec', async () => {
+      const {posted} = await runPostFocus('sdd:focus:spec\nНовое и изменённое обещание.\n', {
+        files: [file('specs/focus/spec.md')],
+      });
+      assert.equal(focusMarkerLine(posted[0] ?? ''), 'sdd:focus:spec');
+    });
+
+    scenario('A published design uses sdd:focus:design', async () => {
+      const {posted} = await runPostFocus('sdd:focus:design\nГде живёт поведение.\n', {
+        files: [file('design.md')],
+      });
+      assert.equal(focusMarkerLine(posted[0] ?? ''), 'sdd:focus:design');
+    });
+
+    scenario('Published tasks use sdd:focus:tasks', async () => {
+      const {posted} = await runPostFocus('sdd:focus:tasks\nСлайсы по порядку заметности.\n', {
+        files: [file('tasks.md')],
+      });
+      assert.equal(focusMarkerLine(posted[0] ?? ''), 'sdd:focus:tasks');
+    });
+
+    scenario('A code slice, or a code change that answers a review thread, uses sdd:focus:code', async () => {
+      const {posted} = await runPostFocus('sdd:focus:code\nПосле коммита верно следующее.\n');
+      assert.equal(focusMarkerLine(posted[0] ?? ''), 'sdd:focus:code');
+    });
+
+    scenario('The archive commit uses sdd:focus:accept', async () => {
+      const {posted} = await runPostFocus('sdd:focus:accept\nБазовая линия и архив.\n');
+      assert.equal(focusMarkerLine(posted[0] ?? ''), 'sdd:focus:accept');
+    });
+
+    scenario('The archive writes this comment every time, including when sdd:auto-merge is set', async () => {
+      const first = await runPostFocus('sdd:focus:accept\nПервый архив.\n');
+      const second = await runPostFocus('sdd:focus:accept\nАрхив при auto-merge.\n', {
+        comments: [{body: first.posted[0] ?? ''}],
+      });
+      assert.equal(first.posted.length, 1);
+      assert.equal(second.posted.length, 1);
+      assert.equal(focusMarkerLine(second.posted[0] ?? ''), 'sdd:focus:accept');
+    });
+
+    scenario(
+      'sdd:auto-plan, sdd:auto-spec, and sdd:auto-design do not skip the comment, and the document was published',
+      async () => {
+        for (const marker of ['sdd:focus:plan', 'sdd:focus:spec', 'sdd:focus:design'] as const) {
+          const {posted, message} = await runPostFocus(`${marker}\nДокумент опубликован.\n`, {
+            files: [file('proposal.md'), file('specs/focus/spec.md'), file('design.md')],
+          });
+          assert.equal(focusMarkerLine(posted[0] ?? ''), marker);
+          assert.match(message, /posted/);
+        }
+      },
+    );
+
+    scenario(
+      'A visit that fixes review threads of its own phase writes that phase\'s marker even when the diff is small',
+      async () => {
+        const older = 'sdd:focus:spec\nСтарая спека.\n';
+        const {comments, posted} = await runPostFocus('sdd:focus:spec\nУточнение после ревью.\n', {
+          comments: [{body: older}],
+          files: [file('specs/focus/spec.md')],
+        });
+        assert.equal(comments[0]?.body, older);
+        assert.equal(comments.length, 2);
+        assert.equal(focusMarkerLine(posted[0] ?? ''), 'sdd:focus:spec');
+      },
+    );
+
+    scenario(
+      'Verify, labeling threads, a rebase-only commit, and a publish that carries no phase artifact write no focus comment',
+      async () => {
+        const posted: string[] = [];
+        const memory = memoryPorts({
+          issues: [{key: KEY, title: '#26', body: '', state: 'OPEN', labels: []}],
+        });
+        const tracker = memory.tracker;
+        const comment = tracker.comment.bind(tracker);
+        tracker.comment = async (key, body) => {
+          posted.push(body);
+          return comment(key, body);
+        };
+        await endStep(
+          KEY,
+          {commits: 1, signal: 'Publish'},
+          {
+            tracker,
+            review: memory.review,
+            vcs: {
+              compare: async () => '',
+              filesAt: () => source([file('proposal.md')]),
+              contentCommit: async () => '',
+            },
+          },
+        );
+        await publish(
+          {key: KEY, title: '#26: rebase only'},
+          {
+            review: memory.review,
+            vcs: {dirty: async () => [], push: async () => {}},
+          },
+        );
+        assert.deepEqual(posted, []);
+      },
+    );
+
+    scenario('A separate review step does not write the focus', async () => {
+      const posted: string[] = [];
+      const memory = memoryPorts({
+        issues: [{key: KEY, title: '#26', body: '', state: 'OPEN', labels: []}],
+      });
+      const tracker = memory.tracker;
+      const comment = tracker.comment.bind(tracker);
+      tracker.comment = async (key, body) => {
+        posted.push(body);
+        return comment(key, body);
+      };
+      await endStep(
+        KEY,
+        {commits: 0, signal: null},
+        {
+          tracker,
+          review: memory.review,
+          vcs: {
+            compare: async () => '',
+            filesAt: () => source([file('proposal.md')]),
+            contentCommit: async () => '',
+          },
+        },
+      );
+      assert.deepEqual(posted, []);
     });
   });
 

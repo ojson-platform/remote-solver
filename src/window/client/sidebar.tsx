@@ -737,16 +737,16 @@ function reviewFold(
 }
 
 function FocusBlocks({blocks}: {blocks: readonly SidebarBlock[]}): ReactNode {
-  return blocks
-    .filter(block => block.kind === 'focus')
-    .map((block, index) =>
-      block.kind === 'focus' ? (
-        <section className="block focus-block" key={index}>
-          <span className="badge">{block.marker}</span>
-          <pre>{block.display}</pre>
-        </section>
-      ) : null,
-    );
+  const page = blocks.find(block => block.kind === 'focus');
+  if (page === undefined || page.kind !== 'focus') {
+    return null;
+  }
+  return (
+    <section className="block focus-block">
+      <span className="badge">{page.marker}</span>
+      <pre>{page.display}</pre>
+    </section>
+  );
 }
 
 function Blocks({
@@ -1117,6 +1117,7 @@ export function Sidebar({
         </ActForm>
       </header>
       <div className="side-scroll">
+        <FocusBlocks blocks={opened.blocks} />
         {opened.blocks
           .filter(block => block.kind === 'description')
           .map((block, index) =>
@@ -1127,7 +1128,7 @@ export function Sidebar({
             ) : null,
           )}
         <Blocks blocks={opened.blocks} places={places} />
-        <FocusBlocks blocks={opened.blocks} />
+        {codeExtra(opened.blocks, places)}
         {snapshot.roles.length === 0 ? null : (
           <div className="verbs">
             {snapshot.roles.map(role => (
@@ -1301,7 +1302,6 @@ export function Sidebar({
               <p key={line}>{codeLine(line, places)}</p>
             ))}
             {model.pull && !unanswered ? <p>Открытых тредов нет.</p> : null}
-            {codeExtra(opened.blocks, places)}
           </SpineRow>
           <SpineRow
             layer="Accept"

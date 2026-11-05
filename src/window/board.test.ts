@@ -3206,3 +3206,149 @@ spec('link-mark', () => {
     });
   });
 });
+
+function sideScrollHtml(side: string): string {
+  const start = side.indexOf('<div class="side-scroll">');
+  assert.ok(start >= 0, 'side-scroll missing');
+  const end = side.indexOf('<div class="spine">', start);
+  assert.ok(end >= 0, 'spine missing');
+  return side.slice(start, end);
+}
+
+function blockIndex(scroll: string, needle: RegExp | string): number {
+  const at = typeof needle === 'string' ? scroll.indexOf(needle) : scroll.search(needle);
+  assert.ok(at >= 0, `block ${String(needle)} missing`);
+  return at;
+}
+
+spec('written-focus-page', () => {
+  requirement('The focus block shows the latest written focus', () => {
+    scenario('Opening the sidebar lands on now: the latest written focus, in full', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'implementing', {
+              comments: [
+                {body: 'sdd:focus:plan\nOlder plan note.\n'},
+                {body: 'sdd:focus:spec\nFirst sentence here.\nSecond sentence stays.\n'},
+              ],
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const scroll = sideScrollHtml(bandOf(await pageHtml(page.url), '1'));
+          const focus = scroll.match(
+            /<section class="block focus-block">[\s\S]*?<\/section>/,
+          )?.[0];
+          assert.ok(focus);
+          assert.match(focus, />sdd:focus:spec</);
+          assert.match(focus, /First sentence here\./);
+          assert.match(focus, /Second sentence stays\./);
+          assert.equal(focus.includes('Older plan note'), false);
+        },
+      );
+    });
+  });
+
+  requirement('The focus block sits in the scrolling body', () => {
+    scenario('The focus block sits directly under the title, above the reason and the ask', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'proposed', {
+              labels: ['sdd:cycle', 'sdd:proposed', 'sdd:wait-human'],
+              comments: [
+                {body: 'What should we decide?'},
+                {body: 'sdd:focus:plan\nPlan note for layout.\n'},
+              ],
+            }),
+          ],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const side = bandOf(await pageHtml(page.url), '1');
+          const scroll = sideScrollHtml(side);
+          const focusAt = blockIndex(scroll, 'focus-block');
+          const reasonAt = blockIndex(scroll, '<h3>повод</h3>');
+          const askAt = blockIndex(scroll, '<h3>ask</h3>');
+          assert.ok(focusAt < reasonAt && reasonAt < askAt);
+        },
+      );
+    });
+
+    scenario('Chips stay in the header and do not scroll with the block', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'implementing', {dependsOn: ['9']}), held('9', 'specifying')],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const side = bandOf(await pageHtml(page.url), '1');
+          const header = between(side, '<header>', '</header>');
+          assert.match(header, /class="link-marks"/);
+          assert.doesNotMatch(sideScrollHtml(side), /class="link-marks"/);
+        },
+      );
+    });
+
+    scenario(
+      'The reason, the ask, an unmarked review, and a hook stay their own blocks under the pager',
+      async () => {
+        await hosted(
+          {
+            login: () => MANAGER,
+            tickets: () => [
+              held('1', 'proposed', {
+                labels: ['sdd:cycle', 'sdd:proposed', 'sdd:wait-human'],
+                comments: [
+                  {body: 'Need your call.'},
+                  {body: 'sdd:focus:code\nCode focus line.\n'},
+                ],
+                sddHooks: [{action: 'archive', point: 'before', value: 'hook body'}],
+              }),
+            ],
+            review: () => ({threads: [{lines: ['please review this']}]}),
+          },
+          async (page, window) => {
+            window.chooseAgent('cursor');
+            assert.equal(
+              (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+                .status,
+              200,
+            );
+            const side = bandOf(await pageHtml(page.url), '1');
+            const scroll = sideScrollHtml(side);
+            const focusAt = blockIndex(scroll, 'focus-block');
+            const reasonAt = blockIndex(scroll, '<h3>повод</h3>');
+            const askAt = blockIndex(scroll, '<h3>ask</h3>');
+            const reviewAt = blockIndex(scroll, '<h3>ревью</h3>');
+            const hookAt = blockIndex(scroll, '<h3>хук</h3>');
+            assert.ok(focusAt < reasonAt && reasonAt < askAt && askAt < reviewAt && reviewAt < hookAt);
+            const spine = side.slice(side.indexOf('<div class="spine">'));
+            assert.equal(spine.includes('<h3>ревью</h3>'), false);
+            assert.equal(spine.includes('<h3>хук</h3>'), false);
+          },
+        );
+      },
+    );
+  });
+});

@@ -1,8 +1,8 @@
-import {isFocusRecord, parseMarker} from '../machine/marker.ts';
+import {focusMarkerLine, isFocusRecord, parseMarker} from '../machine/marker.ts';
 import {phaseOf} from '../machine/phase.ts';
 
 import {decisionCount, questionCount, reasonParts, slotOf} from './board.ts';
-import {focusBlockProse, focusSidebar} from './focus.ts';
+import {focusBlockProse} from './focus.ts';
 import {
   isDoc,
   type CardState,
@@ -258,6 +258,29 @@ function reasonLine(
   return parts.join(' · ');
 }
 
+function latestWrittenFocus(
+  comments: readonly WindowComment[] | undefined,
+): SidebarBlock | undefined {
+  let block: SidebarBlock | undefined;
+  for (const comment of comments ?? []) {
+    if (comment.manager || !isFocusRecord(comment.body)) {
+      continue;
+    }
+    const marker = focusMarkerLine(comment.body);
+    if (marker === null) {
+      continue;
+    }
+    const body = comment.body.split('\n').slice(1).join('\n');
+    block = {
+      kind: 'focus',
+      marker,
+      body,
+      display: focusBlockProse(marker, body),
+    };
+  }
+  return block;
+}
+
 export function blocksFor(
   item: WindowTicket,
   ctx: {
@@ -272,6 +295,10 @@ export function blocksFor(
   },
 ): SidebarBlock[] {
   const blocks: SidebarBlock[] = [];
+  const focus = latestWrittenFocus(item.comments);
+  if (focus !== undefined) {
+    blocks.push(focus);
+  }
   if (ctx.inPool) {
     const text = authorText(item.body);
     if (text !== undefined) {
@@ -287,15 +314,6 @@ export function blocksFor(
     if (body !== undefined) {
       blocks.push({kind: 'ask', body});
     }
-  }
-  const focus = focusSidebar(item.comments);
-  if (focus !== undefined) {
-    blocks.push({
-      kind: 'focus',
-      marker: focus.marker,
-      body: focus.body,
-      display: focusBlockProse(focus.marker, focus.body),
-    });
   }
   const reading = ctx.review();
   blocks.push(...lineThreadBlocks(reading));

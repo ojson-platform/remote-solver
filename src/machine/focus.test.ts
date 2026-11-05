@@ -354,6 +354,9 @@ spec('focus', () => {
       const withWeakSpot =
         'sdd:focus:plan\nДля читателя тикета появится фокус-комментарий; отказались от diff; слабое место — Outcome для archive.\n';
       assert.equal(validateFocusBody(withWeakSpot), 'clean phase omits weak-spot wording');
+      const specWithWeakSpot =
+        'sdd:focus:spec\nНовое обещание — проза; изменено обещание о форме. Сценарий «The prose is Russian» без него непонятен. Пагинацию не даём; слабое место — Outcome для archive.\n';
+      assert.equal(validateFocusBody(specWithWeakSpot), 'clean phase omits weak-spot wording');
     });
 
     scenario('A phase with no open questions omits the pointer', async () => {

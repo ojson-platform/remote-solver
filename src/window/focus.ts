@@ -1,4 +1,7 @@
-import type {WindowComment} from './types.ts';
+import type {Decision} from '../machine/policy.ts';
+
+import type {BoardTurn, WindowComment} from './types.ts';
+import {turnAction, turnPhase} from './types.ts';
 
 import {firstFocusSentence, FOCUS_LAYERS, latestFocusComment} from '../machine/focus.ts';
 import {
@@ -7,6 +10,78 @@ import {
   isFocusRecord,
   type FocusMarkerLine,
 } from '../machine/marker.ts';
+
+export type LiveFocus = {badge: string; text: string};
+
+export type LiveFocusInput = {
+  reviewGate?: boolean;
+  running?: boolean;
+  turn?: BoardTurn;
+  decision?: Decision;
+  checks?: 'green' | 'red' | 'pending' | 'none';
+};
+
+function waitLiveSentence(reason: string): string | undefined {
+  if (!reason.startsWith('wait for children') && !reason.startsWith('wait for blockers')) {
+    return undefined;
+  }
+  const keys: string[] = [];
+  for (const match of reason.matchAll(/#(\d+)/g)) {
+    const key = match[1];
+    if (key !== undefined && !keys.includes(key)) {
+      keys.push(key);
+    }
+  }
+  if (keys.length === 0) {
+    return undefined;
+  }
+  let until: string | undefined;
+  if (reason.includes('specified')) {
+    until = 'specified';
+  } else if (reason.includes('accepted')) {
+    until = 'accepted';
+  }
+  const named = keys.join(', ');
+  return until === undefined ? named : `${named} until ${until}`;
+}
+
+/** Chooses the live pager sentence from spy inputs. Review gate suppression is the caller's job. */
+export function liveFocus(input: LiveFocusInput): LiveFocus | undefined {
+  if (input.reviewGate) {
+    return undefined;
+  }
+  if (input.running) {
+    const action = turnAction(input.turn);
+    const phase = turnPhase(input.turn);
+    if (action !== undefined && phase !== undefined) {
+      return {badge: 'working', text: `${phase} → ${action}`};
+    }
+  }
+  if (!input.running) {
+    const action = turnAction(input.turn);
+    const phase = turnPhase(input.turn);
+    if (action !== undefined && phase === undefined) {
+      return {badge: 'waiting for a slot', text: action};
+    }
+  }
+  const decision = input.decision;
+  if (decision?.kind === 'wait' && decision.gate === undefined) {
+    const waitText = waitLiveSentence(decision.reason);
+    if (waitText !== undefined) {
+      return {badge: 'waiting on an issue', text: waitText};
+    }
+  }
+  if (input.checks === 'pending') {
+    return {badge: 'checks', text: 'checks are still running'};
+  }
+  if (input.checks === 'red') {
+    return {
+      badge: 'checks',
+      text: 'checks are red and the failure has not been handed to a worker yet',
+    };
+  }
+  return undefined;
+}
 
 export type FocusSidebar = {marker: FocusMarkerLine; body: string};
 

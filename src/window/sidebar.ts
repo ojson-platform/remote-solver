@@ -2,9 +2,12 @@ import {isFocusRecord, parseMarker} from '../machine/marker.ts';
 import {phaseOf} from '../machine/phase.ts';
 
 import {decisionCount, questionCount, reasonParts, slotOf} from './board.ts';
-import {focusBlockProse, writtenFocusPages} from './focus.ts';
+import {focusBlockProse, liveFocus, writtenFocusPages} from './focus.ts';
+import type {Decision} from '../machine/policy.ts';
+
 import {
   isDoc,
+  type BoardTurn,
   type CardState,
   type SidebarBlock,
   type SidebarHookPoint,
@@ -278,9 +281,23 @@ export function blocksFor(
     serviceBroken: (checkout: string) => boolean;
     cardOf: (item: WindowTicket) => CardState;
     branchFacts?: (key: string) => {questions: number; decisions: number} | undefined;
+    running?: () => boolean;
+    turn?: () => BoardTurn | undefined;
+    settledDecision?: () => Decision | undefined;
+    reviewGate?: () => boolean;
   },
 ): SidebarBlock[] {
   const blocks: SidebarBlock[] = [];
+  const live = liveFocus({
+    reviewGate: ctx.reviewGate?.() ?? false,
+    running: ctx.running?.() ?? false,
+    turn: ctx.turn?.(),
+    decision: ctx.settledDecision?.(),
+    checks: item.checks,
+  });
+  if (live !== undefined) {
+    blocks.push({kind: 'live', badge: live.badge, text: live.text});
+  }
   blocks.push(...writtenFocusBlocks(item.comments));
   if (ctx.inPool) {
     const text = authorText(item.body);

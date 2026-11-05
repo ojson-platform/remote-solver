@@ -214,6 +214,9 @@ export function openWindow(
       serviceBroken: located => checkout.serviceBroken(located),
       cardOf: ticket => checkout.cardOf(ticket),
       branchFacts: key => outside.branchFacts?.(key),
+      running: () => outside.leading?.(item.key) === true,
+      turn: () => outside.turn?.(item.key),
+      settledDecision: () => outside.decision?.(item.key),
     });
   }
 

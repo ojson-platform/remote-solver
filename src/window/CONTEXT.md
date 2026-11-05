@@ -36,6 +36,10 @@ _Avoid_: Icon button
 A quiet card for writing. Choosing a line of a change document opens one. The send mark sits inside the field. The close control is a circle on the field's corner.
 _Avoid_: Textarea, input
 
+**Live page**:
+The pager's open page while a worker is on this issue, a ready action is held by the cap, the cycle waits on another issue, or checks are the live case. The window computes it from the settled decision and from whether a worker is on this issue. It is not a comment and not a history slot, and it leaves when the reason passes. Its badge is its own word, not a phase marker.
+_Avoid_: Focus comment, status line
+
 **Focus block**:
 The sidebar pager. Now is a live page while a worker is on this issue, a ready action is held by the cap, the cycle waits on another issue, or checks are the live case, unless the review gate for the proposal, the spec, the design, or accepting is on. Otherwise now is the latest written focus comment. The live page is computed from the current decision and from whether a worker is on this issue. It is not a comment and not a history slot, and it leaves when the reason passes. Its badge is its own word. Back walks the older written comments, newest first. Forward returns toward now. On a written page the marker is the badge and the prose sits under it. A scenario name in that prose links to that scenario's row. The window does not recompute the written prose. An ask, a role outcome, and a manager comment stay out of this block. The chips stay in the header.
 _Avoid_: Summary, status

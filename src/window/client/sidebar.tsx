@@ -760,8 +760,18 @@ export function focusIndexAfterSnapshot(input: {
   return clampFocusPageIndex(input.index, input.pageCount);
 }
 
-function focusPages(blocks: readonly SidebarBlock[]): Extract<SidebarBlock, {kind: 'focus'}>[] {
-  return blocks.filter((block): block is Extract<SidebarBlock, {kind: 'focus'}> => block.kind === 'focus');
+type FocusPagerPage =
+  | Extract<SidebarBlock, {kind: 'live'}>
+  | Extract<SidebarBlock, {kind: 'focus'}>;
+
+function focusPages(blocks: readonly SidebarBlock[]): FocusPagerPage[] {
+  const out: FocusPagerPage[] = [];
+  for (const block of blocks) {
+    if (block.kind === 'live' || block.kind === 'focus') {
+      out.push(block);
+    }
+  }
+  return out;
 }
 
 function FocusProse({
@@ -803,11 +813,13 @@ export function FocusBlocks({
   const page = pages[index];
   const pageCount = pages.length;
   const currentPage = pageCount - index;
+  const badge = page.kind === 'live' ? page.badge : page.marker;
+  const prose = page.kind === 'live' ? page.text : page.display;
   return (
     <section className="block focus-block">
       {pageCount > 1 ? (
         <div className="focus-row">
-          <span className="badge">{page.marker}</span>
+          <span className="badge">{badge}</span>
           <div className="focus-pager">
             <button
               className="quiet"
@@ -831,10 +843,14 @@ export function FocusBlocks({
           </div>
         </div>
       ) : (
-        <span className="badge">{page.marker}</span>
+        <span className="badge">{badge}</span>
       )}
       <pre>
-        <FocusProse display={page.display} capabilities={capabilities} />
+        {page.kind === 'live' ? (
+          prose
+        ) : (
+          <FocusProse display={prose} capabilities={capabilities} />
+        )}
       </pre>
     </section>
   );

@@ -200,8 +200,6 @@ function unansweredBlock(reading: WindowReview | undefined): SidebarBlock | unde
   }
   const threads = (reading.threads ?? [])
     .filter(thread => !hasMarker(thread.marker))
-    .filter(thread => !anchoredOnLine(thread))
-    .filter(thread => !onPhase(thread))
     .map(thread => ({lines: thread.lines}));
   const last = reading.conversation?.last;
   const comment = last && !hasMarker(last.marker) ? last.body : undefined;

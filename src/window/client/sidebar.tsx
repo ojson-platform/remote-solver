@@ -10,7 +10,7 @@ import {Fragment} from 'react';
 
 import {unchangedLabel} from '../spec-diff.ts';
 
-import {Gate} from './board.tsx';
+import {Gate, LinkMarks} from './board.tsx';
 import {BusyEdge} from './busy.tsx';
 import {ActForm, Hidden} from './forms.tsx';
 import {capIsOpen, layerHasFold} from './gesture.ts';
@@ -882,6 +882,7 @@ export function Sidebar({
             </a>
           ) : null}
         </div>
+        <LinkMarks marks={row.marks} />
         <ActForm act="close-card">
           <button className="x" type="submit" aria-label="Закрыть">
             <Cross />

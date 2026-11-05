@@ -203,6 +203,8 @@ function ticketFrom(issue: IssueRecord, repo: string, service: string | undefine
     open: issue.state.toUpperCase() !== 'CLOSED',
     parent: issue.parent,
     dependsOn: [...issue.dependsOn],
+    blockedBy: [...(issue.blockedBy ?? [])],
+    blocks: [...(issue.blocks ?? [])],
     ...(issue.sddHooks !== undefined ? {sddHooks: issue.sddHooks} : {}),
   };
 }

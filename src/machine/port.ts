@@ -29,7 +29,11 @@ export type IssueRecord = {
   sddHooks?: unknown;
   parent?: IssueKey;
   dependsOn: IssueKey[];
+  blockedBy: IssueKey[];
+  blocks: IssueKey[];
 };
+
+export type IssueLinkKind = 'parent' | 'blocks' | 'blocked-by' | 'depends-on';
 
 export type CheckState = 'green' | 'red' | 'pending' | 'none';
 
@@ -75,6 +79,8 @@ export type Tracker = {
   /** Issue comments in order. A manager comment is not an `sdd:focus` record. */
   comments(key: IssueKey): Promise<{body: string; manager?: boolean}[]>;
   close(key: IssueKey, comment: string): Promise<void>;
+  /** Write one host issue link. Does not change the body. */
+  link(key: IssueKey, kind: IssueLinkKind, other: IssueKey): Promise<void>;
   /** How a person moves the phase in this tracker. Pure: no tracker call. */
   phaseHint(from: Phase, to: Phase): string;
 };

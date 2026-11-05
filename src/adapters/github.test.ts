@@ -12,7 +12,6 @@ import {
   githubAdapters,
   isRestGet,
   linkedTitle,
-  linksFrom,
   memoryPorts,
   noteGithubPause,
   PULL_LIST_FRESH_MS,
@@ -24,6 +23,7 @@ import {
   withRestValidators,
   type CheckRollup,
 } from './github.ts';
+import {linkIssue} from '../sdd.ts';
 import {setPhase} from '../machine/labels.ts';
 import {loadCycle} from '../machine/snapshot.ts';
 import type {FileSource} from '../machine/port.ts';
@@ -80,13 +80,6 @@ test('a completed rollup with no pending check is green', () => {
   );
 });
 
-test('parent and depends are read from the issue body', () => {
-  assert.deepEqual(linksFrom('Parent: #LAVKA-1\nDepends: #LAVKA-2\nDepends: #9\n'), {
-    parent: 'LAVKA-1',
-    dependsOn: ['LAVKA-2', '9'],
-  });
-});
-
 test('the pull range is the REST head and base commits', () => {
   assert.deepEqual(pullRangeArgs('acme/billing', '11'), [
     'api',
@@ -133,9 +126,10 @@ test('loadCycle keeps marker grammar above the port', async () => {
       {
         key: '7',
         title: '#7: title',
-        body: 'Parent: #1\n',
+        body: '',
         state: 'OPEN',
         labels: ['Sandcastle', 'sdd:cycle', 'sdd:implementing'],
+        parent: '1',
       },
     ],
     pulls: {
@@ -181,19 +175,39 @@ function viewedIssue(
   number: number,
   login?: string,
   labels: {name: string}[] = [],
+  body = '',
 ): string {
   return JSON.stringify({
     number,
     title: 't',
-    body: '',
+    body,
     state: 'OPEN',
     labels,
     assignees: login ? [{login}] : [],
   });
 }
 
+function answerGithubGraphql(args: string[]): string | undefined {
+  const joined = args.join(' ');
+  if (!joined.includes('graphql')) {
+    return undefined;
+  }
+  if (joined.includes('parent{number}')) {
+    return githubLinkGraph({});
+  }
+  if (joined.includes('{id}')) {
+    const number = joined.match(/number=(\d+)/)?.[1] ?? '0';
+    return githubNodeId(`ID-${number}`);
+  }
+  return undefined;
+}
+
 function issueRead(number: number, fields: string | Error, login?: string) {
   return async (args: string[]) => {
+    const graph = answerGithubGraphql(args);
+    if (graph !== undefined) {
+      return graph;
+    }
     if (args.join(' ').includes('issue-field-values')) {
       if (fields instanceof Error) {
         throw fields;
@@ -216,6 +230,10 @@ test('an organization issue field named sddHooks is the cycle field', async () =
   const {tracker} = githubAdapters({
     run: async (args, input) => {
       calls.push(`${args.join(' ')}${input ? ` <${input}>` : ''}`);
+      const graph = answerGithubGraphql(args);
+      if (graph !== undefined) {
+        return graph;
+      }
       const joined = args.join(' ');
       if (joined.includes('issue-field-values')) {
         return JSON.stringify([
@@ -327,6 +345,171 @@ test('posted bodies carry the spy mark, and the shared login is not the robot', 
   );
 });
 
+function githubLinkGraph(issue: {
+  parent?: number | null;
+  blockedBy?: number[];
+  blocking?: number[];
+}): string {
+  return JSON.stringify({
+    data: {
+      repository: {
+        issue: {
+          parent: issue.parent === undefined || issue.parent === null ? null : {number: issue.parent},
+          blockedBy: {nodes: (issue.blockedBy ?? []).map(number => ({number}))},
+          blocking: {nodes: (issue.blocking ?? []).map(number => ({number}))},
+        },
+      },
+    },
+  });
+}
+
+function githubNodeId(id: string): string {
+  return JSON.stringify({data: {repository: {issue: {id}}}});
+}
+
+spec('dependencies', () => {
+  requirement('Host issue links are the child and the blocker', () => {
+    scenario('The machine reads parent, blocks, blocked-by, and depends-on from the host\'s own issue links', async () => {
+      const calls: string[] = [];
+      const {tracker} = githubAdapters({
+        run: async args => {
+          calls.push(args.join(' '));
+          const joined = args.join(' ');
+          if (joined.includes('graphql') && joined.includes('parent{number}')) {
+            return githubLinkGraph({parent: 1, blockedBy: [8], blocking: [9]});
+          }
+          if (args[0] === 'issue' && args[1] === 'view') {
+            return viewedIssue(7, 'me');
+          }
+          if (joined.includes('/issues?state=open')) {
+            return `[${viewedIssue(7, 'me', [{name: 'sdd:cycle'}])}]`;
+          }
+          if (joined.includes('issue-field-values')) {
+            return '[]';
+          }
+          throw new Error(joined);
+        },
+      });
+      const record = await tracker.issue('7');
+      assert.equal(record.parent, '1');
+      assert.deepEqual(record.blockedBy, ['8']);
+      assert.deepEqual(record.blocks, ['9']);
+      assert.deepEqual(record.dependsOn, []);
+      const withBody = await tracker.issue('7');
+      assert.equal(withBody.parent, '1');
+    });
+
+    scenario('It writes those links when the flow creates a child cycle or a dependency, and it does not write a body line', async () => {
+      const calls: string[][] = [];
+      const {tracker} = githubAdapters({
+        run: async args => {
+          calls.push(args);
+          const joined = args.join(' ');
+          if (joined.includes('graphql') && joined.includes('addSubIssue')) {
+            return '{}';
+          }
+          const graph = answerGithubGraphql(args);
+          if (graph !== undefined) {
+            return graph;
+          }
+          throw new Error(joined);
+        },
+      });
+      await tracker.link('2', 'parent', '1');
+      const edits = calls.filter(args => args[0] === 'issue' && args[1] === 'edit');
+      assert.equal(edits.length, 0);
+      assert.equal(
+        calls.some(args => args.join(' ').includes('addSubIssue')),
+        true,
+      );
+    });
+
+    scenario('The flow that opens a child cycle or a dependency writes the host link and does not write a body line', async () => {
+      const {tracker, calls} = memoryPorts({
+        issues: [{key: '2', title: '#2: title', body: 'unchanged\n', state: 'OPEN', labels: []}],
+      });
+      await linkIssue({key: '2', kind: 'parent', other: '1'}, tracker);
+      assert.equal(calls.includes('link:parent:1'), true);
+      assert.equal(calls.includes('updateBody'), false);
+      assert.equal((await tracker.issue('2')).body, 'unchanged\n');
+      assert.equal((await tracker.issue('2')).parent, '1');
+    });
+
+    scenario('A parent link is a child: an open cycle issue this issue is the parent of', async () => {
+      const {tracker} = memoryPorts({
+        issues: [
+          {key: '1', title: '#1: title', body: 'Parent: #9\n', state: 'OPEN', labels: ['sdd:cycle']},
+          {key: '2', title: '#2: title', body: '', state: 'OPEN', labels: ['sdd:cycle'], parent: '1'},
+        ],
+      });
+      const child = await tracker.issue('2');
+      assert.equal(child.parent, '1');
+      const parent = await tracker.issue('1');
+      assert.equal(parent.parent, undefined);
+    });
+
+    scenario('A blocked-by link and a depends-on link are blockers: issues this issue waits on', async () => {
+      const {tracker} = githubAdapters({
+        run: async args => {
+          if (args.join(' ').includes('parent{number}')) {
+            return githubLinkGraph({blockedBy: [8, 10]});
+          }
+          if (args[0] === 'issue' && args[1] === 'view') {
+            return viewedIssue(7, 'me', [], 'Depends: #99\n');
+          }
+          if (args.join(' ').includes('issue-field-values')) {
+            return '[]';
+          }
+          throw new Error(args.join(' '));
+        },
+      });
+      const record = await tracker.issue('7');
+      assert.deepEqual(record.blockedBy, ['8', '10']);
+      assert.deepEqual(record.dependsOn, []);
+    });
+
+    scenario('A blocks link is the other side and does not hold this issue', async () => {
+      const {tracker} = githubAdapters({
+        run: async args => {
+          if (args.join(' ').includes('parent{number}')) {
+            return githubLinkGraph({blocking: [3]});
+          }
+          if (args[0] === 'issue' && args[1] === 'view') {
+            return viewedIssue(7, 'me');
+          }
+          if (args.join(' ').includes('issue-field-values')) {
+            return '[]';
+          }
+          throw new Error(args.join(' '));
+        },
+      });
+      const record = await tracker.issue('7');
+      assert.deepEqual(record.blocks, ['3']);
+      assert.deepEqual(record.blockedBy, []);
+    });
+
+    scenario('One issue on two of these links counts once for the wait', async () => {
+      const {tracker} = memoryPorts({
+        issues: [
+          {
+            key: '1',
+            title: '#1: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['sdd:implementing'],
+            parent: '9',
+            blockedBy: ['9'],
+            dependsOn: [],
+          },
+        ],
+      });
+      const record = await tracker.issue('1');
+      assert.equal(record.parent, '9');
+      assert.deepEqual(record.blockedBy, ['9']);
+    });
+  });
+});
+
 spec('github-read', () => {
   requirement('The cycle field is read for a cycle', () => {
     scenario('An issue without the cycle label skips the field', async () => {
@@ -334,6 +517,10 @@ spec('github-read', () => {
       const {tracker} = githubAdapters({
         run: async args => {
           calls.push(args.join(' '));
+          const graph = answerGithubGraphql(args);
+          if (graph !== undefined) {
+            return graph;
+          }
           if (args.join(' ').includes('/issues?state=open')) {
             return JSON.stringify([
               {

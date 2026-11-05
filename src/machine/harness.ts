@@ -34,6 +34,8 @@ export function issue(
     state: 'OPEN',
     labels,
     dependsOn: [],
+    blockedBy: [],
+    blocks: [],
     ...extra,
   };
 }

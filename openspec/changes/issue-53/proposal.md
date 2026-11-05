@@ -30,11 +30,11 @@ Chips stay in the header and do not scroll with the block. The badge is the comm
 
 ### Added
 
-- `written-focus-page` the focus block pages the written focus comments and opens on the latest, in full
 - `scenario-name-link` a scenario name in the prose is a link to that scenario's row lower in the sidebar
 
 ### Modified
 
+- `written-focus-page` the focus block pages the written focus comments and opens on the latest, in full
 - `accept-caption` the Accept row's caption becomes the first sentence of the `sdd:focus:accept` comment, and until that comment exists the row keeps the sentence about auto-merge
 
 ## Open questions

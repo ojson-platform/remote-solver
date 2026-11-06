@@ -1,37 +1,39 @@
 ## Problem
 
-Hold review comments until send. The sidebar shows the pull request's review threads on the line they anchor, and a document-level remark on the phase. One line holds more than one comment. A reply whose marker is `sdd:fixed` is a status on the original comment, with the commit when the reply has one. It is not a second comment.
+Удерживать замечания ревью до отправки. Новое замечание остаётся в окне до отправки.
 
 ## Outcome
 
-A new remark stays in the window until send. The send control posts every unsent remark, each as its own review thread, then clears them. While any remark is unsent, that control stands where «Принять» stood. «Принять» returns when the queue is empty. A failed send leaves the queue and keeps the send control. The window holds the queue for the open ticket. A reload drops unsent remarks.
+Новое замечание остаётся в окне до отправки. Управление отправки у поля замечания публикует каждое неотправленное замечание отдельной нитью ревью. «Принять» остаётся в строке фазы. Управление отправки не занимает его место.
 
-The queue is the unsent remarks held for the open ticket. It is empty when no remark is unsent, and «Принять» returns in that place then. Showing «Принять» when the phase has no open question and every review thread for the phase is fixed does not name this queue.
+Сразу после успешной отправки нить видна в боковой панели, и черновик очищается вместе с этим. Неудачная отправка оставляет черновик. Когда у запроса на слияние уже есть эта нить, в том числе после того как окно сообщило об ошибке, повторная попытка не публикует вторую нить с тем же текстом на той же строке. Черновик остаётся только когда этой нити на запросе на слияние нет.
 
-Immediately after a successful send, the thread is visible on its line and the draft is cleared together. A cleared field with no thread on that line is indistinguishable from a failure, and the person sends the same text again.
+Окно держит очередь для открытого тикета. Перезагрузка сбрасывает неотправленные замечания.
 
 ## Scope
 
-A new remark stays in the window until send. The send control posts every unsent remark, each as its own review thread, then clears them. Immediately after a successful send, the thread is visible on its line and the draft is cleared together. A cleared field with no thread on that line is indistinguishable from a failure, and the person sends the same text again. While any remark is unsent, that control stands where «Принять» stood. «Принять» returns when the queue is empty. A failed send leaves the queue and keeps the send control. The window holds the queue for the open ticket. A reload drops unsent remarks.
+Новое замечание остаётся в окне до отправки. Управление отправки у поля замечания публикует каждое неотправленное замечание отдельной нитью ревью. «Принять» остаётся в строке фазы. Управление отправки не занимает его место.
 
-The sidebar shows the pull request's review threads on the line they anchor, and a document-level remark on the phase. One line holds more than one comment. A reply whose marker is `sdd:fixed` is a status on the original comment, with the commit when the reply has one. It is not a second comment.
+Сразу после успешной отправки нить видна в боковой панели, и черновик очищается вместе с этим. Неудачная отправка оставляет черновик. Когда у запроса на слияние уже есть эта нить, в том числе после того как окно сообщило об ошибке, повторная попытка не публикует вторую нить с тем же текстом на той же строке. Черновик остаётся только когда этой нити на запросе на слияние нет.
+
+Окно держит очередь для открытого тикета. Перезагрузка сбрасывает неотправленные замечания.
 
 ## Out of scope
 
-Editing a comment already on the pull request. Resolving a thread from the sidebar. Persisting the queue across a reload. Showing «Принять» when the phase has no open question and every review thread for the phase is fixed.
+Показ существующих нитей на их строках. «Принять» не делается неактивным, пока открыта нить фазы. Правка комментария, уже стоящего на запросе на слияние. Разрешение нити из боковой панели. Сохранение очереди между перезагрузками.
 
 ## Constraints
 
-One line holds more than one comment. A reply whose marker is `sdd:fixed` is a status on the original comment, with the commit when the reply has one. It is not a second comment. While any remark is unsent, the send control stands where «Принять» stood. «Принять» returns when the queue is empty. A failed send leaves the queue and keeps the send control. The window holds the queue for the open ticket. A reload drops unsent remarks. The queue is empty when no remark is unsent. A phase with no open question, and every review thread for the phase fixed, is not that queue. Immediately after a successful send, the thread is visible on its line and the draft is cleared together. A cleared field with no thread on that line is not that send.
+«Принять» остаётся в строке фазы. Управление отправки не занимает его место. Неудачная отправка оставляет черновик. Когда у запроса на слияние уже есть эта нить, в том числе после того как окно сообщило об ошибке, повторная попытка не публикует вторую нить с тем же текстом на той же строке. Черновик остаётся только когда этой нити на запросе на слияние нет. Окно держит очередь для открытого тикета. Перезагрузка сбрасывает неотправленные замечания.
+
+Depends: #49
 
 ## Capabilities
 
 ### Added
 
-- `unsent-remark` a new remark stays in the window until a successful send posts every unsent remark as its own review thread, shows that thread on its line, and clears the draft, together; the queue is those remarks, and «Принять» returns when none are unsent
+- `unsent-remark` новое замечание остаётся в окне до отправки; отправка публикует каждое отдельной нитью, «Принять» остаётся в строке фазы, успешная отправка показывает нить в боковой панели и очищает черновик вместе, неудача оставляет черновик, повтор не публикует вторую нить с тем же текстом на той же строке, черновик остаётся только если этой нити нет, очередь держится для открытого тикета и сбрасывается перезагрузкой
 
 ### Modified
-
-- `anchored-thread` the sidebar shows each review thread on the line it anchors, including immediately after a successful send, a document-level remark on the phase, and a reply whose marker is sdd:fixed as a status on the original comment, not a second comment
 
 ## Open questions

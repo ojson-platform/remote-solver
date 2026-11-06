@@ -580,7 +580,9 @@ function boot(): void {
                 return;
               }
               last = (await response.json()) as WindowSnapshot;
-              clearDraftsForSent(memory, [body]);
+              if (last.status === undefined) {
+                clearDraftsForSent(memory, [body]);
+              }
             } catch {
               finish(undefined);
               return;
@@ -603,7 +605,7 @@ function boot(): void {
         return (await response.json()) as WindowSnapshot;
       })
       .then(snapshot => {
-        if (snapshot !== undefined && act === 'answer') {
+        if (snapshot !== undefined && act === 'answer' && snapshot.status === undefined) {
           clearDraftsForSent(memory, [params]);
         }
         finish(snapshot);

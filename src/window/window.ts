@@ -494,6 +494,11 @@ export function openWindow(
           });
           outside.mergeHeldThread?.(key, {file: phasePath, line: null, comments: [text]});
         } catch {
+          const after = outside.review?.(key);
+          if (threadAlreadyPresent(after, phasePath, undefined, text)) {
+            outside.mergeHeldThread?.(key, {file: phasePath, line: null, comments: [text]});
+            return undefined;
+          }
           try {
             if (!outside.speakPull) {
               throw new Error('speak is missing');
@@ -520,6 +525,11 @@ export function openWindow(
         await outside.threadPull(key, text, {path, line, side: anchorSide(side)});
         outside.mergeHeldThread?.(key, {file: path, line, comments: [text]});
       } catch {
+        const after = outside.review?.(key);
+        if (threadAlreadyPresent(after, path, line, text)) {
+          outside.mergeHeldThread?.(key, {file: path, line, comments: [text]});
+          return undefined;
+        }
         try {
           if (!outside.speakPull) {
             throw new Error('speak is missing');

@@ -64,6 +64,8 @@ export type SnapshotRow = {
   marks?: readonly LinkMark[];
 };
 
+export type PhaseLayerDrafts = {Plan: string; Specify: string; Design: string};
+
 export type WindowSnapshot = {
   /** Grows when a turn changes, a tracker read commits, or a gesture is written. */
   generation: number;
@@ -90,6 +92,8 @@ export type WindowSnapshot = {
   repair?: string;
   ask?: {key: string; station: string; side: boolean};
   rows: SnapshotRow[];
+  /** Unsent phase-remark text kept server-side for HTML snapshot tests; the browser still holds drafts in page memory. */
+  phaseDrafts?: Record<string, PhaseLayerDrafts>;
   opened?: {
     key: string;
     title: string;
@@ -133,6 +137,7 @@ type SnapshotView = {
   ask?: {key: string; station: string; side: boolean};
   service: Record<string, string>;
   serviceDirty: boolean;
+  phaseDrafts: Record<string, PhaseLayerDrafts>;
 };
 
 type Fact = {
@@ -441,6 +446,7 @@ export function snapshot(surface: SnapshotSurface, view: SnapshotView): WindowSn
       rememberPlaces(line.raw, surface.openReviewPlace, reviewPlaces);
     }
   }
+  const phaseDraftKeys = Object.keys(view.phaseDrafts);
   return {
     generation: view.generation,
     lamp: board.stepsStart,
@@ -461,5 +467,6 @@ export function snapshot(surface: SnapshotSurface, view: SnapshotView): WindowSn
     ...(view.repair !== undefined ? {repair: view.repair} : {}),
     ...(view.ask !== undefined ? {ask: view.ask} : {}),
     ...(opened !== undefined ? {opened} : {}),
+    ...(phaseDraftKeys.length > 0 ? {phaseDrafts: view.phaseDrafts} : {}),
   };
 }

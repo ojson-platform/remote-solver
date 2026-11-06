@@ -2,99 +2,99 @@
 
 ## Purpose
 
-Новое замечание остаётся в окне до отправки. Управление отправки публикует каждое отдельной нитью ревью, «Принять» остаётся в строке фазы, и черновик исчезает, когда нить уже на pull request.
+A new remark stays in the window until send. The send control posts each as its own review thread, «Принять» stays on the phase row, and the draft disappears when the thread is already on the pull request.
 
 ## ADDED Requirements
 
-### Requirement: Новое замечание остаётся в окне до отправки
+### Requirement: A new remark stays in the window until send
 
-Новое замечание SHALL оставаться в окне до отправки.
+A new remark SHALL stay in the window until send.
 
-#### Scenario: Новое замечание остаётся в окне до отправки
+#### Scenario: A new remark stays in the window until send
 
-- **WHEN** новое замечание и окно уже видны, и замечание уже остаётся в окне до отправки, together with отправка замечания до управления отправки as the limit that can replace это пребывание
-- **THEN** новое замечание остаётся в окне до отправки
+- **WHEN** a new remark and the window are already visible, together with sending the remark before the send control as the limit that can replace this stay
+- **THEN** a new remark stays in the window until send
 
-### Requirement: Управление отправки публикует каждое неотправленное замечание отдельной нитью ревью
+### Requirement: The send control posts every unsent remark as its own review thread
 
-Управление отправки у поля замечания SHALL публиковать каждое неотправленное замечание отдельной нитью ревью.
+The send control on the remark field SHALL post every unsent remark as its own review thread.
 
-#### Scenario: Управление отправки у поля замечания публикует каждое неотправленное замечание отдельной нитью ревью
+#### Scenario: The send control on the remark field posts every unsent remark as its own review thread
 
-- **WHEN** управление отправки, поле замечания и каждое неотправленное замечание уже видны, и каждое уже опубликовано отдельной нитью ревью, together with одна нить ревью на все неотправленные замечания as the limit that can replace эти нити
-- **THEN** управление отправки у поля замечания публикует каждое неотправленное замечание отдельной нитью ревью
+- **WHEN** the send control, the remark field, and every unsent remark are already visible, together with one review thread for all unsent remarks as the limit that can replace these threads
+- **THEN** the send control on the remark field posts every unsent remark as its own review thread
 
-### Requirement: «Принять» остаётся в строке фазы
+### Requirement: «Принять» stays on the phase row
 
-«Принять» SHALL оставаться в строке фазы. Управление отправки SHALL NOT занимать его место.
+«Принять» SHALL stay on the phase row. The send control SHALL NOT take its place.
 
-#### Scenario: «Принять» остаётся в строке фазы
+#### Scenario: «Принять» stays on the phase row
 
-- **WHEN** «Принять» и строка фазы уже видны, и «Принять» уже остаётся в строке фазы, together with управление отправки на месте «Принять» as the limit that can replace «Принять» в строке фазы
-- **THEN** «Принять» остаётся в строке фазы
+- **WHEN** «Принять» and the phase row are already visible, together with the send control in the place of «Принять» as the limit that can replace «Принять» on the phase row
+- **THEN** «Принять» stays on the phase row
 
-#### Scenario: Управление отправки не занимает его место
+#### Scenario: The send control does not take its place
 
-- **WHEN** управление отправки и место «Принять» в строке фазы уже видны, и управление отправки уже не занимает это место, together with управление отправки на месте «Принять» as the limit that can replace этот отказ
-- **THEN** управление отправки не занимает его место
+- **WHEN** the send control and the place of «Принять» on the phase row are already visible, together with the send control in the place of «Принять» as the limit that can replace this refusal
+- **THEN** the send control does not take its place
 
-### Requirement: Успешная отправка показывает нить и очищает черновик
+### Requirement: A successful send shows the thread and clears the draft
 
-Сразу после успешной отправки нить SHALL быть видна в боковой панели, и черновик SHALL очищаться вместе с этим. После того как GitHub тред принял, черновик SHALL исчезнуть.
+Immediately after a successful send, the thread SHALL be visible in the sidebar, and the draft SHALL be cleared together with that. After the GitHub thread has been accepted, the draft SHALL disappear.
 
-#### Scenario: Сразу после успешной отправки нить видна в боковой панели, и черновик очищается вместе с этим
+#### Scenario: Immediately after a successful send the thread is visible in the sidebar and the draft is cleared together with that
 
-- **WHEN** успешная отправка, нить, боковая панель и черновик уже видны, нить уже видна в боковой панели, и черновик уже очищен вместе с этим, together with поле, которое остаётся с тем же текстом, и нить, которой нет в боковой панели, as the limit that can replace эту очистку
-- **THEN** сразу после успешной отправки нить видна в боковой панели, и черновик очищается вместе с этим
+- **WHEN** a successful send, the thread, the sidebar, and the draft are already visible, together with a field that keeps the same text and a thread that is not in the sidebar as the limit that can replace this clearing
+- **THEN** immediately after a successful send the thread is visible in the sidebar and the draft is cleared together with that
 
-#### Scenario: После того как GitHub тред принял, черновик обязан исчезнуть
+#### Scenario: After the GitHub thread has been accepted, the draft must disappear
 
-- **WHEN** GitHub тред уже принят и черновик уже исчез, together with черновик с тем же текстом после того как GitHub тред принял as the limit that can replace это исчезновение
-- **THEN** после того как GitHub тред принял, черновик обязан исчезнуть
+- **WHEN** the GitHub thread that has been accepted and the draft are already visible, together with a draft that keeps the same text after the GitHub thread has been accepted as the limit that can replace this disappearance
+- **THEN** after the GitHub thread has been accepted, the draft must disappear
 
-### Requirement: Черновик остаётся только когда нити на запросе нет
+### Requirement: The draft remains only when that thread is not on the pull request
 
-Неудачная отправка SHALL оставлять черновик. Черновик SHALL оставаться только когда этой нити на запросе на слияние нет. Черновик SHALL оставаться только когда треда на pull request нет.
+A failed send SHALL leave the draft. The draft SHALL remain only when that thread is not on the pull request.
 
-#### Scenario: Неудачная отправка оставляет черновик
+#### Scenario: A failed send leaves the draft
 
-- **WHEN** неудачная отправка и черновик уже видны, и черновик уже остаётся, together with нить, которая уже есть на запросе на слияние, as the limit that can replace этот оставшийся черновик
-- **THEN** неудачная отправка оставляет черновик
+- **WHEN** a failed send and the draft are already visible, together with a thread that is already on the pull request as the limit that can replace this remaining draft
+- **THEN** a failed send leaves the draft
 
-#### Scenario: Черновик остаётся только когда этой нити на запросе на слияние нет
+#### Scenario: The draft remains only when that thread is not on the pull request
 
-- **WHEN** черновик и запрос на слияние уже видны, и черновик уже остаётся только когда этой нити на запросе на слияние нет, together with черновик, который остаётся, когда эта нить уже есть, as the limit that can replace это условие
-- **THEN** черновик остаётся только когда этой нити на запросе на слияние нет
+- **WHEN** the draft, that thread, and the pull request are already visible, together with a draft that remains when that thread is already on the pull request as the limit that can replace this condition
+- **THEN** the draft remains only when that thread is not on the pull request
 
-#### Scenario: Черновик остаётся только когда треда на pull request нет
+#### Scenario: The draft remains only when the thread is not on the pull request
 
-- **WHEN** черновик и pull request уже видны, и черновик уже остаётся только когда треда на pull request нет, together with черновик, который остаётся после того как GitHub тред принял, as the limit that can replace это условие
-- **THEN** черновик остаётся только когда треда на pull request нет
+- **WHEN** the draft, the thread, and the pull request are already visible, together with a draft that remains after the GitHub thread has been accepted as the limit that can replace this condition
+- **THEN** the draft remains only when the thread is not on the pull request
 
-### Requirement: Повтор не публикует вторую нить с тем же текстом на той же строке
+### Requirement: A retry does not post a second thread with the same text on the same line
 
-Когда у запроса на слияние уже есть эта нить, в том числе после того как окно сообщило об ошибке, повторная попытка SHALL NOT публиковать вторую нить с тем же текстом на той же строке. Если окно после записи ответило ошибкой, в том числе «устарело», повтор SHALL NOT создавать второй тред с тем же текстом на той же строке.
+When the pull request already has that thread, including after the window reported an error, a retry SHALL NOT post a second thread with the same text on the same line. If the window replied with an error after the write, including "stale", a retry SHALL NOT create a second thread with the same text on the same line.
 
-#### Scenario: Когда у запроса на слияние уже есть эта нить, в том числе после того как окно сообщило об ошибке, повторная попытка не публикует вторую нить с тем же текстом на той же строке
+#### Scenario: When the pull request already has that thread, including after the window reported an error, a retry does not post a second thread with the same text on the same line
 
-- **WHEN** запрос на слияние, эта нить, тот же текст и та же строка уже видны, окно уже сообщило об ошибке, и повторная попытка уже не публикует вторую нить, together with вторая нить с тем же текстом на той же строке as the limit that can replace этот отказ
-- **THEN** когда у запроса на слияние уже есть эта нить, в том числе после того как окно сообщило об ошибке, повторная попытка не публикует вторую нить с тем же текстом на той же строке
+- **WHEN** the pull request, that thread, the same text, the same line, and the error the window reported are already visible, together with a second thread with the same text on the same line as the limit that can replace this refusal
+- **THEN** when the pull request already has that thread, including after the window reported an error, a retry does not post a second thread with the same text on the same line
 
-#### Scenario: Если окно после записи ответило ошибкой, в том числе «устарело», повтор не создаёт второй тред с тем же текстом на той же строке
+#### Scenario: If the window replied with an error after the write, including stale, a retry does not create a second thread with the same text on the same line
 
-- **WHEN** окно после записи уже ответило ошибкой, в том числе «устарело», тот же текст и та же строка уже видны, и повтор уже не создаёт второй тред, together with второй тред с тем же текстом на той же строке as the limit that can replace этот отказ
-- **THEN** если окно после записи ответило ошибкой, в том числе «устарело», повтор не создаёт второй тред с тем же текстом на той же строке
+- **WHEN** the error the window replied with after the write, including "stale", the same text, and the same line are already visible, together with a second thread with the same text on the same line as the limit that can replace this refusal
+- **THEN** if the window replied with an error after the write, including "stale", a retry does not create a second thread with the same text on the same line
 
-### Requirement: Окно держит очередь для открытого тикета
+### Requirement: The window holds the queue for the open ticket
 
-Окно SHALL держать очередь для открытого тикета. Перезагрузка SHALL сбрасывать неотправленные замечания.
+The window SHALL hold the queue for the open ticket. A reload SHALL drop unsent remarks.
 
-#### Scenario: Окно держит очередь для открытого тикета
+#### Scenario: The window holds the queue for the open ticket
 
-- **WHEN** окно, очередь и открытый тикет уже видны, и окно уже держит очередь для открытого тикета, together with очередь другого тикета as the limit that can replace эту очередь
-- **THEN** окно держит очередь для открытого тикета
+- **WHEN** the window, the queue, and the open ticket are already visible, together with another ticket's queue as the limit that can replace this queue
+- **THEN** the window holds the queue for the open ticket
 
-#### Scenario: Перезагрузка сбрасывает неотправленные замечания
+#### Scenario: A reload drops unsent remarks
 
-- **WHEN** перезагрузка и неотправленные замечания уже видны, и перезагрузка уже сбрасывает неотправленные замечания, together with очередь, которая сохраняется между перезагрузками, as the limit that can replace этот сброс
-- **THEN** перезагрузка сбрасывает неотправленные замечания
+- **WHEN** a reload and the unsent remarks are already visible, together with a queue that persists across reloads as the limit that can replace this drop
+- **THEN** a reload drops unsent remarks

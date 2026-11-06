@@ -1,4 +1,4 @@
-- [ ] `depends-49-sidebar`
+- [x] `depends-49-sidebar`
 - [ ] `remark-field-send-chrome` A new remark stays in the window until send; The send control on the remark field posts every unsent remark as its own review thread; «Принять» stays on the phase row; The send control does not take its place
 - [ ] `success-send-sidebar-draft` Immediately after a successful send the thread is visible in the sidebar and the draft is cleared together with that; After the GitHub thread has been accepted, the draft must disappear
 - [ ] `failure-retry-draft-dedupe` A failed send leaves the draft; Once GitHub has accepted the thread, the draft disappears, including when the window reported an error such as stale; The draft remains only when that thread is not on the pull request; The draft remains only when the thread is not on the pull request; When the pull request already has that thread, including after the window reported an error, a retry does not post a second thread with the same text on the same line; If the window replied with an error after the write, including stale, a retry does not create a second thread with the same text on the same line

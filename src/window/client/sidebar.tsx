@@ -207,6 +207,7 @@ function Remark({
       <label className="draft">
         Комментарий
         <textarea
+          key={`remark-${layer}-${text}`}
           name="reply"
           rows={2}
           placeholder="Замечание ко всему документу"
@@ -253,6 +254,7 @@ function LineNote({
       {anchor}
       <div className="draft">
         <textarea
+          key={`line-${line}-${text}`}
           name="reply"
           rows={2}
           placeholder={question === '' ? 'Комментарий к этой строке' : 'Ответ'}

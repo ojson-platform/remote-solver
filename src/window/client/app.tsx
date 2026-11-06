@@ -202,6 +202,8 @@ export function WindowView({
   css: string;
   layer?: SpineLayer | '';
 }): ReactNode {
+  const opened = snapshot.opened?.key;
+  const remark = opened !== undefined ? snapshot.phaseDrafts?.[opened] : undefined;
   return (
     <html lang="ru">
       <head>
@@ -212,7 +214,7 @@ export function WindowView({
         <style>{css}</style>
       </head>
       <body data-show={snapshot.show}>
-        <App snapshot={snapshot} layer={layer} />
+        <App snapshot={snapshot} layer={layer} {...(remark !== undefined ? {remark} : {})} />
       </body>
     </html>
   );

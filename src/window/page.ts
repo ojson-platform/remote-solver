@@ -17,7 +17,7 @@ import {setImmediate} from 'node:timers';
 
 import {bundleClient} from './client/bundle.ts';
 import {factorySvg} from './mark.ts';
-import {omitHeldSpine, snapshot, type WindowSnapshot} from './snapshot.ts';
+import {omitHeldSpine, snapshot, type PhaseLayerDrafts, type WindowSnapshot} from './snapshot.ts';
 import {ROLE_OUTCOMES} from './types.ts';
 
 export {
@@ -120,11 +120,53 @@ type PageView = {
   status?: string;
   show?: string;
   serviceDirty: boolean;
+  /** Phase-remark queue keyed by ticket, for server-rendered HTML; a new GET / drops this map. */
+  phaseDrafts: Record<string, PhaseLayerDrafts>;
 };
 
 const BODY_LIMIT = 262144;
 
 type ActResult = 'see' | 'unknown' | 'conflict' | 'stale';
+
+function emptyPhaseDrafts(): PhaseLayerDrafts {
+  return {Plan: '', Specify: '', Design: ''};
+}
+
+function settleOpened(surface: Surface, view: PageView): void {
+  if (view.opened === '') {
+    return;
+  }
+  const board = surface.board();
+  const found =
+    board.pool.some(card => card.key === view.opened) ||
+    board.columns.some(column => column.cards.some(card => card.key === view.opened));
+  if (!found) {
+    view.opened = '';
+  }
+}
+
+function clearPhaseDraftsForKey(view: PageView, key: string): void {
+  delete view.phaseDrafts[key];
+}
+
+function updatePhaseDraftAfterAnswer(
+  view: PageView,
+  key: string,
+  layer: string | null,
+  reply: string,
+  status: string | undefined,
+): void {
+  if (layer !== 'Plan' && layer !== 'Specify' && layer !== 'Design') {
+    return;
+  }
+  const next = {...(view.phaseDrafts[key] ?? emptyPhaseDrafts())};
+  if (status === undefined) {
+    next[layer] = '';
+  } else {
+    next[layer] = reply;
+  }
+  view.phaseDrafts[key] = next;
+}
 
 function namesOf(value: string | null): string[] {
   return (value ?? '')
@@ -152,19 +194,6 @@ function intOf(value: string | null): number | undefined {
     return undefined;
   }
   return Number(value);
-}
-
-function settleOpened(surface: Surface, view: PageView): void {
-  if (view.opened === '') {
-    return;
-  }
-  const board = surface.board();
-  const found =
-    board.pool.some(card => card.key === view.opened) ||
-    board.columns.some(column => column.cards.some(card => card.key === view.opened));
-  if (!found) {
-    view.opened = '';
-  }
 }
 
 function roleDraft(surface: Surface, params: URLSearchParams, act: string | null): void {
@@ -271,17 +300,25 @@ async function apply(
     if (key && view.opened === key) {
       view.opened = '';
       surface.closeCard();
+      clearPhaseDraftsForKey(view, key);
       return finish(surface, params, act, view);
     }
     if (key && surface.openCard(key)) {
+      if (view.opened !== '' && view.opened !== key) {
+        clearPhaseDraftsForKey(view, view.opened);
+      }
       view.opened = key;
       view.show = key;
     }
     return finish(surface, params, act, view);
   }
   if (act === 'close-card') {
+    const prev = view.opened;
     view.opened = '';
     surface.closeCard();
+    if (prev !== '') {
+      clearPhaseDraftsForKey(view, prev);
+    }
     return finish(surface, params, act, view);
   }
   if (act === 'open-settings') {
@@ -395,6 +432,7 @@ async function apply(
           ? 'Комментарий пустой. Напишите его в поле.'
           : 'Ответ пустой. Напишите его в поле.';
     } else if (key) {
+      const layer = params.get('layer');
       const status = await surface.answer(
         key,
         params.get('question') ?? '',
@@ -403,7 +441,7 @@ async function apply(
         params.get('path') ?? '',
         params.get('at') ?? '',
         params.get('side') ?? '',
-        params.get('layer') ?? '',
+        layer ?? '',
       );
       if (mine !== epoch.n) {
         return 'stale';
@@ -412,6 +450,7 @@ async function apply(
       if (status !== undefined) {
         view.status = status;
       }
+      updatePhaseDraftAfterAnswer(view, key, layer, reply, status);
     }
     return finish(surface, params, act, view);
   }
@@ -733,6 +772,7 @@ async function handle(
         text(res, 409, 'не записано');
         return;
       }
+      view.phaseDrafts = {};
       if (taken) {
         view.show = taken;
       }
@@ -760,6 +800,7 @@ async function handle(
     return;
   }
   if (req.method === 'GET' && url.pathname === '/') {
+    view.phaseDrafts = {};
     surface.spy();
     res.writeHead(200, {'content-type': 'text/html; charset=utf-8'});
     res.end(SHELL);
@@ -811,6 +852,7 @@ export async function serveBoard(surface: Surface, port = 0): Promise<{
     opened: '',
     service: {},
     serviceDirty: false,
+    phaseDrafts: {},
   };
   const epoch = {n: 0};
   const listeners = new Set<ServerResponse>();

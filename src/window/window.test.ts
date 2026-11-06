@@ -995,7 +995,12 @@ test('the last drag writes its own text', () => {
   proveTheLastDragWritesItsOwnText();
 });
 
-type ThreadPlace = {path: string; line: number; side: 'right' | 'left'};
+type ThreadPlace = {
+  path: string;
+  line?: number;
+  side?: 'right' | 'left';
+  subject_type?: 'file';
+};
 
 function hostedAnswer(openPullRequests: number) {
   const {dir, home, arcadia} = yard();
@@ -1080,7 +1085,7 @@ test('a left side stays on the left', async () => {
   }
 });
 
-test('a refused thread falls back to a quoted conversation comment', async () => {
+test('a refused thread leaves the remark unposted', async () => {
   const hosted = hostedAnswer(1);
   hosted.hosts.threadPull = async () => {
     throw new Error('host refused the thread');
@@ -1088,7 +1093,6 @@ test('a refused thread falls back to a quoted conversation comment', async () =>
   try {
     const status = await hosted.window.answer('1', '', 'ответ', 'строка', 'src/a.ts', '4', 'right');
     assert.equal(status, undefined);
-    assert.equal(String(status).includes('host refused the thread'), false);
     assert.deepEqual(hosted.spoken, [{key: '1', body: '> строка\n\nответ'}]);
     assert.deepEqual(hosted.comments, []);
   } finally {

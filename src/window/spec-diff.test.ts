@@ -1238,6 +1238,7 @@ spec('spec-diff', () => {
           assert.equal(threadCalls, 1);
           assert.deepEqual(spoken, [`> ${newLine}\n\n${reply}`]);
           assert.equal(next.status, undefined);
+          assert.equal(renderWindow(next).includes('role="status"'), false);
           assert.equal(JSON.stringify(next).includes('host refused the thread'), false);
         },
       );

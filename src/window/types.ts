@@ -142,12 +142,25 @@ export type WindowOutside = {
   threadPull?: (
     key: string,
     body: string,
-    place: {path: string; line: number; side: 'right' | 'left'},
+    place: {
+      path: string;
+      line?: number;
+      side?: 'right' | 'left';
+      subject_type?: 'file';
+    },
   ) => Promise<void>;
   /** Conversation comment used when a thread is refused. A refusal rejects. */
   speakPull?: (key: string, body: string) => Promise<void>;
   /** Threads and the conversation for this key. The window does not call a review host. */
   review?: (key: string) => WindowReview | undefined;
+  /**
+   * Fold one newly opened thread into the held review so the next snapshot shows it in the sidebar.
+   * The live board uses the store; tests may update a held review the same way.
+   */
+  mergeHeldThread?: (
+    key: string,
+    thread: {file: string; line?: number | null; comments: readonly string[]},
+  ) => void;
   /** Branch summary already stored for this key. Absent until a poll or a refresh has read it. */
   branchFacts?: (key: string) => BranchFacts | undefined;
   /** Branch bytes from that same read. The spine uses them and does not open the branch again. */

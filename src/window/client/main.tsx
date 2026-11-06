@@ -1,6 +1,7 @@
 import type {SpecEntry} from '../spec-diff.ts';
 import type {SpineLayer} from '../spine.ts';
 import type {WindowSnapshot} from '../snapshot.ts';
+import type {SidebarBlock} from '../types.ts';
 import type {LineDraft, SpecOpen} from './gesture.ts';
 import type {BusyEdges, FrameHold} from './frame.ts';
 import type {DocumentRemark} from './sidebar.tsx';
@@ -9,6 +10,7 @@ import {flushSync} from 'react-dom';
 import {createRoot} from 'react-dom/client';
 
 import {App} from './app.tsx';
+import {buildAnswerPostsFromState} from './remark-queue.ts';
 import {
   focusHasLive,
   focusIndexAfterSnapshot,
@@ -118,6 +120,87 @@ function blankRemark(): DocumentRemark {
 
 function copyRemark(remark: DocumentRemark): DocumentRemark {
   return {Plan: remark.Plan, Specify: remark.Specify, Design: remark.Design};
+}
+
+function clearDraftsForSent(memory: Memory, batch: readonly URLSearchParams[]): void {
+  for (const body of batch) {
+    const layer = body.get('layer');
+    if (layer === 'Plan' || layer === 'Specify' || layer === 'Design') {
+      memory.remark[layer] = '';
+      continue;
+    }
+    const line = body.get('line');
+    if (line !== null && line !== '') {
+      memory.drafts = memory.drafts.filter(item => item.line !== line);
+    }
+  }
+}
+
+function normDraftPath(value: string | null): string {
+  if (value === null || value === '') {
+    return '';
+  }
+  return value.replace(/\\/g, '/');
+}
+
+/** Clears page-memory drafts only when the snapshot already shows the matching review thread in the sidebar. */
+function snapshotShowsSentRemark(snapshot: WindowSnapshot, body: URLSearchParams): boolean {
+  const reply = (body.get('reply') ?? '').trim();
+  if (reply === '') {
+    return false;
+  }
+  const blocks: readonly SidebarBlock[] = snapshot.opened?.blocks ?? [];
+  const layer = body.get('layer');
+  if (layer === 'Plan' || layer === 'Specify' || layer === 'Design') {
+    return blocks.some(
+      block =>
+        block.kind === 'phase-thread' &&
+        block.layer === layer &&
+        block.comments.some(comment => comment.trim() === reply),
+    );
+  }
+  const path = normDraftPath(body.get('path'));
+  const at = body.get('at');
+  const line = at === null || at === '' ? undefined : Number(at);
+  if (path === '' || line === undefined || Number.isNaN(line)) {
+    return false;
+  }
+  return blocks.some(
+    block =>
+      block.kind === 'line-thread' &&
+      normDraftPath(block.file) === path &&
+      block.line === line &&
+      block.comments.some(comment => comment.trim() === reply),
+  );
+}
+
+/** When the snapshot already shows accepted threads, drop matching client memory even if the act response was stale. */
+function syncDraftMemoryFromSnapshot(memory: Memory, snapshot: WindowSnapshot): void {
+  const key = snapshot.opened?.key;
+  if (key === undefined) {
+    return;
+  }
+  const batch = buildAnswerPostsFromState(key, memory.drafts, line => {
+    const form = Array.from(document.querySelectorAll('.spine form.line-note')).find(candidate => {
+      const lineField = candidate.querySelector('input[name="line"]');
+      return lineField instanceof HTMLInputElement && lineField.value === line;
+    });
+    if (!(form instanceof HTMLFormElement)) {
+      return undefined;
+    }
+    const pathField = form.querySelector('input[name="path"]');
+    const atField = form.querySelector('input[name="at"]');
+    const sideField = form.querySelector('input[name="side"]');
+    return {
+      path: pathField instanceof HTMLInputElement ? pathField.value : undefined,
+      at: atField instanceof HTMLInputElement ? atField.value : undefined,
+      side: sideField instanceof HTMLInputElement ? sideField.value : undefined,
+    };
+  }, memory.remark);
+  const pending = batch.filter(body => snapshotShowsSentRemark(snapshot, body));
+  if (pending.length > 0) {
+    clearDraftsForSent(memory, pending);
+  }
 }
 
 function documentRemark(): DocumentRemark {
@@ -345,6 +428,22 @@ async function readSnapshot(revision: string | undefined): Promise<WindowSnapsho
   return response.json() as Promise<WindowSnapshot>;
 }
 
+async function refreshSnapshotAfterFailedAnswer(
+  keptDrawers: Map<string, NonNullable<WindowSnapshot['opened']>>,
+  base: WindowSnapshot | undefined,
+): Promise<WindowSnapshot | undefined> {
+  const opened = base?.opened;
+  if (opened === undefined) {
+    return undefined;
+  }
+  const rev = keptDrawers.get(opened.key)?.revision;
+  try {
+    return await readSnapshot(rev);
+  } catch {
+    return undefined;
+  }
+}
+
 function holdsSeq(hold: FrameHold, mine: number): boolean {
   return (
     hold.open?.seq === mine ||
@@ -515,6 +614,16 @@ function boot(): void {
       } else if (snapshot !== undefined) {
         keep(snapshot);
       }
+      if (
+        snapshot !== undefined &&
+        act === 'answer' &&
+        snapshot.status === undefined &&
+        snapshot.opened !== undefined
+      ) {
+        syncDraftMemoryFromSnapshot(memory, snapshot);
+      } else if (snapshot !== undefined && base !== undefined && base.opened !== undefined) {
+        syncDraftMemoryFromSnapshot(memory, base);
+      }
       if (snapshot === undefined && drawerBefore !== undefined) {
         restoreMemory(memory, drawerBefore);
       }
@@ -525,23 +634,79 @@ function boot(): void {
     if (have) {
       params.set('have', have);
     }
-    void fetch(path, {
-      method: 'POST',
-      headers: {'content-type': 'application/x-www-form-urlencoded'},
-      body: params,
-    })
-      .then(async response => {
-        if (!response.ok) {
+    if (act === 'answer' && base !== undefined) {
+      const batchKey = params.get('key') ?? '';
+      memory.drafts = lineDrafts();
+      memory.remark = documentRemark();
+      const batch = buildAnswerPostsFromState(batchKey, memory.drafts, line => {
+        const form = Array.from(document.querySelectorAll('.spine form.line-note')).find(candidate => {
+          const lineField = candidate.querySelector('input[name="line"]');
+          return lineField instanceof HTMLInputElement && lineField.value === line;
+        });
+        if (!(form instanceof HTMLFormElement)) {
           return undefined;
         }
-        return (await response.json()) as WindowSnapshot;
-      })
-      .then(snapshot => {
-        finish(snapshot);
-      })
-      .catch(() => {
-        finish(undefined);
-      });
+        const pathField = form.querySelector('input[name="path"]');
+        const atField = form.querySelector('input[name="at"]');
+        const sideField = form.querySelector('input[name="side"]');
+        return {
+          path: pathField instanceof HTMLInputElement ? pathField.value : undefined,
+          at: atField instanceof HTMLInputElement ? atField.value : undefined,
+          side: sideField instanceof HTMLInputElement ? sideField.value : undefined,
+        };
+      }, memory.remark);
+      const fromRemarkField = (() => {
+        const layer = params.get('layer');
+        return layer === 'Plan' || layer === 'Specify' || layer === 'Design';
+      })();
+      const runBatch = batch.length > 1 || fromRemarkField;
+      if (runBatch) {
+        void (async () => {
+          let last: WindowSnapshot | undefined;
+          for (const body of batch) {
+            if (have) {
+              body.set('have', have);
+            }
+            try {
+              const response = await fetch(path, {
+                method: 'POST',
+                headers: {'content-type': 'application/x-www-form-urlencoded'},
+                body,
+              });
+              if (!response.ok) {
+                finish(await refreshSnapshotAfterFailedAnswer(keptDrawers, base));
+                return;
+              }
+              last = (await response.json()) as WindowSnapshot;
+              if (last.status === undefined) {
+                syncDraftMemoryFromSnapshot(memory, last);
+              }
+            } catch {
+              finish(await refreshSnapshotAfterFailedAnswer(keptDrawers, base));
+              return;
+            }
+          }
+          finish(last);
+        })();
+        return;
+      }
+    }
+    void (async () => {
+      try {
+        const response = await fetch(path, {
+          method: 'POST',
+          headers: {'content-type': 'application/x-www-form-urlencoded'},
+          body: params,
+        });
+        if (!response.ok) {
+          finish(await refreshSnapshotAfterFailedAnswer(keptDrawers, base));
+          return;
+        }
+        finish((await response.json()) as WindowSnapshot);
+      } catch {
+        finish(await refreshSnapshotAfterFailedAnswer(keptDrawers, base));
+      }
+    })();
   });
   document.addEventListener('dragstart', event => {
     const card = event.target;

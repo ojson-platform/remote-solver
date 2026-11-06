@@ -6,6 +6,7 @@ import type {
   RoleRecord,
   SkillMode,
   WindowOutside,
+  WindowReview,
   WindowTicket,
 } from './types.ts';
 
@@ -72,6 +73,51 @@ function wholeLine(at: string): number | undefined {
     return undefined;
   }
   return Number(at);
+}
+
+function normalizePathForThread(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
+function threadAlreadyPresent(
+  reading: WindowReview | undefined,
+  path: string,
+  line: number | undefined,
+  text: string,
+): boolean {
+  const wantPath = normalizePathForThread(path);
+  for (const thread of reading?.threads ?? []) {
+    if (normalizePathForThread(thread.file ?? '') !== wantPath) {
+      continue;
+    }
+    if (line === undefined) {
+      if (thread.line != null) {
+        continue;
+      }
+    } else if (thread.line !== line) {
+      continue;
+    }
+    const bodies = thread.comments ?? thread.lines;
+    if (bodies.some(body => body.trim() === text)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function phaseRemarkPath(spine: Spine, layer: 'Plan' | 'Specify' | 'Design'): string | undefined {
+  const root = spine.readPath;
+  if (layer === 'Plan') {
+    return `${root}/proposal.md`;
+  }
+  if (layer === 'Design') {
+    return `${root}/design.md`;
+  }
+  const first = spine.capabilities[0];
+  if (first === undefined) {
+    return undefined;
+  }
+  return `${root}/specs/${first.id}/spec.md`;
 }
 
 function anchorSide(side: string): 'right' | 'left' {
@@ -400,6 +446,7 @@ export function openWindow(
       path = '',
       at = '',
       side = '',
+      layer = '',
     ): Promise<string | undefined> {
       const text = reply.trim();
       const asked = question.trim();
@@ -423,24 +470,68 @@ export function openWindow(
       if (asked !== '') {
         return comment(`- [ ] ${asked}\n\n${text}`);
       }
+      if (layer === 'Plan' || layer === 'Specify' || layer === 'Design') {
+        const phaseLayer = layer;
+        const spine = readOpenSpine();
+        if (!spine) {
+          return 'комментарий не записан';
+        }
+        const phasePath = phaseRemarkPath(spine, phaseLayer);
+        if (phasePath === undefined) {
+          return 'комментарий не записан';
+        }
+        const reading = outside.review?.(key);
+        if (threadAlreadyPresent(reading, phasePath, undefined, text)) {
+          return undefined;
+        }
+        try {
+          if (!outside.threadPull) {
+            throw new Error('thread is missing');
+          }
+          await outside.threadPull(key, text, {
+            path: phasePath,
+            subject_type: 'file',
+          });
+          outside.mergeHeldThread?.(key, {file: phasePath, line: null, comments: [text]});
+        } catch {
+          const after = outside.review?.(key);
+          if (threadAlreadyPresent(after, phasePath, undefined, text)) {
+            outside.mergeHeldThread?.(key, {file: phasePath, line: null, comments: [text]});
+            return undefined;
+          }
+          return 'комментарий не записан';
+        }
+        return undefined;
+      }
       const line = wholeLine(at);
       if (path === '' || line === undefined) {
         return comment(quotedLine(source, text));
+      }
+      const readingLine = outside.review?.(key);
+      if (threadAlreadyPresent(readingLine, path, line, text)) {
+        return undefined;
       }
       try {
         if (!outside.threadPull) {
           throw new Error('thread is missing');
         }
         await outside.threadPull(key, text, {path, line, side: anchorSide(side)});
-      } catch {
-        try {
-          if (!outside.speakPull) {
-            throw new Error('speak is missing');
-          }
-          await outside.speakPull(key, quotedLine(source, text));
-        } catch {
-          return 'комментарий не записан';
+        outside.mergeHeldThread?.(key, {file: path, line, comments: [text]});
+      } catch (error) {
+        const after = outside.review?.(key);
+        if (threadAlreadyPresent(after, path, line, text)) {
+          outside.mergeHeldThread?.(key, {file: path, line, comments: [text]});
+          return undefined;
         }
+        if (outside.speakPull) {
+          try {
+            await outside.speakPull(key, quotedLine(source, text));
+            return undefined;
+          } catch {
+            return 'комментарий не записан';
+          }
+        }
+        return 'комментарий не записан';
       }
       return undefined;
     },

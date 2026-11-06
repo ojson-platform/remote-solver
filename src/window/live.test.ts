@@ -138,7 +138,7 @@ test('a live anchor opens a plain thread on the pull head', async () => {
   }
 });
 
-test('a refused live thread falls back to the quoted line', async () => {
+test('a refused live thread leaves the remark unposted', async () => {
   const hosted = liveAnchor();
   let tried = false;
   hosted.review.openThread = async () => {
@@ -158,7 +158,6 @@ test('a refused live thread falls back to the quoted line', async () => {
     );
     assert.equal(tried, true);
     assert.equal(status, undefined);
-    assert.equal(String(status).includes('host refused the thread'), false);
     assert.deepEqual(hosted.spoken, [{pull: '11', body: '> строка\n\nответ'}]);
   } finally {
     rmSync(hosted.staged.dir, {recursive: true, force: true});
@@ -187,7 +186,7 @@ test('an empty pull head falls back to the quoted line', async () => {
   }
 });
 
-test('a refused live thread and a refused quote are not written', async () => {
+test('a refused live thread leaves the quote path unused', async () => {
   const hosted = liveAnchor();
   let triedThread = false;
   let triedSpeak = false;

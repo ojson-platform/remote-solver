@@ -191,13 +191,23 @@ function SpineRow({
   );
 }
 
-function Remark({keyName, text}: {keyName: string; text: string}): ReactNode {
+function Remark({
+  keyName,
+  text,
+  layer,
+}: {
+  keyName: string;
+  text: string;
+  layer: 'Plan' | 'Specify' | 'Design';
+}): ReactNode {
   return (
     <ActForm act="answer" className="note">
       <Hidden name="key" value={keyName} />
+      <Hidden name="layer" value={layer} />
       <label className="draft">
         Комментарий
         <textarea
+          key={`remark-${layer}-${text}`}
           name="reply"
           rows={2}
           placeholder="Замечание ко всему документу"
@@ -244,6 +254,7 @@ function LineNote({
       {anchor}
       <div className="draft">
         <textarea
+          key={`line-${line}-${text}`}
           name="reply"
           rows={2}
           placeholder={question === '' ? 'Комментарий к этой строке' : 'Ответ'}
@@ -731,7 +742,7 @@ function reviewFold(
   return (
     <div className="plan-foot">
       <PostedPhaseComments entries={phaseComments(blocks, model, layer)} />
-      <Remark keyName={keyName} text={remark} />
+      <Remark keyName={keyName} text={remark} layer={layer} />
     </div>
   );
 }

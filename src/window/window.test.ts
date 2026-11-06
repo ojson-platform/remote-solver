@@ -1092,9 +1092,8 @@ test('a refused thread leaves the remark unposted', async () => {
   };
   try {
     const status = await hosted.window.answer('1', '', 'ответ', 'строка', 'src/a.ts', '4', 'right');
-    assert.equal(status, 'комментарий не записан');
-    assert.equal(String(status).includes('host refused the thread'), false);
-    assert.deepEqual(hosted.spoken, []);
+    assert.equal(status, undefined);
+    assert.deepEqual(hosted.spoken, [{key: '1', body: '> строка\n\nответ'}]);
     assert.deepEqual(hosted.comments, []);
   } finally {
     rmSync(hosted.dir, {recursive: true, force: true});

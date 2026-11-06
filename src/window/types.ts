@@ -142,7 +142,12 @@ export type WindowOutside = {
   threadPull?: (
     key: string,
     body: string,
-    place: {path: string; line: number; side: 'right' | 'left'},
+    place: {
+      path: string;
+      line?: number;
+      side?: 'right' | 'left';
+      subject_type?: 'file';
+    },
   ) => Promise<void>;
   /** Conversation comment used when a thread is refused. A refusal rejects. */
   speakPull?: (key: string, body: string) => Promise<void>;

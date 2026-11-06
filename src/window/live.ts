@@ -764,6 +764,11 @@ export function openLiveBoard(options: LiveBoardOptions) {
           }
         }
         await review.openThread(pull, target);
+        if (place.subject_type === 'file') {
+          store.mergeHeldThread(key, {file: place.path, line: null, comments: [body]});
+        } else if (place.line !== undefined) {
+          store.mergeHeldThread(key, {file: place.path, line: place.line, comments: [body]});
+        }
       },
       async speakPull(key, body) {
         const pull = store.pull(key);

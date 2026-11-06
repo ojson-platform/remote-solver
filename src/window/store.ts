@@ -57,6 +57,46 @@ function treeId(checkout: string, key: string, strict: boolean): string {
   return `${path.resolve(checkout)}\0${key}\0${strict ? 's' : 'l'}`;
 }
 
+/** Merge one opened thread into a held review snapshot (idempotent on same path, line, and body). */
+export function mergeThreadIntoReview(
+  prev: WindowReview | undefined,
+  thread: {file: string; line?: number | null; comments: readonly string[]},
+): WindowReview {
+  const text = thread.comments[0]?.trim() ?? '';
+  if (text === '') {
+    return prev ?? {threads: []};
+  }
+  const wantLine = thread.line;
+  const prior = [...(prev?.threads ?? [])];
+  const duplicate = prior.some(entry => {
+    if (entry.file !== thread.file) {
+      return false;
+    }
+    const lineMatch =
+      wantLine === undefined || wantLine === null
+        ? entry.line == null || entry.line === undefined
+        : entry.line === wantLine;
+    if (!lineMatch) {
+      return false;
+    }
+    const bodies = entry.comments ?? [...entry.lines];
+    return bodies.some(body => body.trim() === text);
+  });
+  if (duplicate) {
+    return prev ?? {threads: prior};
+  }
+  const nextThread: WindowReview['threads'][number] = {
+    file: thread.file,
+    line: wantLine ?? null,
+    lines: [...thread.comments],
+    comments: [...thread.comments],
+  };
+  return {
+    threads: [...prior, nextThread],
+    conversation: prev?.conversation,
+  };
+}
+
 /**
  * One process store: the observation, the spine shelf, and the git trees.
  * Writing the same observation leaves the shelf revision untouched.
@@ -102,6 +142,12 @@ export function createBoardStore() {
     },
     review(key: string): WindowReview | undefined {
       return reviews.get(key);
+    },
+    mergeHeldThread(
+      key: string,
+      thread: {file: string; line?: number | null; comments: readonly string[]},
+    ): void {
+      reviews.set(key, mergeThreadIntoReview(reviews.get(key), thread));
     },
     factsOf(key: string): BranchFacts | undefined {
       return facts.get(key);

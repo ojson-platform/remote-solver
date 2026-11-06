@@ -96,13 +96,13 @@ A new spec SHALL NOT keep the Purpose the command writes (`TBD - created by arch
 
 #### Scenario: An existing spec keeps its Purpose
 
-- **WHEN** an existing spec already keeps its Purpose, together with the one line under that capability in the proposal as the limit that can replace that Purpose
-- **THEN** an existing spec keeps its Purpose
+- **WHEN** an existing spec already keeps the Purpose `The accept step folds a delta into the baseline by editing it, and records that fold in one commit.`, together with the one line under that capability in the proposal (`the accept step folds a delta into the baseline by editing it, in one commit`) as the limit that can replace that Purpose
+- **THEN** an existing spec keeps the Purpose `The accept step folds a delta into the baseline by editing it, and records that fold in one commit.`
 
 #### Scenario: The command does not change it
 
-- **WHEN** the command has already left an existing spec's Purpose unchanged, together with `TBD - created by archiving change ...` as the limit that can replace that Purpose
-- **THEN** the command does not change it
+- **WHEN** the command has already left the Purpose `The accept step folds a delta into the baseline by editing it, and records that fold in one commit.` unchanged, together with a Purpose that says the step folds with `openspec archive issue-<key> --yes` instead of editing the baseline by hand as the limit that can replace that Purpose
+- **THEN** the command does not change the Purpose `The accept step folds a delta into the baseline by editing it, and records that fold in one commit.`
 
 ### Requirement: A refusal does not publish
 

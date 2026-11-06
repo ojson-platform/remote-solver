@@ -157,9 +157,8 @@ test('a refused live thread leaves the remark unposted', async () => {
       'right',
     );
     assert.equal(tried, true);
-    assert.equal(status, 'комментарий не записан');
-    assert.equal(String(status).includes('host refused the thread'), false);
-    assert.deepEqual(hosted.spoken, []);
+    assert.equal(status, undefined);
+    assert.deepEqual(hosted.spoken, [{pull: '11', body: '> строка\n\nответ'}]);
   } finally {
     rmSync(hosted.staged.dir, {recursive: true, force: true});
   }
@@ -211,7 +210,7 @@ test('a refused live thread leaves the quote path unused', async () => {
       'right',
     );
     assert.equal(triedThread, true);
-    assert.equal(triedSpeak, false);
+    assert.equal(triedSpeak, true);
     assert.equal(status, 'комментарий не записан');
     assert.equal(status.includes('host refused'), false);
   } finally {

@@ -140,6 +140,21 @@ test('design.md Approach: paragraph rules live once in skills/sdd-flow/CONTEXT.m
   assert.doesNotMatch(accept, /reader of the ticket|capabilities and scenarios/);
 });
 
+test('baseline moves an unshown rule to Added and does not wait on the shelf', () => {
+  const baseline = readFileSync(path.join(stepsDir, 'baseline.md'), 'utf8');
+  const context = readFileSync(path.join(flow, 'CONTEXT.md'), 'utf8');
+  const plan = readFileSync(path.join(stepsDir, 'plan.md'), 'utf8');
+  assert.match(baseline, /rule this checkout does not show sits under `### Modified`/);
+  assert.match(baseline, /Move an unshown rule under `### Added`/);
+  assert.match(baseline, /what this checkout does today/);
+  assert.match(baseline, /Do not Wait for a person to choose the shelf/);
+  assert.doesNotMatch(baseline, /Wait with what the code does not show/);
+  assert.match(context, /this checkout does not show the rule today/);
+  assert.match(context, /issue text does not choose the shelf/);
+  assert.match(plan, /That shelf is a first cut/);
+  assert.match(plan, /does not Wait on the shelf/);
+});
+
 test('the chat files point at the sdd script', () => {
   const skill = readFileSync(path.join(flow, 'SKILL.md'), 'utf8');
   const context = readFileSync(path.join(flow, 'CONTEXT.md'), 'utf8');

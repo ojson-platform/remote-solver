@@ -47,9 +47,11 @@ or helper implements it. Cut: when the rule changes, exactly one spec
 changes. A rule observed through several helpers is one id. Several rules
 inside one helper are several ids.
 
-`### Added`: the caller cannot observe the rule today. `### Modified`: the
-caller can, and the baseline restores it before the delta. A rule that exists
-and is being deepened or moved is Modified.
+`### Added`: this checkout does not show the rule today. `### Modified`: this
+checkout shows the rule, and the baseline restores today's behavior before the
+delta. A rule that exists and is being deepened or moved is Modified. The
+issue text does not choose the shelf. Baseline moves the line to the shelf
+the checkout shows and does not wait for a person.
 
 The baseline of an id holds today's behavior of that rule only, including
 disagreements between helpers. Behavior under `## Out of scope` belongs to

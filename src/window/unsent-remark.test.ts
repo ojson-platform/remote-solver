@@ -1,5 +1,7 @@
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import assert from 'node:assert/strict';
+import {mkdirSync, writeFileSync} from 'node:fs';
+import path from 'node:path';
 import {test} from 'vitest';
 
 import {changeDir} from '../machine/naming.ts';
@@ -7,15 +9,61 @@ import {changeDir} from '../machine/naming.ts';
 import {buildAnswerPostsFromState} from './client/remark-queue.ts';
 import {
   bandOf,
+  beginPost,
+  delay,
+  deltaRequirement,
   held,
   hosted,
   MANAGER,
   pageHtml,
   post,
+  readSnapshot,
+  ticket,
   writeChange,
 } from './page.harness.ts';
 import {mergeThreadIntoReview} from './store.ts';
+import type {WindowSnapshot} from './snapshot.ts';
 import type {WindowReview} from './types.ts';
+
+const SPEC_ID = 'case-read';
+const SPEC_LINE_PATH = `openspec/changes/issue-1/specs/${SPEC_ID}/spec.md`;
+const SPEC_LINE_TEXT = '- **WHEN** the section is long';
+
+const BASELINE_SPEC_BODY = [
+  '### Requirement: Rows show the section',
+  '',
+  'The row shows the whole section.',
+  '',
+  '#### Scenario: The row shows the section',
+  '',
+  '- **WHEN** the section is short',
+  '- **THEN** the row shows it',
+  '',
+].join('\n');
+
+function writeBaselineSpec(arcadia: string, id: string): void {
+  const file = path.join(arcadia, 'services', 'billing', 'openspec', 'specs', id, 'spec.md');
+  mkdirSync(path.dirname(file), {recursive: true});
+  writeFileSync(file, BASELINE_SPEC_BODY);
+}
+
+function lineAnswerParams(shot: WindowSnapshot, lineText: string, reply: string): URLSearchParams {
+  const cap = shot.opened?.spine.capabilities.find(item => item.id === SPEC_ID);
+  assert.ok(cap);
+  const flat = cap.rows.flatMap(entry => (entry.kind === 'gap' ? entry.hidden : [entry]));
+  const row = flat.find(r => r.kind === 'add' && r.text === lineText);
+  assert.ok(row?.anchor);
+  const a = row.anchor;
+  return new URLSearchParams({
+    act: 'answer',
+    key: '1',
+    reply,
+    line: lineText,
+    path: a.path,
+    at: String(a.line),
+    side: a.side,
+  });
+}
 
 spec('unsent-remark', () => {
   requirement('A new remark stays in the window until send', () => {
@@ -305,6 +353,257 @@ test('After the GitHub thread has been accepted, the draft must disappear', asyn
       const foot = html.slice(html.indexOf('class="plan-foot"'), html.indexOf('id="spine-Specify"'));
       assert.match(foot, /class="posted-comment"[\s\S]*уже на запросе/);
       assert.match(foot, /<textarea[^>]*name="reply"[^>]*><\/textarea>/);
+    },
+  );
+});
+
+test('A failed send leaves the draft', async () => {
+  const proposalRel = `${changeDir('1')}/proposal.md`;
+  let heldReview: WindowReview | undefined;
+  await hosted(
+    {
+      login: () => MANAGER,
+      tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
+      review: () => heldReview,
+      mergeHeldThread: (_key, thread) => {
+        heldReview = mergeThreadIntoReview(heldReview, thread);
+      },
+      threadPull: async () => {
+        throw new Error('host refused');
+      },
+    },
+    async (page, window, paths) => {
+      writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+      window.chooseAgent('cursor');
+      const draft = 'ни на запросе';
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())).status,
+        200,
+      );
+      const failed = await post(
+        page.url,
+        'act',
+        new URLSearchParams({act: 'answer', key: '1', reply: draft, layer: 'Plan'}).toString(),
+      );
+      assert.equal(failed.status, 200);
+      assert.equal((JSON.parse(failed.body) as WindowSnapshot).status, 'комментарий не записан');
+    },
+  );
+});
+
+test('Once GitHub has accepted the thread, the draft disappears, including when the window reported an error such as stale', async () => {
+  const proposalRel = `${changeDir('1')}/proposal.md`;
+  let releaseAnswer: (() => void) | undefined;
+  let started = false;
+  const body = 'уже принято';
+  let heldReview: WindowReview | undefined;
+  await hosted(
+    {
+      login: () => MANAGER,
+      tickets: () => [
+        held('1', 'proposing', {openPullRequests: 1}),
+        ticket({key: '2', title: '2', queue: 'alpha', sddService: 'services/billing', labels: ['sdd:cycle']}),
+      ],
+      review: () => heldReview,
+      mergeHeldThread: (_key, thread) => {
+        heldReview = mergeThreadIntoReview(heldReview, thread);
+      },
+      threadPull: async (_key, posted, place) => {
+        started = true;
+        heldReview = mergeThreadIntoReview(heldReview, {
+          file: place.path,
+          line: place.line ?? null,
+          comments: [posted],
+        });
+        await new Promise<void>(resolve => {
+          releaseAnswer = resolve;
+        });
+      },
+    },
+    async (page, window, paths) => {
+      let finishStale: (() => Promise<{status: number; body: string}>) | undefined;
+      writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+      window.chooseAgent('cursor');
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())).status,
+        200,
+      );
+      finishStale = await beginPost(
+        page.url,
+        'act',
+        new URLSearchParams({act: 'answer', key: '1', reply: body, layer: 'Plan'}).toString(),
+      );
+      const pendingStale = finishStale();
+      while (!started) {
+        await delay(5);
+      }
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '2'}).toString())).status,
+        200,
+      );
+      releaseAnswer?.();
+      const late = await pendingStale;
+      assert.equal(late.status, 409);
+      assert.equal(late.body, 'устарело');
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())).status,
+        200,
+      );
+      const html = bandOf(await pageHtml(page.url), '1');
+      const foot = html.slice(html.indexOf('class="plan-foot"'), html.indexOf('id="spine-Specify"'));
+      assert.match(foot, /class="posted-comment"[\s\S]*уже принято/);
+      assert.match(foot, /<textarea[^>]*name="reply"[^>]*><\/textarea>/);
+    },
+  );
+});
+
+test('The draft remains only when that thread is not on the pull request', async () => {
+  const proposalRel = `${changeDir('1')}/proposal.md`;
+  const draft = 'остаётся';
+  let heldReview: WindowReview | undefined;
+  await hosted(
+    {
+      login: () => MANAGER,
+      tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
+      review: () => heldReview,
+      mergeHeldThread: (_key, thread) => {
+        heldReview = mergeThreadIntoReview(heldReview, thread);
+      },
+      threadPull: async () => {
+        throw new Error('host refused');
+      },
+    },
+    async (page, window, paths) => {
+      writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+      window.chooseAgent('cursor');
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())).status,
+        200,
+      );
+      const failed = await post(
+        page.url,
+        'act',
+        new URLSearchParams({act: 'answer', key: '1', reply: draft, layer: 'Plan'}).toString(),
+      );
+      assert.equal(failed.status, 200);
+      assert.equal((JSON.parse(failed.body) as WindowSnapshot).status, 'комментарий не записан');
+    },
+  );
+});
+
+test('The draft remains only when the thread is not on the pull request', async () => {
+  const draft = 'линия';
+  let heldReview: WindowReview | undefined;
+  await hosted(
+    {
+      login: () => MANAGER,
+      tickets: () => [held('1', 'specifying', {openPullRequests: 1})],
+      review: () => heldReview,
+      mergeHeldThread: (_key, thread) => {
+        heldReview = mergeThreadIntoReview(heldReview, thread);
+      },
+      threadPull: async () => {
+        throw new Error('refused');
+      },
+    },
+    async (page, window, paths) => {
+      writeBaselineSpec(paths.arcadia, SPEC_ID);
+      writeChange(paths.arcadia, '1', `specs/${SPEC_ID}/spec.md`, deltaRequirement());
+      window.chooseAgent('cursor');
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())).status,
+        200,
+      );
+      const shot = await readSnapshot(page.url);
+      const params = lineAnswerParams(shot, SPEC_LINE_TEXT, draft);
+      const failedLine = await post(page.url, 'act', params.toString());
+      assert.equal(failedLine.status, 200);
+      assert.equal((JSON.parse(failedLine.body) as WindowSnapshot).status, 'комментарий не записан');
+    },
+  );
+});
+
+test('When the pull request already has that thread, including after the window reported an error, a retry does not post a second thread with the same text on the same line', async () => {
+  const text = 'один раз';
+  let heldReview: WindowReview | undefined;
+  let threadPullCalls = 0;
+  await hosted(
+    {
+      login: () => MANAGER,
+      tickets: () => [held('1', 'specifying', {openPullRequests: 1})],
+      review: () => heldReview,
+      mergeHeldThread: (_key, thread) => {
+        heldReview = mergeThreadIntoReview(heldReview, thread);
+      },
+      threadPull: async () => {
+        threadPullCalls += 1;
+        throw new Error('stale');
+      },
+      speakPull: async () => {
+        throw new Error('no speak');
+      },
+    },
+    async (page, window, paths) => {
+      writeBaselineSpec(paths.arcadia, SPEC_ID);
+      writeChange(paths.arcadia, '1', `specs/${SPEC_ID}/spec.md`, deltaRequirement());
+      window.chooseAgent('cursor');
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())).status,
+        200,
+      );
+      const shot = await readSnapshot(page.url);
+      const anchor = lineAnswerParams(shot, SPEC_LINE_TEXT, text);
+      heldReview = mergeThreadIntoReview(undefined, {
+        file: anchor.get('path') ?? '',
+        line: Number(anchor.get('at')),
+        comments: [text],
+      });
+      assert.equal((await post(page.url, 'act', anchor.toString())).status, 200);
+      assert.equal(threadPullCalls, 0);
+    },
+  );
+});
+
+test('If the window replied with an error after the write, including stale, a retry does not create a second thread with the same text on the same line', async () => {
+  const text = 'после ошибки';
+  let heldReview: WindowReview | undefined;
+  let call = 0;
+  await hosted(
+    {
+      login: () => MANAGER,
+      tickets: () => [held('1', 'specifying', {openPullRequests: 1})],
+      review: () => heldReview,
+      mergeHeldThread: (_key, thread) => {
+        heldReview = mergeThreadIntoReview(heldReview, thread);
+      },
+      threadPull: async (_key, body, place) => {
+        call += 1;
+        if (call === 1) {
+          heldReview = mergeThreadIntoReview(heldReview, {
+            file: place.path,
+            line: place.line,
+            comments: [body],
+          });
+          throw new Error('stale');
+        }
+      },
+      speakPull: async () => {
+        throw new Error('no');
+      },
+    },
+    async (page, window, paths) => {
+      writeBaselineSpec(paths.arcadia, SPEC_ID);
+      writeChange(paths.arcadia, '1', `specs/${SPEC_ID}/spec.md`, deltaRequirement());
+      window.chooseAgent('cursor');
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())).status,
+        200,
+      );
+      const shot = await readSnapshot(page.url);
+      const params = lineAnswerParams(shot, SPEC_LINE_TEXT, text);
+      assert.equal((await post(page.url, 'act', params.toString())).status, 200);
+      assert.equal((await post(page.url, 'act', params.toString())).status, 200);
+      assert.equal(call, 1);
     },
   );
 });

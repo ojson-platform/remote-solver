@@ -1,6 +1,7 @@
 import type {SpecEntry} from '../spec-diff.ts';
 import type {SpineLayer} from '../spine.ts';
 import type {WindowSnapshot} from '../snapshot.ts';
+import type {SidebarBlock} from '../types.ts';
 import type {LineDraft, SpecOpen} from './gesture.ts';
 import type {BusyEdges, FrameHold} from './frame.ts';
 import type {DocumentRemark} from './sidebar.tsx';
@@ -133,6 +134,44 @@ function clearDraftsForSent(memory: Memory, batch: readonly URLSearchParams[]): 
       memory.drafts = memory.drafts.filter(item => item.line !== line);
     }
   }
+}
+
+function normDraftPath(value: string | null): string {
+  if (value === null || value === '') {
+    return '';
+  }
+  return value.replace(/\\/g, '/');
+}
+
+/** Clears page-memory drafts only when the snapshot already shows the matching review thread in the sidebar. */
+function snapshotShowsSentRemark(snapshot: WindowSnapshot, body: URLSearchParams): boolean {
+  const reply = (body.get('reply') ?? '').trim();
+  if (reply === '') {
+    return false;
+  }
+  const blocks: readonly SidebarBlock[] = snapshot.opened?.blocks ?? [];
+  const layer = body.get('layer');
+  if (layer === 'Plan' || layer === 'Specify' || layer === 'Design') {
+    return blocks.some(
+      block =>
+        block.kind === 'phase-thread' &&
+        block.layer === layer &&
+        block.comments.some(comment => comment.trim() === reply),
+    );
+  }
+  const path = normDraftPath(body.get('path'));
+  const at = body.get('at');
+  const line = at === null || at === '' ? undefined : Number(at);
+  if (path === '' || line === undefined || Number.isNaN(line)) {
+    return false;
+  }
+  return blocks.some(
+    block =>
+      block.kind === 'line-thread' &&
+      normDraftPath(block.file) === path &&
+      block.line === line &&
+      block.comments.some(comment => comment.trim() === reply),
+  );
 }
 
 function documentRemark(): DocumentRemark {
@@ -580,7 +619,7 @@ function boot(): void {
                 return;
               }
               last = (await response.json()) as WindowSnapshot;
-              if (last.status === undefined) {
+              if (last.status === undefined && snapshotShowsSentRemark(last, body)) {
                 clearDraftsForSent(memory, [body]);
               }
             } catch {
@@ -605,7 +644,12 @@ function boot(): void {
         return (await response.json()) as WindowSnapshot;
       })
       .then(snapshot => {
-        if (snapshot !== undefined && act === 'answer' && snapshot.status === undefined) {
+        if (
+          snapshot !== undefined &&
+          act === 'answer' &&
+          snapshot.status === undefined &&
+          snapshotShowsSentRemark(snapshot, params)
+        ) {
           clearDraftsForSent(memory, [params]);
         }
         finish(snapshot);

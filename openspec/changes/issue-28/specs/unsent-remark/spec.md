@@ -54,12 +54,17 @@ Immediately after a successful send, the thread SHALL be visible in the sidebar,
 
 ### Requirement: The draft remains only when that thread is not on the pull request
 
-A failed send SHALL leave the draft. The draft SHALL remain only when that thread is not on the pull request.
+The draft SHALL remain only when that thread is not on the pull request. A failed send SHALL leave the draft only when that thread is not on the pull request. Once GitHub has accepted the thread, the draft SHALL disappear, including when the window reported an error such as stale.
 
 #### Scenario: A failed send leaves the draft
 
-- **WHEN** a failed send and the draft are already visible, together with a thread that is already on the pull request as the limit that can replace this remaining draft
-- **THEN** a failed send leaves the draft
+- **WHEN** a failed send and the draft are already visible, and that thread is not on the pull request, together with GitHub having accepted the thread, including when the window reported an error such as stale, as the limit that can replace this remaining draft
+- **THEN** a failed send leaves the draft only when that thread is not on the pull request
+
+#### Scenario: Once GitHub has accepted the thread, the draft disappears, including when the window reported an error such as stale
+
+- **WHEN** the thread GitHub has accepted, the draft, and the error the window reported, such as stale, are already visible, together with a failed send that leaves the draft when that thread is not on the pull request as the limit that can replace this disappearance
+- **THEN** once GitHub has accepted the thread, the draft disappears, including when the window reported an error such as stale
 
 #### Scenario: The draft remains only when that thread is not on the pull request
 

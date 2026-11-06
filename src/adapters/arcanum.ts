@@ -86,6 +86,9 @@ export async function arcanumOpenThread(
   pull: string,
   target: ThreadTarget,
 ): Promise<void> {
+  if (target.line === undefined || target.subject_type === 'file') {
+    throw new Error('arcanum inline comment needs a line');
+  }
   const active = await http.get(`/v1/pull-requests/${pull}/active-diff?fields=id`);
   const id = activeDiffId(active);
   if (id === undefined) {

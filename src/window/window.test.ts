@@ -995,7 +995,12 @@ test('the last drag writes its own text', () => {
   proveTheLastDragWritesItsOwnText();
 });
 
-type ThreadPlace = {path: string; line: number; side: 'right' | 'left'};
+type ThreadPlace = {
+  path: string;
+  line?: number;
+  side?: 'right' | 'left';
+  subject_type?: 'file';
+};
 
 function hostedAnswer(openPullRequests: number) {
   const {dir, home, arcadia} = yard();

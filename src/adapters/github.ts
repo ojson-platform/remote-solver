@@ -1064,15 +1064,21 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
         `commit_id=${target.commit}`,
         '-f',
         `path=${target.path}`,
-        '-F',
-        `line=${target.line}`,
         '-f',
         `body=${body}`,
       ];
-      if (target.side === 'right') {
-        args.push('-f', 'side=RIGHT');
-      } else if (target.side === 'left') {
-        args.push('-f', 'side=LEFT');
+      if (target.subject_type === 'file') {
+        args.push('-f', 'subject_type=file');
+      } else {
+        if (target.line === undefined) {
+          throw new Error('line is missing for inline thread');
+        }
+        args.push('-F', `line=${target.line}`);
+        if (target.side === 'right') {
+          args.push('-f', 'side=RIGHT');
+        } else if (target.side === 'left') {
+          args.push('-f', 'side=LEFT');
+        }
       }
       await run(args);
     },

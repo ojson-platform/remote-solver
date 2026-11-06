@@ -769,14 +769,24 @@ export function openLiveBoard(options: LiveBoardOptions) {
         if (range.head === '') {
           throw new Error('head is missing');
         }
-        await review.openThread(pull, {
+        const target: ThreadTarget = {
           commit: range.head,
           path: place.path,
-          line: place.line,
           body,
           plain: true,
-          side: place.side,
-        });
+        };
+        if (place.subject_type === 'file') {
+          target.subject_type = 'file';
+        } else {
+          if (place.line === undefined) {
+            throw new Error('line is missing');
+          }
+          target.line = place.line;
+          if (place.side !== undefined) {
+            target.side = place.side;
+          }
+        }
+        await review.openThread(pull, target);
       },
       async speakPull(key, body) {
         const pull = store.pull(key);

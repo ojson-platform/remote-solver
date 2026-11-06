@@ -499,14 +499,7 @@ export function openWindow(
             outside.mergeHeldThread?.(key, {file: phasePath, line: null, comments: [text]});
             return undefined;
           }
-          try {
-            if (!outside.speakPull) {
-              throw new Error('speak is missing');
-            }
-            await outside.speakPull(key, quotedLine(source, text));
-          } catch {
-            return 'комментарий не записан';
-          }
+          return 'комментарий не записан';
         }
         return undefined;
       }
@@ -524,20 +517,22 @@ export function openWindow(
         }
         await outside.threadPull(key, text, {path, line, side: anchorSide(side)});
         outside.mergeHeldThread?.(key, {file: path, line, comments: [text]});
-      } catch {
+      } catch (error) {
         const after = outside.review?.(key);
         if (threadAlreadyPresent(after, path, line, text)) {
           outside.mergeHeldThread?.(key, {file: path, line, comments: [text]});
           return undefined;
         }
-        try {
-          if (!outside.speakPull) {
-            throw new Error('speak is missing');
+        const headMissing = error instanceof Error && error.message === 'head is missing';
+        if (headMissing && outside.speakPull) {
+          try {
+            await outside.speakPull(key, quotedLine(source, text));
+            return undefined;
+          } catch {
+            return 'комментарий не записан';
           }
-          await outside.speakPull(key, quotedLine(source, text));
-        } catch {
-          return 'комментарий не записан';
         }
+        return 'комментарий не записан';
       }
       return undefined;
     },

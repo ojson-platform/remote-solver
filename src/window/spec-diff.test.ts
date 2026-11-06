@@ -1236,8 +1236,9 @@ spec('spec-diff', () => {
           assert.equal(posted.status, 200);
           const next = JSON.parse(posted.body) as WindowSnapshot;
           assert.equal(threadCalls, 1);
-          assert.deepEqual(spoken, [`> ${newLine}\n\n${reply}`]);
-          assert.equal(next.status, undefined);
+          assert.deepEqual(spoken, []);
+          assert.equal(next.status, 'комментарий не записан');
+          assert.equal(statusOf(renderWindow(next)), 'комментарий не записан');
           assert.equal(JSON.stringify(next).includes('host refused the thread'), false);
         },
       );
@@ -1282,7 +1283,7 @@ spec('spec-diff', () => {
           assert.equal(posted.status, 200);
           const next = JSON.parse(posted.body) as WindowSnapshot;
           assert.equal(threadCalls, 1);
-          assert.equal(speakCalls, 1);
+          assert.equal(speakCalls, 0);
           assert.equal(next.status, 'комментарий не записан');
           assert.equal(statusOf(renderWindow(next)), 'комментарий не записан');
           assert.equal(JSON.stringify(next).includes('host refused'), false);

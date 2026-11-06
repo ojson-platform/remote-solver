@@ -492,6 +492,7 @@ export function openWindow(
             path: phasePath,
             subject_type: 'file',
           });
+          outside.mergeHeldThread?.(key, {file: phasePath, line: null, comments: [text]});
         } catch {
           try {
             if (!outside.speakPull) {
@@ -517,6 +518,7 @@ export function openWindow(
           throw new Error('thread is missing');
         }
         await outside.threadPull(key, text, {path, line, side: anchorSide(side)});
+        outside.mergeHeldThread?.(key, {file: path, line, comments: [text]});
       } catch {
         try {
           if (!outside.speakPull) {

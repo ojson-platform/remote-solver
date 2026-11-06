@@ -2,6 +2,8 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
+import {changeDir} from '../machine/naming.ts';
+
 import {buildAnswerPostsFromState} from './client/remark-queue.ts';
 import {
   bandOf,
@@ -12,6 +14,8 @@ import {
   post,
   writeChange,
 } from './page.harness.ts';
+import {mergeThreadIntoReview} from './store.ts';
+import type {WindowReview} from './types.ts';
 
 spec('unsent-remark', () => {
   requirement('A new remark stays in the window until send', () => {
@@ -182,6 +186,125 @@ test('A new remark stays in the window until send', async () => {
       window.openCard('1');
       void window.answer('1', '', '   ', '', '', '', '', 'Plan');
       assert.deepEqual(threads, []);
+    },
+  );
+});
+
+test('mergeThreadIntoReview ignores a duplicate thread body on the same file and line bucket', () => {
+  const path = 'openspec/changes/issue-1/proposal.md';
+  const once = mergeThreadIntoReview(undefined, {
+    file: path,
+    line: null,
+    comments: ['same'],
+  });
+  const twice = mergeThreadIntoReview(once, {
+    file: path,
+    line: null,
+    comments: ['same'],
+  });
+  assert.equal(twice.threads.length, 1);
+});
+
+test('Immediately after a successful send the thread is visible in the sidebar and the draft is cleared together with that', async () => {
+  const proposalRel = `${changeDir('1')}/proposal.md`;
+  const opened: {path: string; line?: number; subject_type?: 'file'}[] = [];
+  let heldReview: WindowReview | undefined;
+  await hosted(
+    {
+      login: () => MANAGER,
+      tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
+      review: () => heldReview,
+      mergeHeldThread: (_key, thread) => {
+        heldReview = mergeThreadIntoReview(heldReview, thread);
+      },
+      threadPull: async (_key, body, place) => {
+        opened.push({
+          path: place.path,
+          line: place.line,
+          subject_type: place.subject_type,
+        });
+        assert.equal(body, 'sidebar together');
+      },
+    },
+    async (page, window, paths) => {
+      writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+      window.chooseAgent('cursor');
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())).status,
+        200,
+      );
+      assert.equal(
+        (
+          await post(
+            page.url,
+            'act',
+            new URLSearchParams({
+              act: 'answer',
+              key: '1',
+              reply: 'sidebar together',
+              layer: 'Plan',
+            }).toString(),
+          )
+        ).status,
+        200,
+      );
+      assert.deepEqual(opened, [{path: proposalRel, line: undefined, subject_type: 'file'}]);
+      const html = bandOf(await pageHtml(page.url), '1');
+      const foot = html.slice(html.indexOf('class="plan-foot"'), html.indexOf('id="spine-Specify"'));
+      assert.match(foot, /class="posted-comment"[\s\S]*sidebar together/);
+      assert.match(foot, /<textarea[^>]*name="reply"[^>]*><\/textarea>/);
+    },
+  );
+});
+
+test('After the GitHub thread has been accepted, the draft must disappear', async () => {
+  const proposalRel = `${changeDir('1')}/proposal.md`;
+  const body = 'уже на запросе';
+  let heldReview: WindowReview | undefined = mergeThreadIntoReview(undefined, {
+    file: proposalRel,
+    line: null,
+    comments: [body],
+  });
+  let threadPullCalls = 0;
+  await hosted(
+    {
+      login: () => MANAGER,
+      tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
+      review: () => heldReview,
+      mergeHeldThread: (_key, thread) => {
+        heldReview = mergeThreadIntoReview(heldReview, thread);
+      },
+      threadPull: async () => {
+        threadPullCalls += 1;
+      },
+    },
+    async (page, window, paths) => {
+      writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+      window.chooseAgent('cursor');
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())).status,
+        200,
+      );
+      assert.equal(
+        (
+          await post(
+            page.url,
+            'act',
+            new URLSearchParams({
+              act: 'answer',
+              key: '1',
+              reply: body,
+              layer: 'Plan',
+            }).toString(),
+          )
+        ).status,
+        200,
+      );
+      assert.equal(threadPullCalls, 0);
+      const html = bandOf(await pageHtml(page.url), '1');
+      const foot = html.slice(html.indexOf('class="plan-foot"'), html.indexOf('id="spine-Specify"'));
+      assert.match(foot, /class="posted-comment"[\s\S]*уже на запросе/);
+      assert.match(foot, /<textarea[^>]*name="reply"[^>]*><\/textarea>/);
     },
   );
 });

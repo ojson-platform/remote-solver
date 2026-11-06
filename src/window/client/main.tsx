@@ -121,6 +121,20 @@ function copyRemark(remark: DocumentRemark): DocumentRemark {
   return {Plan: remark.Plan, Specify: remark.Specify, Design: remark.Design};
 }
 
+function clearDraftsForSent(memory: Memory, batch: readonly URLSearchParams[]): void {
+  for (const body of batch) {
+    const layer = body.get('layer');
+    if (layer === 'Plan' || layer === 'Specify' || layer === 'Design') {
+      memory.remark[layer] = '';
+      continue;
+    }
+    const line = body.get('line');
+    if (line !== null && line !== '') {
+      memory.drafts = memory.drafts.filter(item => item.line !== line);
+    }
+  }
+}
+
 function documentRemark(): DocumentRemark {
   const remark = blankRemark();
   for (const field of Array.from(document.querySelectorAll('.spine form.note textarea'))) {
@@ -566,6 +580,7 @@ function boot(): void {
                 return;
               }
               last = (await response.json()) as WindowSnapshot;
+              clearDraftsForSent(memory, [body]);
             } catch {
               finish(undefined);
               return;
@@ -588,6 +603,9 @@ function boot(): void {
         return (await response.json()) as WindowSnapshot;
       })
       .then(snapshot => {
+        if (snapshot !== undefined && act === 'answer') {
+          clearDraftsForSent(memory, [params]);
+        }
         finish(snapshot);
       })
       .catch(() => {

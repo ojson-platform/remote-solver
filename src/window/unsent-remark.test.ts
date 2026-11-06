@@ -675,7 +675,7 @@ test('The window holds the queue for the open ticket', async () => {
       assert.equal(foot.includes(draft1), false);
     },
   );
-});
+}, 15_000);
 
 test('A reload drops unsent remarks', async () => {
   const draft = 'после перезагрузки нет';

@@ -58,6 +58,79 @@ function treeId(checkout: string, key: string, strict: boolean): string {
 }
 
 /** Merge one opened thread into a held review snapshot (idempotent on same path, line, and body). */
+function normReviewPath(value: string | undefined): string {
+  return (value ?? '').replace(/\\/g, '/');
+}
+
+function lineBucketMatch(
+  left: number | null | undefined,
+  right: number | null | undefined,
+): boolean {
+  if (left === undefined || left === null) {
+    return right === undefined || right === null;
+  }
+  return right === left;
+}
+
+function reviewHasThreadText(
+  reading: WindowReview | undefined,
+  file: string,
+  line: number | null | undefined,
+  text: string,
+): boolean {
+  const wantPath = normReviewPath(file);
+  const trimmed = text.trim();
+  if (trimmed === '') {
+    return true;
+  }
+  for (const thread of reading?.threads ?? []) {
+    if (normReviewPath(thread.file) !== wantPath) {
+      continue;
+    }
+    if (!lineBucketMatch(thread.line, line)) {
+      continue;
+    }
+    const bodies = thread.comments ?? thread.lines;
+    if (bodies.some(body => body.trim() === trimmed)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Spy refresh replaces reviews; fold locally held threads in so dedupe still sees accepted posts. */
+export function mergeReviewsPreservingLocal(
+  prev: ReadonlyMap<string, WindowReview>,
+  incoming: ReadonlyMap<string, WindowReview>,
+): Map<string, WindowReview> {
+  const out = new Map<string, WindowReview>();
+  for (const [key, next] of incoming) {
+    const was = prev.get(key);
+    if (was === undefined) {
+      out.set(key, next);
+      continue;
+    }
+    let merged: WindowReview = next;
+    for (const thread of was.threads ?? []) {
+      const file = thread.file ?? '';
+      const line = thread.line ?? null;
+      const bodies = thread.comments ?? thread.lines;
+      for (const body of bodies) {
+        const t = body.trim();
+        if (t === '') {
+          continue;
+        }
+        if (reviewHasThreadText(merged, file, line, t)) {
+          continue;
+        }
+        merged = mergeThreadIntoReview(merged, {file, line, comments: [t]});
+      }
+    }
+    out.set(key, merged);
+  }
+  return out;
+}
+
 export function mergeThreadIntoReview(
   prev: WindowReview | undefined,
   thread: {file: string; line?: number | null; comments: readonly string[]},
@@ -220,7 +293,7 @@ export function createBoardStore() {
       }
       tickets = next.tickets;
       pulls = next.pulls;
-      reviews = next.reviews;
+      reviews = mergeReviewsPreservingLocal(reviews, next.reviews);
       spyPulls = next.spyPulls;
       facts = next.facts;
       texts = next.texts;

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Keeps «Принять» in the gate's place on Plan, Specify, and Design while that phase has an unclosed review thread, and keeps the machine from asking to accept the phase.
+Keeps «Принять» in the gate's place on Plan, Specify, and Design while that phase has an unclosed review thread. While such a thread is open, the machine removes `sdd:wait-human`, does not ask to accept the phase, and `sdd:auto-plan` and `sdd:auto-spec` do not advance the phase.
 
 ## ADDED Requirements
 
@@ -71,9 +71,9 @@ An open question SHALL still leave that place empty, as it does now.
 
 ### Requirement: An open thread does not ask to accept the phase
 
-While such a thread is open, the machine SHALL NOT set `sdd:wait-human` and SHALL NOT ask to accept the phase.
+While such a thread is open, the machine SHALL remove `sdd:wait-human` and SHALL NOT ask to accept the phase. `sdd:auto-plan` and `sdd:auto-spec` SHALL NOT advance the phase while the thread holds it.
 
-#### Scenario: While such a thread is open, the machine does not set sdd:wait-human and does not ask to accept the phase
+#### Scenario: While such a thread is open, the machine removes sdd:wait-human and does not ask to accept the phase
 
-- **WHEN** such a thread, `sdd:wait-human`, and the ask to accept the phase are already visible, together with a thread marked for a later phase as the limit that can replace such a thread
-- **THEN** while such a thread is open, the machine does not set `sdd:wait-human` and does not ask to accept the phase
+- **WHEN** `sdd:wait-human`, the ask to accept the phase, such a thread, `sdd:auto-plan`, and `sdd:auto-spec` are already visible, together with a thread marked for a later phase as the limit that can replace such a thread
+- **THEN** while such a thread is open, the machine removes `sdd:wait-human`, does not ask to accept the phase, and `sdd:auto-plan` and `sdd:auto-spec` do not advance the phase while the thread holds it

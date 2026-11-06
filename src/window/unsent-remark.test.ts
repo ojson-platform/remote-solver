@@ -1,6 +1,6 @@
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import assert from 'node:assert/strict';
-import {mkdirSync, writeFileSync} from 'node:fs';
+import {mkdirSync, rmSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {test} from 'vitest';
 
@@ -17,10 +17,14 @@ import {
   MANAGER,
   pageHtml,
   post,
+  prepare,
   readSnapshot,
   ticket,
   writeChange,
+  yard,
 } from './page.harness.ts';
+import {serveBoard} from './page.ts';
+import {openWindow} from './window.ts';
 import {mergeThreadIntoReview} from './store.ts';
 import type {WindowSnapshot} from './snapshot.ts';
 import type {WindowReview} from './types.ts';
@@ -606,4 +610,123 @@ test('If the window replied with an error after the write, including stale, a re
       assert.equal(call, 1);
     },
   );
+});
+
+test('The window holds the queue for the open ticket', async () => {
+  const draft1 = 'очередь первого тикета';
+  const draft2 = 'другой тикет';
+  await hosted(
+    {
+      login: () => MANAGER,
+      tickets: () => [
+        held('1', 'proposing', {openPullRequests: 1}),
+        held('2', 'proposing', {openPullRequests: 1}),
+      ],
+      threadPull: async () => {
+        throw new Error('host refused');
+      },
+    },
+    async (page, window, paths) => {
+      writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+      writeChange(paths.arcadia, '2', 'proposal.md', '## Outcome\n\nДругой.\n');
+      window.chooseAgent('cursor');
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())).status,
+        200,
+      );
+      assert.equal(
+        (
+          await post(
+            page.url,
+            'act',
+            new URLSearchParams({act: 'answer', key: '1', reply: draft1, layer: 'Plan'}).toString(),
+          )
+        ).status,
+        200,
+      );
+      let html = bandOf(await pageHtml(page.url), '1');
+      let foot = html.slice(html.indexOf('class="plan-foot"'), html.indexOf('id="spine-Specify"'));
+      assert.match(foot, new RegExp(`name="reply"[^>]*>${draft1.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '2'}).toString())).status,
+        200,
+      );
+      assert.equal(
+        (
+          await post(
+            page.url,
+            'act',
+            new URLSearchParams({act: 'answer', key: '2', reply: draft2, layer: 'Plan'}).toString(),
+          )
+        ).status,
+        200,
+      );
+      html = bandOf(await pageHtml(page.url), '2');
+      foot = html.slice(html.indexOf('class="plan-foot"'), html.indexOf('id="spine-Specify"'));
+      assert.match(foot, new RegExp(`name="reply"[^>]*>${draft2.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+      assert.equal(foot.includes(draft1), false);
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())).status,
+        200,
+      );
+      html = bandOf(await pageHtml(page.url), '1');
+      foot = html.slice(html.indexOf('class="plan-foot"'), html.indexOf('id="spine-Specify"'));
+      assert.match(foot, /<textarea[^>]*name="reply"[^>]*><\/textarea>/);
+      assert.equal(foot.includes(draft1), false);
+    },
+  );
+});
+
+test('A reload drops unsent remarks', async () => {
+  const draft = 'после перезагрузки нет';
+  const {dir, home, arcadia} = yard();
+  try {
+    prepare(arcadia, home);
+    const windowApi = openWindow({homePath: home, adapter: 'tracker'}, {
+      login: () => MANAGER,
+      tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
+      threadPull: async () => {
+        throw new Error('host refused');
+      },
+    });
+    const page1 = await serveBoard(windowApi);
+    try {
+      writeChange(arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+      windowApi.chooseAgent('cursor');
+      assert.equal(
+        (await post(page1.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())).status,
+        200,
+      );
+      assert.equal(
+        (
+          await post(
+            page1.url,
+            'act',
+            new URLSearchParams({act: 'answer', key: '1', reply: draft, layer: 'Plan'}).toString(),
+          )
+        ).status,
+        200,
+      );
+      let html = bandOf(await pageHtml(page1.url), '1');
+      let foot = html.slice(html.indexOf('class="plan-foot"'), html.indexOf('id="spine-Specify"'));
+      assert.match(foot, new RegExp(`name="reply"[^>]*>${draft.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+    } finally {
+      await page1.close();
+    }
+    const page2 = await serveBoard(windowApi);
+    try {
+      assert.equal(
+        (await post(page2.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())).status,
+        200,
+      );
+      const html = bandOf(await pageHtml(page2.url), '1');
+      const foot = html.slice(html.indexOf('class="plan-foot"'), html.indexOf('id="spine-Specify"'));
+      assert.match(foot, /<textarea[^>]*name="reply"[^>]*><\/textarea>/);
+      assert.equal(foot.includes(draft), false);
+    } finally {
+      await page2.close();
+    }
+  } finally {
+    rmSync(dir, {recursive: true, force: true});
+  }
 });

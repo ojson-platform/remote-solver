@@ -632,7 +632,11 @@ function boot(): void {
           side: sideField instanceof HTMLInputElement ? sideField.value : undefined,
         };
       }, memory.remark);
-      const runBatch = batch.length > 1;
+      const fromRemarkField = (() => {
+        const layer = params.get('layer');
+        return layer === 'Plan' || layer === 'Specify' || layer === 'Design';
+      })();
+      const runBatch = batch.length > 1 || fromRemarkField;
       if (runBatch) {
         void (async () => {
           let last: WindowSnapshot | undefined;
@@ -651,9 +655,6 @@ function boot(): void {
                 return;
               }
               last = (await response.json()) as WindowSnapshot;
-              if (last.status === undefined && snapshotShowsSentRemark(last, body)) {
-                clearDraftsForSent(memory, [body]);
-              }
               if (last.status === undefined) {
                 syncDraftMemoryFromSnapshot(memory, last);
               }

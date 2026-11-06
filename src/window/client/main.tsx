@@ -174,6 +174,35 @@ function snapshotShowsSentRemark(snapshot: WindowSnapshot, body: URLSearchParams
   );
 }
 
+/** When the snapshot already shows accepted threads, drop matching client memory even if the act response was stale. */
+function syncDraftMemoryFromSnapshot(memory: Memory, snapshot: WindowSnapshot): void {
+  const key = snapshot.opened?.key;
+  if (key === undefined) {
+    return;
+  }
+  const batch = buildAnswerPostsFromState(key, memory.drafts, line => {
+    const form = Array.from(document.querySelectorAll('.spine form.line-note')).find(candidate => {
+      const lineField = candidate.querySelector('input[name="line"]');
+      return lineField instanceof HTMLInputElement && lineField.value === line;
+    });
+    if (!(form instanceof HTMLFormElement)) {
+      return undefined;
+    }
+    const pathField = form.querySelector('input[name="path"]');
+    const atField = form.querySelector('input[name="at"]');
+    const sideField = form.querySelector('input[name="side"]');
+    return {
+      path: pathField instanceof HTMLInputElement ? pathField.value : undefined,
+      at: atField instanceof HTMLInputElement ? atField.value : undefined,
+      side: sideField instanceof HTMLInputElement ? sideField.value : undefined,
+    };
+  }, memory.remark);
+  const pending = batch.filter(body => snapshotShowsSentRemark(snapshot, body));
+  if (pending.length > 0) {
+    clearDraftsForSent(memory, pending);
+  }
+}
+
 function documentRemark(): DocumentRemark {
   const remark = blankRemark();
   for (const field of Array.from(document.querySelectorAll('.spine form.note textarea'))) {
@@ -569,6 +598,9 @@ function boot(): void {
       } else if (snapshot !== undefined) {
         keep(snapshot);
       }
+      if (snapshot !== undefined && base !== undefined && base.opened !== undefined) {
+        syncDraftMemoryFromSnapshot(memory, base);
+      }
       if (snapshot === undefined && drawerBefore !== undefined) {
         restoreMemory(memory, drawerBefore);
       }
@@ -622,6 +654,9 @@ function boot(): void {
               if (last.status === undefined && snapshotShowsSentRemark(last, body)) {
                 clearDraftsForSent(memory, [body]);
               }
+              if (last.status === undefined) {
+                syncDraftMemoryFromSnapshot(memory, last);
+              }
             } catch {
               finish(undefined);
               return;
@@ -651,6 +686,9 @@ function boot(): void {
           snapshotShowsSentRemark(snapshot, params)
         ) {
           clearDraftsForSent(memory, [params]);
+        }
+        if (snapshot !== undefined && act === 'answer' && snapshot.status === undefined) {
+          syncDraftMemoryFromSnapshot(memory, snapshot);
         }
         finish(snapshot);
       })

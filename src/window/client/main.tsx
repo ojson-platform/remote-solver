@@ -598,7 +598,14 @@ function boot(): void {
       } else if (snapshot !== undefined) {
         keep(snapshot);
       }
-      if (snapshot !== undefined && base !== undefined && base.opened !== undefined) {
+      if (
+        snapshot !== undefined &&
+        act === 'answer' &&
+        snapshot.status === undefined &&
+        snapshot.opened !== undefined
+      ) {
+        syncDraftMemoryFromSnapshot(memory, snapshot);
+      } else if (snapshot !== undefined && base !== undefined && base.opened !== undefined) {
         syncDraftMemoryFromSnapshot(memory, base);
       }
       if (snapshot === undefined && drawerBefore !== undefined) {
@@ -680,17 +687,6 @@ function boot(): void {
         return (await response.json()) as WindowSnapshot;
       })
       .then(snapshot => {
-        if (
-          snapshot !== undefined &&
-          act === 'answer' &&
-          snapshot.status === undefined &&
-          snapshotShowsSentRemark(snapshot, params)
-        ) {
-          clearDraftsForSent(memory, [params]);
-        }
-        if (snapshot !== undefined && act === 'answer' && snapshot.status === undefined) {
-          syncDraftMemoryFromSnapshot(memory, snapshot);
-        }
         finish(snapshot);
       })
       .catch(() => {

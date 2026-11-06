@@ -90,10 +90,13 @@ export type Tracker = {
 export type ThreadTarget = {
   commit: string;
   path: string;
-  line: number;
+  /** Omit for a file-level review thread (GitHub `subject_type: file`). */
+  line?: number;
   body: string;
   side?: 'right' | 'left';
   plain?: boolean;
+  /** When set, the host opens a thread on the file without a line anchor. */
+  subject_type?: 'file';
 };
 
 export type Review = {

@@ -49,6 +49,7 @@ type Surface = {
     path?: string,
     at?: string,
     side?: string,
+    layer?: string,
   ) => string | undefined | Promise<string | undefined>;
   acceptReview: (key: string) => string | undefined;
   shelf: () => {name: string; outcome: RoleOutcome}[];
@@ -402,6 +403,7 @@ async function apply(
         params.get('path') ?? '',
         params.get('at') ?? '',
         params.get('side') ?? '',
+        params.get('layer') ?? '',
       );
       if (mine !== epoch.n) {
         return 'stale';

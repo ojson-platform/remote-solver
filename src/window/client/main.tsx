@@ -9,6 +9,7 @@ import {flushSync} from 'react-dom';
 import {createRoot} from 'react-dom/client';
 
 import {App} from './app.tsx';
+import {buildAnswerPostsFromState} from './remark-queue.ts';
 import {
   focusHasLive,
   focusIndexAfterSnapshot,
@@ -524,6 +525,56 @@ function boot(): void {
     const have = haveKey ? keptDrawers.get(haveKey)?.revision : undefined;
     if (have) {
       params.set('have', have);
+    }
+    if (act === 'answer' && base !== undefined) {
+      const batchKey = params.get('key') ?? '';
+      memory.drafts = lineDrafts();
+      memory.remark = documentRemark();
+      const batch = buildAnswerPostsFromState(batchKey, memory.drafts, line => {
+        const form = Array.from(document.querySelectorAll('.spine form.line-note')).find(candidate => {
+          const lineField = candidate.querySelector('input[name="line"]');
+          return lineField instanceof HTMLInputElement && lineField.value === line;
+        });
+        if (!(form instanceof HTMLFormElement)) {
+          return undefined;
+        }
+        const pathField = form.querySelector('input[name="path"]');
+        const atField = form.querySelector('input[name="at"]');
+        const sideField = form.querySelector('input[name="side"]');
+        return {
+          path: pathField instanceof HTMLInputElement ? pathField.value : undefined,
+          at: atField instanceof HTMLInputElement ? atField.value : undefined,
+          side: sideField instanceof HTMLInputElement ? sideField.value : undefined,
+        };
+      }, memory.remark);
+      const runBatch = batch.length > 1;
+      if (runBatch) {
+        void (async () => {
+          let last: WindowSnapshot | undefined;
+          for (const body of batch) {
+            if (have) {
+              body.set('have', have);
+            }
+            try {
+              const response = await fetch(path, {
+                method: 'POST',
+                headers: {'content-type': 'application/x-www-form-urlencoded'},
+                body,
+              });
+              if (!response.ok) {
+                finish(undefined);
+                return;
+              }
+              last = (await response.json()) as WindowSnapshot;
+            } catch {
+              finish(undefined);
+              return;
+            }
+          }
+          finish(last);
+        })();
+        return;
+      }
     }
     void fetch(path, {
       method: 'POST',

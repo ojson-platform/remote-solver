@@ -24,7 +24,7 @@ import type {Decision} from '../machine/policy.ts';
 import {runSpy, type RunningTurn} from '../main.ts';
 
 import {changeFiles, contentChangeFiles} from './change-files.ts';
-import {createBoardStore} from './store.ts';
+import {createBoardStore, mergeReviewsPreservingLocal} from './store.ts';
 import {FACTORY_AGENTS, mergeFactory, readOverlayDoc} from './factory.ts';
 import {serveBoard} from './page.ts';
 import {isDoc, type BoardTurn, type WindowReview, type WindowTicket} from './types.ts';
@@ -608,9 +608,10 @@ export function openLiveBoard(options: LiveBoardOptions) {
     retire(issues);
     const painted = paintTickets(tickets, new Map(issues.map(issue => [issue.key, issue.labels])));
     const read = factsFor(painted);
+    const mergedReviews = mergeReviewsPreservingLocal(store.copyReviews(), nextReviews);
     const nextLogin = login ?? store.login();
-    const changed = store.changed(painted, nextReviews, read.facts, nextLogin);
-    remember(painted, nextPulls, nextReviews, store.copySpyPulls(), read, login);
+    const changed = store.changed(painted, mergedReviews, read.facts, nextLogin);
+    remember(painted, nextPulls, mergedReviews, store.copySpyPulls(), read, login);
     return changed;
   }
 
@@ -676,8 +677,9 @@ export function openLiveBoard(options: LiveBoardOptions) {
       store.setSpyKeys(used);
     }
     const read = factsFor(tickets, snapshot.facts, snapshot.texts);
-    const changed = store.changed(tickets, nextReviews, read.facts, store.login());
-    remember(tickets, nextPulls, nextReviews, nextSpy, read, undefined);
+    const mergedReviews = mergeReviewsPreservingLocal(store.copyReviews(), nextReviews);
+    const changed = store.changed(tickets, mergedReviews, read.facts, store.login());
+    remember(tickets, nextPulls, mergedReviews, nextSpy, read, undefined);
     return changed;
   }
 

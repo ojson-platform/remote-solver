@@ -29,7 +29,7 @@ _Avoid_: Failure, skip
 ### People and marks
 
 **Ask**:
-The issue comment that says how a person closes the current gate.
+The issue comment that says how a person closes the current gate. On proposing, specifying, and designing, an unclosed review thread of that phase keeps the machine from setting `sdd:wait-human` and from posting this comment. A thread with no marker counts as that phase. A thread marked for a later phase does not. A note does not.
 _Avoid_: Prompt, instruction
 
 **Auto tag**:

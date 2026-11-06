@@ -25,7 +25,7 @@ An issue on the board this card waits on, named by blocked-by or depends-on. The
 _Avoid_: An edge drawn between cards, listing an issue past the direct link
 
 **Pill**:
-A named action. A block has one brass pill. A hairline pill is a secondary name. The acceptance control uses the plaque's frame. A word that is not an action stays text.
+A named action. A block has one brass pill. A hairline pill is a secondary name. The acceptance control uses the plaque's frame. On Plan, Specify, and Design, «Принять» stays in the gate's place and is inactive while that phase has an unclosed review thread. Hovering it names the phase and says a thread on that phase is still open. A thread with no marker counts as that phase. A thread marked for a later phase does not. A note does not. An open question still leaves that place empty. A word that is not an action stays text.
 _Avoid_: Button, link
 
 **Circle**:

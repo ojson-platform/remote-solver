@@ -523,8 +523,7 @@ export function openWindow(
           outside.mergeHeldThread?.(key, {file: path, line, comments: [text]});
           return undefined;
         }
-        const headMissing = error instanceof Error && error.message === 'head is missing';
-        if (headMissing && outside.speakPull) {
+        if (outside.speakPull) {
           try {
             await outside.speakPull(key, quotedLine(source, text));
             return undefined;

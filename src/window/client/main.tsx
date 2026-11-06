@@ -428,6 +428,22 @@ async function readSnapshot(revision: string | undefined): Promise<WindowSnapsho
   return response.json() as Promise<WindowSnapshot>;
 }
 
+async function refreshSnapshotAfterFailedAnswer(
+  keptDrawers: Map<string, NonNullable<WindowSnapshot['opened']>>,
+  base: WindowSnapshot | undefined,
+): Promise<WindowSnapshot | undefined> {
+  const opened = base?.opened;
+  if (opened === undefined) {
+    return undefined;
+  }
+  const rev = keptDrawers.get(opened.key)?.revision;
+  try {
+    return await readSnapshot(rev);
+  } catch {
+    return undefined;
+  }
+}
+
 function holdsSeq(hold: FrameHold, mine: number): boolean {
   return (
     hold.open?.seq === mine ||
@@ -658,7 +674,7 @@ function boot(): void {
                 body,
               });
               if (!response.ok) {
-                finish(undefined);
+                finish(await refreshSnapshotAfterFailedAnswer(keptDrawers, base));
                 return;
               }
               last = (await response.json()) as WindowSnapshot;
@@ -666,7 +682,7 @@ function boot(): void {
                 syncDraftMemoryFromSnapshot(memory, last);
               }
             } catch {
-              finish(undefined);
+              finish(await refreshSnapshotAfterFailedAnswer(keptDrawers, base));
               return;
             }
           }
@@ -675,23 +691,22 @@ function boot(): void {
         return;
       }
     }
-    void fetch(path, {
-      method: 'POST',
-      headers: {'content-type': 'application/x-www-form-urlencoded'},
-      body: params,
-    })
-      .then(async response => {
+    void (async () => {
+      try {
+        const response = await fetch(path, {
+          method: 'POST',
+          headers: {'content-type': 'application/x-www-form-urlencoded'},
+          body: params,
+        });
         if (!response.ok) {
-          return undefined;
+          finish(await refreshSnapshotAfterFailedAnswer(keptDrawers, base));
+          return;
         }
-        return (await response.json()) as WindowSnapshot;
-      })
-      .then(snapshot => {
-        finish(snapshot);
-      })
-      .catch(() => {
-        finish(undefined);
-      });
+        finish((await response.json()) as WindowSnapshot);
+      } catch {
+        finish(await refreshSnapshotAfterFailedAnswer(keptDrawers, base));
+      }
+    })();
   });
   document.addEventListener('dragstart', event => {
     const card = event.target;

@@ -25,7 +25,7 @@ import {
 } from './page.harness.ts';
 import {serveBoard} from './page.ts';
 import {openWindow} from './window.ts';
-import {mergeThreadIntoReview} from './store.ts';
+import {mergeReviewsPreservingLocal, mergeThreadIntoReview} from './store.ts';
 import type {WindowSnapshot} from './snapshot.ts';
 import type {WindowReview} from './types.ts';
 
@@ -240,6 +240,42 @@ test('A new remark stays in the window until send', async () => {
       assert.deepEqual(threads, []);
     },
   );
+});
+
+test('mergeReviewsPreservingLocal keeps a locally held thread when the spy map replaces the review', () => {
+  const key = '1';
+  const path = 'openspec/changes/issue-1/proposal.md';
+  const prev = new Map([
+    [
+      key,
+      mergeThreadIntoReview(undefined, {
+        file: path,
+        line: null,
+        comments: ['held only'],
+      }),
+    ],
+  ]);
+  const incoming = new Map([
+    [
+      key,
+      {
+        threads: [
+          {
+            file: path,
+            line: null,
+            lines: ['from github'],
+            comments: ['from github'],
+          },
+        ],
+      } satisfies WindowReview,
+    ],
+  ]);
+  const merged = mergeReviewsPreservingLocal(prev, incoming);
+  const reading = merged.get(key);
+  assert.ok(reading);
+  const bodies = reading.threads.flatMap(t => [...(t.comments ?? t.lines)]);
+  assert.ok(bodies.some(b => b.trim() === 'held only'));
+  assert.ok(bodies.some(b => b.trim() === 'from github'));
 });
 
 test('mergeThreadIntoReview ignores a duplicate thread body on the same file and line bucket', () => {

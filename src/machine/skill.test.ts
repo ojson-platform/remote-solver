@@ -202,6 +202,17 @@ test('an instruction is a thread of this phase, and a note asks for nothing', ()
   assert.match(fix, /§ Onto the base/);
 });
 
+test('a code fix hands off before the commit, and verify reads the THEN first', () => {
+  const fix = readFileSync(path.join(stepsDir, 'fix.md'), 'utf8');
+  const verify = readFileSync(path.join(stepsDir, 'verify.md'), 'utf8');
+  const handed = fix.indexOf('behavior the named scenarios do not describe');
+  const commit = fix.indexOf('One commit per thread');
+  assert.ok(handed !== -1 && commit !== -1 && handed < commit);
+  const then = verify.indexOf("read that scenario's THEN");
+  const code = verify.indexOf('Hand-off (`CONTEXT.md`) to `code`');
+  assert.ok(then !== -1 && code !== -1 && then < code);
+});
+
 test('the chat files point at the sdd script', () => {
   const skill = readFileSync(path.join(flow, 'SKILL.md'), 'utf8');
   const context = readFileSync(path.join(flow, 'CONTEXT.md'), 'utf8');

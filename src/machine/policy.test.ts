@@ -38,6 +38,7 @@ function change(over: Partial<ChangeView> = {}): ChangeView {
     openTasks: 0,
     capabilities: [],
     missingBaseline: [],
+    unjudged: [],
     ...over,
   };
 }

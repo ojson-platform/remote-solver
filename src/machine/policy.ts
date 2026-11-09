@@ -319,6 +319,16 @@ export function decide(
       `no baseline for ${change.missingBaseline.join(', ')}`,
     );
   }
+  // The plan does not read the checkout. Added is a published shelf only after ## Shelf lists it.
+  if (phase === 'specifying' && !change.delta && change.unjudged.length) {
+    return agent(
+      issue.key,
+      'restore-baseline',
+      phase,
+      pr ? String(pr.id) : '',
+      `shelf not published for ${change.unjudged.join(', ')}`,
+    );
+  }
 
   const layer = layerOfPhase(phase);
   if (layer && feedback.layers.includes(layer) && pr) {

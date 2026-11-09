@@ -17,6 +17,8 @@ export type ChangeView = {
   /** Ids under Added and Modified. Empty when the proposal names none. */
   capabilities: string[];
   missingBaseline: string[];
+  /** Added ids `## Shelf` does not list yet. The baseline look has not been published. */
+  unjudged: string[];
 };
 
 /** Change-file headings the machine reads; `skills/sdd-flow/CONTEXT.md` § Artifacts states them. */
@@ -108,6 +110,21 @@ export function missingBaselineIds(proposal: string, exists: (rel: string) => bo
   );
 }
 
+/** Ids already placed by the baseline look. */
+function shelvedIds(proposal: string): string[] {
+  return section(proposal, 'Shelf')
+    .split('\n')
+    .map(line => line.match(/^-\s+(\S+)/)?.[1])
+    .map(token => (token ? capabilityId(token) : token))
+    .filter((id): id is string => Boolean(id));
+}
+
+/** Added ids the baseline look has not published. A missing spec file is not this list. */
+export function unjudgedAddedIds(proposal: string): string[] {
+  const shelved = new Set(shelvedIds(proposal));
+  return idsUnder(proposal, HEADINGS.added).filter(id => !shelved.has(id));
+}
+
 /** A delta file, or a proposal that names no capability, is enough to leave specifying. */
 export function specsReady(
   change: Pick<ChangeView, 'proposal' | 'delta' | 'capabilities'>,
@@ -137,6 +154,7 @@ export function readChange(key: string, files: FileSource): ChangeView {
       .filter(line => line.trimStart().startsWith('- [ ]')).length,
     capabilities: namedCapabilities(proposal),
     missingBaseline: missing,
+    unjudged: unjudgedAddedIds(proposal),
   };
 }
 

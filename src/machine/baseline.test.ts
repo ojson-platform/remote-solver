@@ -27,17 +27,6 @@ spec('baseline', () => {
       );
       assert.equal(action(decision), 'restore-baseline');
     });
-    scenario('An Added id without a baseline does not restore', () => {
-      const source: FileSource = {
-        exists: rel => rel === 'openspec/changes/issue-1/proposal.md',
-        read: () => '## Capabilities\n### Added\n- cache-first new\n',
-        list: () => [],
-      };
-      const view = readChange('1', source);
-      assert.deepEqual(view.missingBaseline, []);
-      const decision = decide(issue(1, ['sdd:specifying']), [], [pull(9)], view);
-      assert.notEqual(action(decision), 'restore-baseline');
-    });
     scenario('A fenced Modified id finds its baseline', () => {
       const proposal = [
         '## Capabilities',
@@ -70,6 +59,41 @@ spec('baseline', () => {
       assert.deepEqual(view.missingBaseline, ['cache-first']);
       const decision = decide(issue(1, ['sdd:specifying']), [], [pull(9)], view);
       assert.equal(action(decision), 'restore-baseline');
+    });
+  });
+
+  requirement('An Added shelf is published before the delta', () => {
+    scenario('An unjudged Added id is restored before the delta', () => {
+      const source: FileSource = {
+        exists: rel => rel === 'openspec/changes/issue-1/proposal.md',
+        read: () => '## Capabilities\n### Added\n- cache-first new\n',
+        list: () => [],
+      };
+      const view = readChange('1', source);
+      assert.deepEqual(view.missingBaseline, []);
+      assert.deepEqual(view.unjudged, ['cache-first']);
+      const decision = decide(issue(1, ['sdd:specifying']), [], [pull(9)], view);
+      assert.equal(action(decision), 'restore-baseline');
+    });
+    scenario('A judged Added id is not restored again', () => {
+      const source: FileSource = {
+        exists: rel => rel === 'openspec/changes/issue-1/proposal.md',
+        read: () => '## Capabilities\n### Added\n- cache-first new\n\n## Shelf\n- cache-first\n',
+        list: () => [],
+      };
+      const view = readChange('1', source);
+      assert.deepEqual(view.unjudged, []);
+      const decision = decide(issue(1, ['sdd:specifying']), [], [pull(9)], view);
+      assert.notEqual(action(decision), 'restore-baseline');
+    });
+    scenario('An Added id is not restored once a delta exists', () => {
+      const decision = decide(
+        issue(1, ['sdd:specifying']),
+        [],
+        [pull(9)],
+        change({proposal: true, delta: true, unjudged: ['cache-first']}),
+      );
+      assert.notEqual(action(decision), 'restore-baseline');
     });
   });
 });

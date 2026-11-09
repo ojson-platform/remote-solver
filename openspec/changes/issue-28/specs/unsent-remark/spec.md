@@ -40,31 +40,31 @@ The send control on the remark field SHALL post every unsent remark as its own r
 
 ### Requirement: A successful send shows the thread and clears the draft
 
-Immediately after a successful send, the thread SHALL be visible in the sidebar, and the draft SHALL be cleared together with that. After the GitHub thread has been accepted, the draft SHALL disappear.
+Immediately after a successful send, the thread SHALL be visible in the sidebar, and the draft SHALL be cleared together with that. When the pull request has that thread, the draft SHALL disappear.
 
 #### Scenario: Immediately after a successful send the thread is visible in the sidebar and the draft is cleared together with that
 
 - **WHEN** a successful send, the thread, the sidebar, and the draft are already visible, together with a field that keeps the same text and a thread that is not in the sidebar as the limit that can replace this clearing
 - **THEN** immediately after a successful send the thread is visible in the sidebar and the draft is cleared together with that
 
-#### Scenario: After the GitHub thread has been accepted, the draft must disappear
+#### Scenario: When the pull request has that thread, the draft disappears
 
-- **WHEN** the GitHub thread that has been accepted and the draft are already visible, together with a draft that keeps the same text after the GitHub thread has been accepted as the limit that can replace this disappearance
-- **THEN** after the GitHub thread has been accepted, the draft must disappear
+- **WHEN** the pull request, that thread, and the draft are already visible, together with a draft that keeps the same text when the pull request has that thread as the limit that can replace this disappearance
+- **THEN** when the pull request has that thread, the draft disappears
 
 ### Requirement: The draft remains only when that thread is not on the pull request
 
-The draft SHALL remain only when that thread is not on the pull request. A failed send SHALL leave the draft only when that thread is not on the pull request. Once GitHub has accepted the thread, the draft SHALL disappear, including when the window reported an error such as stale.
+The draft SHALL remain only when that thread is not on the pull request. A failed send SHALL leave the draft only when that thread is not on the pull request. Once the pull request has that thread, the draft SHALL disappear, including when the window reported an error such as stale.
 
 #### Scenario: A failed send leaves the draft
 
-- **WHEN** a failed send and the draft are already visible, and that thread is not on the pull request, together with GitHub having accepted the thread, including when the window reported an error such as stale, as the limit that can replace this remaining draft
+- **WHEN** a failed send and the draft are already visible, and that thread is not on the pull request, together with the pull request having that thread, including when the window reported an error such as stale, as the limit that can replace this remaining draft
 - **THEN** a failed send leaves the draft only when that thread is not on the pull request
 
-#### Scenario: Once GitHub has accepted the thread, the draft disappears, including when the window reported an error such as stale
+#### Scenario: Once the pull request has that thread, the draft disappears, including when the window reported an error such as stale
 
-- **WHEN** the thread GitHub has accepted, the draft, and the error the window reported, such as stale, are already visible, together with a failed send that leaves the draft when that thread is not on the pull request as the limit that can replace this disappearance
-- **THEN** once GitHub has accepted the thread, the draft disappears, including when the window reported an error such as stale
+- **WHEN** the pull request, that thread, the draft, and the error the window reported, such as stale, are already visible, together with a failed send that leaves the draft when that thread is not on the pull request as the limit that can replace this disappearance
+- **THEN** once the pull request has that thread, the draft disappears, including when the window reported an error such as stale
 
 #### Scenario: The draft remains only when that thread is not on the pull request
 
@@ -73,7 +73,7 @@ The draft SHALL remain only when that thread is not on the pull request. A faile
 
 #### Scenario: The draft remains only when the thread is not on the pull request
 
-- **WHEN** the draft, the thread, and the pull request are already visible, together with a draft that remains after the GitHub thread has been accepted as the limit that can replace this condition
+- **WHEN** the draft, the thread, and the pull request are already visible, together with a draft that remains when the pull request has that thread as the limit that can replace this condition
 - **THEN** the draft remains only when the thread is not on the pull request
 
 ### Requirement: A refused send from «Записать» returns «комментарий не записан» and does not post a conversation comment

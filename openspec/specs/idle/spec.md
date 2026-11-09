@@ -8,7 +8,7 @@ A skill run that changes nothing is not started again until the decision changes
 
 ### Requirement: A run with no commit is not repeated
 
-When a skill run produces no commit, the spy SHALL NOT start that issue again while the phase, the action, and the reason are unchanged. The idle notice SHALL be reported once. A different phase, action, or reason SHALL start. An exit other than the no-commit exit SHALL clear the idle mark, so the same decision MAY start again. When one worker runs a later turn and that turn produces no commit, the idle mark SHALL be that later turn.
+When a skill run produces no commit, the machine SHALL comment `sdd:refused` and that effect's signature on the issue. The next poll SHALL NOT start that effect while the refusal is the latest machine comment and the phase, the action, and the reason are unchanged. A later person comment SHALL clear the refusal. A different phase, action, or reason SHALL start. The spy SHALL NOT keep the mark in its own memory. An exit other than the no-commit exit SHALL NOT post the refusal, so the same decision MAY start again. When one worker runs a later turn and that turn produces no commit, the refusal SHALL name that later turn.
 
 #### Scenario: A later turn with no commit stays idle
 
@@ -18,8 +18,12 @@ When a skill run produces no commit, the spy SHALL NOT start that issue again wh
 #### Scenario: The same decision stays idle
 
 - **WHEN** a run produces no commit and the next poll has the same phase, action, and reason
-- **THEN** the spy does not start the issue again and reports the idle once
-- **AND** the following poll reports nothing further
+- **THEN** the issue carries `sdd:refused` and the spy does not start the issue
+
+#### Scenario: A person comment starts the effect again
+
+- **WHEN** a person comments after `sdd:refused`
+- **THEN** the same effect starts
 
 #### Scenario: A different action starts
 
@@ -56,7 +60,7 @@ A second process SHALL NOT start an agent for an issue a live process already ho
 
 ### Requirement: A crashed run resumes its chat once
 
-A skill run that crashes before a commit SHALL leave its chat. The next start of that same decision SHALL resume that chat. A second crash of that chat SHALL NOT start an agent, and that decision SHALL stay idle. A run that commits, a run that finishes with no commit, and a different decision SHALL each start a new chat.
+A skill run that crashes before a commit SHALL leave its chat and SHALL NOT post `sdd:refused`. The next start of that same decision SHALL resume that chat. A second crash of that chat SHALL post `sdd:refused` and SHALL NOT start an agent. A run that commits and a different decision SHALL each start a new chat. A run that finishes with no commit SHALL NOT start again until a person comments.
 
 #### Scenario: A crash resumes the same chat
 
@@ -66,17 +70,17 @@ A skill run that crashes before a commit SHALL leave its chat. The next start of
 #### Scenario: A second crash stays idle
 
 - **WHEN** the resumed chat crashes as well
-- **THEN** the spy does not start an agent and that decision stays idle
+- **THEN** the issue carries `sdd:refused` and the next drive does not start an agent
 
 #### Scenario: A commit starts a new chat
 
 - **WHEN** a skill run commits
 - **THEN** the next start of the same action begins a new chat
 
-#### Scenario: A run with no commit starts a new chat
+#### Scenario: A run with no commit does not start again
 
 - **WHEN** a skill run finishes with no commit
-- **THEN** the next start of that same decision begins a new chat
+- **THEN** the next drive does not start an agent
 
 #### Scenario: A different decision starts a new chat
 

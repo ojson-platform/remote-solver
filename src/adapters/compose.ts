@@ -6,7 +6,7 @@ import {performIssue} from '../machine/flow.ts';
 import type {Review, Runtime, Tracker, Vcs} from '../machine/port.ts';
 import type {QueueConfig} from '../machine/service-config.ts';
 import {githubAdapters} from './github.ts';
-import {gitVcs} from './vcs.ts';
+import {gitVcs, packageLinks} from './vcs.ts';
 
 export type MachineConfig = {
   queues: QueueConfig[];
@@ -90,6 +90,9 @@ export function turn(box: Machine, key: string): ReturnType<typeof performIssue>
       files: box.vcs.filesAt(key),
       queues: box.config.queues,
       tip,
+      checkout: () =>
+        box.vcs.prepare(key, {worktreesDir: '.worktrees', links: packageLinks(solverRoot())}),
+      readTip: () => (box.vcs.tipMessage ? box.vcs.tipMessage(key) : Promise.resolve(undefined)),
     }),
   );
 }

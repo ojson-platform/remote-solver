@@ -153,8 +153,9 @@ spec('review-gate', () => {
         change: {...readChange('5', files), proposal: true},
       });
       assert.ok((await tracker.labels('5')).includes('sdd:specifying'));
-      assert.equal((await tracker.labels('5')).includes('sdd:wait-human'), false);
+      assert.equal((await tracker.labels('5')).includes('sdd:wait-human'), true);
       assert.ok(calls.some(call => call.includes('sdd:accept proposing → specifying')));
+      assert.ok(calls.some(call => call.includes('Review the spec')));
     });
     scenario('Specified over a missing delta drops the gate', async () => {
       const {tracker, review, calls} = memoryPorts({

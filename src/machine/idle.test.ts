@@ -10,11 +10,11 @@ import {memoryPorts} from '../adapters/github.ts';
 import {tryHoldIssue} from '../adapters/lock.ts';
 import {readChat, rememberChat} from '../adapters/session.ts';
 import {resolveCycle} from './flow.ts';
-import {files} from './harness.ts';
+import {change, files, issue} from './harness.ts';
 import type {Runtime, Vcs} from './port.ts';
-import type {Decision} from './policy.ts';
+import {cycleRecord, decide, effectSignature, refusalBody, type Decision} from './policy.ts';
 import {loadCycle} from './snapshot.ts';
-import {exited, signature, tick, type State} from './scheduler.ts';
+import {exited, tick, type State} from './scheduler.ts';
 import {driveIssue} from '../main.ts';
 import {laterTurn} from '../window/live.harness.ts';
 
@@ -26,27 +26,47 @@ spec('idle', () => {
       assert.equal(lines.filter(line => line.includes('restore-baseline')).length, 1);
       assert.equal(lines.at(-1), '');
     });
-    scenario('The same decision stays idle', () => {
-      const empty: State = {running: [], idle: {}, reported: {}};
-      const decision: Extract<Decision, {kind: 'agent'}> = {
-        kind: 'agent',
-        issue: '1',
-        action: 'create-proposal',
-        skill: 'plan',
-        phase: 'proposing',
-        pr: '',
-        reason: 'write proposal.md',
+    scenario('The same decision stays idle', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-refused-'));
+      const seen: string[] = [];
+      const runtime: Runtime = {
+        async run(skill) {
+          seen.push(skill.action);
+          return {commits: 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
       };
-      const running = {...tick(empty, [decision], 1).state, running: ['1']};
-      const idle = exited(running, '1', 2, signature(decision));
-      const again = tick(idle, [decision], 1);
-      assert.deepEqual(again.start, []);
-      assert.equal(again.report.length, 1);
-      const quiet = tick(again.state, [decision], 1);
-      assert.deepEqual(quiet.report, []);
+      const box = implementing(root, runtime);
+      const first = await driveIssue(box, '8');
+      assert.equal(first.code, 0);
+      const notes = await box.tracker.comments('8');
+      assert.ok(notes.some(note => note.body.includes('sdd:refused')));
+      await driveIssue(box, '8');
+      assert.deepEqual(seen, ['implement-next-task']);
+    });
+    scenario('A person comment starts the effect again', () => {
+      const row = issue(1, ['sdd:proposing']);
+      const signature = effectSignature({
+        phase: 'proposing',
+        action: 'create-proposal',
+        reason: 'write proposal.md and open the pull request',
+      });
+      const refused = [{body: `🤖 ${refusalBody(signature)}`}];
+      const held = decide(row, [], [], change(), cycleRecord(row, '', refused));
+      assert.equal(held.kind, 'wait');
+      const cleared = decide(
+        row,
+        [],
+        [],
+        change(),
+        cycleRecord(row, '', [...refused, {body: 'go on', manager: true}]),
+      );
+      assert.equal(cleared.kind, 'agent');
     });
     scenario('A different action starts', () => {
-      const empty: State = {running: [], idle: {}, reported: {}};
+      const empty: State = {running: [], reported: {}};
       const first: Extract<Decision, {kind: 'agent'}> = {
         kind: 'agent',
         issue: '1',
@@ -56,9 +76,9 @@ spec('idle', () => {
         pr: '',
         reason: 'write proposal.md',
       };
-      const idle = exited({...empty, running: ['1']}, '1', 0, signature(first));
+      const left = exited({...empty, running: ['1']}, '1');
       const next = tick(
-        idle,
+        left,
         [{...first, action: 'create-initial-specs', reason: 'write the delta'}],
         1,
       );
@@ -91,7 +111,7 @@ spec('idle', () => {
       assert.deepEqual(await tracker.labels('7'), ['Sandcastle', 'sdd:cycle', 'sdd:proposed']);
     });
     scenario('Parallel 1 starts one of two ready issues', () => {
-      const empty: State = {running: [], idle: {}, reported: {}};
+      const empty: State = {running: [], reported: {}};
       const one: Extract<Decision, {kind: 'agent'}> = {
         kind: 'agent',
         issue: '1',
@@ -158,9 +178,10 @@ spec('idle', () => {
       await assert.rejects(() => driveIssue(crash, '8'));
       await assert.rejects(() => driveIssue(crash, '8'));
       const third = await driveIssue(crash, '8');
-      assert.equal(third.code, 2);
-      assert.match(third.idle ?? '', /implement-next-task/);
+      assert.equal(third.code, 0);
       assert.equal(seen.length, 2);
+      const notes = await crash.tracker.comments('8');
+      assert.ok(notes.some(note => note.body.includes('sdd:refused')));
     });
     scenario('A commit starts a new chat', async () => {
       const root = mkdtempSync(path.join(tmpdir(), 'sdd-chat-commit-'));
@@ -182,11 +203,11 @@ spec('idle', () => {
         },
       };
       const result = await driveIssue(implementing(root, runtime), '8');
-      assert.equal(result.code, 2);
+      assert.equal(result.code, 0);
       assert.deepEqual(seen, [undefined, undefined]);
       assert.equal(readChat(root, '8'), undefined);
     });
-    scenario('A run with no commit starts a new chat', async () => {
+    scenario('A run with no commit does not start again', async () => {
       const root = mkdtempSync(path.join(tmpdir(), 'sdd-chat-stop-'));
       const seen: Array<string | undefined> = [];
       const runtime: Runtime = {
@@ -205,10 +226,10 @@ spec('idle', () => {
       };
       const box = implementing(root, runtime);
       const first = await driveIssue(box, '8');
-      assert.equal(first.code, 2);
+      assert.equal(first.code, 0);
       assert.equal(readChat(root, '8'), undefined);
       await driveIssue(box, '8');
-      assert.deepEqual(seen, [undefined, undefined]);
+      assert.deepEqual(seen, [undefined]);
     });
     scenario('A different decision starts a new chat', async () => {
       const root = mkdtempSync(path.join(tmpdir(), 'sdd-chat-other-'));
@@ -253,7 +274,7 @@ spec('idle', () => {
         }),
         '8',
       );
-      assert.equal(result.code, 2);
+      assert.equal(result.code, 0);
       assert.deepEqual(seen, ['create-proposal -']);
       assert.equal(readChat(root, '8'), undefined);
     });

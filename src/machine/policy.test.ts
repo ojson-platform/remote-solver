@@ -474,10 +474,7 @@ test('accepted archives a change that is still open, then closes only a merged p
     [pull(9, {state: 'MERGED'})],
     change({proposal: true}),
   );
-  assert.equal(archive.kind, 'agent');
-  if (archive.kind === 'agent') {
-    assert.equal(archive.action, 'archive');
-  }
+  assert.equal(archive.kind, 'archive');
   const open = decide(issue(1, ['sdd:accepted']), [], [pull(9)], change({archived: true}));
   assert.deepEqual(open, {
     kind: 'wait',
@@ -679,9 +676,8 @@ function archivedIssue9Files(): FileSource {
 test('An open pull request on tasking is restored', () => {
   const record = issue(9, ['sdd:tasking']);
   const decision = decide(record, [], [openPull], archivedOpen);
-  assert.equal(decision.kind, 'agent');
-  if (decision.kind === 'agent') {
-    assert.equal(decision.action, 'unarchive');
+  assert.equal(decision.kind, 'unarchive');
+  if (decision.kind === 'unarchive') {
     assert.equal(decision.phase, 'tasking');
   }
   assert.notEqual(decision.kind, 'done');
@@ -698,10 +694,7 @@ test('A proposed gate restores before it moves', () => {
   const record = issue(9, ['sdd:proposed', 'sdd:proposing']);
   const walked = settle(record, [], [openPull], archivedOpen);
   assert.deepEqual(walked.transitions, []);
-  assert.equal(walked.decision.kind, 'agent');
-  if (walked.decision.kind === 'agent') {
-    assert.equal(walked.decision.action, 'unarchive');
-  }
+  assert.equal(walked.decision.kind, 'unarchive');
   const moved = decide(record, [], [openPull], {...archivedOpen, archived: false});
   assert.equal(moved.kind, 'advance');
   if (moved.kind === 'advance') {
@@ -728,7 +721,7 @@ test('Checked tasks and an open pull request stay', () => {
 test('An open pull request stays on the board when every task is checked', () => {
   const record = issue(9, ['sdd:tasking'], {state: 'OPEN'});
   const decision = decide(record, [], [openPull], archivedOpen);
-  assert.equal(decision.kind, 'agent');
+  assert.equal(decision.kind, 'unarchive');
   assert.notEqual(decision.kind, 'done');
   const walked = settle(record, [], [openPull], archivedOpen);
   assert.notEqual(walked.decision.kind, 'done');
@@ -796,20 +789,14 @@ spec('finished-cycle', () => {
     scenario('An open pull request on tasking is restored', () => {
       const record = issue(9, ['sdd:tasking']);
       const decision = decide(record, [], [openPull], archivedOpen);
-      assert.equal(decision.kind, 'agent');
-      if (decision.kind === 'agent') {
-        assert.equal(decision.action, 'unarchive');
-      }
+      assert.equal(decision.kind, 'unarchive');
       assert.notEqual(decision.kind, 'done');
     });
     scenario('A proposed gate restores before it moves', () => {
       const record = issue(9, ['sdd:proposed', 'sdd:proposing']);
       const walked = settle(record, [], [openPull], archivedOpen);
       assert.deepEqual(walked.transitions, []);
-      assert.equal(walked.decision.kind, 'agent');
-      if (walked.decision.kind === 'agent') {
-        assert.equal(walked.decision.action, 'unarchive');
-      }
+      assert.equal(walked.decision.kind, 'unarchive');
       const moved = decide(record, [], [openPull], {...archivedOpen, archived: false});
       assert.equal(moved.kind, 'advance');
       if (moved.kind === 'advance') {
@@ -850,7 +837,7 @@ spec('finished-cycle', () => {
     scenario('An open pull request stays on the board when every task is checked', async () => {
       const record = issue(9, ['sdd:tasking'], {state: 'OPEN'});
       const decision = decide(record, [], [openPull], archivedOpen);
-      assert.equal(decision.kind, 'agent');
+      assert.equal(decision.kind, 'unarchive');
       assert.notEqual(decision.kind, 'done');
       const {tracker, review} = memoryPorts({
         user: MANAGER,
@@ -992,10 +979,7 @@ spec('artifact', () => {
         [pull(9)],
         change({...named, openTasks: 0}),
       );
-      assert.equal(decision.kind, 'agent');
-      if (decision.kind === 'agent') {
-        assert.equal(decision.action, 'archive');
-      }
+      assert.equal(decision.kind, 'archive');
     });
     scenario('A task card records the delta revision and the scenario title', () => {
       const specText = '## ADDED Requirements\n\n#### Scenario: The remark stays\n\n- **THEN** it stays\n';

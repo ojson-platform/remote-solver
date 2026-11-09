@@ -1,13 +1,14 @@
 import path from 'node:path';
 
 import {solverRoot, turn, type Machine} from './adapters/compose.ts';
+import {packageLinks} from './adapters/vcs.ts';
 import {ghErrorLine, githubPauseRemaining} from './adapters/github.ts';
 import {tryHoldIssue} from './adapters/lock.ts';
 import {claimChat, clearChat} from './adapters/session.ts';
 import {performCycle} from './machine/flow.ts';
-import type {Decision} from './machine/policy.ts';
 import {endStep, observedSignal, runMarks} from './machine/focus.ts';
-import {exited, signature, tick, type State} from './machine/scheduler.ts';
+import {effectSignature, refusalBody, type Decision} from './machine/policy.ts';
+import {exited, tick, type State} from './machine/scheduler.ts';
 import {modeOfSkill} from './machine/skill.ts';
 import {contentFiles} from './machine/port.ts';
 import {loadCycle, type CycleSnapshot} from './machine/snapshot.ts';
@@ -69,11 +70,12 @@ async function driveHeldIssue(box: Machine, key: string, watch?: SpyWatch): Prom
       console.log(`#${key} ${decision.kind}: ${decision.reason}`);
       return {code: 0};
     }
-    const sig = signature(decision);
+    const sig = effectSignature(decision);
     const claim = claimChat(box.root, key, decision.action, sig);
     if (claim.kind === 'spent') {
       console.error(`Stopped: ${decision.action} already resumed its chat once.`);
-      return {code: 2, idle: sig};
+      await box.tracker.comment(key, refusalBody(sig));
+      return {code: 0};
     }
     watch?.onTurn?.(key, {issue: key, phase: decision.phase, action: decision.action});
     console.log(`\n#${key} ${decision.phase} → ${decision.action} (${decision.skill})`);
@@ -89,7 +91,7 @@ async function driveHeldIssue(box: Machine, key: string, watch?: SpyWatch): Prom
       sddHooks: record.sddHooks,
       service: record.service,
       issue: {title: record.title, body: record.body},
-      signature: sig,
+      signature: effectSignature(decision),
       ...(claim.kind === 'resume' ? {resumeSession: claim.sessionId} : {}),
     });
     clearChat(box.root, key);
@@ -108,7 +110,8 @@ async function driveHeldIssue(box: Machine, key: string, watch?: SpyWatch): Prom
       console.error(
         `Stopped: ${decision.action} made no commit, so the next poll would repeat it.`,
       );
-      return {code: 2, idle: signature(decision)};
+      await box.tracker.comment(key, refusalBody(effectSignature(decision)));
+      return {code: 0};
     }
   }
   console.error(`Stopped #${key} after 40 steps.`);
@@ -143,7 +146,7 @@ function say(watch: SpyWatch | undefined, line: string): void {
 export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Promise<void> {
   const parallel = flag(argv, '--parallel', 2);
   const intervalMs = flag(argv, '--interval', 20) * 1000;
-  let state: State = {running: [], idle: {}, reported: {}};
+  let state: State = {running: [], reported: {}};
   let wake: (() => void) | null = null;
   let woke = false;
 
@@ -151,8 +154,8 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
     watch?.onRunning?.([...state.running]);
   };
 
-  const finish = (issue: string, code: number, sig: string) => {
-    state = exited(state, issue, code, sig);
+  const finish = (issue: string, code: number) => {
+    state = exited(state, issue);
     publish();
     watch?.onTurn?.(issue, undefined);
     say(watch, `#${issue} worker exited ${code}`);
@@ -187,6 +190,13 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
             review: box.review,
             filesAt: key => box.vcs.filesAt(key),
             queues: box.config.queues,
+            checkout: key =>
+              box.vcs.prepare(key, {
+                worktreesDir: '.worktrees',
+                links: packageLinks(solverRoot()),
+              }),
+            readTip: key =>
+              box.vcs.tipMessage ? box.vcs.tipMessage(key) : Promise.resolve(undefined),
           },
           new Set(state.running),
         );
@@ -209,14 +219,13 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
             phase: decision.phase,
             action: decision.action,
           });
-          const sig = signature(decision);
           state = {...state, running: [...state.running, decision.issue]};
           publish();
           void driveIssue(box, decision.issue, watch).then(
             result => {
               if (result.busy) {
                 watch?.onTurn?.(decision.issue, undefined);
-                state = exited(state, decision.issue, 0, sig);
+                state = exited(state, decision.issue);
                 publish();
                 const reason = 'already running';
                 if (state.reported[decision.issue] !== reason) {
@@ -225,11 +234,11 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
                 }
                 return;
               }
-              finish(decision.issue, result.code, result.idle ?? sig);
+              finish(decision.issue, result.code);
             },
             error => {
               console.error(ghErrorLine(error));
-              finish(decision.issue, 1, sig);
+              finish(decision.issue, 1);
             },
           );
         }

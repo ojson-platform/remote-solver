@@ -54,12 +54,12 @@ On GitHub the ask SHALL be: review the artifact, replace `sdd:<phase>` with the 
 
 ### Requirement: A person closes the gate on the issue
 
-A person MAY leave the writing label on and add `proposed`, `specified`, or `designed`. On a ready artifact the machine SHALL move to the next phase, clear `wait-human`, drop the gate label, and comment `sdd:accept <from> → <to>`. On a missing artifact or an open item the machine SHALL drop the gate label and SHALL keep or restore the writing phase. It SHALL NOT comment that the phase moved. The next poll continues that writing phase. When the item is then closed, the machine SHALL post the review ask.
+A person MAY leave the writing label on and add `proposed`, `specified`, or `designed`. On a ready artifact the machine SHALL move to the next phase, clear that phase's `wait-human`, drop the gate label, and comment `sdd:accept <from> → <to>`. The same poll SHALL then read the issue and perform the next determined effect, including the next review ask. On a missing artifact or an open item the machine SHALL drop the gate label and SHALL keep or restore the writing phase. It SHALL NOT comment that the phase moved. The next poll continues that writing phase. When the item is then closed, the machine SHALL post the review ask.
 
 #### Scenario: Proposed on a ready proposal moves to specifying
 
 - **WHEN** a person adds `proposed` beside `proposing` and the proposal has nothing open
-- **THEN** the phase becomes `specifying`, `wait-human` is cleared, and the issue comment is `sdd:accept proposing → specifying`
+- **THEN** the phase becomes `specifying`, the issue comment is `sdd:accept proposing → specifying`, and the same poll opens the spec review
 
 #### Scenario: Specified over a missing delta drops the gate
 

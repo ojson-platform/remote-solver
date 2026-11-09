@@ -110,10 +110,7 @@ spec('phase', () => {
         change({design: true, tasks: true}),
         cycleRecord(row, 'Sdd-Archive: issue-1\n'),
       );
-      assert.equal(decision.kind, 'agent');
-      if (decision.kind === 'agent') {
-        assert.equal(decision.action, 'unarchive');
-      }
+      assert.equal(decision.kind, 'unarchive');
     });
     scenario('Accept uses the same record', () => {
       const recorded = issue(1, ['sdd:cycle', 'sdd:designing', 'sdd:designed']);

@@ -131,8 +131,9 @@ test('a person who moves the gate label on the issue gets a record, or the chang
     change: {...base, proposal: true},
   });
   assert.ok((await accepted.tracker.labels('5')).includes('sdd:specifying'));
-  assert.ok(!(await accepted.tracker.labels('5')).includes('sdd:wait-human'));
+  assert.ok((await accepted.tracker.labels('5')).includes('sdd:wait-human'));
   assert.ok(accepted.calls.includes('body:' + markRobot('sdd:accept proposing → specifying')));
+  assert.ok(accepted.calls.some(call => call.includes('Review the spec')));
 
   const open = seed(['Sandcastle', 'sdd:cycle', 'sdd:proposed']);
   const options = {
@@ -485,10 +486,7 @@ spec('finished-cycle', () => {
         queues: [{name: 'Sandcastle'}],
         change: finishedChange,
       });
-      assert.equal(decision.kind, 'agent');
-      if (decision.kind === 'agent') {
-        assert.equal(decision.action, 'unarchive');
-      }
+      assert.equal(decision.kind, 'unarchive');
       assert.equal((await tracker.issue('9')).state, 'OPEN');
       assert.ok((await tracker.listOpen()).some(issue => issue.key === '9'));
       assert.ok(!calls.some(call => call.startsWith('close:')));

@@ -15,6 +15,7 @@ import {
   type GateEvent,
   type Phase,
 } from './phase.ts';
+import {ROBOT_MARK} from './marker.ts';
 import {emptyReview, layerOfPhase, type ReviewView} from './review.ts';
 import {ACTION_SKILL, LAYER_ACTION, type AgentAction, type Skill} from './route.ts';
 
@@ -33,7 +34,10 @@ export type Decision =
   | ({kind: 'done'; issue: string | null; reason: string} & LabelFix)
   /** `comment` is posted on the issue after the move. */
   | ({kind: 'advance'; issue: string; to: Phase; reason: string; comment?: string} & LabelFix)
-  | ({kind: 'merge'; issue: string; pull: string; reason: string} & LabelFix);
+  | ({kind: 'merge'; issue: string; pull: string; reason: string} & LabelFix)
+  /** The machine folds the change. The same effect as a merge: perform, then read again. */
+  | ({kind: 'archive'; issue: string; phase: Phase; pr: string; reason: string} & LabelFix)
+  | ({kind: 'unarchive'; issue: string; phase: Phase; reason: string} & LabelFix);
 
 /** A rejected gate label leaves, and the writing phase stays. */
 type LabelFix = {drop?: string[]; stay?: Phase};
@@ -224,10 +228,57 @@ export type CycleRecord = {
   autoMerge: boolean;
   /** A gate label on the issue. The same event as `sdd accept`. */
   accept: GateEvent | null;
+  /** Signature of an effect the last empty run refused. A later person comment clears it. */
+  refused: string | null;
 };
 
 /** Labels, the hold, and the tip line, collapsed once. The decision does not read the label set. */
-export function cycleRecord(issue: IssueRecord, tip: string): CycleRecord {
+export type IssueNote = {body: string; manager?: boolean};
+
+/** `phase`, `action`, and `reason` of one effect. */
+export function effectSignature(part: {phase: string; action: string; reason: string}): string {
+  return `${part.phase}\0${part.action}\0${part.reason}`;
+}
+
+export function refusalBody(signature: string): string {
+  return `sdd:refused\n${signature}`;
+}
+
+/** The refusal still in force. A later person comment clears every older one. */
+export function refusalOf(notes: readonly IssueNote[]): string | null {
+  for (let index = notes.length - 1; index >= 0; index -= 1) {
+    const note = notes[index];
+    if (note.manager) {
+      return null;
+    }
+    const lines = note.body.split('\n').map(line => line.trim()).filter(line => line !== '');
+    const head = lines[0]?.startsWith(ROBOT_MARK) ? lines[0].slice(ROBOT_MARK.length).trim() : lines[0];
+    if (head === 'sdd:refused') {
+      return lines[1] ?? '';
+    }
+  }
+  return null;
+}
+
+function blockRepeated(decision: Decision, refused: string | null): Decision {
+  if (refused === null) {
+    return decision;
+  }
+  const effect =
+    decision.kind === 'agent'
+      ? {phase: decision.phase, action: decision.action, reason: decision.reason}
+      : decision.kind === 'archive'
+        ? {phase: decision.phase, action: 'archive', reason: decision.reason}
+        : decision.kind === 'unarchive'
+          ? {phase: decision.phase, action: 'unarchive', reason: decision.reason}
+          : null;
+  if (!effect || refused !== effectSignature(effect)) {
+    return decision;
+  }
+  return {kind: 'wait', issue: decision.issue, reason: `refused ${effect.action}: ${effect.reason}`};
+}
+
+export function cycleRecord(issue: IssueRecord, tip: string, notes: readonly IssueNote[] = []): CycleRecord {
   const names = issue.labels;
   const accept: GateEvent | null = names.includes('sdd:designed')
     ? 'designed'
@@ -250,6 +301,7 @@ export function cycleRecord(issue: IssueRecord, tip: string): CycleRecord {
     autoDesign: names.includes('sdd:auto-design'),
     autoMerge: names.includes('sdd:auto-merge'),
     accept,
+    refused: refusalOf(notes),
   };
 }
 
@@ -305,6 +357,16 @@ export function decide(
   change: ChangeView,
   record: CycleRecord = cycleRecord(issue, legacyTip(issue, change)),
 ): Decision {
+  return blockRepeated(decideOpen(issue, issues, pulls, change, record), record.refused);
+}
+
+function decideOpen(
+  issue: IssueRecord,
+  issues: IssueRecord[],
+  pulls: PullSnapshot[],
+  change: ChangeView,
+  record: CycleRecord = cycleRecord(issue, legacyTip(issue, change)),
+): Decision {
   if (record.phase === 'cancelled') {
     return {kind: 'done', issue: issue.key, reason: 'cancelled'};
   }
@@ -334,13 +396,13 @@ export function decide(
     const acceptedMerged = pulls.filter(item => item.state === 'MERGED');
     const acceptedPr = acceptedMerged[0] ?? acceptedOpen[0];
     if (!record.folded && (change.proposal || change.delta)) {
-      return agent(
-        issue.key,
-        'archive',
+      return {
+        kind: 'archive',
+        issue: issue.key,
         phase,
-        acceptedPr ? String(acceptedPr.id) : '',
-        'archive the change',
-      );
+        pr: acceptedPr ? String(acceptedPr.id) : '',
+        reason: 'archive the change',
+      };
     }
     return mergeOrWait(issue.key, acceptedOpen[0], acceptedMerged, false);
   }
@@ -350,7 +412,7 @@ export function decide(
     record.folded &&
     !pulls.some(pr => pr.state === 'MERGED')
   ) {
-    return agent(issue.key, 'unarchive', phase, '', 'return the delta to the change');
+    return {kind: 'unarchive', issue: issue.key, phase, reason: 'return the delta to the change'};
   }
 
   const merged = pulls.filter(pr => pr.state === 'MERGED');
@@ -678,13 +740,13 @@ export function decide(
     if (slice) {
       return {kind: 'wait', issue: issue.key, reason: slice};
     }
-    return agent(
-      issue.key,
-      'archive',
+    return {
+      kind: 'archive',
+      issue: issue.key,
       phase,
-      pr ? String(pr.id) : String(merged[0].id),
-      'archive the change',
-    );
+      pr: pr ? String(pr.id) : String(merged[0].id),
+      reason: 'archive the change',
+    };
   }
   return mergeOrWait(issue.key, pr, merged, record.autoMerge);
 }

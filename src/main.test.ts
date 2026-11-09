@@ -77,7 +77,7 @@ function agent(issue: string): Extract<Decision, {kind: 'agent'}> {
   };
 }
 
-const emptyCapState: State = {running: [], idle: {}, reported: {}};
+const emptyCapState: State = {running: [], reported: {}};
 
 spec('parallel-cap', () => {
   requirement('A poll starts at most the cap', () => {
@@ -100,7 +100,7 @@ spec('parallel-cap', () => {
     });
 
     scenario('One free slot starts one ready cycle', () => {
-      const state: State = {running: ['1'], idle: {}, reported: {}};
+      const state: State = {running: ['1'], reported: {}};
       const turned = tick(state, [agent('2'), agent('3')], 2);
       assert.deepEqual(
         turned.start.map(item => item.issue),

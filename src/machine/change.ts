@@ -31,6 +31,14 @@ export type ChangeView = {
   designStamp: string;
   /** `sdd-absorbed` in `tasks.md`. */
   tasksStamp: string;
+  /** Scenario titles under ADDED and MODIFIED in the delta. */
+  deltaScenarios: string[];
+  /** Scenario titles named on the task cards. */
+  cardScenarios: string[];
+  /** `sdd-delta` shared by every task card. Empty when any card omits it. */
+  cardRevision: string;
+  /** Scenario titles named by an open or checked line in `tasks.md`. */
+  slicedScenarios: string[];
 };
 
 /** The `sdd-absorbed` line a phase file moves when it folds its input. */
@@ -45,6 +53,96 @@ export function contentRevision(chunks: {path: string; text: string}[]): string 
     .map(chunk => `# ${chunk.path}\n${chunk.text}`)
     .join('\n');
   return createHash('sha256').update(body).digest('hex').slice(0, 16);
+}
+
+/** Scenario titles in the ADDED and MODIFIED blocks of one delta. */
+export function deltaScenarioNames(text: string): string[] {
+  const names: string[] = [];
+  let take = false;
+  for (const line of text.split('\n')) {
+    if (line.startsWith('## ')) {
+      const title = line.slice(3);
+      take = title.startsWith('ADDED') || title.startsWith('MODIFIED');
+      continue;
+    }
+    if (!take || !line.startsWith('#### Scenario: ')) {
+      continue;
+    }
+    const name = line.slice('#### Scenario: '.length).trim();
+    if (name !== '') {
+      names.push(name);
+    }
+  }
+  return names;
+}
+
+function cardScenarioNames(text: string): string[] {
+  const head = text.split(/^## /m)[0] ?? '';
+  return head.split('\n').flatMap(line => {
+    const item = /^- (?!\[)(.+)$/.exec(line.trim());
+    const name = item?.[1]?.trim() ?? '';
+    return name === '' || name.startsWith('sdd-') ? [] : [name];
+  });
+}
+
+function deltaStamp(text: string): string {
+  return /^sdd-delta: ([0-9a-f]+)\s*$/m.exec(text)?.[1] ?? '';
+}
+
+function sharedDelta(texts: string[]): string {
+  if (texts.length === 0) {
+    return '';
+  }
+  const stamps = texts.map(deltaStamp);
+  const first = stamps[0] ?? '';
+  return first !== '' && stamps.every(stamp => stamp === first) ? first : '';
+}
+
+function slicedScenarioNames(tasks: string): string[] {
+  const names: string[] = [];
+  for (const line of tasks.split('\n')) {
+    const quoted = [...line.matchAll(/«([^»]+)»/g)]
+      .map(item => (item[1] ?? '').trim())
+      .filter(name => name !== '');
+    if (quoted.length > 0) {
+      names.push(...quoted);
+      continue;
+    }
+    const marked = /^- \[[ x]\] `[^`]+`\s*(.*)$/.exec(line.trim());
+    if (!marked) {
+      continue;
+    }
+    for (const name of (marked[1] ?? '').replace(/^[—–-]\s*/, '').split(';')) {
+      const trimmed = name.trim();
+      if (trimmed !== '') {
+        names.push(trimmed);
+      }
+    }
+  }
+  return names;
+}
+
+/** The card is not the live delta. Empty revisions are the test harness. */
+export function cardGap(change: ChangeView): string | null {
+  if (change.specsRevision === '' || change.deltaScenarios.length === 0) {
+    return null;
+  }
+  if (change.cardRevision !== change.specsRevision) {
+    return 'the delta revision is not the card';
+  }
+  const named = new Set(change.cardScenarios);
+  const missing = change.deltaScenarios.find(name => !named.has(name));
+  return missing ? `no card for ${missing}` : null;
+}
+
+/** A delta scenario with neither an open nor a checked task line. */
+export function unslicedScenario(change: ChangeView): string | null {
+  if (change.deltaScenarios.length === 0) {
+    return null;
+  }
+  const named = new Set(change.slicedScenarios);
+  const missing = change.deltaScenarios.find(name => !named.has(name));
+  return missing ? `no task for ${missing}` : null;
 }
 
 export function sharedStamp(texts: string[]): string {
@@ -181,6 +279,11 @@ export function readChange(key: string, files: FileSource): ChangeView {
     .filter(rel => rel.endsWith('spec.md'))
     .sort();
   const specChunks = specRels.map(rel => ({path: rel, text: files.read(rel)}));
+  const cardRels = files
+    .list(path.join(dir, 'tasks'))
+    .filter(rel => rel.endsWith('.md') && path.basename(rel) !== 'tasks.md')
+    .sort();
+  const cardTexts = cardRels.map(rel => files.read(rel));
   const missing = missingBaselineIds(proposal, rel => files.exists(rel));
   return {
     proposal: docs.has(proposalPath),
@@ -203,6 +306,10 @@ export function readChange(key: string, files: FileSource): ChangeView {
     specStamp: sharedStamp(specChunks.map(chunk => chunk.text)),
     designStamp: absorbedStamp(designText),
     tasksStamp: absorbedStamp(tasksText),
+    deltaScenarios: specChunks.flatMap(chunk => deltaScenarioNames(chunk.text)),
+    cardScenarios: cardTexts.flatMap(cardScenarioNames),
+    cardRevision: sharedDelta(cardTexts),
+    slicedScenarios: slicedScenarioNames(tasksText),
   };
 }
 

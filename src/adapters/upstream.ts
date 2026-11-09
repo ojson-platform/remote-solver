@@ -101,10 +101,14 @@ export function upstreamBlock(cwd: string, skill: string, key: string): string {
     }
     const file = skill === 'design' ? `${root}/design.md` : `${root}/tasks.md`;
     const text = readFile(path.join(cwd, file));
-    if (text === null) {
-      return missing(file);
-    }
     const specs = specChunks(cwd, key);
+    const deltaRevision = contentRevision(specs);
+    if (text === null) {
+      const absent = missing(file);
+      return skill === 'tasks'
+        ? `${absent}\n\nThe delta revision is \`${deltaRevision}\`.`
+        : absent;
+    }
     const input =
       skill === 'design'
         ? specs
@@ -114,9 +118,9 @@ export function upstreamBlock(cwd: string, skill: string, key: string): string {
           ];
     const revision = contentRevision(input);
     const stamp = absorbedStamp(text);
-    return stamp !== '' && stamp === revision
-      ? matched(file)
-      : folded(file, stamp, revision, input);
+    const block =
+      stamp !== '' && stamp === revision ? matched(file) : folded(file, stamp, revision, input);
+    return skill === 'tasks' ? `${block}\n\nThe delta revision is \`${deltaRevision}\`.` : block;
   } catch {
     return unreadable();
   }

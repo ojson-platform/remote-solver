@@ -111,6 +111,28 @@ spec('artifact', () => {
       assert.match(upstream, /This action has no previous artifact/);
     });
 
+    scenario('A tasks run whose stamp matches names the delta revision', async () => {
+      const root = repo();
+      const dir = 'openspec/changes/issue-6';
+      const specText = 'A remark stays until send.\n';
+      const specPath = `${dir}/specs/unsent-remark/spec.md`;
+      const designPath = `${dir}/design.md`;
+      const designText = '# design\n';
+      const revision = contentRevision([
+        {path: specPath, text: specText},
+        {path: designPath, text: designText},
+      ]);
+      const deltaRevision = contentRevision([{path: specPath, text: specText}]);
+      write(root, designPath, designText);
+      write(root, specPath, specText);
+      write(root, `${dir}/tasks.md`, `# tasks\nsdd-absorbed: ${revision}\n`);
+      const upstream = await promptOf(root, 'tasks', 'tasking');
+      assert.match(upstream, /matches the input revision/);
+      assert.match(upstream, /The delta revision is `/);
+      assert.equal(upstream.includes(deltaRevision), true);
+      assert.equal(upstream.includes('A remark stays until send.'), false);
+    });
+
     scenario(
       'A run whose previous artifact cannot be read does not treat the file as already right',
       async () => {

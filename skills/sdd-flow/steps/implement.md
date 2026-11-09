@@ -26,7 +26,7 @@ A file the task does not name stays unread and unedited, including other changes
 
 ## Steps
 
-1. No `tasks/<id>.md`, or it lacks a § Artifacts heading: Hand-off to `tasks` on that line of `tasks.md`. Do not reconstruct the task from the code.
+1. The card's `sdd-delta` is not the live delta revision, or a live scenario title is on no card: Hand-off to `tasks`. Write no code. No `tasks/<id>.md`, or it lacks a § Artifacts heading: Hand-off to `tasks` on that line of `tasks.md`. Do not reconstruct the task from the code.
 2. The named scenarios do not contain the behavior the task asks for: Hand-off to `spec` on the scenario closest to it. Write no code.
 3. The task does not fit one commit: split `tasks.md` in its own commit and keep the scenario links. Publish after that commit and end the run.
 4. **Implement the task.** For each scenario the task names, do 4.1 and then 4.2 before the next scenario. The substeps still hold. One commit covers the whole task.

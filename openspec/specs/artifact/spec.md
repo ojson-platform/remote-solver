@@ -89,7 +89,7 @@ The prompt for a skill run SHALL include the issue title and body. It SHALL say 
 
 ### Requirement: The writing prompt carries the input revision
 
-For `specify`, `design`, and `tasks`, the prompt SHALL carry the current text of the previous artifact and the `sdd-absorbed` stamp in this step's file. A stamp that equals the revision of that text SHALL be one sentence and SHALL NOT include the text. A missing file SHALL say that file does not exist yet. `plan` SHALL be told that the issue text is the upstream and that the proposal existing is not a reason to leave it. Any other skill SHALL be told that the action has no previous artifact. An unreadable previous artifact SHALL tell the run not to treat the existing file as already right. The revision SHALL be a hash of the current bytes. The prompt SHALL NOT be a diff against a commit.
+For `specify`, `design`, and `tasks`, the prompt SHALL carry the current text of the previous artifact and the `sdd-absorbed` stamp in this step's file. A stamp that equals the revision of that text SHALL be one sentence and SHALL NOT include the text. For `tasks`, that prompt SHALL also name the delta revision on its own line. A missing file SHALL say that file does not exist yet. `plan` SHALL be told that the issue text is the upstream and that the proposal existing is not a reason to leave it. Any other skill SHALL be told that the action has no previous artifact. An unreadable previous artifact SHALL tell the run not to treat the existing file as already right. The revision SHALL be a hash of the current bytes. The prompt SHALL NOT be a diff against a commit.
 
 #### Scenario: A design run after a spec edit carries that text
 
@@ -120,6 +120,11 @@ For `specify`, `design`, and `tasks`, the prompt SHALL carry the current text of
 
 - **WHEN** the machine runs `design` and `design.md` is not a file
 - **THEN** the prompt says the previous artifact could not be read and not to treat the existing file as already right
+
+#### Scenario: A tasks run whose stamp matches names the delta revision
+
+- **WHEN** `tasks.md` records `sdd-absorbed` equal to the revision of the delta and the design, and the delta states a fact
+- **THEN** the tasks prompt says the stamp matches, names the delta revision, and does not include that fact
 
 ### Requirement: A stale stamp restarts the writing skill
 
@@ -154,3 +159,42 @@ On `specifying`, when a delta exists and its stamp is not the proposal revision,
 
 - **WHEN** a person accepts `specifying` and the delta stamp is not the proposal revision
 - **THEN** the machine refuses
+
+### Requirement: A task card names the delta it was cut from
+
+A task card SHALL name scenario titles and the delta revision `sdd-delta`, and SHALL NOT copy the scenario text. On `implementing`, when that revision is not the live delta, or a live scenario has no card, the machine SHALL return to `tasking` and SHALL NOT run the implement skill. On `implementing`, when every task line is checked and a delta scenario has no open or checked line, the machine SHALL return to `tasking` and SHALL NOT move to `verifying`. On `accepting`, that missing line SHALL make the machine wait and SHALL NOT archive the change. A checked line SHALL count as the scenario's task. Zero open lines SHALL NOT by itself make the cut complete.
+
+#### Scenario: A differing card revision returns implementing to tasking
+
+- **WHEN** `implementing` has an open task and the card revision is not the live delta
+- **THEN** the machine returns to `tasking` and does not run the implement skill
+
+#### Scenario: A live scenario with no card returns implementing to tasking
+
+- **WHEN** `implementing` has an open task, the card revision matches, and a delta scenario is named on no card
+- **THEN** the machine returns to `tasking` and does not run the implement skill
+
+#### Scenario: A matching card still runs the open task
+
+- **WHEN** `implementing` has an open task, the card revision matches, and the card names every delta scenario
+- **THEN** the machine runs the implement skill
+
+#### Scenario: A checked-off cut with an unsliced scenario returns to tasking
+
+- **WHEN** `implementing` has no open task and a delta scenario has no task line
+- **THEN** the machine returns to `tasking` and does not move to `verifying`
+
+#### Scenario: Accepting waits while a delta scenario has no task
+
+- **WHEN** `accepting` is not archived and a delta scenario has no open or checked task line
+- **THEN** the machine waits and does not archive the change
+
+#### Scenario: A task card records the delta revision and the scenario title
+
+- **WHEN** a card lists a scenario title and `sdd-delta`, and `tasks.md` checks that title
+- **THEN** the machine reads that title, that revision, and that checked line
+
+#### Scenario: A checked task line lets accepting archive
+
+- **WHEN** `accepting` is not archived and every delta scenario has a checked task line
+- **THEN** the machine archives the change

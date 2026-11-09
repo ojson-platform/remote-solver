@@ -103,7 +103,7 @@ The other files of `openspec/changes/issue-<issue>/`, with these headings exactl
 
 `tasks.md`: lines `- [ ] \`<id>\`` in work order, each naming its Scenario titles. The machine counts every `- [ ]`.
 
-`tasks/<id>.md`: the Scenario titles, then
+`tasks/<id>.md`: the Scenario titles as `- <title>` lines, then one line `sdd-delta: <revision>` for the delta revision named in the upstream block. The card does not copy the scenario text. After that line:
 - `## Source`: what changes, what the task leaves untouched, every file the implementer may edit. The test file is not here.
 - `## Proof`: the test file path, what the test observes, which files it may read, and the commands. The one-file command runs on each attempt while the test is red and after each edit. The layer command, the fast suite when the card names one, and the type check when the card names it run once after the one-file command exits 0. The trace line is copied when the boundary has one.
 

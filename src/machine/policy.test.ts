@@ -4,7 +4,7 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
 
 import {memoryPorts} from '../adapters/github.ts';
-import type {ChangeView} from './change.ts';
+import {readChange, type ChangeView} from './change.ts';
 import {resolveIssue} from './flow.ts';
 import {
   accept,
@@ -45,6 +45,10 @@ function change(over: Partial<ChangeView> = {}): ChangeView {
     specStamp: '',
     designStamp: '',
     tasksStamp: '',
+    deltaScenarios: [],
+    cardScenarios: [],
+    cardRevision: '',
+    slicedScenarios: [],
     ...over,
   };
 }
@@ -901,6 +905,125 @@ spec('finished-cycle', () => {
       ]);
       assert.ok(!visibleKeys(window.board()).includes('1'));
       rmSync(dir, {recursive: true, force: true});
+    });
+  });
+});
+
+spec('artifact', () => {
+  requirement('A task card names the delta it was cut from', () => {
+    const named = {
+      tasks: true,
+      openTasks: 1,
+      specsRevision: 'aaa',
+      cardRevision: 'aaa',
+      deltaScenarios: ['The remark stays'],
+      cardScenarios: ['The remark stays'],
+      slicedScenarios: ['The remark stays'],
+    };
+    scenario('A differing card revision returns implementing to tasking', () => {
+      const decision = decide(
+        issue(1, ['sdd:implementing']),
+        [],
+        [pull(9)],
+        change({...named, cardRevision: 'bbb'}),
+      );
+      assert.equal(decision.kind, 'advance');
+      if (decision.kind === 'advance') {
+        assert.equal(decision.to, 'tasking');
+      }
+      assert.notEqual(decision.kind === 'agent' ? decision.action : decision.kind, 'implement-next-task');
+    });
+    scenario('A live scenario with no card returns implementing to tasking', () => {
+      const decision = decide(
+        issue(1, ['sdd:implementing']),
+        [],
+        [pull(9)],
+        change({...named, cardScenarios: []}),
+      );
+      assert.equal(decision.kind, 'advance');
+      if (decision.kind === 'advance') {
+        assert.equal(decision.to, 'tasking');
+        assert.match(decision.reason, /no card for The remark stays/);
+      }
+    });
+    scenario('A matching card still runs the open task', () => {
+      const decision = decide(issue(1, ['sdd:implementing']), [], [pull(9)], change(named));
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'implement-next-task');
+      }
+    });
+    scenario('A checked-off cut with an unsliced scenario returns to tasking', () => {
+      const decision = decide(
+        issue(1, ['sdd:implementing']),
+        [],
+        [pull(9)],
+        change({...named, openTasks: 0, slicedScenarios: []}),
+      );
+      assert.equal(decision.kind, 'advance');
+      if (decision.kind === 'advance') {
+        assert.equal(decision.to, 'tasking');
+      }
+    });
+    scenario('Accepting waits while a delta scenario has no task', () => {
+      const decision = decide(
+        issue(1, ['sdd:accepting']),
+        [],
+        [pull(9)],
+        change({...named, openTasks: 0, slicedScenarios: []}),
+      );
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.match(decision.reason, /no task for The remark stays/);
+      }
+    });
+    scenario('A checked task line lets accepting archive', () => {
+      const decision = decide(
+        issue(1, ['sdd:accepting']),
+        [],
+        [pull(9)],
+        change({...named, openTasks: 0}),
+      );
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'archive');
+      }
+    });
+    scenario('A task card records the delta revision and the scenario title', () => {
+      const specText = '## ADDED Requirements\n\n#### Scenario: The remark stays\n\n- **THEN** it stays\n';
+      const source: FileSource = {
+        exists: rel =>
+          rel.endsWith('proposal.md') ||
+          rel.endsWith('spec.md') ||
+          rel.endsWith('tasks.md') ||
+          rel.endsWith('cut.md'),
+        read: rel => {
+          if (rel.endsWith('spec.md')) {
+            return specText;
+          }
+          if (rel.endsWith('cut.md')) {
+            return '- The remark stays\nsdd-delta: abc\n## Source\nThe body is not a title.\n';
+          }
+          if (rel.endsWith('tasks.md')) {
+            return '- [x] `cut` The remark stays\n';
+          }
+          return '';
+        },
+        list: rel => {
+          if (rel.endsWith('specs')) {
+            return ['openspec/changes/issue-1/specs/remark/spec.md'];
+          }
+          if (rel.endsWith('tasks')) {
+            return ['openspec/changes/issue-1/tasks/cut.md'];
+          }
+          return [];
+        },
+      };
+      const view = readChange('1', source);
+      assert.deepEqual(view.deltaScenarios, ['The remark stays']);
+      assert.deepEqual(view.cardScenarios, ['The remark stays']);
+      assert.equal(view.cardRevision, 'abc');
+      assert.deepEqual(view.slicedScenarios, ['The remark stays']);
     });
   });
 });

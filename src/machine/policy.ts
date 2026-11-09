@@ -2,7 +2,7 @@ import type {CheckState, Conversation, IssueRecord, ThreadRecord} from './port.t
 
 import path from 'node:path';
 
-import {HEADINGS, specsReady, type ChangeView} from './change.ts';
+import {cardGap, HEADINGS, specsReady, unslicedScenario, type ChangeView} from './change.ts';
 import {changeDir} from './naming.ts';
 import {GATE_CLOSES, labelsAfterAdvance, phaseOf, phaseRank, type Phase} from './phase.ts';
 import {emptyReview, layerOfPhase, type ReviewView} from './review.ts';
@@ -516,6 +516,10 @@ export function decide(
         'the design revision is not the stamp',
       );
     }
+    const cut = cardGap(change) ?? unslicedScenario(change);
+    if (cut) {
+      return agent(issue.key, 'create-tasks', phase, pr ? String(pr.id) : '', cut);
+    }
     const kids = children(issue.key, issues);
     const behind = kids.filter(kid => !atLeast(kid, 'specified'));
     if (behind.length) {
@@ -535,6 +539,10 @@ export function decide(
     if (pr?.conflict) {
       return agent(issue.key, 'fix-implementation', phase, String(pr.id), 'rebase onto the base');
     }
+    const card = cardGap(change);
+    if (card) {
+      return {kind: 'advance', issue: issue.key, to: 'tasking', reason: card};
+    }
     if (change.openTasks > 0) {
       return agent(
         issue.key,
@@ -543,6 +551,10 @@ export function decide(
         pr ? String(pr.id) : '',
         'next open task',
       );
+    }
+    const slice = unslicedScenario(change);
+    if (slice) {
+      return {kind: 'advance', issue: issue.key, to: 'tasking', reason: slice};
     }
     const dependencyWait = implementingDependencyWait(issue, issues);
     if (dependencyWait) {
@@ -596,6 +608,10 @@ export function decide(
     return {kind: 'wait', issue: issue.key, reason: 'accepting needs the pull request'};
   }
   if (!change.archived) {
+    const slice = unslicedScenario(change);
+    if (slice) {
+      return {kind: 'wait', issue: issue.key, reason: slice};
+    }
     return agent(
       issue.key,
       'archive',

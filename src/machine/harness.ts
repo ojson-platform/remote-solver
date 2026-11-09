@@ -24,6 +24,10 @@ export function change(over: Partial<ChangeView> = {}): ChangeView {
     specStamp: '',
     designStamp: '',
     tasksStamp: '',
+    deltaScenarios: [],
+    cardScenarios: [],
+    cardRevision: '',
+    slicedScenarios: [],
     ...over,
   };
 }

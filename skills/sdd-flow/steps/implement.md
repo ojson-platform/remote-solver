@@ -13,7 +13,7 @@ The headings below are `CONTEXT.md` § Artifacts.
 3. The Scenario blocks that line names, in the delta spec only.
 4. Files named in the task file.
 
-A file the task does not name stays unread and unedited: other changes, ADRs, a directory listing of the files in `## Source`.
+A file the task does not name stays unread and unedited, including other changes and ADRs.
 
 ## Out of this action
 

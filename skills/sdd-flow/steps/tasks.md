@@ -13,7 +13,7 @@ The implementation checklist. No human gate. A slice groups Scenarios the caller
 
 A slice is one caller-visible path. After this task lands, its Scenarios hold together.
 
-- Scenarios that are the same observation share a slice. A deadline and the span it leaves are one path when the caller sees one fact.
+- Scenarios that are the same observation share a slice. Two wordings of one fact the caller sees are one slice.
 - A later slice may assume the earlier slice's Scenarios already hold. Line order in `tasks.md` is that work order.
 - Each Scenario sits in exactly one slice. The titles are copied from the delta.
 

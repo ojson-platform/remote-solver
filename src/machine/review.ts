@@ -6,7 +6,7 @@ import type {Conversation, Thread, ThreadRecord} from './port.ts';
 
 export {markRobot, ROBOT_MARK} from './marker.ts';
 
-/** The spy mark, or a commenter named in the pattern list. A `[bot]` login is a person. */
+/** The spy mark, or a commenter named in the pattern list. */
 export function spokeByRobot(body: string, login: string, ignored: readonly RegExp[]): boolean {
   return body.startsWith('🤖') || authorIgnored(login, ignored);
 }

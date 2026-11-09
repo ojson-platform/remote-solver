@@ -180,7 +180,7 @@ test('an instruction is a thread of this phase, and a note asks for nothing', ()
   const design = readFileSync(path.join(stepsDir, 'design.md'), 'utf8');
   const tasks = readFileSync(path.join(stepsDir, 'tasks.md'), 'utf8');
   const fix = readFileSync(path.join(stepsDir, 'fix.md'), 'utf8');
-  assert.match(comments, /does not sort the request by which action it names/);
+  assert.match(comments, /This step does not divide the request/);
   assert.match(comments, /After that thread is open, `thread say/);
   assert.match(comments, /do not open a `code` thread/);
   assert.match(comments, /Step 3 Waited: leave `sdd:wait-human` set/);

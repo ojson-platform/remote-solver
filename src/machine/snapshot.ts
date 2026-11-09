@@ -16,6 +16,8 @@ export type CycleSnapshot = {
   facts?: Map<string, BranchFacts>;
   /** Bytes of that same read. The spine projects them instead of opening the branch again. */
   texts?: Map<string, BranchText>;
+  /** Tip commit message of each cycle this poll read. Absent when the caller did not read tips. */
+  tips?: Map<string, string>;
 };
 
 /** Pulls of one issue, each open pull carrying the one review reading. */
@@ -56,6 +58,7 @@ export async function loadCycle(
   filesAt: (key: string) => FileSource,
   queues: QueueConfig[],
   contentAt: (key: string) => FileSource = filesAt,
+  tipMessage?: (key: string) => Promise<string>,
 ): Promise<CycleSnapshot> {
   const issues = await tracker.listOpen();
   const me = await tracker.login();
@@ -71,6 +74,7 @@ export async function loadCycle(
   const changes = new Map<string, ChangeView>();
   const facts = new Map<string, BranchFacts>();
   const texts = new Map<string, BranchText>();
+  const tips = tipMessage ? new Map<string, string>() : undefined;
   for (const issue of cycles) {
     const files = filesAt(issue.key);
     const read = readBranch(issue.key, files, contentAt(issue.key));
@@ -80,6 +84,13 @@ export async function loadCycle(
       facts.set(issue.key, read.facts);
       texts.set(issue.key, read.text);
     }
+    if (tips && tipMessage) {
+      try {
+        tips.set(issue.key, await tipMessage(issue.key));
+      } catch {
+        tips.set(issue.key, '');
+      }
+    }
   }
-  return {issues, cycles, pulls, changes, facts, texts};
+  return {issues, cycles, pulls, changes, facts, texts, tips};
 }

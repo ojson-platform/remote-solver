@@ -178,6 +178,7 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
           key => box.vcs.filesAt(key),
           box.config.queues,
           key => contentFiles(box.vcs, key),
+          key => box.vcs.tipMessage?.(key) ?? Promise.resolve(''),
         );
         const decisions = await performCycle(
           snapshot,

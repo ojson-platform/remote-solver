@@ -144,6 +144,8 @@ export type Vcs = {
   prepare(key: IssueKey, options: {worktreesDir: string; links: Link[]}): Promise<string>;
   /** Tip of the local issue branch. Throws when the branch does not exist. */
   tip(key: IssueKey): Promise<string>;
+  /** Message of the issue branch tip. Empty when the branch is absent. */
+  tipMessage?(key: IssueKey): Promise<string>;
   /** Files of the issue branch. Reading them is local and stays synchronous. */
   filesAt(key: IssueKey): FileSource;
   /**

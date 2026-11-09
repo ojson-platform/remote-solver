@@ -55,3 +55,27 @@ When `accepted` is on the issue, the phase SHALL be `accepted`, even when an ear
 
 - **WHEN** `set` is asked to put `proposed` on an issue
 - **THEN** the command fails and the labels stay as they were
+
+### Requirement: The decision reads one cycle record
+
+Before a decision, the labels, the hold, and the tip's `Sdd-Archive` line SHALL collapse into one phase, one hold, and one folded bit. The decision SHALL use that record. An archive directory without that line SHALL NOT count as folded. A tip line without the archive directory SHALL count as folded. `sdd accept` SHALL use that same record.
+
+#### Scenario: A gate label and the phase it closes are one phase before the decision
+
+- **WHEN** the record is built from `proposing` and `proposed`, and the issue passed to the decision carries only `proposing`
+- **THEN** the decision follows `proposed`
+
+#### Scenario: An archive directory without the tip line is not folded
+
+- **WHEN** the change directory is archived and the tip message has no `Sdd-Archive` line
+- **THEN** the decision does not restore the change
+
+#### Scenario: A tip line without the archive directory is folded
+
+- **WHEN** the change directory is not archived and the tip message carries `Sdd-Archive` for the issue
+- **THEN** the decision restores the change
+
+#### Scenario: Accept uses the same record
+
+- **WHEN** the record is built from `proposing` and `proposed`, and accept is given an issue that carries only `proposing`
+- **THEN** accept follows `proposed`

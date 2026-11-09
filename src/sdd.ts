@@ -16,7 +16,7 @@ import {parseMarker} from './machine/marker.ts';
 import {updateMirror} from './machine/mirror.ts';
 import {changeDir} from './machine/naming.ts';
 import {labelsAfterAdvance, PHASES, type Phase} from './machine/phase.ts';
-import {accept as acceptGate, publishChoice, type Decision} from './machine/policy.ts';
+import {accept as acceptGate, cycleRecord, publishChoice, type Decision} from './machine/policy.ts';
 import {queueOf} from './machine/queues.ts';
 import {openItemLayer, threadsReport, type OpenItemFile} from './machine/review.ts';
 import {resolveServiceRoot, sameService} from './machine/service-config.ts';
@@ -263,6 +263,7 @@ async function plan(box: Machine): Promise<void> {
     key => box.vcs.filesAt(key),
     box.config.queues,
     key => contentFiles(box.vcs, key),
+    key => box.vcs.tipMessage?.(key) ?? Promise.resolve(''),
   );
   const decision = pick(await resolveCycle(snapshot, box.tracker, box.config.queues));
   const labels = decision.issue === null ? [] : (await box.tracker.issue(decision.issue)).labels;
@@ -379,7 +380,12 @@ async function unwait(box: Machine, rest: string[]): Promise<void> {
 async function accept(box: Machine, rest: string[]): Promise<void> {
   const key = need(rest[0], usage);
   const record = await box.tracker.issue(key);
-  const decision = acceptGate(record, readChange(key, box.vcs.filesAt(key)));
+  const tip = box.vcs.tipMessage ? await box.vcs.tipMessage(key) : '';
+  const decision = acceptGate(
+    record,
+    readChange(key, box.vcs.filesAt(key)),
+    cycleRecord(record, tip),
+  );
   if (decision.kind !== 'advance') {
     throw new Error(decision.reason);
   }

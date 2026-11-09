@@ -94,7 +94,14 @@ export async function resolveCycle(
       decisions.push({kind: 'wait', issue: record.key, reason: 'change was not loaded'});
       continue;
     }
-    const settled = settle(record, snapshot.issues, snapshot.pulls.get(record.key) ?? [], change);
+    const tip = snapshot.tips?.get(record.key);
+    const settled = settle(
+      record,
+      snapshot.issues,
+      snapshot.pulls.get(record.key) ?? [],
+      change,
+      snapshot.tips ? (tip ?? '') : undefined,
+    );
     await applySettlement(tracker, record.labels, settled, record.key);
     decisions.push(settled.decision);
   }
@@ -109,6 +116,8 @@ export async function resolveIssue(
     files: FileSource;
     queues: QueueConfig[];
     change?: ChangeView;
+    /** Tip message. When set, the archive directory is not the folded bit. */
+    tip?: string;
   },
 ): Promise<Decision> {
   const issues = await options.tracker.listOpen();
@@ -126,6 +135,7 @@ export async function resolveIssue(
     issues,
     await pullSnapshots(options.review, key, options.files),
     options.change ?? readChange(key, options.files),
+    options.tip,
   );
   await applySettlement(options.tracker, record.labels, settled, key);
   return settled.decision;
@@ -143,6 +153,7 @@ export async function performIssue(
     files: FileSource;
     queues: QueueConfig[];
     change?: ChangeView;
+    tip?: string;
   },
 ): Promise<Decision> {
   const decision = await resolveIssue(key, options);
@@ -175,12 +186,14 @@ export async function performCycle(
       performed.push(decision);
       continue;
     }
+    const tip = snapshot.tips?.get(decision.issue);
     performed.push(
       await performIssue(decision.issue, {
         tracker: options.tracker,
         review: options.review,
         files: options.filesAt(decision.issue),
         queues: options.queues,
+        tip: snapshot.tips ? (tip ?? '') : undefined,
       }),
     );
   }

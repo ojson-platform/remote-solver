@@ -4,10 +4,10 @@ import {test} from 'vitest';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {memoryPorts} from '../adapters/github.ts';
-import {change, issue} from './harness.ts';
+import {change, issue, pull} from './harness.ts';
 import {setPhase} from './labels.ts';
 import {phaseOf} from './phase.ts';
-import {settle} from './policy.ts';
+import {accept, cycleRecord, decide, settle} from './policy.ts';
 
 test('a gate label wins over the phase it closes', () => {
   assert.equal(phaseOf(['sdd:proposing', 'sdd:proposed']), 'proposed');
@@ -67,6 +67,60 @@ spec('phase', () => {
       });
       await assert.rejects(setPhase('7', 'proposed', tracker), /gate label sdd:proposed/);
       assert.deepEqual(await tracker.labels('7'), ['sdd:proposing']);
+    });
+  });
+
+  requirement('The decision reads one cycle record', () => {
+    scenario('A gate label and the phase it closes are one phase before the decision', () => {
+      const recorded = issue(1, ['sdd:proposing', 'sdd:proposed']);
+      const decision = decide(
+        issue(1, ['sdd:proposing']),
+        [],
+        [pull(9)],
+        change({proposal: true}),
+        cycleRecord(recorded, ''),
+      );
+      assert.equal(decision.kind, 'advance');
+      if (decision.kind === 'advance') {
+        assert.equal(decision.to, 'specifying');
+      }
+    });
+    scenario('An archive directory without the tip line is not folded', () => {
+      const row = issue(1, ['sdd:tasking']);
+      const decision = decide(
+        row,
+        [],
+        [],
+        change({archived: true, proposal: true, design: true, tasks: true}),
+        cycleRecord(row, ''),
+      );
+      assert.notEqual(decision.kind === 'agent' ? decision.action : decision.kind, 'unarchive');
+    });
+    scenario('A tip line without the archive directory is folded', () => {
+      const row = issue(1, ['sdd:tasking']);
+      const decision = decide(
+        row,
+        [],
+        [],
+        change({design: true, tasks: true}),
+        cycleRecord(row, 'Sdd-Archive: issue-1\n'),
+      );
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'unarchive');
+      }
+    });
+    scenario('Accept uses the same record', () => {
+      const recorded = issue(1, ['sdd:cycle', 'sdd:proposing', 'sdd:proposed']);
+      const decision = accept(
+        issue(1, ['sdd:cycle', 'sdd:proposing']),
+        change({proposal: true}),
+        cycleRecord(recorded, ''),
+      );
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.match(decision.reason, /proposed/);
+      }
     });
   });
 });

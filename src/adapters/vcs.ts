@@ -6,6 +6,7 @@ import path from 'node:path';
 import {promisify} from 'node:util';
 
 import {branchName} from '../machine/naming.ts';
+import {foldedFromTip} from '../machine/phase.ts';
 
 export type GitVcsConfig = {
   branchPrefix?: string;
@@ -358,14 +359,6 @@ function filesOnBranch(
   return filesOfRef(root, ref, strict);
 }
 
-function archiveMark(key: string): string {
-  return `Sdd-Archive: issue-${key}`;
-}
-
-function hasArchiveMark(message: string, key: string): boolean {
-  const mark = archiveMark(key);
-  return message.split('\n').some(line => line.trimEnd() === mark);
-}
 
 function messageOf(root: string, ref: string, strict: boolean): string | undefined {
   try {
@@ -385,7 +378,7 @@ function messageOf(root: string, ref: string, strict: boolean): string | undefin
  */
 function contentRef(root: string, tip: string, key: string, strict: boolean): string {
   const message = messageOf(root, tip, strict);
-  if (message === undefined || !hasArchiveMark(message, key)) {
+  if (message === undefined || !foldedFromTip(message, key)) {
     return tip;
   }
   const parent = git(root, ['rev-parse', '--verify', `${tip}^`], true).trim();
@@ -573,6 +566,13 @@ export function gitVcs(root: string, config: GitVcsConfig = {}): Vcs {
         throw new Error(`no branch ${branchName(key, prefix)}`);
       }
       return found;
+    },
+    async tipMessage(key) {
+      const ref = issueRef(root, key, prefix);
+      if (ref === null) {
+        return '';
+      }
+      return messageOf(root, ref, false) ?? '';
     },
     filesAt: key => gitFiles(root, key, prefix),
     contentAt: key => contentBranchFiles(root, key, prefix) ?? gitFiles(root, key, prefix),

@@ -4,7 +4,15 @@ import path from 'node:path';
 
 import {cardGap, HEADINGS, specsReady, unslicedScenario, type ChangeView} from './change.ts';
 import {changeDir} from './naming.ts';
-import {GATE_CLOSES, labelsAfterAdvance, phaseOf, phaseRank, type Phase} from './phase.ts';
+import {
+  archiveMark,
+  foldedFromTip,
+  GATE_CLOSES,
+  labelsAfterAdvance,
+  phaseOf,
+  phaseRank,
+  type Phase,
+} from './phase.ts';
 import {emptyReview, layerOfPhase, type ReviewView} from './review.ts';
 import {ACTION_SKILL, LAYER_ACTION, type AgentAction, type Skill} from './route.ts';
 
@@ -210,12 +218,50 @@ function agent(
   return {kind: 'agent', issue, action, skill: ACTION_SKILL[action], phase, pr, reason};
 }
 
+/** One reading of a cycle: the phase, the hold, and whether the tip is the archive commit. */
+export type CycleRecord = {
+  phase: Phase | null;
+  /** The ask, when `sdd:wait-human` is on. Absent when the person is not holding the issue. */
+  hold: string | null;
+  /** The tip message carries `Sdd-Archive` for this issue. */
+  folded: boolean;
+  cycle: boolean;
+  autoPlan: boolean;
+  autoSpec: boolean;
+  autoDesign: boolean;
+  autoMerge: boolean;
+};
+
+/** Labels, the hold, and the tip line, collapsed once. The decision does not read the label set. */
+export function cycleRecord(issue: IssueRecord, tip: string): CycleRecord {
+  const phase = phaseOf(issue.labels);
+  const names = issue.labels;
+  return {
+    phase,
+    hold:
+      names.includes('sdd:wait-human') && phase
+        ? `sdd:wait-human is set on ${phase}. Do the ask on the issue.`
+        : null,
+    folded: foldedFromTip(tip, issue.key),
+    cycle: names.includes('sdd:cycle'),
+    autoPlan: names.includes('sdd:auto-plan'),
+    autoSpec: names.includes('sdd:auto-spec'),
+    autoDesign: names.includes('sdd:auto-design'),
+    autoMerge: names.includes('sdd:auto-merge'),
+  };
+}
+
+/** A test harness that still says `archived` stands for the tip line. A passed tip replaces it. */
+function legacyTip(issue: IssueRecord, change: ChangeView): string {
+  return change.archived ? archiveMark(issue.key) : '';
+}
+
 /** Archived with a merged pull request and none open: the cycle is finished. */
-function finishedCycle(pulls: PullSnapshot[], change: ChangeView, labels: string[]): boolean {
-  if (labels.includes('sdd:cancelled')) {
+function finishedCycle(pulls: PullSnapshot[], folded: boolean, phase: Phase | null): boolean {
+  if (phase === 'cancelled') {
     return false;
   }
-  if (!change.archived) {
+  if (!folded) {
     return false;
   }
   if (pulls.some(pr => pr.state === 'OPEN')) {
@@ -255,9 +301,9 @@ export function decide(
   issues: IssueRecord[],
   pulls: PullSnapshot[],
   change: ChangeView,
+  record: CycleRecord = cycleRecord(issue, legacyTip(issue, change)),
 ): Decision {
-  const names = issue.labels;
-  if (names.includes('sdd:cancelled')) {
+  if (record.phase === 'cancelled') {
     return {kind: 'done', issue: issue.key, reason: 'cancelled'};
   }
   const open = pulls.filter(pr => pr.state === 'OPEN');
@@ -268,11 +314,11 @@ export function decide(
       reason: severalOpenReason(open.map(pr => pr.id)),
     };
   }
-  const phase = phaseOf(names);
+  const phase = record.phase;
   if (!phase) {
     return {kind: 'advance', issue: issue.key, to: 'proposing', reason: 'enter the cycle'};
   }
-  if (phaseRank(phase) < phaseRank('accepting') && finishedCycle(pulls, change, names)) {
+  if (phaseRank(phase) < phaseRank('accepting') && finishedCycle(pulls, record.folded, phase)) {
     if (phase === 'implementing' && change.tasks && change.openTasks === 0) {
       const dependencyWait = implementingDependencyWait(issue, issues);
       if (dependencyWait) {
@@ -285,7 +331,7 @@ export function decide(
     const acceptedOpen = open;
     const acceptedMerged = pulls.filter(item => item.state === 'MERGED');
     const acceptedPr = acceptedMerged[0] ?? acceptedOpen[0];
-    if (!change.archived && (change.proposal || change.delta)) {
+    if (!record.folded && (change.proposal || change.delta)) {
       return agent(
         issue.key,
         'archive',
@@ -304,7 +350,7 @@ export function decide(
   // A repair must not commit on top of the archive commit. Accepting still rolls back first; the next step of this settlement restores the change while that commit is the tip. A merged pull request stays archived.
   if (
     phaseRank(phase) < phaseRank('accepting') &&
-    change.archived &&
+    record.folded &&
     !pulls.some(pr => pr.state === 'MERGED')
   ) {
     return agent(issue.key, 'unarchive', phase, '', 'return the delta to the change');
@@ -374,7 +420,7 @@ export function decide(
 
   // A skill stopped for a person, or the machine opened the review gate.
   // The gate holds when no classified thread asks for a layer.
-  if (names.includes('sdd:wait-human')) {
+  if (record.hold !== null) {
     const review =
       phase === 'proposing'
         ? {artifact: 'proposal', to: 'proposed' as const}
@@ -393,7 +439,16 @@ export function decide(
     };
   }
 
-  const auto = (tag: string) => names.includes(tag);
+  const auto = (tag: string) =>
+    tag === 'sdd:auto-plan'
+      ? record.autoPlan
+      : tag === 'sdd:auto-spec'
+        ? record.autoSpec
+        : tag === 'sdd:auto-design'
+          ? record.autoDesign
+          : tag === 'sdd:auto-merge'
+            ? record.autoMerge
+            : false;
 
   if (phase === 'proposing') {
     if (!change.proposal || !pr) {
@@ -607,7 +662,7 @@ export function decide(
   if (!pr && merged.length === 0) {
     return {kind: 'wait', issue: issue.key, reason: 'accepting needs the pull request'};
   }
-  if (!change.archived) {
+  if (!record.folded) {
     const slice = unslicedScenario(change);
     if (slice) {
       return {kind: 'wait', issue: issue.key, reason: slice};
@@ -620,14 +675,18 @@ export function decide(
       'archive the change',
     );
   }
-  return mergeOrWait(issue.key, pr, merged, names.includes('sdd:auto-merge'));
+  return mergeOrWait(issue.key, pr, merged, record.autoMerge);
 }
 
-export function accept(issue: IssueRecord, change: ChangeView): Decision {
-  if (!issue.labels.includes('sdd:cycle')) {
+export function accept(
+  issue: IssueRecord,
+  change: ChangeView,
+  record: CycleRecord = cycleRecord(issue, legacyTip(issue, change)),
+): Decision {
+  if (!record.cycle) {
     return {kind: 'wait', issue: issue.key, reason: `#${issue.key} has no sdd:cycle label`};
   }
-  const phase = phaseOf(issue.labels);
+  const phase = record.phase;
   const next = phase ? HUMAN_NEXT[phase] : undefined;
   if (!phase || !next) {
     return {
@@ -654,11 +713,19 @@ export function settle(
   issues: IssueRecord[],
   pulls: PullSnapshot[],
   change: ChangeView,
+  tip?: string,
 ): Settlement {
+  const message = tip ?? legacyTip(issue, change);
   let labels = [...issue.labels];
   const transitions: Settlement['transitions'] = [];
   for (let step = 0; step < 12; step += 1) {
-    const decision = decide({...issue, labels}, issues, pulls, change);
+    const decision = decide(
+      {...issue, labels},
+      issues,
+      pulls,
+      change,
+      cycleRecord({...issue, labels}, message),
+    );
     if (decision.kind !== 'advance') {
       return {decision, transitions, labels};
     }

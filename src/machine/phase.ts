@@ -27,6 +27,17 @@ export const GATE_CLOSES: Partial<Record<Phase, Phase>> = {
 
 const LABEL = (phase: string) => `sdd:${phase}`;
 
+/** The line an archive commit carries for one issue. */
+export function archiveMark(key: string): string {
+  return `Sdd-Archive: issue-${key}`;
+}
+
+/** True when the tip message carries this issue's archive line. */
+export function foldedFromTip(tip: string, key: string): boolean {
+  const mark = archiveMark(key);
+  return tip.split('\n').some(line => line.trimEnd() === mark);
+}
+
 export function phaseOf(labels: string[]): Phase | null {
   const found = PHASES.filter(phase => labels.includes(LABEL(phase)));
   // The cycle is closed. This label wins even when the previous phase label

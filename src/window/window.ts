@@ -524,7 +524,10 @@ export function openWindow(
           outside.mergeHeldThread?.(key, {file: path, line, comments: [text]});
           return undefined;
         }
-        if (hold !== '1' && outside.speakPull) {
+        if (hold === '1') {
+          return 'комментарий не записан';
+        }
+        if (outside.speakPull) {
           try {
             await outside.speakPull(key, quotedLine(source, text));
             return undefined;

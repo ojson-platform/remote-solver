@@ -73,6 +73,24 @@ test('threads report lists open threads with their handles and filters by marker
   );
 });
 
+test('the instruction is the first comment and the body stays the latest', () => {
+  const records = [
+    {
+      id: 'T1',
+      comment: '22',
+      path: 'src/a.ts',
+      line: 4,
+      resolved: false,
+      body: '🤖 sdd:layer=spec → specifying',
+      comments: ['please quote the refusal', '🤖 sdd:layer=spec → specifying'],
+    },
+  ];
+  const [line] = threadsReport(records, []).threads;
+  assert.equal(line?.instruction, 'please quote the refusal');
+  assert.equal(line?.body, '🤖 sdd:layer=spec → specifying');
+  assert.equal(line?.marker, 'spec');
+});
+
 test('a thread fixed but not yet resolved is done: not unanswered, not a layer, not unmarked', () => {
   const records = [
     {

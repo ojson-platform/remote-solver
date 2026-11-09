@@ -109,6 +109,9 @@ export type ThreadLine = {
   file: string;
   line: number | null;
   marker: string | null;
+  /** The first comment. The skill carries this out. */
+  instruction: string;
+  /** The latest comment. The marker is read from here. */
   body: string;
 };
 
@@ -127,7 +130,15 @@ export type ReadThread = Thread & {
   comment?: string;
   path?: string;
   line?: number | null;
+  /** Comment bodies in host order. Absent when only the latest body was kept. */
+  comments?: string[];
 };
+
+/** The remark the skill carries out: the first comment, or the only body we have. */
+function instructionOf(thread: ReadThread): string {
+  const first = thread.comments?.find(body => body !== '');
+  return first ?? thread.body;
+}
 
 /** One reading of threads and the conversation. The cycle and `threads` both take it. */
 export type ReviewReading = ReviewView & {
@@ -171,6 +182,7 @@ export function readReview(
       file: thread.path ?? '',
       line: thread.line ?? null,
       marker: pinned ?? markerOf(thread.body),
+      instruction: instructionOf(thread),
       body: thread.body,
     });
   }

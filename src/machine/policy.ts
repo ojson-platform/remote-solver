@@ -183,8 +183,8 @@ function atLeast(issue: IssueRecord, phase: Phase): boolean {
   return rank >= 0 && rank >= phaseRank(phase);
 }
 
-/** After every task is checked: children short of `accepted`, then open blockers. */
-function implementingDependencyWait(issue: IssueRecord, issues: IssueRecord[]): Decision | null {
+/** Leaving a phase and finishing the cycle share this. An open task does not. */
+function linkWait(issue: IssueRecord, issues: IssueRecord[]): Decision | null {
   const kids = children(issue.key, issues).filter(kid => !atLeast(kid, 'accepted'));
   if (kids.length) {
     return {
@@ -371,40 +371,52 @@ function decideOpen(
     return {kind: 'done', issue: issue.key, reason: 'cancelled'};
   }
   const open = pulls.filter(pr => pr.state === 'OPEN');
+  const phase = record.phase;
   if (open.length > 1) {
+    const openTask =
+      phase === 'implementing' &&
+      change.tasks &&
+      change.openTasks > 0 &&
+      !open.some(pr => pr.conflict);
+    if (openTask) {
+      return agent(
+        issue.key,
+        'implement-next-task',
+        phase,
+        String(open[0].id),
+        'next open task',
+      );
+    }
     return {
       kind: 'wait',
       issue: issue.key,
       reason: severalOpenReason(open.map(pr => pr.id)),
     };
   }
-  const phase = record.phase;
   if (!phase) {
     return {kind: 'advance', issue: issue.key, to: 'proposing', reason: 'enter the cycle'};
   }
-  if (phaseRank(phase) < phaseRank('accepting') && finishedCycle(pulls, record.folded, phase)) {
-    if (phase === 'implementing' && change.tasks && change.openTasks === 0) {
-      const dependencyWait = implementingDependencyWait(issue, issues);
-      if (dependencyWait) {
-        return dependencyWait;
+  if (finishedCycle(pulls, record.folded, phase)) {
+    const held = linkWait(issue, issues);
+    if (held) {
+      const openTask =
+        phase === 'implementing' &&
+        change.tasks &&
+        change.openTasks > 0 &&
+        !open.some(pr => pr.conflict);
+      if (openTask) {
+        return agent(issue.key, 'implement-next-task', phase, '', 'next open task');
       }
+      return held;
     }
     return {kind: 'done', issue: issue.key, reason: 'finished cycle'};
   }
   if (phase === 'accepted') {
-    const acceptedOpen = open;
-    const acceptedMerged = pulls.filter(item => item.state === 'MERGED');
-    const acceptedPr = acceptedMerged[0] ?? acceptedOpen[0];
-    if (!record.folded && (change.proposal || change.delta)) {
-      return {
-        kind: 'archive',
-        issue: issue.key,
-        phase,
-        pr: acceptedPr ? String(acceptedPr.id) : '',
-        reason: 'archive the change',
-      };
+    if (!record.folded) {
+      return {kind: 'wait', issue: issue.key, reason: 'the change is not archived'};
     }
-    return mergeOrWait(issue.key, acceptedOpen[0], acceptedMerged, false);
+    const acceptedMerged = pulls.filter(item => item.state === 'MERGED');
+    return mergeOrWait(issue.key, open[0], acceptedMerged, false);
   }
   // A repair must not commit on top of the archive commit. Accepting still rolls back first; the next step of this settlement restores the change while that commit is the tip. A merged pull request stays archived.
   if (
@@ -665,14 +677,9 @@ function decideOpen(
     if (cut) {
       return agent(issue.key, 'create-tasks', phase, pr ? String(pr.id) : '', cut);
     }
-    const kids = children(issue.key, issues);
-    const behind = kids.filter(kid => !atLeast(kid, 'specified'));
-    if (behind.length) {
-      return {
-        kind: 'wait',
-        issue: issue.key,
-        reason: `wait for children to reach specified: ${behind.map(kid => '#' + kid.key).join(', ')}`,
-      };
+    const held = linkWait(issue, issues);
+    if (held) {
+      return held;
     }
     return {kind: 'advance', issue: issue.key, to: 'implementing', reason: 'tasks exist'};
   }
@@ -701,9 +708,9 @@ function decideOpen(
     if (slice) {
       return {kind: 'advance', issue: issue.key, to: 'tasking', reason: slice};
     }
-    const dependencyWait = implementingDependencyWait(issue, issues);
-    if (dependencyWait) {
-      return dependencyWait;
+    const held = linkWait(issue, issues);
+    if (held) {
+      return held;
     }
     return {kind: 'advance', issue: issue.key, to: 'verifying', reason: 'no open tasks'};
   }
@@ -725,6 +732,10 @@ function decideOpen(
     }
     if (pr.checks !== 'green') {
       return {kind: 'wait', issue: issue.key, reason: `checks are ${pr.checks}`};
+    }
+    const held = linkWait(issue, issues);
+    if (held) {
+      return held;
     }
     return {kind: 'advance', issue: issue.key, to: 'accepting', reason: 'checks are green'};
   }

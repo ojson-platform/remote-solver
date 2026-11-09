@@ -66,17 +66,17 @@ On `accepting`, a change that is not archived SHALL be archived before the merge
 
 ### Requirement: Accepted does not merge
 
-The `accepted` label SHALL NOT merge. `auto-merge` on `accepted` SHALL be ignored. A change that is still open and still has a proposal or a delta SHALL be archived first. When the pull request is merged and the change is archived, the machine SHALL set `accepted` and close the issue. The close comment SHALL say that the pull request is merged and the baseline is in trunk. An open pull request SHALL leave the issue open.
+The `accepted` label SHALL NOT merge and SHALL NOT archive. `auto-merge` on `accepted` SHALL be ignored. Archive happens on `accepting`, once. When the pull request is merged and the change is archived, the machine SHALL close the issue in place and SHALL NOT set the label again. A change that is not archived SHALL leave the issue open. An open pull request SHALL leave the issue open.
 
-#### Scenario: Accepted with an open change archives it
+#### Scenario: Accepted with an open change does not archive it
 
 - **WHEN** the phase is `accepted`, the pull request is already merged, and the change still has a proposal
-- **THEN** the machine archives the change and does not close the issue yet
+- **THEN** the machine does not archive the change and does not close the issue
 
 #### Scenario: A merged archived pull request closes the issue
 
 - **WHEN** the phase is `accepted`, the change is archived, and the pull request is merged
-- **THEN** the machine closes the issue
+- **THEN** the machine closes the issue in place
 
 #### Scenario: Accepted waits while the pull request is open
 

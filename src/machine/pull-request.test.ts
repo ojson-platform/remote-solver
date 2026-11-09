@@ -8,7 +8,7 @@ import {publish} from '../sdd.ts';
 import {change, issue, pull} from './harness.ts';
 
 spec('pull-request', () => {
-  requirement('Several open pull requests stop the cycle before any step', () => {
+  requirement('Several open pull requests hold the phase line', () => {
     scenario('Two open pull requests stop proposing', () => {
       const decision = decide(
         issue(1, ['sdd:proposing']),
@@ -37,6 +37,18 @@ spec('pull-request', () => {
       const settled = settle(issue(1, ['sdd:cycle']), [], [pull(3), pull(4)], change());
       assert.deepEqual(settled.transitions, []);
       assert.equal(settled.labels.includes('sdd:proposing'), false);
+    });
+    scenario('An open task still runs while two pull requests are open', () => {
+      const decision = decide(
+        issue(1, ['sdd:implementing']),
+        [],
+        [pull(3), pull(4)],
+        change({tasks: true, openTasks: 1}),
+      );
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'implement-next-task');
+      }
     });
   });
 

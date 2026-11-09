@@ -23,12 +23,12 @@ On `proposing`, `specifying`, `designing`, and `tasking`, an archived change who
 
 ### Requirement: Accepting closes a merged archived cycle
 
-When the phase is `accepting` or `accepted`, the pull request is merged, and the change is archived, the machine SHALL set `accepted` and close the issue. The close comment SHALL say that the pull request is merged and the baseline is in trunk. The machine SHALL NOT restore the change and SHALL NOT start another step. The issue SHALL be absent from the open list. A later reading of the open list SHALL NOT show the card.
+When the phase is `accepting` or `accepted`, the pull request is merged, and the change is archived, the machine SHALL close the issue in place. It SHALL NOT set `accepted` on the way and SHALL NOT archive again. The machine SHALL NOT restore the change and SHALL NOT start another step. The issue SHALL be absent from the open list. A later reading of the open list SHALL NOT show the card.
 
 #### Scenario: Accepting closes
 
 - **WHEN** the phase is `accepting`, the pull request is merged, and the change is archived
-- **THEN** the machine sets `accepted`, closes the issue, does not restore the change, does not start a step, and a later reading of the open list has no card
+- **THEN** the machine closes the issue without setting `accepted`, does not restore the change, does not start a step, and a later reading of the open list has no card
 
 #### Scenario: Accepted closes
 

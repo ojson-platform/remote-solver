@@ -114,14 +114,15 @@ spec('merge', () => {
   });
 
   requirement('Accepted does not merge', () => {
-    scenario('Accepted with an open change archives it', () => {
+    scenario('Accepted with an open change does not archive it', () => {
       const decision = decide(
         issue(1, ['sdd:accepted']),
         [],
         [pull(9, {state: 'MERGED'})],
         change({proposal: true}),
       );
-      assert.equal(action(decision), 'archive');
+      assert.equal(decision.kind, 'wait');
+      assert.notEqual(action(decision), 'archive');
     });
     scenario('A merged archived pull request closes the issue', async () => {
       const {tracker, review} = memoryPorts({
@@ -141,6 +142,7 @@ spec('merge', () => {
         review,
         files,
         queues: [{name: 'Sandcastle'}],
+        change: change({archived: true}),
       });
       assert.equal(decision.kind, 'done');
       assert.equal((await tracker.issue('5')).state, 'CLOSED');

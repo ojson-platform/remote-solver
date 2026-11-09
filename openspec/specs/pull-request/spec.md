@@ -6,9 +6,9 @@ A cycle has one open pull request. The title links the pull request to the issue
 
 ## Requirements
 
-### Requirement: Several open pull requests stop the cycle before any step
+### Requirement: Several open pull requests hold the phase line
 
-When more than one open pull request belongs to the issue, the machine SHALL wait and name them, and SHALL NOT enter a phase, close a gate, archive, run a skill, or follow a marker, until one open pull request remains.
+When more than one open pull request belongs to the issue, the machine SHALL wait and name them, and SHALL NOT enter a phase, leave a phase, close a gate, archive, or finish, until one open pull request remains. An open task on `implementing` SHALL still run.
 
 #### Scenario: Two open pull requests stop proposing
 
@@ -24,6 +24,11 @@ When more than one open pull request belongs to the issue, the machine SHALL wai
 
 - **WHEN** an issue has no phase and two open pull requests belong to it
 - **THEN** the machine does not set `proposing`
+
+#### Scenario: An open task still runs while two pull requests are open
+
+- **WHEN** `implementing` has an open task and two open pull requests belong to the issue
+- **THEN** the machine runs that task and names neither pull request as a wait
 
 ### Requirement: None creates a pull request, one is reused
 

@@ -221,6 +221,7 @@ test('resolveIssue closes an accepted issue once the pull request is merged', as
     review: green.review,
     files,
     queues: [{name: 'Sandcastle'}],
+    change: change({archived: true}),
   });
   assert.deepEqual(held, {kind: 'wait', issue: '424242', reason: 'wait for merge of PR #9'});
   assert.equal(
@@ -245,6 +246,7 @@ test('resolveIssue closes an accepted issue once the pull request is merged', as
     review: merged.review,
     files,
     queues: [{name: 'Sandcastle'}],
+    change: change({archived: true}),
   });
   assert.equal(decision.kind, 'done');
   assert.equal(merged.calls.filter(call => call.startsWith('close:')).length, 1);
@@ -277,10 +279,10 @@ test('performIssue merges a green archived pull request and settles the close', 
   });
   assert.equal(decision.kind, 'done');
   if (decision.kind === 'done') {
-    assert.equal(decision.reason, 'pull request merged');
+    assert.equal(decision.reason, 'finished cycle');
   }
   assert.equal(calls.filter(call => call === 'merge:9').length, 1);
-  assert.ok((await tracker.labels('3')).includes('sdd:accepted'));
+  assert.equal((await tracker.labels('3')).includes('sdd:accepted'), false);
   assert.equal((await tracker.issue('3')).state, 'CLOSED');
 });
 
@@ -518,7 +520,7 @@ spec('finished-cycle', () => {
         queues: [{name: 'Sandcastle'}],
       });
       assert.equal(decision.kind, 'done');
-      assert.ok((await tracker.labels('3')).includes('sdd:accepted'));
+      assert.equal((await tracker.labels('3')).includes('sdd:accepted'), false);
       assert.equal((await tracker.issue('3')).state, 'CLOSED');
       assert.ok(!calls.some(call => call.startsWith('unarchive')));
       assert.ok(!(await tracker.listOpen()).some(issue => issue.key === '3'));

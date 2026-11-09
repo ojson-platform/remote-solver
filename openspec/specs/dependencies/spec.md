@@ -6,29 +6,34 @@ A parent cycle waits for its child cycles and for the open issues it depends on.
 
 ## Requirements
 
-### Requirement: Tasking waits until every child is specified
+### Requirement: Tasking waits until every child is accepted
 
-A child is an open cycle issue this issue is the parent of, by the host parent link. Once `tasking` has a tasks file and an open pull request, the machine SHALL wait until every child is at least `specified`. A child with no phase, or a cancelled child, SHALL NOT count as specified. A cancelled child SHALL still hold that wait, and the machine SHALL still name that child. When every child is at least `specified`, the machine SHALL move the issue to `implementing`.
+A child is an open cycle issue this issue is the parent of, by the host parent link. Once `tasking` has a tasks file and an open pull request, the machine SHALL wait until every child is `accepted` and every blocker has left the open list. A child that is only `specified`, a child with no phase, or a cancelled child SHALL hold that wait, and the machine SHALL name that child. When every child is `accepted` and no blocker is open, the machine SHALL move the issue to `implementing`.
 
 #### Scenario: A child still on specifying holds tasking
 
 - **WHEN** the phase is `tasking`, the tasks are published, and a child cycle is `specifying`
 - **THEN** the machine waits and names that child
 
-#### Scenario: A specified child lets tasking move on
+#### Scenario: A specified child does not let tasking move on
 
-- **WHEN** the phase is `tasking`, the tasks are published, and every child cycle is at least `specified`
+- **WHEN** the phase is `tasking`, the tasks are published, and a child cycle is only `specified`
+- **THEN** the machine waits and names that child
+
+#### Scenario: An accepted child lets tasking move on
+
+- **WHEN** the phase is `tasking`, the tasks are published, and every child cycle is `accepted`
 - **THEN** the machine moves the issue to `implementing`
 
-#### Scenario: A cancelled child does not count as specified
+#### Scenario: A cancelled child does not count as accepted
 
 - **WHEN** the phase is `tasking`, the tasks are published, and a child cycle is `cancelled`
 - **THEN** the machine waits and names that child
 
-#### Scenario: Tasking still waits until every child is at least specified, then moves to implementing
+#### Scenario: Tasking still waits until every child is accepted, then moves to implementing
 
-- **WHEN** tasking already waits until every child is at least specified, together with every child at least specified as the limit that replaces that wait and moves the issue to implementing
-- **THEN** tasking still waits until every child is at least specified, then moves to implementing
+- **WHEN** tasking already waits until every child is accepted, together with moving to implementing while a child is only specified as the limit that can replace that wait
+- **THEN** tasking still waits until every child is accepted, then moves to implementing
 
 #### Scenario: A cancelled child still holds that wait, and the machine still names that child
 
@@ -44,7 +49,7 @@ A child is an open cycle issue this issue is the parent of, by the host parent l
 
 While a task is open, the machine SHALL run that task before it looks at links and SHALL NOT wait on a link, unless the open pull request conflicts with its base. A conflict SHALL be rebased first. When no task is open and the pull request does not conflict, it SHALL wait until every child is `accepted`, then wait while a blocker is open. A closed issue SHALL NOT hold that wait and SHALL NOT hold the parent. After those waits the machine SHALL move to `verifying`.
 
-A finished parent is the finished-cycle exception to that move. The parent is finished when its pull request is merged and its change is archived. While a child is short of `accepted` and an open blocker remains, the machine SHALL wait and SHALL NOT move to `verifying`. Tasks that are all checked SHALL NOT replace that wait.
+A finished parent is the finished-cycle exception to that move. The parent is finished when its pull request is merged and its change is archived. While a child is short of `accepted` or an open blocker remains, the machine SHALL wait and SHALL NOT close. An open task SHALL still run. Tasks that are all checked SHALL NOT replace that wait.
 
 #### Scenario: An open task runs before the children are checked
 
@@ -85,6 +90,20 @@ A finished parent is the finished-cycle exception to that move. The parent is fi
 
 - **WHEN** a closed issue already does not hold that wait, together with an open blocker as the limit that can replace that closed issue
 - **THEN** a closed issue does not hold that wait
+
+### Requirement: Verifying waits for the same links before it leaves
+
+Green checks SHALL NOT move `verifying` to `accepting` while a child is short of `accepted` or a blocker is still open. The machine SHALL name that issue. When every child is `accepted` and no blocker is open, green checks SHALL move the issue to `accepting`.
+
+#### Scenario: A child that is not accepted holds verifying
+
+- **WHEN** `verifying` has green checks and a child cycle is not `accepted`
+- **THEN** the machine waits and names that child
+
+#### Scenario: Accepted children let verifying move on
+
+- **WHEN** `verifying` has green checks and every child cycle is `accepted`
+- **THEN** the machine moves the issue to `accepting`
 
 ### Requirement: A rollback does not move a linked issue
 
@@ -141,11 +160,3 @@ The machine SHALL write those links when the flow creates a child cycle or a dep
 - **WHEN** one issue is already on two of these links and already counts once for the wait, together with counting that issue twice as the limit that can replace that
 - **THEN** one issue on two of these links counts once for the wait
 
-### Requirement: No other phase move waits on a link
-
-No phase move other than the tasking wait and the implementing wait SHALL wait on a link.
-
-#### Scenario: No other phase move waits on a link
-
-- **WHEN** no other phase move already waits on a link, together with verifying waiting on a link as the limit that can replace that
-- **THEN** no other phase move waits on a link

@@ -9,7 +9,7 @@ import {reviewOf} from './review.ts';
 import {action, change, issue, pull, ready} from './harness.ts';
 
 spec('dependencies', () => {
-  requirement('Tasking waits until every child is specified', () => {
+  requirement('Tasking waits until every child is accepted', () => {
     scenario('A child still on specifying holds tasking', () => {
       const parent = issue(1, ['sdd:tasking']);
       const child = issue(2, ['sdd:cycle', 'sdd:specifying'], {parent: '1'});
@@ -19,9 +19,18 @@ spec('dependencies', () => {
         assert.match(decision.reason, /#2/);
       }
     });
-    scenario('A specified child lets tasking move on', () => {
+    scenario('A specified child does not let tasking move on', () => {
       const parent = issue(1, ['sdd:tasking']);
       const child = issue(2, ['sdd:cycle', 'sdd:specified'], {parent: '1'});
+      const decision = decide(parent, [parent, child], [pull(9)], ready);
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.match(decision.reason, /#2/);
+      }
+    });
+    scenario('An accepted child lets tasking move on', () => {
+      const parent = issue(1, ['sdd:tasking']);
+      const child = issue(2, ['sdd:cycle', 'sdd:accepted'], {parent: '1'});
       const decision = decide(parent, [parent, child], [pull(9)], ready);
       assert.deepEqual(decision, {
         kind: 'advance',
@@ -30,7 +39,7 @@ spec('dependencies', () => {
         reason: 'tasks exist',
       });
     });
-    scenario('A cancelled child does not count as specified', () => {
+    scenario('A cancelled child does not count as accepted', () => {
       const parent = issue(1, ['sdd:tasking']);
       const child = issue(2, ['sdd:cycle', 'sdd:cancelled', 'sdd:tasking'], {parent: '1'});
       const decision = decide(parent, [parent, child], [pull(9)], ready);
@@ -39,12 +48,12 @@ spec('dependencies', () => {
         assert.match(decision.reason, /#2/);
       }
     });
-    scenario('Tasking still waits until every child is at least specified, then moves to implementing', () => {
+    scenario('Tasking still waits until every child is accepted, then moves to implementing', () => {
       const parent = issue(1, ['sdd:tasking']);
-      const slow = issue(2, ['sdd:cycle', 'sdd:specifying'], {parent: '1'});
+      const slow = issue(2, ['sdd:cycle', 'sdd:specified'], {parent: '1'});
       const waiting = decide(parent, [parent, slow], [pull(9)], ready);
       assert.equal(waiting.kind, 'wait');
-      const fast = issue(2, ['sdd:cycle', 'sdd:specified'], {parent: '1'});
+      const fast = issue(2, ['sdd:cycle', 'sdd:accepted'], {parent: '1'});
       assert.deepEqual(decide(parent, [parent, fast], [pull(9)], ready), {
         kind: 'advance',
         issue: '1',
@@ -169,12 +178,20 @@ spec('dependencies', () => {
     });
   });
 
-  requirement('No other phase move waits on a link', () => {
-    scenario('No other phase move waits on a link', () => {
-      const parent = issue(1, ['sdd:verifying'], {dependsOn: ['8'], blockedBy: ['8']});
+  requirement('Verifying waits for the same links before it leaves', () => {
+    scenario('A child that is not accepted holds verifying', () => {
+      const parent = issue(1, ['sdd:verifying']);
       const child = issue(2, ['sdd:cycle', 'sdd:specifying'], {parent: '1'});
-      const blocker = issue(8, ['sdd:cycle', 'sdd:implementing']);
-      const decision = decide(parent, [parent, child, blocker], [pull(9, {checks: 'green'})], ready);
+      const decision = decide(parent, [parent, child], [pull(9, {checks: 'green'})], ready);
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.match(decision.reason, /#2/);
+      }
+    });
+    scenario('Accepted children let verifying move on', () => {
+      const parent = issue(1, ['sdd:verifying']);
+      const child = issue(2, ['sdd:cycle', 'sdd:accepted'], {parent: '1'});
+      const decision = decide(parent, [parent, child], [pull(9, {checks: 'green'})], ready);
       assert.deepEqual(decision, {
         kind: 'advance',
         issue: '1',

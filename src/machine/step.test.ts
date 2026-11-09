@@ -173,10 +173,10 @@ spec('step', () => {
       );
       assert.equal(printed.kind, 'done');
       if (printed.kind === 'done') {
-        assert.equal(printed.reason, 'pull request merged');
+        assert.equal(printed.reason, 'finished cycle');
       }
-      assert.ok((await labels('3')).includes('sdd:accepted'));
-      assert.equal((await labels('3')).includes('sdd:accepting'), false);
+      assert.equal((await labels('3')).includes('sdd:accepted'), false);
+      assert.equal((await labels('3')).includes('sdd:accepting'), true);
       assert.equal(calls.filter(call => call === 'merge:9').length, 1);
       assert.ok(calls.some(call => call.startsWith('close:')));
     });

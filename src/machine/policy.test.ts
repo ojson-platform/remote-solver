@@ -429,7 +429,7 @@ test('a green pull request with a marker rolls back', () => {
   });
 });
 
-test('several open pull requests stop the cycle before any step', () => {
+test('several open pull requests hold the phase line', () => {
   const decision = decide(
     issue(1, ['sdd:proposing']),
     [],
@@ -474,7 +474,10 @@ test('accepted archives a change that is still open, then closes only a merged p
     [pull(9, {state: 'MERGED'})],
     change({proposal: true}),
   );
-  assert.equal(archive.kind, 'archive');
+  assert.equal(archive.kind, 'wait');
+  if (archive.kind === 'wait') {
+    assert.match(archive.reason, /not archived/);
+  }
   const open = decide(issue(1, ['sdd:accepted']), [], [pull(9)], change({archived: true}));
   assert.deepEqual(open, {
     kind: 'wait',
@@ -493,12 +496,7 @@ test('accepted archives a change that is still open, then closes only a merged p
     [pull(9, {state: 'MERGED'})],
     change({archived: true}),
   );
-  assert.deepEqual(close, {
-    kind: 'advance',
-    issue: '1',
-    to: 'accepted',
-    reason: 'pull request merged',
-  });
+  assert.deepEqual(close, {kind: 'done', issue: '1', reason: 'finished cycle'});
 });
 
 test('a green archived pull request waits for a person to merge, and sdd:auto-merge merges', () => {
@@ -521,10 +519,9 @@ test('a green archived pull request waits for a person to merge, and sdd:auto-me
     reason: 'wait for merge of PR #9',
   });
   assert.deepEqual(decide(issue(1, ['sdd:accepting']), [], [pull(9, {state: 'MERGED'})], ready), {
-    kind: 'advance',
+    kind: 'done',
     issue: '1',
-    to: 'accepted',
-    reason: 'pull request merged',
+    reason: 'finished cycle',
   });
   const pending = decide(
     issue(1, ['sdd:accepting', 'sdd:auto-merge']),
@@ -636,11 +633,8 @@ test('settle walks mechanical advances on labels and stops to close an accepted 
     [pull(9, {state: 'MERGED'})],
     change({archived: true}),
   );
-  assert.deepEqual(
-    closing.transitions.map(transition => transition.to),
-    ['accepted'],
-  );
-  assert.deepEqual(closing.decision, {kind: 'done', issue: '1', reason: 'pull request merged'});
+  assert.deepEqual(closing.transitions, []);
+  assert.deepEqual(closing.decision, {kind: 'done', issue: '1', reason: 'finished cycle'});
 });
 
 const mergedPull = pull(25, {state: 'MERGED'});

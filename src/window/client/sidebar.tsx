@@ -203,6 +203,7 @@ function Remark({
   return (
     <ActForm act="answer" className="note">
       <Hidden name="key" value={keyName} />
+      <Hidden name="hold" value="1" />
       <Hidden name="layer" value={layer} />
       <label className="draft">
         Комментарий
@@ -249,6 +250,7 @@ function LineNote({
   return (
     <ActForm act="answer" className="line-note">
       <Hidden name="key" value={keyName} />
+      <Hidden name="hold" value="1" />
       <Hidden name="line" value={line} />
       <Hidden name="question" value={question} />
       {anchor}

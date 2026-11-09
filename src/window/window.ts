@@ -447,6 +447,7 @@ export function openWindow(
       at = '',
       side = '',
       layer = '',
+      hold = '',
     ): Promise<string | undefined> {
       const text = reply.trim();
       const asked = question.trim();
@@ -523,7 +524,7 @@ export function openWindow(
           outside.mergeHeldThread?.(key, {file: path, line, comments: [text]});
           return undefined;
         }
-        if (outside.speakPull) {
+        if (hold !== '1' && outside.speakPull) {
           try {
             await outside.speakPull(key, quotedLine(source, text));
             return undefined;

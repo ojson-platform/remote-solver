@@ -50,6 +50,7 @@ type Surface = {
     at?: string,
     side?: string,
     layer?: string,
+    hold?: string,
   ) => string | undefined | Promise<string | undefined>;
   acceptReview: (key: string) => string | undefined;
   shelf: () => {name: string; outcome: RoleOutcome}[];
@@ -442,6 +443,7 @@ async function apply(
         params.get('at') ?? '',
         params.get('side') ?? '',
         layer ?? '',
+        params.get('hold') ?? '',
       );
       if (mine !== epoch.n) {
         return 'stale';

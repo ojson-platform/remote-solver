@@ -539,6 +539,7 @@ test('The draft remains only when that thread is not on the pull request', async
 test('The draft remains only when the thread is not on the pull request', async () => {
   const draft = 'линия';
   let heldReview: WindowReview | undefined;
+  let speakCalls = 0;
   await hosted(
     {
       login: () => MANAGER,
@@ -549,6 +550,10 @@ test('The draft remains only when the thread is not on the pull request', async 
       },
       threadPull: async () => {
         throw new Error('refused');
+      },
+      speakPull: async () => {
+        speakCalls += 1;
+        throw new Error('speak');
       },
     },
     async (page, window, paths) => {
@@ -564,6 +569,7 @@ test('The draft remains only when the thread is not on the pull request', async 
       const failedLine = await post(page.url, 'act', params.toString());
       assert.equal(failedLine.status, 200);
       assert.equal((JSON.parse(failedLine.body) as WindowSnapshot).status, 'комментарий не записан');
+      assert.equal(speakCalls, 0);
     },
   );
 });

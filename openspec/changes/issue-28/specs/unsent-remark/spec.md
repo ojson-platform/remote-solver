@@ -2,7 +2,7 @@
 
 ## Purpose
 
-A new remark stays in the window until send. The send control posts each as its own review thread, «Принять» stays on the phase row, and the draft disappears when the thread is already on the pull request. A refused send from «Записать» returns «комментарий не записан» and does not post a conversation comment. A refused open that is not that send still speaks a quote of the line.
+A new remark stays in the window until send. The send control posts each as its own review thread, «Принять» stays on the phase row, and the draft disappears when the thread is already on the pull request. A refused send from «Записать» returns «комментарий не записан» and does not post a conversation comment.
 
 ## ADDED Requirements
 
@@ -78,17 +78,12 @@ The draft SHALL remain only when that thread is not on the pull request. A faile
 
 ### Requirement: A refused send from «Записать» returns «комментарий не записан» and does not post a conversation comment
 
-A refused open of a thread on a send from the «Записать» field SHALL return «комментарий не записан» and SHALL NOT post a conversation comment. A refused open that is not a send from the «Записать» field SHALL still speak a quote of the line.
+A refused open of a thread on a send from the «Записать» field SHALL return «комментарий не записан» and SHALL NOT post a conversation comment.
 
 #### Scenario: A refused send from «Записать» returns «комментарий не записан» and does not post a conversation comment
 
-- **WHEN** a refused open of a thread, a send from the «Записать» field, and «комментарий не записан» are already visible, together with a refused open that is not a send from the «Записать» field and still speaks a quote of the line as the limit that can replace this return
+- **WHEN** a refused open of a thread, a send from the «Записать» field, and «комментарий не записан» are already visible, together with a conversation comment posted for that send as the limit that can replace this return
 - **THEN** a refused send from «Записать» returns «комментарий не записан» and does not post a conversation comment
-
-#### Scenario: A refused open that is not a send from «Записать» still speaks a quote of the line
-
-- **WHEN** a refused open of a thread that is not a send from the «Записать» field, and a quote of the line, are already visible, together with a refused send from «Записать» that returns «комментарий не записан» and does not post a conversation comment as the limit that can replace this speech
-- **THEN** a refused open that is not a send from «Записать» still speaks a quote of the line
 
 ### Requirement: A retry does not post a second thread with the same text on the same line
 

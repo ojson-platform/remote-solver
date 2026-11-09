@@ -61,6 +61,7 @@ function lineAnswerParams(shot: WindowSnapshot, lineText: string, reply: string)
   return new URLSearchParams({
     act: 'answer',
     key: '1',
+    hold: '1',
     reply,
     line: lineText,
     path: a.path,
@@ -145,6 +146,7 @@ test('The send control on the remark field posts every unsent remark as its own 
     [
       ['act', 'answer'],
       ['at', '1'],
+      ['hold', '1'],
       ['key', '9'],
       ['line', '- line A'],
       ['path', 'a.md'],
@@ -158,6 +160,7 @@ test('The send control on the remark field posts every unsent remark as its own 
     [
       ['act', 'answer'],
       ['at', '2'],
+      ['hold', '1'],
       ['key', '9'],
       ['line', '- line B'],
       ['path', 'b.md'],
@@ -168,12 +171,14 @@ test('The send control on the remark field posts every unsent remark as its own 
   );
   assert.deepEqual([...posts[2]!.entries()].sort((a, b) => a[0].localeCompare(b[0])), [
     ['act', 'answer'],
+    ['hold', '1'],
     ['key', '9'],
     ['layer', 'Plan'],
     ['reply', 'plan note'],
   ]);
   assert.deepEqual([...posts[3]!.entries()].sort((a, b) => a[0].localeCompare(b[0])), [
     ['act', 'answer'],
+    ['hold', '1'],
     ['key', '9'],
     ['layer', 'Design'],
     ['reply', 'design note'],

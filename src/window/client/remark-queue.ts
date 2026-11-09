@@ -20,6 +20,7 @@ export function buildAnswerPostsFromState(
     const body = new URLSearchParams();
     body.set('act', 'answer');
     body.set('key', key);
+    body.set('hold', '1');
     body.set('reply', draft.text.trim());
     body.set('line', draft.line);
     body.set('question', draft.question);
@@ -42,6 +43,7 @@ export function buildAnswerPostsFromState(
     const body = new URLSearchParams();
     body.set('act', 'answer');
     body.set('key', key);
+    body.set('hold', '1');
     body.set('reply', text);
     body.set('layer', layer);
     out.push(body);

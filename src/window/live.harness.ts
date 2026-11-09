@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import {mkdirSync, mkdtempSync, writeFileSync} from 'node:fs';
-import path from 'node:path';
+import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
+import path from 'node:path';
 
 import {machine} from '../adapters/compose.ts';
 import {memoryPorts} from '../adapters/github.ts';
@@ -150,7 +150,8 @@ export async function laterTurn(): Promise<{lines: string[]; runs: number}> {
       return {text: ''};
     },
   };
-  const box = machine(tmpdir(), {
+  const root = mkdtempSync(path.join(tmpdir(), 'later-turn-'));
+  const box = machine(root, {
     config: {
       queues: [{name: 'remote-solver'}],
       base: 'master',
@@ -201,6 +202,7 @@ export async function laterTurn(): Promise<{lines: string[]; runs: number}> {
   ]);
   controller.abort();
   await done;
+  rmSync(root, {recursive: true, force: true});
   assert.equal(outcome, 'gone', lines.join('\n'));
   return {lines, runs};
 }

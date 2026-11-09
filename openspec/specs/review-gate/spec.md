@@ -54,27 +54,28 @@ On GitHub the ask SHALL be: review the artifact, replace `sdd:<phase>` with the 
 
 ### Requirement: A person closes the gate on the issue
 
-A person MAY leave the writing label on and add `proposed`, `specified`, or `designed`. On a ready artifact the machine SHALL move to the next phase, clear `wait-human`, and comment `sdd:accept <from> → <to>`. On a missing artifact or an open item the machine SHALL move the issue back to the writing phase and comment once what is left. The next poll SHALL NOT repeat that comment. When the item is then closed, the machine SHALL post the review ask.
+A person MAY leave the writing label on and add `proposed`, `specified`, or `designed`. On a ready artifact the machine SHALL move to the next phase, clear `wait-human`, drop the gate label, and comment `sdd:accept <from> → <to>`. On a missing artifact or an open item the machine SHALL drop the gate label and SHALL keep or restore the writing phase. It SHALL NOT comment that the phase moved. The next poll continues that writing phase. When the item is then closed, the machine SHALL post the review ask.
 
 #### Scenario: Proposed on a ready proposal moves to specifying
 
 - **WHEN** a person adds `proposed` beside `proposing` and the proposal has nothing open
 - **THEN** the phase becomes `specifying`, `wait-human` is cleared, and the issue comment is `sdd:accept proposing → specifying`
 
-#### Scenario: Specified over a missing delta goes back once
+#### Scenario: Specified over a missing delta drops the gate
 
 - **WHEN** a person sets `specified`, the proposal names a capability, and the change has no delta
-- **THEN** the machine moves the issue back to `specifying` and comments once which file is missing
+- **THEN** the machine drops `specified`, the phase is `specifying`, and it asks to write the delta
+- **AND** the issue has no comment that the phase moved
 
 #### Scenario: Specified with no named capability moves on
 
 - **WHEN** a person sets `specified` and the proposal names no capability
 - **THEN** the phase becomes `designing` and the issue comment is `sdd:accept specifying → designing`
 
-#### Scenario: Designed over an open decision goes back, then asks
+#### Scenario: Designed over an open decision stays, then asks
 
 - **WHEN** a person sets `designed` and the design has an open decision
-- **THEN** the machine moves the issue back to `designing` and comments the open heading once
+- **THEN** the machine drops `designed`, the phase is `designing`, and it waits on the open decision without a comment
 - **AND** after that decision is closed, the machine posts the design ask
 
 ### Requirement: Accept closes only a writing phase

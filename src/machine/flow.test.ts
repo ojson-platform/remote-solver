@@ -143,17 +143,18 @@ test('a person who moves the gate label on the issue gets a record, or the chang
   };
   const held = await resolveIssue('5', options);
   assert.equal(held.kind, 'wait');
+  if (held.kind === 'wait') {
+    assert.match(held.reason, /open question/);
+  }
   assert.deepEqual(await open.tracker.labels('5'), ['Sandcastle', 'sdd:cycle', 'sdd:proposing']);
   const notes = () => open.calls.filter(call => call.startsWith('body:'));
-  assert.equal(notes().length, 1);
-  assert.match(notes()[0], /back to proposing/);
-  assert.match(notes()[0], /## Open questions in openspec\/changes\/issue-5\/proposal\.md/);
+  assert.equal(notes().length, 0);
 
   await resolveIssue('5', options);
-  assert.equal(notes().length, 1);
+  assert.equal(notes().length, 0);
   await resolveIssue('5', {...options, change: {...base, proposal: true}});
-  assert.equal(notes().length, 2);
-  assert.match(notes()[1], /Review the proposal/);
+  assert.equal(notes().length, 1);
+  assert.match(notes()[0], /Review the proposal/);
 });
 
 test('resolveCycle leaves an issue a worker already runs', async () => {

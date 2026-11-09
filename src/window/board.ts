@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import {HEADINGS, type BranchFacts} from '../machine/change.ts';
 import {isFocusRecord} from '../machine/marker.ts';
-import {GATE_CLOSES, GATE_PHASES, phaseOf, phaseRank, type Phase} from '../machine/phase.ts';
+import {GATE_CLOSES, GATE_PHASES, phaseOf, phaseRank, reachedRank, type Phase} from '../machine/phase.ts';
 
 import {changeFiles, changeRel, listedSpecs} from './change-files.ts';
 import {focusLayers, liveFocus} from './focus.ts';
@@ -156,8 +156,7 @@ function childWaits(parent: string, reading: readonly WindowTicket[]): string[] 
     if (issue.parent !== parent || !issue.labels.includes('sdd:cycle')) {
       continue;
     }
-    const current = phaseOf([...issue.labels]);
-    if (current && current !== 'cancelled' && phaseRank(current) >= phaseRank('specified')) {
+    if (reachedRank(issue.labels) >= phaseRank('specified')) {
       continue;
     }
     keys.push(issue.key);
@@ -273,6 +272,12 @@ export function reasonParts(
   }
   if (isGate(phase)) {
     parts.push(phase);
+  } else if (item.labels.includes('sdd:designed')) {
+    parts.push('designed');
+  } else if (item.labels.includes('sdd:specified')) {
+    parts.push('specified');
+  } else if (item.labels.includes('sdd:proposed')) {
+    parts.push('proposed');
   }
   if (item.labels.includes('sdd:wait-human')) {
     parts.push('Ask');

@@ -203,35 +203,35 @@ for (const gate of gates) {
   });
 }
 
-test('a gate phase over a missing artifact goes back and names the file', () => {
+test('a gate label over a missing artifact drops and asks for the file', () => {
   const decision = decide(
     issue(1, ['sdd:specified']),
     [],
     [pull(9)],
     change({proposal: true, capabilities: ['section-text']}),
   );
-  assert.equal(decision.kind, 'advance');
-  if (decision.kind === 'advance') {
-    assert.equal(decision.to, 'specifying');
-    assert.match(decision.comment ?? '', /Missing openspec\/changes\/issue-1\/specs/);
+  assert.equal(decision.kind, 'agent');
+  if (decision.kind === 'agent') {
+    assert.equal(decision.action, 'create-initial-specs');
+    assert.equal(decision.phase, 'specifying');
   }
+  assert.deepEqual(decision.drop, ['sdd:specified']);
+  assert.equal(decision.stay, 'specifying');
 });
 
-test('a gate phase over open items goes back, waits without an ask, and asks once they are closed', () => {
+test('a gate label over open items drops, waits without an ask, and asks once they are closed', () => {
   const open = change({proposal: true, delta: true, design: true, openDecisions: 1});
   const reverted = settle(issue(1, ['sdd:cycle', 'sdd:designed']), [], [pull(9)], open);
   assert.deepEqual(
     reverted.transitions.map(transition => transition.to),
-    ['designing'],
-  );
-  assert.match(
-    reverted.transitions[0].comment ?? '',
-    /open items under ## Open decisions in openspec\/changes\/issue-1\/design\.md/,
+    [],
   );
   assert.ok(reverted.labels.includes('sdd:designing'));
+  assert.equal(reverted.labels.includes('sdd:designed'), false);
   assert.equal(reverted.decision.kind, 'wait');
   if (reverted.decision.kind === 'wait') {
     assert.equal(reverted.decision.gate, undefined);
+    assert.match(reverted.decision.reason, /open decision/);
   }
 
   const closed = settle(issue(1, reverted.labels), [], [pull(9)], ready);
@@ -694,16 +694,19 @@ test('An open pull request on tasking is restored', () => {
   });
 });
 
-test('A proposed gate restores after it moves', () => {
+test('A proposed gate restores before it moves', () => {
   const record = issue(9, ['sdd:proposed', 'sdd:proposing']);
   const walked = settle(record, [], [openPull], archivedOpen);
-  assert.ok(walked.transitions.length > 0);
-  assert.notEqual(walked.transitions[0]?.to, 'proposing');
+  assert.deepEqual(walked.transitions, []);
   assert.equal(walked.decision.kind, 'agent');
   if (walked.decision.kind === 'agent') {
     assert.equal(walked.decision.action, 'unarchive');
   }
-  assert.notEqual(walked.decision.reason, 'finished cycle');
+  const moved = decide(record, [], [openPull], {...archivedOpen, archived: false});
+  assert.equal(moved.kind, 'advance');
+  if (moved.kind === 'advance') {
+    assert.equal(moved.to, 'specifying');
+  }
 });
 
 test('Checked tasks and an open pull request stay', () => {
@@ -799,13 +802,18 @@ spec('finished-cycle', () => {
       }
       assert.notEqual(decision.kind, 'done');
     });
-    scenario('A proposed gate restores after it moves', () => {
+    scenario('A proposed gate restores before it moves', () => {
       const record = issue(9, ['sdd:proposed', 'sdd:proposing']);
       const walked = settle(record, [], [openPull], archivedOpen);
-      assert.ok(walked.transitions.length > 0);
+      assert.deepEqual(walked.transitions, []);
       assert.equal(walked.decision.kind, 'agent');
       if (walked.decision.kind === 'agent') {
         assert.equal(walked.decision.action, 'unarchive');
+      }
+      const moved = decide(record, [], [openPull], {...archivedOpen, archived: false});
+      assert.equal(moved.kind, 'advance');
+      if (moved.kind === 'advance') {
+        assert.equal(moved.to, 'specifying');
       }
     });
   });

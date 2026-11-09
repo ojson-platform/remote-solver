@@ -33,14 +33,19 @@ When `accepted` is on the issue, the phase SHALL be `accepted`, even when an ear
 - **WHEN** an issue carries `accepting` and `accepted`
 - **THEN** the phase is `accepted`
 
-### Requirement: A gate label wins only over the phase it closes
+### Requirement: A gate label is consent, not a phase
 
-`proposed` closes `proposing`, `specified` closes `specifying`, and `designed` closes `designing`. When both are on, the gate SHALL be the phase. Any other pair SHALL keep the earliest label in phase order.
+`proposed` closes `proposing`, `specified` closes `specifying`, and `designed` closes `designing`. The gate SHALL NOT replace the writing phase. A lone gate label SHALL still name that writing phase for the decision. Any other pair SHALL keep the earliest label in phase order.
 
-#### Scenario: The gate wins over the phase it closes
+#### Scenario: The writing phase stays when the gate label is also on
 
 - **WHEN** an issue carries `proposing` and `proposed`
-- **THEN** the phase is `proposed`
+- **THEN** the phase is `proposing`
+
+#### Scenario: A lone gate label is the writing phase it closes
+
+- **WHEN** an issue carries only `proposed`
+- **THEN** the phase is `proposing`
 
 #### Scenario: Otherwise the earliest label wins
 
@@ -63,7 +68,7 @@ Before a decision, the labels, the hold, and the tip's `Sdd-Archive` line SHALL 
 #### Scenario: A gate label and the phase it closes are one phase before the decision
 
 - **WHEN** the record is built from `proposing` and `proposed`, and the issue passed to the decision carries only `proposing`
-- **THEN** the decision follows `proposed`
+- **THEN** the decision moves to `specifying`
 
 #### Scenario: An archive directory without the tip line is not folded
 
@@ -77,5 +82,5 @@ Before a decision, the labels, the hold, and the tip's `Sdd-Archive` line SHALL 
 
 #### Scenario: Accept uses the same record
 
-- **WHEN** the record is built from `proposing` and `proposed`, and accept is given an issue that carries only `proposing`
-- **THEN** accept follows `proposed`
+- **WHEN** the record is built from `designing` and `designed`, and accept is given an issue that carries only `proposing`
+- **THEN** accept moves to `tasking`

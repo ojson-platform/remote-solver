@@ -9,10 +9,10 @@ import {setPhase} from './labels.ts';
 import {phaseOf} from './phase.ts';
 import {accept, cycleRecord, decide, settle} from './policy.ts';
 
-test('a gate label wins over the phase it closes', () => {
-  assert.equal(phaseOf(['sdd:proposing', 'sdd:proposed']), 'proposed');
-  assert.equal(phaseOf(['sdd:specifying', 'sdd:specified']), 'specified');
-  assert.equal(phaseOf(['sdd:designing', 'sdd:designed']), 'designed');
+test('a gate label does not replace the writing phase', () => {
+  assert.equal(phaseOf(['sdd:proposing', 'sdd:proposed']), 'proposing');
+  assert.equal(phaseOf(['sdd:specifying', 'sdd:specified']), 'specifying');
+  assert.equal(phaseOf(['sdd:designing', 'sdd:designed']), 'designing');
   assert.equal(phaseOf(['sdd:accepting', 'sdd:accepted']), 'accepted');
 });
 
@@ -49,9 +49,14 @@ spec('phase', () => {
     });
   });
 
-  requirement('A gate label wins only over the phase it closes', () => {
-    scenario('The gate wins over the phase it closes', () => {
-      assert.equal(phaseOf(['sdd:proposing', 'sdd:proposed']), 'proposed');
+  requirement('A gate label is consent, not a phase', () => {
+    scenario('The writing phase stays when the gate label is also on', () => {
+      assert.equal(phaseOf(['sdd:proposing', 'sdd:proposed']), 'proposing');
+    });
+    scenario('A lone gate label is the writing phase it closes', () => {
+      assert.equal(phaseOf(['sdd:proposed']), 'proposing');
+      assert.equal(phaseOf(['sdd:specified']), 'specifying');
+      assert.equal(phaseOf(['sdd:designed']), 'designing');
     });
     scenario('Otherwise the earliest label wins', () => {
       assert.equal(phaseOf(['sdd:proposing', 'sdd:specified']), 'proposing');
@@ -111,15 +116,15 @@ spec('phase', () => {
       }
     });
     scenario('Accept uses the same record', () => {
-      const recorded = issue(1, ['sdd:cycle', 'sdd:proposing', 'sdd:proposed']);
+      const recorded = issue(1, ['sdd:cycle', 'sdd:designing', 'sdd:designed']);
       const decision = accept(
         issue(1, ['sdd:cycle', 'sdd:proposing']),
-        change({proposal: true}),
+        change({proposal: true, delta: true, design: true}),
         cycleRecord(recorded, ''),
       );
-      assert.equal(decision.kind, 'wait');
-      if (decision.kind === 'wait') {
-        assert.match(decision.reason, /proposed/);
+      assert.equal(decision.kind, 'advance');
+      if (decision.kind === 'advance') {
+        assert.equal(decision.to, 'tasking');
       }
     });
   });

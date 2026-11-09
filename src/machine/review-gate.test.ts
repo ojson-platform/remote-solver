@@ -156,7 +156,7 @@ spec('review-gate', () => {
       assert.equal((await tracker.labels('5')).includes('sdd:wait-human'), false);
       assert.ok(calls.some(call => call.includes('sdd:accept proposing → specifying')));
     });
-    scenario('Specified over a missing delta goes back once', async () => {
+    scenario('Specified over a missing delta drops the gate', async () => {
       const {tracker, review, calls} = memoryPorts({
         issues: [
           {
@@ -176,13 +176,17 @@ spec('review-gate', () => {
         queues: [{name: 'Sandcastle'}],
         change: {...readChange('5', files), proposal: true, capabilities: ['section-text']},
       };
+      const decision = await resolveIssue('5', options);
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'create-initial-specs');
+      }
+      const labels = await tracker.labels('5');
+      assert.ok(labels.includes('sdd:specifying'));
+      assert.equal(labels.includes('sdd:specified'), false);
+      assert.equal(calls.filter(call => call.startsWith('body:')).length, 0);
       await resolveIssue('5', options);
-      assert.ok((await tracker.labels('5')).includes('sdd:specifying'));
-      const notes = calls.filter(call => call.startsWith('body:'));
-      assert.equal(notes.length, 1);
-      assert.match(notes[0], /specs/);
-      await resolveIssue('5', options);
-      assert.equal(calls.filter(call => call.startsWith('body:')).length, 1);
+      assert.equal(calls.filter(call => call.startsWith('body:')).length, 0);
     });
     scenario('Specified with no named capability moves on', () => {
       const moved = settle(
@@ -197,14 +201,16 @@ spec('review-gate', () => {
       );
       assert.match(moved.transitions[0]?.comment ?? '', /sdd:accept specifying → designing/);
     });
-    scenario('Designed over an open decision goes back, then asks', () => {
+    scenario('Designed over an open decision stays, then asks', () => {
       const open = change({proposal: true, delta: true, design: true, openDecisions: 1});
       const reverted = settle(issue(1, ['sdd:cycle', 'sdd:designed']), [], [pull(9)], open);
       assert.deepEqual(
         reverted.transitions.map(step => step.to),
-        ['designing'],
+        [],
       );
-      assert.match(reverted.transitions[0].comment ?? '', /Open decisions/);
+      assert.ok(reverted.labels.includes('sdd:designing'));
+      assert.equal(reverted.labels.includes('sdd:designed'), false);
+      assert.equal(reverted.decision.kind, 'wait');
       const closed = settle(issue(1, reverted.labels), [], [pull(9)], ready);
       assert.equal(closed.decision.kind, 'wait');
       if (closed.decision.kind === 'wait') {

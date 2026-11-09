@@ -11,13 +11,15 @@ import {
   labelsAfterAdvance,
   phaseOf,
   phaseRank,
+  reachedRank,
+  type GateEvent,
   type Phase,
 } from './phase.ts';
 import {emptyReview, layerOfPhase, type ReviewView} from './review.ts';
 import {ACTION_SKILL, LAYER_ACTION, type AgentAction, type Skill} from './route.ts';
 
 export type Decision =
-  | {
+  | ({
       kind: 'agent';
       issue: string;
       action: AgentAction;
@@ -25,13 +27,16 @@ export type Decision =
       phase: Phase;
       pr: string;
       reason: string;
-    }
+    } & LabelFix)
   /** `gate` names the open review. The ask is posted only when `sdd:wait-human` is not already set. */
-  | {kind: 'wait'; issue: string | null; reason: string; gate?: Gate}
-  | {kind: 'done'; issue: string | null; reason: string}
+  | ({kind: 'wait'; issue: string | null; reason: string; gate?: Gate} & LabelFix)
+  | ({kind: 'done'; issue: string | null; reason: string} & LabelFix)
   /** `comment` is posted on the issue after the move. */
-  | {kind: 'advance'; issue: string; to: Phase; reason: string; comment?: string}
-  | {kind: 'merge'; issue: string; pull: string; reason: string};
+  | ({kind: 'advance'; issue: string; to: Phase; reason: string; comment?: string} & LabelFix)
+  | ({kind: 'merge'; issue: string; pull: string; reason: string} & LabelFix);
+
+/** A rejected gate label leaves, and the writing phase stays. */
+type LabelFix = {drop?: string[]; stay?: Phase};
 
 /** Several open pull requests stop the cycle before any step, until a person leaves one. */
 export function severalOpenReason(ids: string[]): string {
@@ -137,27 +142,17 @@ export function stampBehind(phase: Phase, change: ChangeView): string | null {
   return null;
 }
 
-/** A person set the gate phase. The machine checks it, then moves on or back to the closed phase. */
-function closeGate(key: string, gate: Phase, closed: Phase, change: ChangeView): Decision {
-  const blocker = gateBlocker(key, closed, change);
-  if (blocker) {
-    return {
-      kind: 'advance',
-      issue: key,
-      to: closed,
-      reason: `${gate} refused: ${blocker}`,
-      comment: `The phase moved to ${gate}, but ${closed} is not done. ${blocker}. The machine moved the issue back to ${closed}.`,
-    };
-  }
-  const next = HUMAN_NEXT[closed] as Phase;
-  return {
-    kind: 'advance',
-    issue: key,
-    to: next,
-    reason: `${closed} → ${next}`,
-    comment: `sdd:accept ${closed} → ${next}`,
-  };
-}
+const GATE_OF: Partial<Record<Phase, GateEvent>> = {
+  proposing: 'proposed',
+  specifying: 'specified',
+  designing: 'designed',
+};
+
+const AUTO_OF: Partial<Record<Phase, string>> = {
+  proposing: 'sdd:auto-plan',
+  specifying: 'sdd:auto-spec',
+  designing: 'sdd:auto-design',
+};
 
 function children(parent: string, issues: IssueRecord[]): IssueRecord[] {
   return issues.filter(issue => issue.parent === parent && issue.labels.includes('sdd:cycle'));
@@ -180,11 +175,8 @@ function blockers(issue: IssueRecord, issues: IssueRecord[]): IssueRecord[] {
 }
 
 function atLeast(issue: IssueRecord, phase: Phase): boolean {
-  const current = phaseOf(issue.labels);
-  if (!current || current === 'cancelled') {
-    return false;
-  }
-  return phaseRank(current) >= phaseRank(phase);
+  const rank = reachedRank(issue.labels);
+  return rank >= 0 && rank >= phaseRank(phase);
 }
 
 /** After every task is checked: children short of `accepted`, then open blockers. */
@@ -230,12 +222,21 @@ export type CycleRecord = {
   autoSpec: boolean;
   autoDesign: boolean;
   autoMerge: boolean;
+  /** A gate label on the issue. The same event as `sdd accept`. */
+  accept: GateEvent | null;
 };
 
 /** Labels, the hold, and the tip line, collapsed once. The decision does not read the label set. */
 export function cycleRecord(issue: IssueRecord, tip: string): CycleRecord {
-  const phase = phaseOf(issue.labels);
   const names = issue.labels;
+  const accept: GateEvent | null = names.includes('sdd:designed')
+    ? 'designed'
+    : names.includes('sdd:specified')
+      ? 'specified'
+      : names.includes('sdd:proposed')
+        ? 'proposed'
+        : null;
+  const phase = phaseOf(names) ?? (accept ? (GATE_CLOSES[accept] ?? null) : null);
   return {
     phase,
     hold:
@@ -248,6 +249,7 @@ export function cycleRecord(issue: IssueRecord, tip: string): CycleRecord {
     autoSpec: names.includes('sdd:auto-spec'),
     autoDesign: names.includes('sdd:auto-design'),
     autoMerge: names.includes('sdd:auto-merge'),
+    accept,
   };
 }
 
@@ -342,11 +344,6 @@ export function decide(
     }
     return mergeOrWait(issue.key, acceptedOpen[0], acceptedMerged, false);
   }
-  const closed = GATE_CLOSES[phase];
-  if (closed) {
-    return closeGate(issue.key, phase, closed, change);
-  }
-
   // A repair must not commit on top of the archive commit. Accepting still rolls back first; the next step of this settlement restores the change while that commit is the tip. A merged pull request stays archived.
   if (
     phaseRank(phase) < phaseRank('accepting') &&
@@ -369,19 +366,18 @@ export function decide(
     );
   }
 
-  // `out` is not in the map, so it does not move the phase. verifying waits
-  // for proof before it follows a marker, unless the checks are already red.
+  // `out` is not in the map, so it does not move the phase. On verifying the
+  // checks must already be red or green; pending does not roll back.
   // A classified marker moves before a held review gate (ADR-0028).
-  if (phase !== 'verifying') {
-    const back = feedback.rollback;
-    if (back && phaseRank(back) < phaseRank(phase)) {
-      return {
-        kind: 'advance',
-        issue: issue.key,
-        to: back,
-        reason: 'review thread sent the change back',
-      };
-    }
+  const back = feedback.rollback;
+  const checksKnown = pr?.checks === 'red' || pr?.checks === 'green';
+  if (back && phaseRank(back) < phaseRank(phase) && (phase !== 'verifying' || checksKnown)) {
+    return {
+      kind: 'advance',
+      issue: issue.key,
+      to: back,
+      reason: 'review thread sent the change back',
+    };
   }
 
   // A spec thread cannot be fixed against a capability that has no baseline.
@@ -418,6 +414,46 @@ export function decide(
     return agent(issue.key, action, phase, String(pr.id), `threads on ${layer}`);
   }
 
+  const auto = (tag: string) =>
+    tag === 'sdd:auto-plan'
+      ? record.autoPlan
+      : tag === 'sdd:auto-spec'
+        ? record.autoSpec
+        : tag === 'sdd:auto-design'
+          ? record.autoDesign
+          : tag === 'sdd:auto-merge'
+            ? record.autoMerge
+            : false;
+
+  // Forward: the gate label and `sdd accept` are the same event. A failed
+  // guard drops the label. It does not store the gate as a phase.
+  const gate = GATE_OF[phase];
+  const autoTag = AUTO_OF[phase];
+  const person = gate !== undefined && record.accept === gate;
+  const granted = person || (autoTag !== undefined && auto(autoTag) && record.hold === null);
+  const blocker = gate ? gateBlocker(issue.key, phase, change) : null;
+  let patch: LabelFix = {};
+  if (granted && gate && pr && !blocker) {
+    const next = HUMAN_NEXT[phase] as Phase;
+    const reason = person ? `${phase} → ${next}` : autoTag;
+    if (reason !== undefined) {
+      return person
+        ? {
+            kind: 'advance',
+            issue: issue.key,
+            to: next,
+            reason,
+            comment: `sdd:accept ${phase} → ${next}`,
+          }
+        : {kind: 'advance', issue: issue.key, to: next, reason};
+    }
+  }
+  if (person && gate) {
+    patch = {drop: [`sdd:${gate}`], stay: phase};
+  }
+  const hand = (decision: Decision): Decision =>
+    patch.drop || patch.stay ? {...decision, ...patch} : decision;
+
   // A skill stopped for a person, or the machine opened the review gate.
   // The gate holds when no classified thread asks for a layer.
   if (record.hold !== null) {
@@ -430,123 +466,115 @@ export function decide(
             ? {artifact: 'design', to: 'designed' as const}
             : null;
     if (review && !gateBlocker(issue.key, phase, change)) {
-      return reviewGate(issue.key, review.artifact, phase, review.to);
+      return hand(reviewGate(issue.key, review.artifact, phase, review.to));
     }
-    return {
+    return hand({
       kind: 'wait',
       issue: issue.key,
       reason: `sdd:wait-human is set on ${phase}. Do the ask on the issue.`,
-    };
+    });
   }
-
-  const auto = (tag: string) =>
-    tag === 'sdd:auto-plan'
-      ? record.autoPlan
-      : tag === 'sdd:auto-spec'
-        ? record.autoSpec
-        : tag === 'sdd:auto-design'
-          ? record.autoDesign
-          : tag === 'sdd:auto-merge'
-            ? record.autoMerge
-            : false;
 
   if (phase === 'proposing') {
     if (!change.proposal || !pr) {
-      return agent(
-        issue.key,
-        'create-proposal',
-        phase,
-        pr ? String(pr.id) : '',
-        change.proposal
-          ? 'publish proposal.md to the pull request'
-          : 'write proposal.md and open the pull request',
+      return hand(
+        agent(
+          issue.key,
+          'create-proposal',
+          phase,
+          pr ? String(pr.id) : '',
+          change.proposal
+            ? 'publish proposal.md to the pull request'
+            : 'write proposal.md and open the pull request',
+        ),
       );
     }
     if (change.openQuestions) {
-      return {
+      return hand({
         kind: 'wait',
         issue: issue.key,
         reason: `${change.openQuestions} open question(s) in proposal.md`,
-      };
+      });
     }
-    if (auto('sdd:auto-plan')) {
-      return {kind: 'advance', issue: issue.key, to: 'specifying', reason: 'sdd:auto-plan'};
-    }
-    return reviewGate(issue.key, 'proposal', 'proposing', 'proposed');
+    return hand(reviewGate(issue.key, 'proposal', 'proposing', 'proposed'));
   }
 
   if (phase === 'specifying') {
     if (!change.proposal) {
-      return {kind: 'advance', issue: issue.key, to: 'proposing', reason: 'proposal.md is missing'};
+      return hand({kind: 'advance', issue: issue.key, to: 'proposing', reason: 'proposal.md is missing'});
     }
     if (!specsReady(change)) {
-      return agent(
-        issue.key,
-        'create-initial-specs',
-        phase,
-        pr ? String(pr.id) : '',
-        'write the delta spec and publish it',
+      return hand(
+        agent(
+          issue.key,
+          'create-initial-specs',
+          phase,
+          pr ? String(pr.id) : '',
+          'write the delta spec and publish it',
+        ),
       );
     }
     if (!pr) {
-      return agent(
-        issue.key,
-        'create-initial-specs',
-        phase,
-        '',
-        change.delta
-          ? 'publish the delta spec to the pull request'
-          : 'publish the change to the pull request',
+      return hand(
+        agent(
+          issue.key,
+          'create-initial-specs',
+          phase,
+          '',
+          change.delta
+            ? 'publish the delta spec to the pull request'
+            : 'publish the change to the pull request',
+        ),
       );
     }
     if (stampBehind(phase, change)) {
-      return agent(
-        issue.key,
-        'create-initial-specs',
-        phase,
-        String(pr.id),
-        'the proposal revision is not the stamp',
+      return hand(
+        agent(
+          issue.key,
+          'create-initial-specs',
+          phase,
+          String(pr.id),
+          'the proposal revision is not the stamp',
+        ),
       );
     }
-    if (auto('sdd:auto-spec')) {
-      return {kind: 'advance', issue: issue.key, to: 'designing', reason: 'sdd:auto-spec'};
-    }
-    return reviewGate(issue.key, 'spec', 'specifying', 'specified');
+    return hand(reviewGate(issue.key, 'spec', 'specifying', 'specified'));
   }
 
   if (phase === 'designing') {
     if (!specsReady(change)) {
-      return {kind: 'advance', issue: issue.key, to: 'specifying', reason: 'delta spec is missing'};
+      return hand({kind: 'advance', issue: issue.key, to: 'specifying', reason: 'delta spec is missing'});
     }
     if (!change.design || !pr) {
-      return agent(
-        issue.key,
-        'create-design',
-        phase,
-        pr ? String(pr.id) : '',
-        change.design ? 'publish design.md to the pull request' : 'write design.md and publish it',
+      return hand(
+        agent(
+          issue.key,
+          'create-design',
+          phase,
+          pr ? String(pr.id) : '',
+          change.design ? 'publish design.md to the pull request' : 'write design.md and publish it',
+        ),
       );
     }
     if (change.openDecisions) {
-      return {
+      return hand({
         kind: 'wait',
         issue: issue.key,
         reason: `${change.openDecisions} open decision(s) in design.md`,
-      };
+      });
     }
     if (stampBehind(phase, change)) {
-      return agent(
-        issue.key,
-        'create-design',
-        phase,
-        pr ? String(pr.id) : '',
-        'the spec revision is not the stamp',
+      return hand(
+        agent(
+          issue.key,
+          'create-design',
+          phase,
+          pr ? String(pr.id) : '',
+          'the spec revision is not the stamp',
+        ),
       );
     }
-    if (auto('sdd:auto-design')) {
-      return {kind: 'advance', issue: issue.key, to: 'tasking', reason: 'sdd:auto-design'};
-    }
-    return reviewGate(issue.key, 'design', 'designing', 'designed');
+    return hand(reviewGate(issue.key, 'design', 'designing', 'designed'));
   }
 
   if (phase === 'tasking') {
@@ -630,28 +658,11 @@ export function decide(
         reason: 'pull request conflicts with the base',
       };
     }
-    const back = pr.review.rollback;
     if (pr.checks === 'red') {
-      if (back) {
-        return {
-          kind: 'advance',
-          issue: issue.key,
-          to: back,
-          reason: 'review thread sent the change back',
-        };
-      }
       return agent(issue.key, 'classify-failures', phase, String(pr.id), 'red checks');
     }
     if (pr.checks !== 'green') {
       return {kind: 'wait', issue: issue.key, reason: `checks are ${pr.checks}`};
-    }
-    if (back) {
-      return {
-        kind: 'advance',
-        issue: issue.key,
-        to: back,
-        reason: 'review thread sent the change back',
-      };
     }
     return {kind: 'advance', issue: issue.key, to: 'accepting', reason: 'checks are green'};
   }
@@ -726,7 +737,14 @@ export function settle(
       change,
       cycleRecord({...issue, labels}, message),
     );
+    if (decision.drop?.length) {
+      const dropping = new Set(decision.drop);
+      labels = labels.filter(name => !dropping.has(name));
+    }
     if (decision.kind !== 'advance') {
+      if (decision.stay && !labels.includes(`sdd:${decision.stay}`)) {
+        labels = [...labels, `sdd:${decision.stay}`];
+      }
       return {decision, transitions, labels};
     }
     labels = labelsAfterAdvance(labels, decision.to);

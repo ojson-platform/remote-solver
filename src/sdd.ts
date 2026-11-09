@@ -15,7 +15,7 @@ import {openWait, setPhase, setWait} from './machine/labels.ts';
 import {parseMarker} from './machine/marker.ts';
 import {updateMirror} from './machine/mirror.ts';
 import {changeDir} from './machine/naming.ts';
-import {labelsAfterAdvance, PHASES, type Phase} from './machine/phase.ts';
+import {GATE_EVENTS, labelsAfterAdvance, PHASES, type Phase} from './machine/phase.ts';
 import {accept as acceptGate, cycleRecord, publishChoice, type Decision} from './machine/policy.ts';
 import {queueOf} from './machine/queues.ts';
 import {openItemLayer, threadsReport, type OpenItemFile} from './machine/review.ts';
@@ -263,7 +263,7 @@ async function plan(box: Machine): Promise<void> {
     key => box.vcs.filesAt(key),
     box.config.queues,
     key => contentFiles(box.vcs, key),
-    key => box.vcs.tipMessage?.(key) ?? Promise.resolve(''),
+    box.vcs.tipMessage ? key => box.vcs.tipMessage!(key) : undefined,
   );
   const decision = pick(await resolveCycle(snapshot, box.tracker, box.config.queues));
   const labels = decision.issue === null ? [] : (await box.tracker.issue(decision.issue)).labels;
@@ -357,7 +357,10 @@ async function assign(box: Machine, rest: string[]): Promise<void> {
 async function set(box: Machine, rest: string[]): Promise<void> {
   const key = need(rest[0], usage);
   const phase = need(rest[1], usage);
-  if (!PHASES.includes(phase as Phase)) {
+  if (
+    !(PHASES as readonly string[]).includes(phase) &&
+    !(GATE_EVENTS as readonly string[]).includes(phase)
+  ) {
     fail(usage);
   }
   await setPhase(key, phase as Phase, box.tracker);

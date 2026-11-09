@@ -8,17 +8,18 @@ A cycle is finished when its pull request is merged and its change is archived. 
 
 ### Requirement: An archived change through tasking is restored
 
-On `proposing`, `specifying`, `designing`, and `tasking`, an archived change whose pull request is still open SHALL be restored and the machine SHALL start that step. Tasks that are all checked SHALL NOT stop the restore. The issue SHALL stay open. When the assignee is this manager, the card SHALL stay on the board, and a later reading of the open list SHALL show the card again. On `proposed`, `specified`, and `designed`, an archived change whose pull request is still open SHALL move the phase and then SHALL be restored. The issue SHALL stay open, and when the assignee is this manager the card SHALL stay on the board.
+On `proposing`, `specifying`, `designing`, and `tasking`, an archived change whose pull request is still open SHALL be restored and the machine SHALL start that step. Tasks that are all checked SHALL NOT stop the restore. The issue SHALL stay open. When the assignee is this manager, the card SHALL stay on the board, and a later reading of the open list SHALL show the card again. A gate label on that writing phase SHALL NOT move the phase before the restore. The next poll, once the change is restored, SHALL move it. The issue SHALL stay open, and when the assignee is this manager the card SHALL stay on the board.
 
 #### Scenario: An open pull request on tasking is restored
 
 - **WHEN** the phase is `tasking`, the assignee is this manager, the pull request is still open, the change is archived, and every task is checked
 - **THEN** the machine restores the change and starts that step, the issue stays open, and the card stays on the board
 
-#### Scenario: A proposed gate restores after it moves
+#### Scenario: A proposed gate restores before it moves
 
-- **WHEN** the phase is `proposed`, the assignee is this manager, the pull request is still open, and the change is archived
-- **THEN** the machine moves the phase, then restores the change, and the issue stays open
+- **WHEN** the phase is `proposing`, the issue also carries `proposed`, the assignee is this manager, the pull request is still open, and the change is archived
+- **THEN** the machine restores the change and does not move the phase
+- **AND** once the change is restored, the next poll moves the phase to `specifying`, and the issue stays open
 
 ### Requirement: Accepting closes a merged archived cycle
 

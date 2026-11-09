@@ -246,6 +246,60 @@ spec('marker', () => {
       );
       assert.equal(action(decision), 'improve-design');
     });
+    scenario('A proposal marker during a held proposal review improves the proposal', () => {
+      const review = readReview(
+        [{resolved: false, body: '🤖 sdd:layer=proposal → proposing rebase and rewrite the plan'}],
+        [
+          {robot: false, body: 'rebase and rewrite the plan'},
+          {robot: true, body: '🤖 sdd:layer=proposal → proposing rebase and rewrite the plan'},
+        ],
+      );
+      assert.equal(review.conversation.unanswered, false);
+      assert.equal(review.conversation.layer, 'proposal');
+      assert.deepEqual(review.layers, ['proposal']);
+      const decision = decide(
+        issue(1, ['sdd:proposing', 'sdd:wait-human']),
+        [],
+        [pull(9, {review})],
+        ready,
+      );
+      assert.equal(action(decision), 'improve-proposal');
+    });
+    scenario('A note during a held proposal review keeps the gate', () => {
+      const review = reviewOf(
+        [],
+        [
+          {robot: false, body: 'rebase and rewrite the plan'},
+          {robot: true, body: '🤖 sdd:note rebase and rewrite the plan'},
+        ],
+      );
+      assert.equal(review.unanswered, false);
+      assert.deepEqual(review.layers, []);
+      const decision = decide(
+        issue(1, ['sdd:proposing', 'sdd:wait-human']),
+        [],
+        [pull(9, {review})],
+        ready,
+      );
+      assert.equal(action(decision), 'wait');
+      assert.equal(decision.kind === 'wait' ? decision.reason : '', 'review the proposal, then a person moves proposing to proposed');
+    });
+    scenario('An unanswered conversation is classified before the proposal thread', () => {
+      const review = readReview(
+        [{resolved: false, body: '🤖 sdd:layer=proposal → proposing rebase and rewrite the plan'}],
+        [{robot: false, body: 'rebase and rewrite the plan'}],
+      );
+      assert.equal(review.conversation.unanswered, true);
+      assert.equal(review.unanswered, true);
+      assert.deepEqual(review.layers, ['proposal']);
+      const decision = decide(
+        issue(1, ['sdd:proposing', 'sdd:wait-human']),
+        [],
+        [pull(9, {review})],
+        ready,
+      );
+      assert.equal(action(decision), 'classify-comments');
+    });
   });
 
   requirement('An open item keeps its file\'s layer', () => {

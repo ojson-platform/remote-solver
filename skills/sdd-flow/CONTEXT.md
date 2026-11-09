@@ -18,7 +18,7 @@ A run ends in exactly one signal. A run that ends with none leaves the decision 
 
 Read this file once in a run, the first time a step names one of its sections. A file named under a step's Read only is read once. After an edit of a file succeeds, that file is known for the rest of the run: do not read it again.
 
-One edit of a file covers one scenario of the step. When the check command fails after that edit and a file has changed since the last run of the command, one further edit of that file is allowed, then the command runs once more. A command the card does not name does not run, apart from the verbs and the git steps in § Publish. `git log`, `git show`, and a diff of an older commit do not run.
+One edit of a file covers one scenario of the step. When the check command fails after that edit and a file has changed since the last run of the command, one further edit of that file is allowed, then the command runs once more. A command the card does not name does not run, apart from the verbs and the git steps in § Publish. The git steps in § Onto the base run when an instruction says to rebase onto the pull request base, or when the pull request conflicts with its base. `git log`, `git show`, and a diff of an older commit do not run.
 
 The one-file command is the check while its test is red and after each edit of that test or its source. It runs again after a later edit even when it already exited 0. The layer command runs once per task, after the one-file command exits 0 for every scenario of that task, and before the commit. The fast suite and the type check run then too, when the card names them. They do not run while the one-file command is failing, and they do not run after each edit. A layer failure in a file this task names returns to the one-file command. The layer command runs once more after that command exits 0. A layer failure outside this task is a Hand-off, and the layer command does not run again.
 
@@ -38,6 +38,17 @@ The validate command in § Delta runs once, after the spec edit, when this step 
 | `out` | leaves the phase | another issue |
 
 Earliest to latest: proposal, spec, design, tasks, code. The machine moves the phase to the earliest open thread marker. A marker on the conversation records a request and does not move the phase.
+
+## Upstream
+
+The prompt carries an `## Upstream` block. That block is the only record of what changed in the previous artifact since this step's file was last committed. Do not run git to rebuild it. Listing titles to satisfy a check is allowed. The facts to write come from the block.
+
+- The block says this file does not exist yet: write it from the previous artifact, as the step says.
+- The block says the previous artifact has not changed: leave this file.
+- The block is a diff: a fact in that diff that this file does not already say is an edit. The whole previous file is not where those facts are found.
+- The block says the diff could not be read: do not leave this file.
+
+`plan`: the issue text above the block is the previous artifact. A caller-visible sentence there that `proposal.md` does not say is an edit. The file existing is not a reason to leave it. `specify`: the previous artifact is `proposal.md`. `design`: the previous artifact is the delta specs. `tasks`: the previous artifacts are the delta specs and `design.md`. Any other action: the block says this action has no upstream diff.
 
 ## Capability
 
@@ -114,11 +125,15 @@ node scripts/sdd.mjs thread fix <issue> <pull> --conversation
 
 ### Fix thread
 
-A skill fixes the threads of its own layer: `threads <pull> --layer <layer>`. For each thread: one commit that answers it, Publish, then `thread fix <issue> <pull> <thread>`. The machine starts that skill for an open thread, not for a conversation marker alone. When the skill is already fixing that layer and `conversation.layer` names it, the conversation request is the same work, answered with `thread fix <issue> <pull> --conversation`.
+A skill fixes the threads of its own layer: `threads <pull> --layer <layer>`. When such a thread is open, this section is the edit of this phase's artifact. The step continues at its Publish step and does not rewrite that artifact. The words after the marker are the instruction. Carry the instruction out on this phase's artifact, in the words it gives, including its language. When the instruction says to rebase onto the pull request base, rebase first (§ Onto the base), then the rest of the instruction. For each thread: one commit that answers it, Publish, then `thread fix <issue> <pull> <thread>`. An instruction this step cannot carry out is a Wait that repeats the instruction. Do not mark it `sdd:note`. The machine starts that skill for an open thread, not for a conversation marker alone. When the skill is already fixing that layer and `conversation.layer` names it, the conversation request is the same work, answered with `thread fix <issue> <pull> --conversation`.
+
+### Onto the base
+
+Rebase `sdd/<issue>` onto the pull request base. Edit only files git marks conflicted. Publish without focus. The phase stays. The same steps run when the pull request conflicts with its base and no person asked.
 
 ### Hand-off
 
-The work the run found belongs to another layer: `thread open <pull> <file> <line> 'sdd:layer=<layer> → <phase> <cause>'` on the line of the pushed head that shows it, `<layer>` and `<phase>` from § Layers. An existing thread that turns out to belong to another layer takes the same line as a `thread reply` instead, and stays open. Then end the run. The machine moves the phase on the next poll; the skill of that layer fixes the thread. A remark that is not a layer of this cycle is `sdd:note <cause>` and moves nothing. A thread on an unchecked item under Open decisions or Open questions stays that file's layer until the item is checked. A hand-off from that item is a new thread, after the check.
+The work the run found belongs to another layer: `thread open <pull> <file> <line> 'sdd:layer=<layer> → <phase> <cause>'` on the line of the pushed head that shows it, `<layer>` and `<phase>` from § Layers. An existing thread that turns out to belong to another layer takes the same line as a `thread reply` instead, and stays open. Then end the run. The machine moves the phase on the next poll; the skill of that layer fixes the thread. A remark that asks the cycle to do nothing is `sdd:note <cause>` and moves nothing. A remark that asks this phase to do something is a thread of this phase's layer, including when it names no line. A phase with no row in § Layers does not invent `code`. A thread on an unchecked item under Open decisions or Open questions stays that file's layer until the item is checked. A hand-off from that item is a new thread, after the check.
 
 ## Publish
 

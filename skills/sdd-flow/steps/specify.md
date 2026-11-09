@@ -14,7 +14,9 @@ Writes observable behavior. Zoom is the black box. The delta grammar is `CONTEXT
 
 ## Steps
 
-1. The delta exists, still matches the proposal, and `threads <pull> --layer spec` is empty: go to step 5.
+An open thread of layer `spec`: Fix thread (`CONTEXT.md`), then step 5. Do not rewrite the delta in the steps in between.
+
+1. § Upstream says the previous artifact has not changed, the delta exists, and `threads <pull> --layer spec` is empty: go to step 5. The upstream block is a diff and the delta exists: step 3, then step 5. Do not rewrite that delta from the template. Otherwise write the delta. Do not judge a match from the whole proposal.
 2. Run `openspec instructions specs --change issue-<issue> --json`. Write `openspec/changes/issue-<issue>/specs/<capability>/spec.md` from its `template`, sections by § Delta. A scenario is checked from outside, without reading code. A sentence in the proposal Outcome or Constraints that names what the caller sees is a Scenario of this capability. The Scenario names each thing that sentence names. Another capability does not stand in for it. The Scenario's WHEN shows each of those things already visible, together with the other limit that can replace them. Its THEN states those same values.
 3. A local proposal change: edit the requirements and scenarios it changes, including ones it drops.
 4. `improve-specs`: Fix thread (`CONTEXT.md`), layer `spec`. A thread that drops a requirement or scenario writes that drop in the delta. `proposal.md` stays. A reply that says which write a named capability does not change rewrites that capability's scenario to that write.

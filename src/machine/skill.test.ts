@@ -155,6 +155,48 @@ test('baseline moves an unshown rule to Added and does not wait on the shelf', (
   assert.match(plan, /does not Wait on the shelf/);
 });
 
+test('an existing artifact stays only when the upstream block says nothing changed', () => {
+  const context = readFileSync(path.join(flow, 'CONTEXT.md'), 'utf8');
+  const plan = readFileSync(path.join(stepsDir, 'plan.md'), 'utf8');
+  const specify = readFileSync(path.join(stepsDir, 'specify.md'), 'utf8');
+  const design = readFileSync(path.join(stepsDir, 'design.md'), 'utf8');
+  const tasks = readFileSync(path.join(stepsDir, 'tasks.md'), 'utf8');
+  assert.match(context, /## Upstream/);
+  assert.match(context, /Do not run git to rebuild it/);
+  assert.match(plan, /file existing is not a reason to leave it|every caller-visible sentence/);
+  assert.match(specify, /previous artifact has not changed/);
+  assert.match(specify, /Do not judge a match from the whole proposal/);
+  assert.match(design, /Do not judge `design.md` already right from the whole spec/);
+  assert.match(tasks, /previous artifact has not changed/);
+  assert.doesNotMatch(design, /design\.md` is already right/);
+  assert.doesNotMatch(plan, /proposal\.md` already exists: leave it/);
+});
+
+test('an instruction is a thread of this phase, and a note asks for nothing', () => {
+  const comments = readFileSync(path.join(stepsDir, 'pr-comments.md'), 'utf8');
+  const context = readFileSync(path.join(flow, 'CONTEXT.md'), 'utf8');
+  const plan = readFileSync(path.join(stepsDir, 'plan.md'), 'utf8');
+  const specify = readFileSync(path.join(stepsDir, 'specify.md'), 'utf8');
+  const design = readFileSync(path.join(stepsDir, 'design.md'), 'utf8');
+  const tasks = readFileSync(path.join(stepsDir, 'tasks.md'), 'utf8');
+  const fix = readFileSync(path.join(stepsDir, 'fix.md'), 'utf8');
+  assert.match(comments, /does not sort the request by which action it names/);
+  assert.match(comments, /After that thread is open, `thread say/);
+  assert.match(comments, /do not open a `code` thread/);
+  assert.match(comments, /Step 3 Waited: leave `sdd:wait-human` set/);
+  assert.doesNotMatch(comments, /rebase or a merge conflict is `code`/);
+  assert.doesNotMatch(comments, /are `code`/);
+  assert.match(context, /does not rewrite that artifact/);
+  assert.match(context, /does not invent `code`/);
+  assert.match(context, /### Onto the base/);
+  assert.match(plan, /then step 5/);
+  assert.match(specify, /then step 5/);
+  assert.match(design, /then step 6/);
+  assert.match(tasks, /then step 8/);
+  assert.doesNotMatch(fix, /conversation\.layer` is `code`/);
+  assert.match(fix, /§ Onto the base/);
+});
+
 test('the chat files point at the sdd script', () => {
   const skill = readFileSync(path.join(flow, 'SKILL.md'), 'utf8');
   const context = readFileSync(path.join(flow, 'CONTEXT.md'), 'utf8');

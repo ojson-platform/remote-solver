@@ -22,6 +22,8 @@ A file the task does not name stays unread and unedited: other changes, ADRs, a 
 - More than one task
 - Review threads
 
+{{before-implement}}
+
 ## Steps
 
 1. No `tasks/<id>.md`, or it lacks a § Artifacts heading: Hand-off to `tasks` on that line of `tasks.md`. Do not reconstruct the task from the code.

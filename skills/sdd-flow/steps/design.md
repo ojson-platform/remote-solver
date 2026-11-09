@@ -12,8 +12,10 @@ Writes the technical decision for this change.
 
 ## Steps
 
-1. `design.md` is already right and `threads <pull> --layer design` is empty: go to step 6.
-2. Otherwise write `design.md` by `CONTEXT.md` § Artifacts. The verification boundary names every capability, where its scenarios are observed, and the commands: a one-file command that contains `<test-file>`, and the layer command. A fast suite is included when the init block names one, otherwise `none`. The last line of the section is the type check, once for the change, or `none`.
+An open thread of layer `design`: Fix thread (`CONTEXT.md`), then step 6. Do not rewrite `design.md` in the steps in between.
+
+1. § Upstream says the previous artifact has not changed and `threads <pull> --layer design` is empty: go to step 6. Otherwise the upstream block is the edit. Do not judge `design.md` already right from the whole spec.
+2. Write `design.md` by `CONTEXT.md` § Artifacts. When the upstream block is a diff, edit the existing design for those facts and do not replace the rest from a fresh reading of the whole spec. The file does not exist yet: write it from the current specs. The verification boundary names every capability, where its scenarios are observed, and the commands: a one-file command that contains `<test-file>`, and the layer command. A fast suite is included when the init block names one, otherwise `none`. The last line of the section is the type check, once for the change, or `none`.
    The block between `<!-- sdd:init:begin -->` and `<!-- sdd:init:end -->` in `AGENTS.md` contains `Open questions:`: Wait. Name those questions. Do not search for commands. Do not publish.
    The block is present and has no open questions: copy its one-file command, its layer command, its trace line, and its test path rule into the boundary. A fast suite line is copied when the block has one, otherwise `none`. Do not search again. Do not edit `AGENTS.md`.
    The block is absent: find the one-file command, the layer command, and the type check in CI, a hook, `package.json`, or a Makefile, and write them in `design.md`. The section shape is § Artifacts. Stop when those three commands are known.

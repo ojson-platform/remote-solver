@@ -9,6 +9,7 @@ import {branchName} from '../machine/naming.ts';
 import {cursorFor, modelFor, type SkillMode} from '../machine/skill.ts';
 
 import {runAgent} from './agent.ts';
+import {upstreamBlock} from './upstream.ts';
 import {rememberChat} from './session.ts';
 import {linkCommand as checkoutLinks, packageLinks} from './vcs.ts';
 
@@ -153,6 +154,7 @@ export function agentRuntime(config: AgentRuntimeConfig): Runtime {
           QUEUE: config.queueLabel,
           BASE: config.prBase,
           ISSUE_TEXT: issueText(skill.issue?.title ?? '', skill.issue?.body ?? ''),
+          UPSTREAM: upstreamBlock(dir, skill.skill, skill.key),
           STEP: stepText
             ? stepPrompt(stepText, skill.action, serviceHookDoc(serviceRoot), skill.sddHooks)
             : '',

@@ -166,8 +166,9 @@ spec('artifact', () => {
       assert.match(text, /do not read the service source to recover it/);
       const prompt = promptFile();
       const issueAt = prompt.indexOf('{{ISSUE_TEXT}}');
+      const upstreamAt = prompt.indexOf('{{UPSTREAM}}');
       const stepAt = prompt.indexOf('{{STEP}}');
-      assert.ok(issueAt >= 0 && issueAt < stepAt);
+      assert.ok(issueAt >= 0 && issueAt < upstreamAt && upstreamAt < stepAt);
       assert.match(prompt, /Do not search for `sdd\.mjs`, `bin\/`, or `node_modules`, and do not read them/);
     });
 

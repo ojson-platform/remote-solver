@@ -86,3 +86,37 @@ The prompt for a skill run SHALL include the issue title and body. It SHALL say 
 
 - **WHEN** the machine runs a skill for an issue with an empty title and an empty body
 - **THEN** the prompt includes that empty title and that empty body, says the issue has no description, and still tells the run not to search
+
+### Requirement: The writing prompt carries the upstream diff
+
+For `specify`, `design`, and `tasks`, the prompt SHALL include the diff of the previous artifact since the commit that last changed this step's file. An empty diff SHALL say the previous artifact has not changed. A missing file SHALL say that file does not exist yet. `plan` SHALL be told that the issue text is the upstream and that the proposal existing is not a reason to leave it. Any other skill SHALL be told that the action has no upstream diff. A diff that cannot be read SHALL tell the run not to treat the existing file as already right.
+
+#### Scenario: A design run after a spec edit carries that diff
+
+- **WHEN** `design.md` is already committed and a later commit changes the delta spec
+- **THEN** the design prompt contains that spec diff and does not say the previous artifact has not changed
+
+#### Scenario: A design run with no later spec edit says the previous artifact has not changed
+
+- **WHEN** `design.md` and the delta spec were last committed together
+- **THEN** the design prompt says the previous artifact has not changed
+
+#### Scenario: A design run before design.md exists says the file does not exist yet
+
+- **WHEN** the checkout has no `design.md`
+- **THEN** the design prompt says `design.md` does not exist yet
+
+#### Scenario: A plan run says the issue text is the upstream
+
+- **WHEN** the machine runs `plan`
+- **THEN** the prompt says the issue text is the upstream of `proposal.md` and that the file existing is not a reason to leave it
+
+#### Scenario: A code run says the action has no upstream diff
+
+- **WHEN** the machine runs `implement`
+- **THEN** the prompt says this action has no upstream diff
+
+#### Scenario: A run whose diff cannot be read does not treat the file as already right
+
+- **WHEN** the machine runs `design` in a checkout that is not a git repository
+- **THEN** the prompt says the upstream diff could not be read and not to treat the existing file as already right

@@ -98,7 +98,7 @@ A layer marker that sits only on the pull-request conversation SHALL leave the p
 
 ### Requirement: A classified marker moves before a held review gate
 
-A classified layer marker on an open thread SHALL move the phase, or start the current layer's action, before a held review gate is repeated. An open thread with no marker SHALL still be classified first. `wait-human` SHALL keep the gate when no thread carries a layer marker.
+A classified layer marker on an open thread SHALL move the phase, or start the current layer's action, before a held review gate is repeated. An open thread with no marker SHALL still be classified first. An unanswered conversation SHALL be classified before that thread's action. A conversation note, with no layer thread, SHALL leave the gate in place. `wait-human` SHALL keep the gate when no thread carries a layer marker.
 
 #### Scenario: An unlabeled thread during a held design review is classified
 
@@ -114,6 +114,21 @@ A classified layer marker on an open thread SHALL move the phase, or start the c
 
 - **WHEN** `designing` has `wait-human` and an open thread marks `design`
 - **THEN** the machine improves the design and does not repeat the design gate
+
+#### Scenario: A proposal marker during a held proposal review improves the proposal
+
+- **WHEN** `proposing` has `wait-human`, the conversation is answered, and an open thread marks `proposal`
+- **THEN** the machine improves the proposal and does not repeat the proposal gate
+
+#### Scenario: A note during a held proposal review keeps the gate
+
+- **WHEN** `proposing` has `wait-human`, the conversation is a note, and no thread carries a layer
+- **THEN** the machine repeats the proposal gate
+
+#### Scenario: An unanswered conversation is classified before the proposal thread
+
+- **WHEN** `proposing` has `wait-human`, the last conversation comment is a person's and carries no marker, and an open thread marks `proposal`
+- **THEN** the machine classifies that comment and does not improve the proposal
 
 ### Requirement: An open item keeps its file's layer
 

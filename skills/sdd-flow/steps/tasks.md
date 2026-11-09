@@ -21,7 +21,9 @@ Files are named only in the task card. The cut follows the caller path.
 
 ## Steps
 
-1. Collect every Scenario in the delta. Cut them into slices.
+An open thread of layer `tasks`: Fix thread (`CONTEXT.md`), then step 8. Do not rewrite the task files in the steps in between.
+
+1. § Upstream says the previous artifact has not changed and there is no open tasks thread: go to step 8. The block says `tasks.md` does not exist yet: collect every Scenario in the delta and cut them into slices. A diff: cut slices for the facts in the block. A scenario the diff drops leaves its task.
 2. `tasks.md` and one `tasks/<id>.md` per slice, by `CONTEXT.md` § Artifacts. The task file is the implementer's whole instruction. Copy the commands from `## Verification boundary` of the capabilities whose scenarios are in the slice. The test path in `## Proof` follows the boundary's path rule for the first file in `## Source`; without a rule, it sits beside that file. Replace `<test-file>` with that path, and copy the trace line with the commands. In `## Proof`, write the timing beside them: the one-file command is the check on each attempt, and the layer command, with the fast suite and the type check when the boundary names them, runs once after that command exits 0. Do not look the commands up. A boundary with no command: Hand-off to `design` on that capability. Do not write the card. Do not invent a package command.
 3. A technical task with no scenario points at a `design.md` item.
 4. Compute the seams of this change. A seam does not by itself create a child issue.

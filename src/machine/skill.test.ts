@@ -164,10 +164,10 @@ test('an existing artifact stays only when the upstream block says nothing chang
   assert.match(context, /## Upstream/);
   assert.match(context, /Do not run git to rebuild it/);
   assert.match(plan, /file existing is not a reason to leave it|every caller-visible sentence/);
-  assert.match(specify, /previous artifact has not changed/);
+  assert.match(specify, /stamp matches/);
   assert.match(specify, /Do not judge a match from the whole proposal/);
   assert.match(design, /Do not judge `design.md` already right from the whole spec/);
-  assert.match(tasks, /previous artifact has not changed/);
+  assert.match(tasks, /stamp matches/);
   assert.doesNotMatch(design, /design\.md` is already right/);
   assert.doesNotMatch(plan, /proposal\.md` already exists: leave it/);
 });

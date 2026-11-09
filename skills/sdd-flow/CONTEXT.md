@@ -41,14 +41,14 @@ Earliest to latest: proposal, spec, design, tasks, code. The machine moves the p
 
 ## Upstream
 
-The prompt carries an `## Upstream` block. That block is the only record of what changed in the previous artifact since this step's file was last committed. Do not run git to rebuild it. Listing titles to satisfy a check is allowed. The facts to write come from the block.
+The prompt carries an `## Upstream` block. That block is the current input and the revision this file has absorbed. Do not run git to rebuild it. Listing titles to satisfy a check is allowed. The facts to write come from the block.
 
-- The block says this file does not exist yet: write it from the previous artifact, as the step says.
-- The block says the previous artifact has not changed: leave this file.
-- The block is a diff: a fact in that diff that this file does not already say is an edit. The whole previous file is not where those facts are found.
-- The block says the diff could not be read: do not leave this file.
+- The block says this file does not exist yet: write it from the previous artifact, as the step says. Put `sdd-absorbed: <revision>` on its own line.
+- The block says the stamp matches: leave this file.
+- The block names an input revision: a fact in that text that this file does not already say is an edit. Move `sdd-absorbed:` to that revision only when the input is folded. Do not blank a section this file owns.
+- The block says the previous artifact could not be read: do not leave this file.
 
-`plan`: the issue text above the block is the previous artifact. A caller-visible sentence there that `proposal.md` does not say is an edit. The file existing is not a reason to leave it. `specify`: the previous artifact is `proposal.md`. `design`: the previous artifact is the delta specs. `tasks`: the previous artifacts are the delta specs and `design.md`. Any other action: the block says this action has no upstream diff.
+`plan`: the issue text above the block is the previous artifact. A caller-visible sentence there that `proposal.md` does not say is an edit. The file existing is not a reason to leave it. `specify`: the previous artifact is `proposal.md`. `design`: the previous artifact is the delta specs. `tasks`: the previous artifacts are the delta specs and `design.md`. Any other action: the block says this action has no previous artifact.
 
 ## Capability
 

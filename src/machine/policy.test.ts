@@ -39,6 +39,12 @@ function change(over: Partial<ChangeView> = {}): ChangeView {
     capabilities: [],
     missingBaseline: [],
     unjudged: [],
+    proposalRevision: '',
+    specsRevision: '',
+    tasksInputRevision: '',
+    specStamp: '',
+    designStamp: '',
+    tasksStamp: '',
     ...over,
   };
 }

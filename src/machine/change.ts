@@ -19,7 +19,42 @@ export type ChangeView = {
   missingBaseline: string[];
   /** Added ids `## Shelf` does not list yet. The baseline look has not been published. */
   unjudged: string[];
+  /** Hash of `proposal.md`. Empty when the caller did not read a checkout. */
+  proposalRevision: string;
+  /** Hash of the delta specs. */
+  specsRevision: string;
+  /** Hash of the delta specs and `design.md`, the input `tasks.md` absorbs. */
+  tasksInputRevision: string;
+  /** `sdd-absorbed` shared by every delta spec. Empty when any spec omits it. */
+  specStamp: string;
+  /** `sdd-absorbed` in `design.md`. */
+  designStamp: string;
+  /** `sdd-absorbed` in `tasks.md`. */
+  tasksStamp: string;
 };
+
+/** The `sdd-absorbed` line a phase file moves when it folds its input. */
+export function absorbedStamp(text: string): string {
+  return /^sdd-absorbed: ([0-9a-f]+)\s*$/m.exec(text)?.[1] ?? '';
+}
+
+/** A revision of the current input bytes. This is not a commit and not a diff. */
+export function contentRevision(chunks: {path: string; text: string}[]): string {
+  const body = [...chunks]
+    .sort((a, b) => a.path.localeCompare(b.path))
+    .map(chunk => `# ${chunk.path}\n${chunk.text}`)
+    .join('\n');
+  return createHash('sha256').update(body).digest('hex').slice(0, 16);
+}
+
+export function sharedStamp(texts: string[]): string {
+  if (texts.length === 0) {
+    return '';
+  }
+  const stamps = texts.map(absorbedStamp);
+  const first = stamps[0] ?? '';
+  return first !== '' && stamps.every(stamp => stamp === first) ? first : '';
+}
 
 /** Change-file headings the machine reads; `skills/sdd-flow/CONTEXT.md` § Artifacts states them. */
 export const HEADINGS = {
@@ -139,6 +174,13 @@ export function readChange(key: string, files: FileSource): ChangeView {
   const tasksPath = path.join(dir, 'tasks.md');
   const docs = new Set(changeDocuments(dir, files));
   const proposal = files.read(proposalPath);
+  const designText = files.read(designPath);
+  const tasksText = files.read(tasksPath);
+  const specRels = files
+    .list(path.join(dir, 'specs'))
+    .filter(rel => rel.endsWith('spec.md'))
+    .sort();
+  const specChunks = specRels.map(rel => ({path: rel, text: files.read(rel)}));
   const missing = missingBaselineIds(proposal, rel => files.exists(rel));
   return {
     proposal: docs.has(proposalPath),
@@ -155,6 +197,12 @@ export function readChange(key: string, files: FileSource): ChangeView {
     capabilities: namedCapabilities(proposal),
     missingBaseline: missing,
     unjudged: unjudgedAddedIds(proposal),
+    proposalRevision: contentRevision([{path: proposalPath, text: proposal}]),
+    specsRevision: contentRevision(specChunks),
+    tasksInputRevision: contentRevision([...specChunks, {path: designPath, text: designText}]),
+    specStamp: sharedStamp(specChunks.map(chunk => chunk.text)),
+    designStamp: absorbedStamp(designText),
+    tasksStamp: absorbedStamp(tasksText),
   };
 }
 

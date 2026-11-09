@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import {mkdirSync, mkdtempSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
@@ -9,6 +8,9 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import type {AgentRun} from './agent.ts';
 import {launcherRuntime} from '../cli.ts';
+import {contentRevision} from '../machine/change.ts';
+import {action, change, issue, pull} from '../machine/harness.ts';
+import {accept, decide} from '../machine/policy.ts';
 import type {Vcs} from '../machine/port.ts';
 
 const runAgent = vi.hoisted(() => vi.fn(async (_run: AgentRun) => ({text: ''})));
@@ -28,24 +30,8 @@ function idleVcs(root: string): Vcs {
   };
 }
 
-function git(cwd: string, args: string[]): void {
-  execFileSync('git', args, {
-    cwd,
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      GIT_AUTHOR_NAME: 'Test',
-      GIT_AUTHOR_EMAIL: 'test@example.com',
-      GIT_COMMITTER_NAME: 'Test',
-      GIT_COMMITTER_EMAIL: 'test@example.com',
-    },
-  });
-}
-
 function repo(): string {
-  const root = mkdtempSync(path.join(tmpdir(), 'sdd-upstream-'));
-  git(root, ['init']);
-  return root;
+  return mkdtempSync(path.join(tmpdir(), 'sdd-upstream-'));
 }
 
 function write(root: string, rel: string, text: string): void {
@@ -74,45 +60,42 @@ async function promptOf(root: string, skill: string, phase: string): Promise<str
 }
 
 spec('artifact', () => {
-  requirement('The writing prompt carries the upstream diff', () => {
-    scenario('A design run after a spec edit carries that diff', async () => {
+  requirement('The writing prompt carries the input revision', () => {
+    scenario('A design run after a spec edit carries that text', async () => {
       const root = repo();
       const change = 'openspec/changes/issue-6';
       write(root, `${change}/design.md`, '# design\n');
-      write(root, `${change}/specs/unsent-remark/spec.md`, 'A remark stays until send.\n');
-      git(root, ['add', '.']);
-      git(root, ['commit', '-m', 'design']);
       write(
         root,
         `${change}/specs/unsent-remark/spec.md`,
         'A refused send from «Записать» does not post a conversation comment.\n',
       );
-      git(root, ['add', '.']);
-      git(root, ['commit', '-m', 'spec']);
       const upstream = await promptOf(root, 'design', 'designing');
       assert.match(upstream, /does not post a conversation comment/);
-      assert.equal(upstream.includes('has not changed'), false);
+      assert.match(upstream, /The input revision is/);
+      assert.equal(upstream.includes('matches the input revision'), false);
+      assert.equal(upstream.includes('```diff'), false);
     });
 
-    scenario(
-      'A design run with no later spec edit says the previous artifact has not changed',
-      async () => {
-        const root = repo();
-        const change = 'openspec/changes/issue-6';
-        write(root, `${change}/design.md`, '# design\n');
-        write(root, `${change}/specs/unsent-remark/spec.md`, 'A remark stays until send.\n');
-        git(root, ['add', '.']);
-        git(root, ['commit', '-m', 'together']);
-        const upstream = await promptOf(root, 'design', 'designing');
-        assert.match(upstream, /The previous artifact has not changed/);
-      },
-    );
+    scenario('A design run whose stamp matches says so in one sentence', async () => {
+      const root = repo();
+      const change = 'openspec/changes/issue-6';
+      const specText = 'A remark stays until send.\n';
+      const specPath = `${change}/specs/unsent-remark/spec.md`;
+      const revision = contentRevision([{path: specPath, text: specText}]);
+      write(root, `${change}/design.md`, `# design\nsdd-absorbed: ${revision}\n`);
+      write(root, specPath, specText);
+      const upstream = await promptOf(root, 'design', 'designing');
+      assert.match(
+        upstream,
+        /The stamp in `openspec\/changes\/issue-6\/design\.md` matches the input revision/,
+      );
+      assert.equal(upstream.includes('A remark stays until send.'), false);
+    });
 
     scenario('A design run before design.md exists says the file does not exist yet', async () => {
       const root = repo();
       write(root, 'openspec/changes/issue-6/proposal.md', '# proposal\n');
-      git(root, ['add', '.']);
-      git(root, ['commit', '-m', 'proposal']);
       const upstream = await promptOf(root, 'design', 'designing');
       assert.match(upstream, /design\.md` does not exist yet/);
     });
@@ -123,19 +106,92 @@ spec('artifact', () => {
       assert.match(upstream, /file existing is not a reason to leave it/);
     });
 
-    scenario('A code run says the action has no upstream diff', async () => {
+    scenario('A code run says the action has no previous artifact', async () => {
       const upstream = await promptOf(repo(), 'implement', 'implementing');
-      assert.match(upstream, /This action has no upstream diff/);
+      assert.match(upstream, /This action has no previous artifact/);
     });
 
     scenario(
-      'A run whose diff cannot be read does not treat the file as already right',
+      'A run whose previous artifact cannot be read does not treat the file as already right',
       async () => {
-        const root = mkdtempSync(path.join(tmpdir(), 'sdd-upstream-none-'));
+        const root = repo();
+        mkdirSync(path.join(root, 'openspec/changes/issue-6/design.md'), {recursive: true});
         const upstream = await promptOf(root, 'design', 'designing');
         assert.match(upstream, /could not be read/);
         assert.match(upstream, /Do not treat the existing file as already right/);
       },
     );
+  });
+
+  requirement('A stale stamp restarts the writing skill', () => {
+    const behind = {
+      proposalRevision: 'aaa',
+      specStamp: 'bbb',
+      specsRevision: 'ccc',
+      designStamp: 'ddd',
+      tasksInputRevision: 'eee',
+      tasksStamp: 'fff',
+    };
+    scenario('A stale spec stamp restarts specify before the auto advance', () => {
+      const decision = decide(
+        issue(1, ['sdd:specifying', 'sdd:auto-spec']),
+        [],
+        [pull(9)],
+        change({proposal: true, delta: true, ...behind}),
+      );
+      assert.equal(action(decision), 'create-initial-specs');
+    });
+    scenario('A matching spec stamp still opens the gate', () => {
+      const decision = decide(
+        issue(1, ['sdd:specifying']),
+        [],
+        [pull(9)],
+        change({proposal: true, delta: true, proposalRevision: 'aaa', specStamp: 'aaa'}),
+      );
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.deepEqual(decision.gate, {artifact: 'spec', from: 'specifying', to: 'specified'});
+      }
+    });
+    scenario('A stale design stamp restarts design before the auto advance', () => {
+      const decision = decide(
+        issue(1, ['sdd:designing', 'sdd:auto-design']),
+        [],
+        [pull(9)],
+        change({proposal: true, delta: true, design: true, ...behind}),
+      );
+      assert.equal(action(decision), 'create-design');
+    });
+    scenario('A stale tasks stamp restarts tasks before implementing', () => {
+      const decision = decide(
+        issue(1, ['sdd:tasking']),
+        [],
+        [pull(9)],
+        change({proposal: true, delta: true, design: true, tasks: true, ...behind}),
+      );
+      assert.equal(action(decision), 'create-tasks');
+    });
+    scenario('An open decision waits before a stale design stamp', () => {
+      const decision = decide(
+        issue(1, ['sdd:designing', 'sdd:auto-design']),
+        [],
+        [pull(9)],
+        change({proposal: true, delta: true, design: true, openDecisions: 1, ...behind}),
+      );
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.match(decision.reason, /open decision/);
+      }
+    });
+    scenario('Accept refuses a stale spec stamp', () => {
+      const decision = accept(
+        issue(1, ['sdd:cycle', 'sdd:specifying']),
+        change({proposal: true, delta: true, ...behind}),
+      );
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.match(decision.reason, /not the stamp/);
+      }
+    });
   });
 });

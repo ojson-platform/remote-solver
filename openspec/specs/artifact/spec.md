@@ -87,19 +87,19 @@ The prompt for a skill run SHALL include the issue title and body. It SHALL say 
 - **WHEN** the machine runs a skill for an issue with an empty title and an empty body
 - **THEN** the prompt includes that empty title and that empty body, says the issue has no description, and still tells the run not to search
 
-### Requirement: The writing prompt carries the upstream diff
+### Requirement: The writing prompt carries the input revision
 
-For `specify`, `design`, and `tasks`, the prompt SHALL include the diff of the previous artifact since the commit that last changed this step's file. An empty diff SHALL say the previous artifact has not changed. A missing file SHALL say that file does not exist yet. `plan` SHALL be told that the issue text is the upstream and that the proposal existing is not a reason to leave it. Any other skill SHALL be told that the action has no upstream diff. A diff that cannot be read SHALL tell the run not to treat the existing file as already right.
+For `specify`, `design`, and `tasks`, the prompt SHALL carry the current text of the previous artifact and the `sdd-absorbed` stamp in this step's file. A stamp that equals the revision of that text SHALL be one sentence and SHALL NOT include the text. A missing file SHALL say that file does not exist yet. `plan` SHALL be told that the issue text is the upstream and that the proposal existing is not a reason to leave it. Any other skill SHALL be told that the action has no previous artifact. An unreadable previous artifact SHALL tell the run not to treat the existing file as already right. The revision SHALL be a hash of the current bytes. The prompt SHALL NOT be a diff against a commit.
 
-#### Scenario: A design run after a spec edit carries that diff
+#### Scenario: A design run after a spec edit carries that text
 
-- **WHEN** `design.md` is already committed and a later commit changes the delta spec
-- **THEN** the design prompt contains that spec diff and does not say the previous artifact has not changed
+- **WHEN** `design.md` has no stamp and the delta spec states a fact
+- **THEN** the design prompt contains that fact, names the input revision, and does not say the stamp matches
 
-#### Scenario: A design run with no later spec edit says the previous artifact has not changed
+#### Scenario: A design run whose stamp matches says so in one sentence
 
-- **WHEN** `design.md` and the delta spec were last committed together
-- **THEN** the design prompt says the previous artifact has not changed
+- **WHEN** `design.md` records `sdd-absorbed` equal to the revision of the delta spec
+- **THEN** the design prompt says the stamp matches the input revision and does not include the spec text
 
 #### Scenario: A design run before design.md exists says the file does not exist yet
 
@@ -111,12 +111,46 @@ For `specify`, `design`, and `tasks`, the prompt SHALL include the diff of the p
 - **WHEN** the machine runs `plan`
 - **THEN** the prompt says the issue text is the upstream of `proposal.md` and that the file existing is not a reason to leave it
 
-#### Scenario: A code run says the action has no upstream diff
+#### Scenario: A code run says the action has no previous artifact
 
 - **WHEN** the machine runs `implement`
-- **THEN** the prompt says this action has no upstream diff
+- **THEN** the prompt says this action has no previous artifact
 
-#### Scenario: A run whose diff cannot be read does not treat the file as already right
+#### Scenario: A run whose previous artifact cannot be read does not treat the file as already right
 
-- **WHEN** the machine runs `design` in a checkout that is not a git repository
-- **THEN** the prompt says the upstream diff could not be read and not to treat the existing file as already right
+- **WHEN** the machine runs `design` and `design.md` is not a file
+- **THEN** the prompt says the previous artifact could not be read and not to treat the existing file as already right
+
+### Requirement: A stale stamp restarts the writing skill
+
+On `specifying`, when a delta exists and its stamp is not the proposal revision, the machine SHALL run the spec skill before the review gate and before `sdd:auto-spec`. On `designing`, an open decision SHALL wait before that check. When `design.md` exists, no decision is open, and its stamp is not the spec revision, the machine SHALL run the design skill before the review gate and before `sdd:auto-design`. On `tasking`, when `tasks.md` exists and its stamp is not the revision of the specs and the design, the machine SHALL run the tasks skill before it leaves for implementing. A matching stamp SHALL leave the gate or the advance in place. `sdd accept` SHALL refuse while the stamp of that phase is behind.
+
+#### Scenario: A stale spec stamp restarts specify before the auto advance
+
+- **WHEN** the phase is `specifying`, `sdd:auto-spec` is set, and the delta stamp is not the proposal revision
+- **THEN** the machine runs the spec skill and does not advance
+
+#### Scenario: A matching spec stamp still opens the gate
+
+- **WHEN** the phase is `specifying` and the delta stamp equals the proposal revision
+- **THEN** the machine opens the review gate
+
+#### Scenario: A stale design stamp restarts design before the auto advance
+
+- **WHEN** the phase is `designing`, `sdd:auto-design` is set, no decision is open, and the design stamp is not the spec revision
+- **THEN** the machine runs the design skill and does not advance
+
+#### Scenario: A stale tasks stamp restarts tasks before implementing
+
+- **WHEN** the phase is `tasking` and the tasks stamp is not the revision of the specs and the design
+- **THEN** the machine runs the tasks skill and does not advance
+
+#### Scenario: An open decision waits before a stale design stamp
+
+- **WHEN** the phase is `designing`, a decision is open, and the design stamp is not the spec revision
+- **THEN** the machine waits on the open decision
+
+#### Scenario: Accept refuses a stale spec stamp
+
+- **WHEN** a person accepts `specifying` and the delta stamp is not the proposal revision
+- **THEN** the machine refuses

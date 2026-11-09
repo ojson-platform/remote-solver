@@ -97,6 +97,35 @@ export function gateBlocker(key: string, phase: Phase, change: ChangeView): stri
     const heading = phase === 'designing' ? HEADINGS.openDecisions : HEADINGS.openQuestions;
     return `#${key} still has open items under ## ${heading} in ${file}`;
   }
+  return stampBehind(phase, change);
+}
+
+/** The phase file's stamp is behind its input. Empty revisions are the test harness, not a checkout. */
+export function stampBehind(phase: Phase, change: ChangeView): string | null {
+  if (
+    phase === 'specifying' &&
+    change.delta &&
+    change.proposalRevision !== '' &&
+    change.specStamp !== change.proposalRevision
+  ) {
+    return 'the proposal revision is not the stamp';
+  }
+  if (
+    phase === 'designing' &&
+    change.design &&
+    change.specsRevision !== '' &&
+    change.designStamp !== change.specsRevision
+  ) {
+    return 'the spec revision is not the stamp';
+  }
+  if (
+    phase === 'tasking' &&
+    change.tasks &&
+    change.tasksInputRevision !== '' &&
+    change.tasksStamp !== change.tasksInputRevision
+  ) {
+    return 'the design revision is not the stamp';
+  }
   return null;
 }
 
@@ -415,6 +444,15 @@ export function decide(
           : 'publish the change to the pull request',
       );
     }
+    if (stampBehind(phase, change)) {
+      return agent(
+        issue.key,
+        'create-initial-specs',
+        phase,
+        String(pr.id),
+        'the proposal revision is not the stamp',
+      );
+    }
     if (auto('sdd:auto-spec')) {
       return {kind: 'advance', issue: issue.key, to: 'designing', reason: 'sdd:auto-spec'};
     }
@@ -441,6 +479,15 @@ export function decide(
         reason: `${change.openDecisions} open decision(s) in design.md`,
       };
     }
+    if (stampBehind(phase, change)) {
+      return agent(
+        issue.key,
+        'create-design',
+        phase,
+        pr ? String(pr.id) : '',
+        'the spec revision is not the stamp',
+      );
+    }
     if (auto('sdd:auto-design')) {
       return {kind: 'advance', issue: issue.key, to: 'tasking', reason: 'sdd:auto-design'};
     }
@@ -458,6 +505,15 @@ export function decide(
         phase,
         pr ? String(pr.id) : '',
         change.tasks ? 'publish tasks.md to the pull request' : 'write tasks.md and publish it',
+      );
+    }
+    if (stampBehind(phase, change)) {
+      return agent(
+        issue.key,
+        'create-tasks',
+        phase,
+        pr ? String(pr.id) : '',
+        'the design revision is not the stamp',
       );
     }
     const kids = children(issue.key, issues);

@@ -1,6 +1,7 @@
-Immediately after a successful send the thread is visible in the sidebar and the draft is cleared together with that
+- Immediately after a successful send the thread is visible in the sidebar and the draft is cleared together with that
+- When the pull request has that thread, the draft disappears
 
-After the GitHub thread has been accepted, the draft must disappear
+sdd-delta: 6bfb0d887ae27abd
 
 ## Source
 
@@ -12,7 +13,7 @@ This slice waits on **`depends-49-sidebar`** (Technical prerequisites).
 
 ## Proof
 
-`src/window/unsent-remark.test.ts` observes immediately after a successful send: the thread appears in the sidebar (on its line or phase foot per #49) and the draft clears in the same paint; once the GitHub-held thread exists for that remark, the draft stays cleared.
+`src/window/unsent-remark.test.ts` observes immediately after a successful send: the thread appears in the sidebar (on its line or phase foot per #49) and the draft clears in the same paint; when the pull request has that thread, the draft disappears.
 
 - **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --reporter=default src/window/unsent-remark.test.ts`
 - **Once** after that command exits 0: `pnpm test`; then `pnpm run test:types`

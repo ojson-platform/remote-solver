@@ -1,3 +1,5 @@
+sdd-delta: 6bfb0d887ae27abd
+
 ## Source
 
 `openspec/changes/issue-28/design.md`, section **Technical prerequisites** (`Depends: #49` and sidebar placement this change assumes).

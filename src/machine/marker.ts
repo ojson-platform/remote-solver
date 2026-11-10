@@ -5,13 +5,14 @@
 
 export const ROBOT_MARK = '🤖 ';
 
+const TOKENS = ['sdd:fixed', 'sdd:note', 'sdd:layer=', 'sdd:begin'];
+
 export type Marker =
   | {kind: 'layer'; layer: string}
   | {kind: 'note'}
   | {kind: 'fixed'; commit: string | null}
   | {kind: 'begin'};
 
-const TOKENS = ['sdd:fixed', 'sdd:note', 'sdd:layer=', 'sdd:begin'];
 
 /** Layers a review thread may carry. Change is the directory, not a layer marker. */
 export const THREAD_LAYER_MARKERS = [

@@ -6,7 +6,7 @@ import {cycleRecord, decide, effectSignature, refusalBody, type Decision} from '
 import type {FileSource, IssueRecord, Review, Tracker} from './port.ts';
 import type {PullSnapshot} from './policy.ts';
 import {queueOf} from './queues.ts';
-import type {QueueConfig} from './service-config.ts';
+import {sameService, type QueueConfig} from './service-config.ts';
 import {pullSnapshots, type CycleSnapshot} from './snapshot.ts';
 
 /** Archive focus. The first line is the marker; the prose matches the accept shape. */
@@ -78,7 +78,21 @@ type IssueRead = {
   /** Replaces the archive command. Tests use this; the poll uses `foldChange`. */
   fold?: (root: string, key: string) => void;
   restore?: (root: string, key: string) => void;
+  /** This checkout. A foreign `service` waits before any label write. */
+  root?: string;
 };
+
+/** The service field names another directory. The verb and the poll share this wait. */
+export function serviceWait(
+  root: string,
+  record: {key: string; service?: string},
+): Decision | null {
+  const declared = (record.service ?? '').trim();
+  if (declared !== '' && !sameService(root, declared)) {
+    return {kind: 'wait', issue: record.key, reason: `service is ${declared}`};
+  }
+  return null;
+}
 
 function nextLabels(before: string[], decision: Decision): string[] {
   let labels = before;
@@ -110,6 +124,12 @@ async function walk(key: string, options: IssueRead): Promise<Decision> {
     );
     if (!record) {
       return {kind: 'done', issue: key, reason: 'not in the open cycle'};
+    }
+    if (options.root) {
+      const foreign = serviceWait(options.root, record);
+      if (foreign) {
+        return foreign;
+      }
     }
     const view = change ?? readChange(key, options.files);
     const message = tip ?? '';
@@ -211,6 +231,7 @@ export async function resolveCycle(
   queues: QueueConfig[],
   busy: ReadonlySet<string> = new Set(),
   filesAt?: (key: string) => FileSource,
+  root?: string,
 ): Promise<Decision[]> {
   const empty = queueLabelOf(snapshot, queues);
   if (empty.length) {
@@ -234,6 +255,7 @@ export async function resolveCycle(
         pulls: snapshot.pulls.get(record.key) ?? [],
         issues: snapshot.issues,
         tip: snapshot.tips ? (tip ?? '') : '',
+        root,
       }),
     );
   }
@@ -272,6 +294,7 @@ export async function performIssue(
     readTip?: () => Promise<string | undefined>;
     fold?: (root: string, key: string) => void;
     restore?: (root: string, key: string) => void;
+    root?: string;
   },
 ): Promise<Decision> {
   const decision = await walk(key, {...options, perform: true});
@@ -291,10 +314,18 @@ export async function performCycle(
     queues: QueueConfig[];
     checkout?: (key: string) => Promise<string>;
     readTip?: (key: string) => Promise<string | undefined>;
+    root?: string;
   },
   busy: ReadonlySet<string> = new Set(),
 ): Promise<Decision[]> {
-  const decisions = await resolveCycle(snapshot, options.tracker, options.queues, busy);
+  const decisions = await resolveCycle(
+    snapshot,
+    options.tracker,
+    options.queues,
+    busy,
+    undefined,
+    options.root,
+  );
   const performed: Decision[] = [];
   for (const decision of decisions) {
     const command =
@@ -313,6 +344,7 @@ export async function performCycle(
         tip: snapshot.tips ? (tip ?? '') : '',
         checkout: options.checkout ? () => options.checkout!(decision.issue!) : undefined,
         readTip: options.readTip ? () => options.readTip!(decision.issue!) : undefined,
+        root: options.root,
       }),
     );
   }

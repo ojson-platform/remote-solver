@@ -18,7 +18,8 @@ import {parse} from 'yaml';
 import {ghErrorLine, githubPauseRemaining} from '../adapters/github.ts';
 import {readBranch, type BranchFacts, type BranchText} from '../machine/change.ts';
 import {markerName, parseMarker} from '../machine/marker.ts';
-import {phaseOf} from '../machine/phase.ts';
+import {setPhase} from '../machine/labels.ts';
+import {phaseOf, removedPhaseLabels, type Phase} from '../machine/phase.ts';
 import {modelFor, type SkillMode} from '../machine/skill.ts';
 import type {Decision} from '../machine/policy.ts';
 import {runSpy, type RunningTurn} from '../main.ts';
@@ -384,7 +385,12 @@ export function openLiveBoard(options: LiveBoardOptions) {
     return token;
   }
 
+  function labelsOf(key: string): string[] {
+    return [...(store.tickets().find(ticket => ticket.key === key)?.labels ?? [])];
+  }
+
   function changeLabels(key: string, add: readonly string[], remove: readonly string[]): void {
+    const before = labelsOf(key);
     bump();
     const tokens: number[] = [];
     for (const label of remove) {
@@ -429,10 +435,12 @@ export function openLiveBoard(options: LiveBoardOptions) {
             if (wishes.some(item => item.key === key && item.label === wish.label)) {
               continue;
             }
-            if (wish.on) {
-              labels = labels.filter(label => label !== wish.label);
-            } else if (!labels.includes(wish.label)) {
+            const had = before.includes(wish.label);
+            const has = labels.includes(wish.label);
+            if (had && !has) {
               labels.push(wish.label);
+            } else if (!had && has) {
+              labels = labels.filter(label => label !== wish.label);
             }
           }
           return {...ticket, labels};
@@ -720,7 +728,22 @@ export function openLiveBoard(options: LiveBoardOptions) {
         forget(tracker.assign(key, login));
       },
       writePhase(key, phase) {
-        changeLabels(key, [`sdd:${phase}`], []);
+        const before = labelsOf(key);
+        const remove = removedPhaseLabels(before, phase as Phase);
+        bump();
+        patch(key, ticket => {
+          const labels = ticket.labels.filter(label => !remove.includes(label));
+          const add = `sdd:${phase}`;
+          if (!labels.includes(add)) {
+            labels.push(add);
+          }
+          return {...ticket, labels};
+        });
+        void setPhase(key, phase as Phase, tracker, {labels: before}).catch(error => {
+          logProblem(error);
+          bump();
+          patch(key, ticket => ({...ticket, labels: before}));
+        });
       },
       editLabels(key, add, remove = []) {
         changeLabels(key, add, remove);

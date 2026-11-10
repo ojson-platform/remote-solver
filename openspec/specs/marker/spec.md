@@ -62,6 +62,25 @@ A body that starts with the robot mark SHALL be the robot. An author on the igno
 - **WHEN** the last conversation comment is from a login that contains `[bot]` and is not on the ignore list, and the body has no marker
 - **THEN** the conversation is unanswered
 
+### Requirement: A focus record is a focus
+
+A comment whose first line is a focus marker SHALL be a focus, with or without the robot mark. A body that is not a focus record and starts with the robot mark, or whose author is ignored, SHALL be the robot. Any other comment SHALL be a person. Only a person comment SHALL be a manager comment.
+
+#### Scenario: An unmarked focus record is a focus
+
+- **WHEN** the first line is `sdd:focus:code`, the robot mark is absent, and the author is not ignored
+- **THEN** the comment is a focus and is not a manager comment
+
+#### Scenario: A plain sentence is a person
+
+- **WHEN** the body has no focus marker and no robot mark, and the author is not ignored
+- **THEN** the comment is a person and is a manager comment
+
+#### Scenario: A marked layer is a robot
+
+- **WHEN** the body starts with the robot mark and the first line is not a focus marker
+- **THEN** the comment is a robot and is not a manager comment
+
 ### Requirement: The earliest layer rolls the phase back
 
 Among open threads, the earliest of `proposal`, `spec`, `design`, `tasks`, and `code` SHALL move the phase there when that phase is earlier than the current one. `out`, `note`, `fixed`, and `begin` SHALL NOT move the phase. On `verifying` this rollback SHALL wait until the checks rule runs.

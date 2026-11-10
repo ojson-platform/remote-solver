@@ -19,7 +19,7 @@ import {parse} from 'yaml';
 import {authorIgnored} from '../machine/ignore.ts';
 import {isFocusRecord, markRobot} from '../machine/marker.ts';
 import {pullTitlePrefix} from '../machine/naming.ts';
-import {spokeByRobot} from '../machine/review.ts';
+import {readComment, spokeByRobot} from '../machine/review.ts';
 
 export type CheckRollup = {
   state: string;
@@ -826,10 +826,9 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       const raw = JSON.parse(
         await run(['api', `repos/${repoSlug()}/issues/${key}/comments?per_page=100`]),
       ) as {body?: string; user?: {login?: string}}[];
-      return raw.map(comment => {
-        const body = comment.body ?? '';
-        return {body, manager: !spokeByRobot(body, comment.user?.login ?? '', ignored)};
-      });
+      return raw.map(comment =>
+        readComment(comment.body ?? '', comment.user?.login ?? '', ignored),
+      );
     },
     async close(key, comment) {
       await run(['issue', 'close', key, '--repo', repoSlug(), '--comment', markRobot(comment)]);
@@ -937,7 +936,12 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
       for (const pr of await linked(key)) {
         const id = String(pr.number);
         if (pr.state !== 'OPEN') {
-          found.push({id, title: pr.title, state: pr.state, checks: 'none'});
+          found.push({
+            id,
+            title: pr.title,
+            state: pr.state,
+            checks: classifyChecks({state: pr.state, statusCheckRollup: []}),
+          });
           continue;
         }
         const viewed = await viewPull(id);

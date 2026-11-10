@@ -6,7 +6,7 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {memoryPorts} from '../adapters/github.ts';
 import {change, issue, pull} from './harness.ts';
 import {setPhase} from './labels.ts';
-import {phaseOf} from './phase.ts';
+import {phaseOf, phaseRank, reachedRank} from './phase.ts';
 import {accept, cycleRecord, decide, settle} from './policy.ts';
 
 test('a gate label does not replace the writing phase', () => {
@@ -46,6 +46,11 @@ spec('phase', () => {
   requirement('Accepted wins over every other phase label', () => {
     scenario('Accepted wins over accepting', () => {
       assert.equal(phaseOf(['sdd:accepting', 'sdd:accepted']), 'accepted');
+    });
+    scenario('Accepted wins over cancelled on the rank', () => {
+      assert.equal(phaseOf(['sdd:accepted', 'sdd:cancelled']), 'accepted');
+      assert.equal(reachedRank(['sdd:accepted', 'sdd:cancelled']), phaseRank('accepted'));
+      assert.equal(reachedRank(['sdd:cancelled', 'sdd:tasking']), -1);
     });
   });
 

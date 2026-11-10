@@ -72,13 +72,10 @@ export function phaseRank(phase: Phase): number {
   return (PHASES as readonly string[]).indexOf(phase);
 }
 
-/** Rank of the working phase the labels name. A lone gate event stays that writing phase. */
+/** Rank of the working phase the labels name. A lone gate event stays that writing phase. Cancellation cuts the rank only when it is the phase. */
 export function reachedRank(labels: readonly string[]): number {
-  if (labels.includes('sdd:cancelled')) {
-    return -1;
-  }
   const phase = phaseOf([...labels]);
-  if (!phase) {
+  if (!phase || phase === 'cancelled') {
     return -1;
   }
   return phaseRank(phase);

@@ -7,10 +7,6 @@ export type State = {
 
 export type Report = {issue: string | null; reason: string};
 
-export function signature(decision: {phase: string; action: string; reason: string}): string {
-  return `${decision.phase}\0${decision.action}\0${decision.reason}`;
-}
-
 export function tick(
   state: State,
   decisions: Decision[],

@@ -17,7 +17,8 @@ import {
 } from './marker.ts';
 import {phaseOfLayer} from './review.ts';
 import {decide} from './policy.ts';
-import {readReview, reviewOf, spokeByRobot, threadsReport, type OpenItemFile} from './review.ts';
+import {commentKind, readComment, readReview, reviewOf, spokeByRobot, threadsReport, type OpenItemFile} from './review.ts';
+import {writtenFocusPages} from '../window/focus.ts';
 
 test('one parser reads every marker, fixed first, then note, then a layer', () => {
   assert.deepEqual(parseMarker('🤖 sdd:layer=spec → specifying'), {kind: 'layer', layer: 'spec'});
@@ -128,6 +129,27 @@ spec('marker', () => {
       const body = 'please rename the cache';
       const review = reviewOf([], [{robot: spokeByRobot(body, 'reviewer[bot]', ignored), body}]);
       assert.equal(review.unanswered, true);
+    });
+  });
+
+  requirement('A focus record is a focus', () => {
+    scenario('An unmarked focus record is a focus', () => {
+      const read = readComment('sdd:focus:code\nThe slice is true.\n', '3y3', []);
+      assert.equal(commentKind(read.body, '3y3', []), 'focus');
+      assert.equal(read.manager, false);
+      assert.equal(writtenFocusPages([read]).length, 1);
+    });
+    scenario('A plain sentence is a person', () => {
+      const read = readComment('please look', '3y3', []);
+      assert.equal(commentKind(read.body, '3y3', []), 'person');
+      assert.equal(read.manager, true);
+      assert.equal(writtenFocusPages([read]).length, 0);
+    });
+    scenario('A marked layer is a robot', () => {
+      const read = readComment('🤖 sdd:layer=code → implementing', '3y3', []);
+      assert.equal(commentKind(read.body, '3y3', []), 'robot');
+      assert.equal(read.manager, false);
+      assert.equal(writtenFocusPages([read]).length, 0);
     });
   });
 

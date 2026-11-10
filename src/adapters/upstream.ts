@@ -1,7 +1,8 @@
-import {existsSync, readdirSync, readFileSync, statSync} from 'node:fs';
+import {existsSync, readdirSync, statSync} from 'node:fs';
 import path from 'node:path';
 
 import {absorbedStamp, contentRevision, sharedStamp} from '../machine/change.ts';
+import {workingTree} from '../window/change-files.ts';
 
 const heading = '## Upstream';
 
@@ -11,14 +12,15 @@ function change(key: string): string {
 
 type Chunk = {path: string; text: string};
 
-function readFile(file: string): string | null {
-  if (!existsSync(file)) {
+function readFile(cwd: string, rel: string): string | null {
+  const abs = path.join(cwd, rel);
+  if (!existsSync(abs)) {
     return null;
   }
-  if (!statSync(file).isFile()) {
-    throw new Error(`not a file: ${file}`);
+  if (!statSync(abs).isFile()) {
+    throw new Error(`not a file: ${abs}`);
   }
-  return readFileSync(file, 'utf8');
+  return workingTree(cwd).read(rel);
 }
 
 function specChunks(cwd: string, key: string): Chunk[] {
@@ -34,12 +36,12 @@ function specChunks(cwd: string, key: string): Chunk[] {
     .filter(rel => rel.endsWith('spec.md'))
     .sort()
     .map(rel => {
-      const file = path.join(dir, rel);
-      const text = readFile(file);
+      const specRel = path.join(change(key), 'specs', rel);
+      const text = readFile(cwd, specRel);
       if (text === null) {
-        throw new Error(`missing ${file}`);
+        throw new Error(`missing ${path.join(cwd, specRel)}`);
       }
-      return {path: path.join(change(key), 'specs', rel), text};
+      return {path: specRel, text};
     });
 }
 
@@ -86,7 +88,7 @@ export function upstreamBlock(cwd: string, skill: string, key: string): string {
   try {
     if (skill === 'specify') {
       const proposalPath = `${root}/proposal.md`;
-      const proposal = readFile(path.join(cwd, proposalPath));
+      const proposal = readFile(cwd, proposalPath);
       const specs = specChunks(cwd, key);
       if (specs.length === 0) {
         return missing(`${root}/specs`);
@@ -100,7 +102,7 @@ export function upstreamBlock(cwd: string, skill: string, key: string): string {
         : folded(file, stamp, revision, input);
     }
     const file = skill === 'design' ? `${root}/design.md` : `${root}/tasks.md`;
-    const text = readFile(path.join(cwd, file));
+    const text = readFile(cwd, file);
     const specs = specChunks(cwd, key);
     const deltaRevision = contentRevision(specs);
     if (text === null) {
@@ -114,7 +116,7 @@ export function upstreamBlock(cwd: string, skill: string, key: string): string {
         ? specs
         : [
             ...specs,
-            {path: `${root}/design.md`, text: readFile(path.join(cwd, `${root}/design.md`)) ?? ''},
+            {path: `${root}/design.md`, text: readFile(cwd, `${root}/design.md`) ?? ''},
           ];
     const revision = contentRevision(input);
     const stamp = absorbedStamp(text);

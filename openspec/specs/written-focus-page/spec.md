@@ -50,6 +50,11 @@ The focus block SHALL page the written focus comments. A written focus comment S
 - **WHEN** `sdd:focus:accept` and these pages are already visible, and `sdd:focus:accept` is already one of these pages, together with leaving that comment out of the pages as the limit that can replace that
 - **THEN** `sdd:focus:accept` is one of these pages
 
+#### Scenario: An unmarked focus record is one of these pages
+
+- **WHEN** a comment's first line is `sdd:focus:code`, the robot mark is absent, and the comment is not a manager comment
+- **THEN** that comment is a written page
+
 #### Scenario: A manager comment is not the block
 
 - **WHEN** the last comment is a manager comment that begins with `sdd:focus`, and an earlier comment begins with `sdd:focus:code`

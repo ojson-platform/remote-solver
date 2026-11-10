@@ -423,14 +423,6 @@ function decideOpen(
   if (finishedCycle(pulls, record.folded, phase)) {
     const held = linkWait(issue, issues);
     if (held) {
-      const openTask =
-        phase === 'implementing' &&
-        change.tasks &&
-        change.openTasks > 0 &&
-        !open.some(pr => pr.conflict);
-      if (openTask) {
-        return agent(issue.key, 'implement-next-task', phase, '', 'next open task');
-      }
       return held;
     }
     return {kind: 'done', issue: issue.key, reason: 'finished cycle'};

@@ -556,6 +556,20 @@ function proveAWholePullRequestCommentBelongsToTheFocusBlockAndToNoSingleRow(): 
   rmSync(dir, {recursive: true, force: true});
 }
 
+function proveAnUnmarkedFocusRecordIsOneOfThesePages(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [
+    cycle('1', 'implementing', {
+      comments: [{body: 'sdd:focus:code\nThe slice is true.\n'}],
+    }),
+  ]);
+  window.openCard('1');
+  const focus = window.sidebar().find(block => block.kind === 'focus');
+  assert.deepEqual(focus, focusBlock('sdd:focus:code', 'The slice is true.\n'));
+  rmSync(dir, {recursive: true, force: true});
+}
+
 function proveAManagerCommentIsNotTheFocusBlock(): void {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
@@ -820,6 +834,9 @@ spec('written-focus-page', () => {
     });
     scenario('sdd:focus:accept is one of these pages', () => {
       proveSddFocusAcceptIsOneOfThesePages();
+    });
+    scenario('An unmarked focus record is one of these pages', () => {
+      proveAnUnmarkedFocusRecordIsOneOfThesePages();
     });
     scenario('A manager comment is not the block', () => {
       proveAManagerCommentIsNotTheFocusBlock();

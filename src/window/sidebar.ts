@@ -1,3 +1,4 @@
+import {hookPoint} from '../machine/hook.ts';
 import {isFocusRecord, parseMarker} from '../machine/marker.ts';
 import {phaseOf} from '../machine/phase.ts';
 
@@ -51,8 +52,18 @@ export function authorText(body: string | undefined): string | undefined {
   return text;
 }
 
-function hookParagraph(value: unknown): string {
-  return typeof value === 'string' ? value : HOOK_UNREADABLE;
+function hookParagraph(value: unknown): string | undefined {
+  const point = hookPoint(value);
+  if (point.kind === 'text') {
+    return point.text;
+  }
+  if (point.kind === 'list') {
+    return point.items.join('\n\n');
+  }
+  if (point.kind === 'unread') {
+    return HOOK_UNREADABLE;
+  }
+  return undefined;
 }
 
 function isPointRecord(value: unknown): value is {action: string; point: string; value?: unknown} {
@@ -70,14 +81,14 @@ function hookBlock(value: unknown): SidebarBlock | undefined {
     if (!value.every(isPointRecord)) {
       return {kind: 'hook', line: HOOK_UNREADABLE};
     }
-    return {
-      kind: 'hook',
-      points: value.map(item => ({
-        action: item.action,
-        point: item.point,
-        paragraph: hookParagraph(item.value),
-      })),
-    };
+    const points = value.flatMap(item => {
+      const paragraph = hookParagraph(item.value);
+      return paragraph === undefined ? [] : [{action: item.action, point: item.point, paragraph}];
+    });
+    if (points.length === 0) {
+      return undefined;
+    }
+    return {kind: 'hook', points};
   }
   if (!isDoc(value)) {
     return {kind: 'hook', line: HOOK_UNREADABLE};
@@ -88,10 +99,11 @@ function hookBlock(value: unknown): SidebarBlock | undefined {
       continue;
     }
     for (const [point, pointValue] of Object.entries(inner)) {
-      if (typeof pointValue === 'string' && pointValue.trim() === '') {
+      const paragraph = hookParagraph(pointValue);
+      if (paragraph === undefined) {
         continue;
       }
-      points.push({action, point, paragraph: hookParagraph(pointValue)});
+      points.push({action, point, paragraph});
     }
   }
   if (points.length === 0) {

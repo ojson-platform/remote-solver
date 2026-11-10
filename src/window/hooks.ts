@@ -1,3 +1,4 @@
+import {hookPoint} from '../machine/hook.ts';
 import {ACTION_SKILL} from '../machine/route.ts';
 
 import {isDoc, type Doc, type ServiceHookChoice, type ServiceHookField} from './types.ts';
@@ -6,13 +7,17 @@ function blank(value: string): boolean {
   return value.trim() === '';
 }
 
-/** A string or a list of strings. Anything else has no field. Spaces are not an entry. */
+/** A nonempty string or a list of them. Empty and unread are not a field. */
 function stringValues(value: unknown): string[] | undefined {
-  if (typeof value === 'string') {
-    return blank(value) ? [] : [value];
+  const point = hookPoint(value);
+  if (point.kind === 'text') {
+    return [point.text];
   }
-  if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
-    return value.filter(item => !blank(item));
+  if (point.kind === 'list') {
+    return point.items;
+  }
+  if (point.kind === 'empty' && (typeof value === 'string' || Array.isArray(value))) {
+    return [];
   }
   return undefined;
 }

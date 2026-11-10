@@ -1,6 +1,6 @@
 import {HEADINGS} from './change.ts';
 import {authorIgnored} from './ignore.ts';
-import {markerName, parseMarker} from './marker.ts';
+import {isFocusRecord, markerName, parseMarker} from './marker.ts';
 import {phaseRank, type Phase} from './phase.ts';
 import type {Conversation, Thread, ThreadRecord} from './port.ts';
 
@@ -9,6 +9,25 @@ export {markRobot, ROBOT_MARK} from './marker.ts';
 /** The spy mark, or a commenter named in the pattern list. */
 export function spokeByRobot(body: string, login: string, ignored: readonly RegExp[]): boolean {
   return body.startsWith('🤖') || authorIgnored(login, ignored);
+}
+
+/** Focus, robot, or person. A focus record stays a focus without the spy mark. */
+export type CommentKind = 'focus' | 'robot' | 'person';
+
+export function commentKind(body: string, login: string, ignored: readonly RegExp[]): CommentKind {
+  if (isFocusRecord(body)) {
+    return 'focus';
+  }
+  return spokeByRobot(body, login, ignored) ? 'robot' : 'person';
+}
+
+/** The comment a tracker read returns. Only a person comment is a manager comment. */
+export function readComment(
+  body: string,
+  login: string,
+  ignored: readonly RegExp[],
+): {body: string; manager: boolean} {
+  return {body, manager: commentKind(body, login, ignored) === 'person'};
 }
 
 /** Comments in order: a layer opens, `fixed` closes, other markers leave it as it is. */

@@ -2,7 +2,7 @@ import type {FileSource} from '../machine/port.ts';
 
 import path from 'node:path';
 
-import {HEADINGS, type BranchFacts} from '../machine/change.ts';
+import {documentDir, HEADINGS, type BranchFacts} from '../machine/change.ts';
 import {isFocusRecord} from '../machine/marker.ts';
 import {GATE_CLOSES, GATE_PHASES, phaseOf, phaseRank, type Phase} from '../machine/phase.ts';
 
@@ -342,9 +342,9 @@ function markedStations(
   return found;
 }
 
-function presentFile(files: FileSource, key: string, name: string): string | undefined {
-  const rel = changeRel(key, name);
-  return files.exists(rel) ? rel : undefined;
+function presentFile(files: FileSource, home: string, name: string): string | undefined {
+  const rel = path.join(home, name).split(path.sep).join('/');
+  return files.exists(rel) && files.read(rel).trim() !== '' ? rel : undefined;
 }
 
 function doorsFromFacts(
@@ -409,21 +409,22 @@ function stationDoors(
     }
     doors[name] = door;
   };
-  const proposal = presentFile(files, item.key, 'proposal.md');
+  const home = documentDir(item.key, files);
+  const proposal = presentFile(files, home, 'proposal.md');
   if (proposal) {
     put('proposing', {kind: 'plan', file: proposal});
   }
-  const specs = listedSpecs(files, item.key).map(spec => ({id: spec.id, file: spec.rel}));
+  const specs = listedSpecs(files, item.key, home).map(spec => ({id: spec.id, file: spec.rel}));
   if (specs.length === 1) {
     put('specifying', {kind: 'spec', file: specs[0]?.file});
   } else if (specs.length > 1) {
     put('specifying', {kind: 'spec', specs});
   }
-  const design = presentFile(files, item.key, 'design.md');
+  const design = presentFile(files, home, 'design.md');
   if (design) {
     put('designing', {kind: 'design', file: design});
   }
-  const tasks = presentFile(files, item.key, 'tasks.md');
+  const tasks = presentFile(files, home, 'tasks.md');
   if (tasks) {
     put('tasking', {kind: 'tasks', file: tasks});
   }
@@ -715,6 +716,7 @@ function poolCard(
       reading,
       hideIcon,
       review,
+      known,
     );
     if (placed.card.phaseRow !== undefined) {
       card.phaseRow = placed.card.phaseRow;

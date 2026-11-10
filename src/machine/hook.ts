@@ -11,6 +11,39 @@ function filled(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '';
 }
 
+/** One reading of a hook point: a nonempty string, a list of them, nothing, or a value that is not text. */
+export type HookPoint =
+  | {kind: 'text'; text: string}
+  | {kind: 'list'; items: string[]}
+  | {kind: 'empty'}
+  | {kind: 'unread'};
+
+export function hookPoint(value: unknown): HookPoint {
+  if (typeof value === 'string') {
+    return value.trim() === '' ? {kind: 'empty'} : {kind: 'text', text: value};
+  }
+  if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
+    const items = value.filter(item => item.trim() !== '');
+    return items.length === 0 ? {kind: 'empty'} : {kind: 'list', items};
+  }
+  if (value === undefined || value === null) {
+    return {kind: 'empty'};
+  }
+  return {kind: 'unread'};
+}
+
+/** The point as one paragraph. A list joins with a blank line. Empty and unread are absent. */
+export function hookText(value: unknown): string | undefined {
+  const point = hookPoint(value);
+  if (point.kind === 'text') {
+    return point.text;
+  }
+  if (point.kind === 'list') {
+    return point.items.join('\n\n');
+  }
+  return undefined;
+}
+
 /**
  * The cycle field as non-empty points. A string of spaces is not a point.
  * A missing value, an empty value, or a value that is not a map is an empty map.
@@ -27,10 +60,11 @@ export function cycleHooks(value: unknown): Record<string, Record<string, string
     }
     const kept: Record<string, string> = {};
     for (const [point, text] of Object.entries(points)) {
-      if (!filled(text)) {
+      const keptText = hookText(text);
+      if (keptText === undefined) {
         continue;
       }
-      kept[point] = text;
+      kept[point] = keptText;
     }
     if (Object.keys(kept).length > 0) {
       map[action] = kept;
@@ -57,11 +91,12 @@ export function serviceHookDoc(root: string): unknown {
 }
 
 function paragraphs(value: unknown): string[] {
-  if (filled(value)) {
-    return [value];
+  const point = hookPoint(value);
+  if (point.kind === 'text') {
+    return [point.text];
   }
-  if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
-    return value.filter(filled);
+  if (point.kind === 'list') {
+    return point.items;
   }
   return [];
 }

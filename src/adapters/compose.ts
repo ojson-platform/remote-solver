@@ -89,6 +89,7 @@ export function turn(box: Machine, key: string): ReturnType<typeof performIssue>
       review: box.review,
       files: box.vcs.filesAt(key),
       queues: box.config.queues,
+      root: box.root,
       tip,
       checkout: () =>
         box.vcs.prepare(key, {worktreesDir: '.worktrees', links: packageLinks(solverRoot())}),

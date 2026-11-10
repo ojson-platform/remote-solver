@@ -8,14 +8,14 @@ export async function setPhase(
   key: string,
   phase: Phase,
   tracker: Tracker,
-  options?: {allowGate?: boolean},
+  options?: {allowGate?: boolean; labels?: readonly string[]},
 ): Promise<void> {
   if (!options?.allowGate && (GATE_PHASES as readonly string[]).includes(phase)) {
     throw new Error(
       `Refusing to set gate label sdd:${phase}. A person changes the phase on the issue, or runs sdd accept ${key}.`,
     );
   }
-  const names = await tracker.labels(key);
+  const names = options?.labels ? [...options.labels] : await tracker.labels(key);
   const remove = removedPhaseLabels(names, phase);
   await tracker.editLabels(key, [LABEL(phase)], remove);
 }

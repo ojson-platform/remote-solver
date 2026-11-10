@@ -427,6 +427,26 @@ export function gitFiles(root: string, key: string, prefix: string): FileSource 
   return filesOfRef(root, issueRef(root, key, prefix), false);
 }
 
+/**
+ * The tree `filesAt` and `contentAt` read.
+ * `tip` is the issue branch. `content` is its parent when the tip is this issue's archive commit.
+ * Null when the branch is absent.
+ */
+export function issueTree(
+  root: string,
+  key: string,
+  which: 'tip' | 'content',
+  strict = false,
+  prefix = 'sdd',
+): FileSource | null {
+  if (which === 'content') {
+    return strict
+      ? strictContentBranchFiles(root, key, prefix)
+      : contentBranchFiles(root, key, prefix);
+  }
+  return strict ? strictBranchFiles(root, key, prefix) : branchFiles(root, key, prefix);
+}
+
 /** The issue branch when it exists. Null when neither `<prefix>/<key>` nor `origin/<prefix>/<key>` is present. A git failure is empty. */
 export function branchFiles(root: string, key: string, prefix: string): FileSource | null {
   return filesOnBranch(root, key, prefix, false);
@@ -580,8 +600,8 @@ export function gitVcs(root: string, config: GitVcsConfig = {}): Vcs {
       }
       return messageOf(root, ref, false) ?? '';
     },
-    filesAt: key => gitFiles(root, key, prefix),
-    contentAt: key => contentBranchFiles(root, key, prefix) ?? gitFiles(root, key, prefix),
+    filesAt: key => issueTree(root, key, 'tip', false, prefix) ?? gitFiles(root, key, prefix),
+    contentAt: key => issueTree(root, key, 'content', false, prefix) ?? gitFiles(root, key, prefix),
     async contentCommit(key, head) {
       return parentOfArchive(root, head, key);
     },

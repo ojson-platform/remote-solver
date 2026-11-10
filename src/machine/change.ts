@@ -210,11 +210,12 @@ function changeDocuments(dir: string, files: FileSource): string[] {
   return [...named, ...specs];
 }
 
+function readableDocuments(dir: string, files: FileSource): string[] {
+  return changeDocuments(dir, files).filter(rel => files.read(rel).trim() !== '');
+}
+
 function changeBody(dir: string, files: FileSource): string[] {
-  return changeDocuments(dir, files).flatMap(rel => {
-    const text = files.read(rel).trim();
-    return text ? [`# ${rel}\n${text}`] : [];
-  });
+  return readableDocuments(dir, files).map(rel => `# ${rel}\n${files.read(rel).trim()}`);
 }
 
 /** Active change text, or the archive copy once accepting has folded it. */
@@ -398,16 +399,16 @@ function taskCounts(text: string, present: boolean): {done: number; open: number
 
 /**
  * Where the documents sit.
- * The active directory when it has any file. The archive when it is the only copy.
- * `readChange` stays on the active directory, so accepting still sees no open change.
+ * The active directory when a file there has text. The archive when it is the only text.
+ * An empty active file does not hide the archive. `readChange` still looks at the active directory.
  */
-function documentDir(key: string, files: FileSource): string {
+export function documentDir(key: string, files: FileSource): string {
   const active = changeDir(key);
-  if (changeDocuments(active, files).length > 0) {
+  if (readableDocuments(active, files).length > 0) {
     return active;
   }
   const archived = archiveDir(key);
-  if (changeDocuments(archived, files).length > 0) {
+  if (readableDocuments(archived, files).length > 0) {
     return archived;
   }
   return active;

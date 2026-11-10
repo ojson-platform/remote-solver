@@ -1,16 +1,17 @@
 import {contentFiles, type IssueLinkKind, type Review, type Tracker, type Vcs} from './machine/port.ts';
 
 import {spawnSync} from 'node:child_process';
-import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
+import {mkdirSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 
 import {solverRoot, turn, type Machine} from './adapters/compose.ts';
 import {openMachine} from './adapters/load.ts';
 import {packageLinks} from './adapters/vcs.ts';
+import {workingTree} from './window/change-files.ts';
 import {readChange} from './machine/change.ts';
 import {postFocusComment, validateFocusBody} from './machine/focus.ts';
 import {focusMarkerLine} from './machine/marker.ts';
-import {applyLabels, pick, resolveCycle} from './machine/flow.ts';
+import {applyLabels, pick, resolveCycle, serviceWait} from './machine/flow.ts';
 import {openWait, setPhase, setWait} from './machine/labels.ts';
 import {parseMarker} from './machine/marker.ts';
 import {updateMirror} from './machine/mirror.ts';
@@ -19,7 +20,7 @@ import {GATE_EVENTS, labelsAfterAdvance, PHASES, type Phase} from './machine/pha
 import {accept as acceptGate, cycleRecord, publishChoice, type Decision} from './machine/policy.ts';
 import {queueOf} from './machine/queues.ts';
 import {openItemLayer, threadsReport, type OpenItemFile} from './machine/review.ts';
-import {resolveServiceRoot, sameService} from './machine/service-config.ts';
+import {resolveServiceRoot} from './machine/service-config.ts';
 import {loadCycle} from './machine/snapshot.ts';
 
 // Verbs the skills call. The GitHub and git adapters sit behind them.
@@ -299,13 +300,9 @@ async function step(box: Machine, rest: string[]): Promise<void> {
   if (owner === '') {
     await box.tracker.assign(args.key, me);
   }
-  const declared = (record.service ?? '').trim();
-  if (declared !== '' && !sameService(box.root, declared)) {
-    await printStep(
-      {kind: 'wait', issue: args.key, reason: `service is ${declared}`},
-      box,
-      record.labels,
-    );
+  const foreign = serviceWait(box.root, record);
+  if (foreign) {
+    await printStep(foreign, box, record.labels);
     return;
   }
   if (args.labels.length) {
@@ -530,11 +527,11 @@ function checkoutFile(rel: string): string | undefined {
   if (!rel.startsWith('openspec/changes/') || rel.includes('..')) {
     return undefined;
   }
-  try {
-    return readFileSync(path.join(process.cwd(), rel), 'utf8');
-  } catch {
+  const files = workingTree(process.cwd());
+  if (!files.exists(rel)) {
     return undefined;
   }
+  return files.read(rel);
 }
 
 async function threadFix(box: Machine, rest: string[]): Promise<void> {

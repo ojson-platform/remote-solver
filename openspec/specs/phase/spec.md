@@ -33,6 +33,14 @@ When `accepted` is on the issue, the phase SHALL be `accepted`, even when an ear
 - **WHEN** an issue carries `accepting` and `accepted`
 - **THEN** the phase is `accepted`
 
+#### Scenario: Accepted wins over cancelled on the rank
+
+- **WHEN** an issue carries `accepted` and `cancelled`
+- **THEN** the phase is `accepted` and its rank is the rank of `accepted`
+
+- **WHEN** an issue carries `cancelled` and `tasking` and does not carry `accepted`
+- **THEN** the rank is cut
+
 ### Requirement: A gate label is consent, not a phase
 
 `proposed` closes `proposing`, `specified` closes `specifying`, and `designed` closes `designing`. The gate SHALL NOT replace the writing phase. A lone gate label SHALL still name that writing phase for the decision. Any other pair SHALL keep the earliest label in phase order.

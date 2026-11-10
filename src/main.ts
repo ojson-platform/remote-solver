@@ -197,6 +197,7 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
               }),
             readTip: key =>
               box.vcs.tipMessage ? box.vcs.tipMessage(key) : Promise.resolve(undefined),
+            root: box.root,
           },
           new Set(state.running),
         );

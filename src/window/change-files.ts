@@ -3,7 +3,7 @@ import type {FileSource} from '../machine/port.ts';
 import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 
-import {branchFiles, contentBranchFiles, strictBranchFiles, strictContentBranchFiles} from '../adapters/vcs.ts';
+import {issueTree} from '../adapters/vcs.ts';
 import {changeDir} from '../machine/naming.ts';
 
 const empty: FileSource = {
@@ -16,7 +16,8 @@ function slash(rel: string): string {
   return rel.split(path.sep).join('/');
 }
 
-function disk(root: string): FileSource {
+/** The checkout directory as a file source. Callers read through `read`, not `readFileSync`. */
+export function workingTree(root: string): FileSource {
   return {
     exists(rel) {
       return existsSync(path.join(root, rel));
@@ -59,7 +60,7 @@ export function changeFiles(checkout: string | undefined, key: string): FileSour
   if (!checkout || checkout.trim() === '' || key.trim() === '') {
     return empty;
   }
-  return branchFiles(checkout, key, 'sdd') ?? disk(checkout);
+  return issueTree(checkout, key, 'tip') ?? workingTree(checkout);
 }
 
 /**
@@ -71,7 +72,7 @@ export function strictChangeFiles(checkout: string | undefined, key: string): Fi
   if (!checkout || checkout.trim() === '' || key.trim() === '') {
     return empty;
   }
-  return strictBranchFiles(checkout, key, 'sdd') ?? disk(checkout);
+  return issueTree(checkout, key, 'tip', true) ?? workingTree(checkout);
 }
 
 /**
@@ -82,7 +83,7 @@ export function contentChangeFiles(checkout: string | undefined, key: string): F
   if (!checkout || checkout.trim() === '' || key.trim() === '') {
     return empty;
   }
-  return contentBranchFiles(checkout, key, 'sdd') ?? disk(checkout);
+  return issueTree(checkout, key, 'content') ?? workingTree(checkout);
 }
 
 /** The content tree for the deferred spine read. A git failure throws. */
@@ -90,15 +91,15 @@ export function strictContentChangeFiles(checkout: string | undefined, key: stri
   if (!checkout || checkout.trim() === '' || key.trim() === '') {
     return empty;
   }
-  return strictContentBranchFiles(checkout, key, 'sdd') ?? disk(checkout);
+  return issueTree(checkout, key, 'content', true) ?? workingTree(checkout);
 }
 
 export function changeRel(key: string, name: string): string {
   return slash(path.join(changeDir(key), name));
 }
 
-export function listedSpecs(files: FileSource, key: string): {id: string; rel: string}[] {
-  const dir = slash(path.join(changeDir(key), 'specs'));
+export function listedSpecs(files: FileSource, key: string, home = changeDir(key)): {id: string; rel: string}[] {
+  const dir = slash(path.join(home, 'specs'));
   const prefix = `${dir}/`;
   const found: {id: string; rel: string}[] = [];
   for (const raw of files.list(dir)) {

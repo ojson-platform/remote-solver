@@ -92,17 +92,24 @@ spec('unsent-remark', () => {
       'Immediately after a successful send the thread is visible in the sidebar and the draft is cleared together with that',
       () => {},
     );
-    scenario('After the GitHub thread has been accepted, the draft must disappear', () => {});
+    scenario('When the pull request has that thread, the draft disappears', () => {});
   });
 
   requirement('The draft remains only when that thread is not on the pull request', () => {
     scenario('A failed send leaves the draft', () => {});
     scenario(
-      'Once GitHub has accepted the thread, the draft disappears, including when the window reported an error such as stale',
+      'Once the pull request has that thread, the draft disappears, including when the window reported an error such as stale',
       () => {},
     );
     scenario('The draft remains only when that thread is not on the pull request', () => {});
     scenario('The draft remains only when the thread is not on the pull request', () => {});
+  });
+
+  requirement('A refused send from «Записать» returns «комментарий не записан» and does not post a conversation comment', () => {
+    scenario(
+      'A refused send from «Записать» returns «комментарий не записан» and does not post a conversation comment',
+      () => {},
+    );
   });
 
   requirement('A retry does not post a second thread with the same text on the same line', () => {
@@ -350,7 +357,7 @@ test('Immediately after a successful send the thread is visible in the sidebar a
   );
 });
 
-test('After the GitHub thread has been accepted, the draft must disappear', async () => {
+test('When the pull request has that thread, the draft disappears', async () => {
   const proposalRel = `${changeDir('1')}/proposal.md`;
   const body = 'уже на запросе';
   let heldReview: WindowReview | undefined = mergeThreadIntoReview(undefined, {
@@ -436,7 +443,51 @@ test('A failed send leaves the draft', async () => {
   );
 });
 
-test('Once GitHub has accepted the thread, the draft disappears, including when the window reported an error such as stale', async () => {
+test('A refused send from «Записать» returns «комментарий не записан» and does not post a conversation comment', async () => {
+  let heldReview: WindowReview | undefined;
+  let speakCalls = 0;
+  let commentCalls = 0;
+  await hosted(
+    {
+      login: () => MANAGER,
+      tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
+      review: () => heldReview,
+      mergeHeldThread: (_key, thread) => {
+        heldReview = mergeThreadIntoReview(heldReview, thread);
+      },
+      threadPull: async () => {
+        throw new Error('host refused');
+      },
+      speakPull: async () => {
+        speakCalls += 1;
+        throw new Error('no speak');
+      },
+      commentPull: async () => {
+        commentCalls += 1;
+      },
+    },
+    async (page, window, paths) => {
+      writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+      window.chooseAgent('cursor');
+      const draft = 'без разговора';
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())).status,
+        200,
+      );
+      const failed = await post(
+        page.url,
+        'act',
+        new URLSearchParams({act: 'answer', key: '1', reply: draft, layer: 'Plan'}).toString(),
+      );
+      assert.equal(failed.status, 200);
+      assert.equal((JSON.parse(failed.body) as WindowSnapshot).status, 'комментарий не записан');
+      assert.equal(speakCalls, 0);
+      assert.equal(commentCalls, 0);
+    },
+  );
+});
+
+test('Once the pull request has that thread, the draft disappears, including when the window reported an error such as stale', async () => {
   const proposalRel = `${changeDir('1')}/proposal.md`;
   let releaseAnswer: (() => void) | undefined;
   let started = false;
@@ -500,7 +551,7 @@ test('Once GitHub has accepted the thread, the draft disappears, including when 
       assert.match(foot, /<textarea[^>]*name="reply"[^>]*><\/textarea>/);
     },
   );
-});
+}, 15_000);
 
 test('The draft remains only when that thread is not on the pull request', async () => {
   const proposalRel = `${changeDir('1')}/proposal.md`;

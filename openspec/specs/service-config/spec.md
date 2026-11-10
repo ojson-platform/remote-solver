@@ -8,9 +8,19 @@ The service config is the service's own machine settings. The service-config gro
 
 ### Requirement: The group writes the sdd fields
 
-The service-config group SHALL show and write the `sdd` fields: queues, `base`, `branch-scope`, `ignore-comments`, and hooks. A save SHALL write those fields and SHALL leave a key inside `sdd` that has no field. `schema`, `context`, and `rules` SHALL stay as they were. The field SHALL show the effective value. A key SHALL NOT be written while the value equals its default: `base` is `trunk`, `branch-scope` is `sdd`, and `ignore-comments` is an empty list. Returning a field to its default SHALL remove the key.
+The service-config group SHALL show and write the `sdd` fields: queues, `base`, `branch-scope`, `ignore-comments`, and hooks.
+
+A save SHALL write those fields and SHALL leave a key inside `sdd` that has no field.
+
+`schema`, `context`, and `rules` SHALL stay as they were.
+
+The field SHALL show the effective value.
+
+A key SHALL NOT be written while the value equals its default: `base` is `trunk`, `branch-scope` is `sdd`, and `ignore-comments` is an empty list.
 
 #### Scenario: A default base is omitted
+
+Returning a field to its default SHALL remove the key.
 
 - **WHEN** the manager saves `base` as `trunk`
 - **THEN** the file has no `base` key
@@ -57,9 +67,9 @@ A queue SHALL be a name and an optional description. An empty description SHALL 
 
 An edit that leaves the file unreadable SHALL NOT be written. The check SHALL run at once. Each such field SHALL warn that the edit cannot be saved. While a warning is present, save SHALL be unavailable, and the spy SHALL read the file on disk. While that file reads, the board SHALL keep the cycles, and the warning SHALL stay in the group. Closing settings SHALL discard the edit, and the readable file SHALL stay readable.
 
-The warning SHALL appear when an `ignore-comments` pattern does not compile, when a queue name is empty, and when no queue remains. A new queue with an empty name SHALL warn until a name is present. When the YAML parses and the `sdd` key is absent, the group SHALL show an empty queue list with that same warning. When the edit reads, the warning SHALL clear and save SHALL write the file.
-
 #### Scenario: A pattern that does not compile blocks save
+
+The warning SHALL appear when an `ignore-comments` pattern does not compile, when a queue name is empty, and when no queue remains. A new queue with an empty name SHALL warn until a name is present. When the YAML parses and the `sdd` key is absent, the group SHALL show an empty queue list with that same warning. When the edit reads, the warning SHALL clear and save SHALL write the file.
 
 - **WHEN** the manager enters an `ignore-comments` pattern that does not compile
 - **THEN** the field warns that the edit cannot be saved, save is unavailable, and the file on disk is unchanged
@@ -95,9 +105,33 @@ When `ignore-comments` is a number, a map, or a list that is not all strings, th
 
 ### Requirement: A service config that does not parse hides that checkout
 
-When the YAML of one checkout does not parse, the group SHALL say the file does not read, SHALL show no fields, SHALL offer no save, and SHALL NOT rewrite the file. Cards of that checkout only SHALL disappear. The board row `конфиг сервиса не читается` SHALL name the path. Other checkouts SHALL remain. A board with nothing to show SHALL remain. There SHALL be no `sddService` choice on a vanished card. «Взять» SHALL NOT act, because the card is gone. The window's spy SHALL NOT move that checkout. The broken file SHALL NOT open settings. When the manager has opened settings and the agent does not answer, this group SHALL show the file without fields and without save. A running step SHALL finish with what it started. The next step on that checkout SHALL NOT start until the file reads. When the file reads again, that checkout's cards SHALL return.
+When the YAML of one checkout does not parse, the group SHALL say the file does not read, SHALL show no fields, SHALL offer no save, and SHALL NOT rewrite the file.
+
+Cards of that checkout only SHALL disappear.
+
+The board row `конфиг сервиса не читается` SHALL name the path.
+
+Other checkouts SHALL remain.
+
+A board with nothing to show SHALL remain.
+
+There SHALL be no `sddService` choice on a vanished card.
+
+«Взять» SHALL NOT act, because the card is gone.
+
+The window's spy SHALL NOT move that checkout.
 
 #### Scenario: One broken file hides only its cards
+
+The broken file SHALL NOT open settings.
+
+When the manager has opened settings and the agent does not answer, this group SHALL show the file without fields and without save.
+
+A running step SHALL finish with what it started.
+
+The next step on that checkout SHALL NOT start until the file reads.
+
+When the file reads again, that checkout's cards SHALL return.
 
 - **WHEN** one checkout's `openspec/config.yaml` does not parse and another checkout's file reads
 - **THEN** the broken checkout's cards disappear, the row names that path, and the other checkout's cards remain

@@ -22,9 +22,19 @@ A cycle on `proposed` SHALL stand on `proposing`, a cycle on `specified` SHALL s
 
 ### Requirement: A column shows this manager's cycles
 
-A column SHALL show a cycle whose assignee is this window's manager. A cycle with a phase and another assignee SHALL NOT be shown. A cycle with a phase and no assignee SHALL stand in the pool. While a cycle is in `accepting`, the issue is open, and one pull request is open, the card SHALL stand in `accepting` with icon reason `мерж`, and it SHALL leave when the issue closes. One open pull request on an earlier phase SHALL leave the card on that phase. A card that carries `sdd:cancelled` SHALL leave, even when an earlier phase label remains.
+A column SHALL show a cycle whose assignee is this window's manager.
+
+A cycle with a phase and another assignee SHALL NOT be shown.
+
+A cycle with a phase and no assignee SHALL stand in the pool.
+
+While a cycle is in `accepting`, the issue is open, and one pull request is open, the card SHALL stand in `accepting` with icon reason `мерж`, and it SHALL leave when the issue closes.
+
+One open pull request on an earlier phase SHALL leave the card on that phase.
 
 #### Scenario: Another assignee is hidden
+
+A card that carries `sdd:cancelled` SHALL leave, even when an earlier phase label remains.
 
 - **WHEN** a cycle has a phase and the assignee is not this manager
 - **THEN** the window does not show that card
@@ -51,9 +61,19 @@ A column SHALL show a cycle whose assignee is this window's manager. A cycle wit
 
 ### Requirement: The pool holds cycles the manager can take
 
-The pool SHALL hold open cycles on the watch list that carry `sdd:cycle`, have no phase, and have no assignee, and cycles that have a phase and no assignee. An issue without `sdd:cycle` SHALL NOT be in the pool. A cycle with no phase and another assignee SHALL be hidden. A cycle with no phase whose assignee is already this manager SHALL leave the pool when the merged factory config can start a step, and the window's spy SHALL set `proposing`. When that config cannot start a step, the card SHALL stay in the pool and «Взять» SHALL be disabled. Two open pull requests or a checkout break SHALL keep that card in the pool, and the spy SHALL NOT set `proposing`.
+The pool SHALL hold open cycles on the watch list that carry `sdd:cycle`, have no phase, and have no assignee, and cycles that have a phase and no assignee.
+
+An issue without `sdd:cycle` SHALL NOT be in the pool.
+
+A cycle with no phase and another assignee SHALL be hidden.
+
+A cycle with no phase whose assignee is already this manager SHALL leave the pool when the merged factory config can start a step, and the window's spy SHALL set `proposing`.
 
 #### Scenario: A bare cycle label with no assignee is in the pool
+
+When that config cannot start a step, the card SHALL stay in the pool and «Взять» SHALL be disabled.
+
+Two open pull requests or a checkout break SHALL keep that card in the pool, and the spy SHALL NOT set `proposing`.
 
 - **WHEN** an open cycle on the watch list carries `sdd:cycle`, has no phase, and has no assignee
 - **THEN** the card stands in the pool
@@ -85,9 +105,29 @@ The pool SHALL hold open cycles on the watch list that carry `sdd:cycle`, have n
 
 ### Requirement: Take writes this process login
 
-A play sign on a cycle SHALL write the assignee as the login of this process and SHALL NOT write a phase. Its accessible name SHALL be «Взять». The word «Взять» SHALL NOT be the button's text. On GitHub that login SHALL be the login of `gh api user`. The window's spy SHALL set `proposing` after that write when the merged factory config can start a step, and the plaque SHALL then stand on `proposing`. Dragging the tile onto a station SHALL be the same gesture: the station under the pointer SHALL show a ring, and the phase SHALL NOT be taken from the station where the tile is dropped. While the home config is missing, play SHALL look disabled and SHALL NOT write the assignee. An exclamation SHALL replace play when a checkout break or two open pull requests silence «Взять» for that cycle. The break phrase SHALL NOT be on the tile face. When «Взять» is silent because the home config is missing or the merged factory config cannot start a step, play SHALL stay on the corner and look disabled, and the reason SHALL be a board row, not a cycle popup. A cycle whose assignee is already this manager SHALL NOT show play.
+A play sign on a cycle SHALL write the assignee as the login of this process and SHALL NOT write a phase.
+
+Its accessible name SHALL be «Взять».
+
+The word «Взять» SHALL NOT be the button's text.
+
+On GitHub that login SHALL be the login of `gh api user`.
+
+The window's spy SHALL set `proposing` after that write when the merged factory config can start a step, and the plaque SHALL then stand on `proposing`.
 
 #### Scenario: Take on a phaseless cycle writes the login only
+
+Dragging the tile onto a station SHALL be the same gesture: the station under the pointer SHALL show a ring, and the phase SHALL NOT be taken from the station where the tile is dropped.
+
+While the home config is missing, play SHALL look disabled and SHALL NOT write the assignee.
+
+An exclamation SHALL replace play when a checkout break or two open pull requests silence «Взять» for that cycle.
+
+The break phrase SHALL NOT be on the tile face.
+
+When «Взять» is silent because the home config is missing or the merged factory config cannot start a step, play SHALL stay on the corner and look disabled, and the reason SHALL be a board row, not a cycle popup.
+
+A cycle whose assignee is already this manager SHALL NOT show play.
 
 - **WHEN** the manager takes a cycle that has no phase and the merged factory config can start a step
 - **THEN** the assignee becomes this process login, the phase was not written by «Взять», and the window's spy then sets `proposing`
@@ -147,9 +187,39 @@ Two open pull requests SHALL keep the card in the pool, SHALL show icon reason `
 
 ### Requirement: The phase row is read from the cycle
 
-The window SHALL read the phase row from the same files and headings the machine reads, and SHALL NOT recompute it. `proposing` SHALL show the number of open `- [ ]` items under `## Open questions` in `proposal.md`, including 0. `specifying` SHALL show no row. `designing` SHALL show the number of open `- [ ]` items under `## Open decisions` in `design.md`, including 0. `tasking` SHALL show no row, except when `tasks.md` exists and a child cycle is not yet at least `specified`. A child is a cycle issue whose parent is this issue. A child with no phase, or a cancelled child, is not `specified`. The plaque SHALL then show `Waits for` those keys in key order, separated by `, `. The reason block SHALL NOT name them. When every such child is at least `specified`, or `tasks.md` is absent, `tasking` SHALL show no such line. `implementing` SHALL show `Done <done>/<done+open>` from `tasks.md` when that file exists, counting `- [x]` as done and `- [ ]` as open. When `tasks.md` is absent, `implementing` SHALL show no such count. `verifying` and `accepting` SHALL show one state of the open pull request, `green`, `red`, or `pending`. A state `none` SHALL show no row. Check names and logs SHALL NOT be on the card. The window SHALL NOT show a coverage count, and SHALL NOT show children, blockers, or threads as a separate number.
+The window SHALL read the phase row from the same files and headings the machine reads, and SHALL NOT recompute it.
+
+`proposing` SHALL show the number of open `- [ ]` items under `## Open questions` in `proposal.md`, including 0.
+
+`specifying` SHALL show no row.
+
+`designing` SHALL show the number of open `- [ ]` items under `## Open decisions` in `design.md`, including 0.
+
+`tasking` SHALL show no row, except when `tasks.md` exists and a child cycle is not yet at least `specified`.
 
 #### Scenario: Proposing shows the open-question count
+
+A child is a cycle issue whose parent is this issue.
+
+A child with no phase, or a cancelled child, is not `specified`.
+
+The plaque SHALL then show `Waits for` those keys in key order, separated by `, `.
+
+The reason block SHALL NOT name them.
+
+When every such child is at least `specified`, or `tasks.md` is absent, `tasking` SHALL show no such line.
+
+`implementing` SHALL show `Done <done>/<done+open>` from `tasks.md` when that file exists, counting `- [x]` as done and `- [ ]` as open.
+
+When `tasks.md` is absent, `implementing` SHALL show no such count.
+
+`verifying` and `accepting` SHALL show one state of the open pull request, `green`, `red`, or `pending`.
+
+A state `none` SHALL show no row.
+
+Check names and logs SHALL NOT be on the card.
+
+The window SHALL NOT show a coverage count, and SHALL NOT show children, blockers, or threads as a separate number.
 
 - **WHEN** a cycle stands in `proposing` and `proposal.md` has two open items under `## Open questions`
 - **THEN** the phase row shows 2
@@ -205,9 +275,23 @@ In the key column, cycles this manager already holds SHALL come first. Inside th
 
 ### Requirement: The icon is hidden while a step runs or checks are waited
 
-The window SHALL record an icon occasion for a gate, an ask, an open question, an open decision, the merge, a child, a blocker, several pull requests, or a checkout break. It SHALL NOT draw that occasion as one lettered icon on the tile or the plaque. A cycle break SHALL be the exclamation on the tile. A future gate SHALL be Gandalf or a circle. Current work SHALL be the plaque. Children and blockers SHALL stay words on the reason line. While an agent leads a step, or the cycle waits on checks, the plaque SHALL keep its text and SHALL NOT add an occasion mark. The row order SHALL keep that occasion.
+The window SHALL record an icon occasion for a gate, an ask, an open question, an open decision, the merge, a child, a blocker, several pull requests, or a checkout break.
+
+It SHALL NOT draw that occasion as one lettered icon on the tile or the plaque.
+
+A cycle break SHALL be the exclamation on the tile.
+
+A future gate SHALL be Gandalf or a circle.
+
+Current work SHALL be the plaque.
+
+Children and blockers SHALL stay words on the reason line.
 
 #### Scenario: A gate shows the icon
+
+While an agent leads a step, or the cycle waits on checks, the plaque SHALL keep its text and SHALL NOT add an occasion mark.
+
+The row order SHALL keep that occasion.
 
 - **WHEN** a cycle stands on `proposed` and no step is running and checks are not waited
 - **THEN** the occasion is recorded and the tile shows no lettered icon
@@ -224,9 +308,23 @@ The window SHALL record an icon occasion for a gate, an ask, an open question, a
 
 ### Requirement: The icon reason is one line
 
-The icon reason SHALL be one line, the same line the sidebar shows in full. It SHALL start with at most one checkout break, in this order: `каталога нет`, otherwise `не назван сервис`, otherwise `конфига сервиса нет`, otherwise `очереди нет в конфиге сервиса`. The rest SHALL follow through `·`, and only the parts the cycle has, in this order: the gate name `proposed`, `specified`, `designed`, or `accepted`; Ask; `вопросы N` for open questions; `решения N` for open decisions; `мерж`; `дети` and the Child keys in key order; `блокеры` and the Blocker keys in key order; `несколько pull request`. The window SHALL gather children from the same reading: records that carry `sdd:cycle` and whose `parent` is this card's key. It SHALL gather blockers from `dependsOn` on this record and find them in the same reading. It SHALL NOT parse the issue body. When the only occasion is questions, or only decisions, and the phase row already shows that number, the card SHALL NOT show the reason line. The sidebar reason block SHALL remain.
+The icon reason SHALL be one line, the same line the sidebar shows in full.
+
+It SHALL start with at most one checkout break, in this order: `каталога нет`, otherwise `не назван сервис`, otherwise `конфига сервиса нет`, otherwise `очереди нет в конфиге сервиса`.
 
 #### Scenario: A missing catalog outranks a missing service config
+
+The rest SHALL follow through `·`, and only the parts the cycle has, in this order: the gate name `proposed`, `specified`, `designed`, or `accepted`; Ask; `вопросы N` for open questions; `решения N` for open decisions; `мерж`; `дети` and the Child keys in key order; `блокеры` and the Blocker keys in key order; `несколько pull request`.
+
+The window SHALL gather children from the same reading: records that carry `sdd:cycle` and whose `parent` is this card's key.
+
+It SHALL gather blockers from `dependsOn` on this record and find them in the same reading.
+
+It SHALL NOT parse the issue body.
+
+When the only occasion is questions, or only decisions, and the phase row already shows that number, the card SHALL NOT show the reason line.
+
+The sidebar reason block SHALL remain.
 
 - **WHEN** the checkout catalog is missing and the service config file is also missing
 - **THEN** the reason starts with `каталога нет` and does not start with `конфига сервиса нет`
@@ -275,9 +373,21 @@ When the recorded agent no longer answers, the board SHALL show only the row `а
 
 ### Requirement: An empty or rejected model names the checkout
 
-When the agent answers and a model in the merged factory config is empty, the board SHALL show a row that names the checkout path and the empty skill mode: `нужна модель mechanical`, `нужна модель judgment`, or `нужны модели mechanical и judgment`. That row SHALL stop the window spy's steps for that service, and SHALL stop «Взять» on a cycle of that service that has no phase. It SHALL NOT stop «Взять» on a cycle that already has a phase. When a service-config row is also shown, the factory row SHALL come first. When the agent answers and a recorded model id is no longer accepted, the board SHALL show `модель не запускается` naming the checkout path, the skill-mode slot, and the id. The next step SHALL NOT start, and «Взять» for that service SHALL NOT act. Empty effort and empty speed SHALL NOT show these rows and SHALL NOT stop a step.
+When the agent answers and a model in the merged factory config is empty, the board SHALL show a row that names the checkout path and the empty skill mode: `нужна модель mechanical`, `нужна модель judgment`, or `нужны модели mechanical и judgment`.
+
+That row SHALL stop the window spy's steps for that service, and SHALL stop «Взять» on a cycle of that service that has no phase.
+
+It SHALL NOT stop «Взять» on a cycle that already has a phase.
 
 #### Scenario: Both models empty
+
+When a service-config row is also shown, the factory row SHALL come first.
+
+When the agent answers and a recorded model id is no longer accepted, the board SHALL show `модель не запускается` naming the checkout path, the skill-mode slot, and the id.
+
+The next step SHALL NOT start, and «Взять» for that service SHALL NOT act.
+
+Empty effort and empty speed SHALL NOT show these rows and SHALL NOT stop a step.
 
 - **WHEN** the agent answers and both skill-mode models are empty for a checkout
 - **THEN** the row names that checkout path and says `нужны модели mechanical и judgment`, and «Взять» does not act for that service
@@ -294,9 +404,23 @@ When the agent answers and a model in the merged factory config is empty, the bo
 
 ### Requirement: The board is a column of keys and seven stations
 
-The board SHALL show one column of keys and seven stations, left to right: `proposing`, `specifying`, `designing`, `tasking`, `implementing`, `verifying`, `accepting`. An empty station SHALL keep the same width as the others. The window SHALL NOT collapse an empty station and SHALL NOT replace a plaque with a dot. The key column SHALL stay when the pool is empty, and an empty pool SHALL draw no tile. Cycles whose assignee is this manager and that already have a phase SHALL stand above the pool. The window SHALL NOT add a control that sets a phase. The window is the surface of one running ai-factory. It SHALL NOT be a tracker page and SHALL NOT be the agent chat, and a running step SHALL NOT have a panel of its own.
+The board SHALL show one column of keys and seven stations, left to right: `proposing`, `specifying`, `designing`, `tasking`, `implementing`, `verifying`, `accepting`.
+
+An empty station SHALL keep the same width as the others.
+
+The window SHALL NOT collapse an empty station and SHALL NOT replace a plaque with a dot.
+
+The key column SHALL stay when the pool is empty, and an empty pool SHALL draw no tile.
+
+Cycles whose assignee is this manager and that already have a phase SHALL stand above the pool.
 
 #### Scenario: An empty station stays the same width
+
+The window SHALL NOT add a control that sets a phase.
+
+The window is the surface of one running ai-factory.
+
+It SHALL NOT be a tracker page and SHALL NOT be the agent chat, and a running step SHALL NOT have a panel of its own.
 
 - **WHEN** no cycle stands in `specifying`
 - **THEN** the `specifying` station is still on the board and has the same width as `proposing`
@@ -318,22 +442,30 @@ The tile SHALL show the full key and the title. The plaque SHALL be a button on 
 The top, in order:
 
 1. `ask`, while the cycle has `sdd:wait-human`.
+
 2. The layer names the latest `sdd:focus` did not mark `solid`, in focus order, joined by `·`.
+
+#### Scenario: Ask is the top while the cycle waits
+
 3. `ревью`, when unanswered text is present and the top is not `ask`.
+
 4. `red`, `green`, or `pending`, when the station is `verifying` or `accepting` and that state is present.
+
 5. Otherwise there is no top, and the plaque is one bottom line.
 
 The bottom is the first line below that is present and does not repeat the top:
 
 1. The ask text, when the top is `ask`. On the closed plaque the tail SHALL be hidden.
+
 2. The phase row, when the phase has one.
+
 3. The reason line, when it does not repeat the top. Children and blockers stay words on that line.
+
 4. The unanswered text, when the top is `ревью`.
+
 5. The worker's action, when the top and the other bottom lines are empty.
 
 The action SHALL NOT replace a line that is already there and SHALL NOT be an occasion mark. While an agent leads a step, or the cycle waits on checks, the plaque SHALL keep its text and SHALL NOT add an occasion mark. The row order SHALL keep that occasion.
-
-#### Scenario: Ask is the top while the cycle waits
 
 - **WHEN** a cycle has `sdd:wait-human` and the latest issue comment that is not `sdd:focus` is the ask
 - **THEN** the plaque top is `ask` and the bottom is that ask text, and the phase row is not repeated on the plaque
@@ -383,18 +515,44 @@ The action SHALL NOT replace a line that is already there and SHALL NOT be an oc
 A door SHALL stand where the artifact already exists, behind the plaque and ahead of it. The current station SHALL NOT draw a circle. The window SHALL read file presence the same way focus reads a layer, and SHALL NOT write `sdd:focus` or compose gap text.
 
 | Station        | Door                                                   |
-| -------------- | ------------------------------------------------------ |
-| `proposing`    | the change has `proposal.md`                           |
-| `specifying`   | the change has `specs/<capability>/spec.md`            |
-| `designing`    | the change has `design.md`                             |
-| `tasking`      | the change has `tasks.md`                              |
-| `implementing` | the single open pull request has a diff                |
-| `verifying`    | the cycle state is `green`, `red`, or `pending`        |
-| `accepting`    | the reason contains `мерж` and the issue is still open |
 
-The door SHALL be a circle with the artifact icon: `plan`, `spec`, `design`, `tasks`, `code`, or the check mark. Several capabilities SHALL be one `spec` circle. A click on one file SHALL open the port address for that path at line 1 and SHALL NOT write a phase. When the port returns nothing, the circle SHALL stay a button and SHALL NOT navigate. A click on several `spec.md` files SHALL open this row. The board SHALL NOT list the capability ids under the cycle. The station width SHALL NOT change. A `note` or `out` marker SHALL NOT move the phase. The named layer's circle SHALL keep a brass dot, and the plaque SHALL stay. A marker that moves the phase SHALL move the plaque with it, and SHALL NOT leave a separate gap behind.
+| -------------- | ------------------------------------------------------ |
+
+| `proposing`    | the change has `proposal.md`                           |
 
 #### Scenario: A file ahead of the plaque is a door
+
+| `specifying`   | the change has `specs/<capability>/spec.md`            |
+
+| `designing`    | the change has `design.md`                             |
+
+| `tasking`      | the change has `tasks.md`                              |
+
+| `implementing` | the single open pull request has a diff                |
+
+| `verifying`    | the cycle state is `green`, `red`, or `pending`        |
+
+| `accepting`    | the reason contains `мерж` and the issue is still open |
+
+The door SHALL be a circle with the artifact icon: `plan`, `spec`, `design`, `tasks`, `code`, or the check mark.
+
+Several capabilities SHALL be one `spec` circle.
+
+A click on one file SHALL open the port address for that path at line 1 and SHALL NOT write a phase.
+
+When the port returns nothing, the circle SHALL stay a button and SHALL NOT navigate.
+
+A click on several `spec.md` files SHALL open this row.
+
+The board SHALL NOT list the capability ids under the cycle.
+
+The station width SHALL NOT change.
+
+A `note` or `out` marker SHALL NOT move the phase.
+
+The named layer's circle SHALL keep a brass dot, and the plaque SHALL stay.
+
+A marker that moves the phase SHALL move the plaque with it, and SHALL NOT leave a separate gap behind.
 
 - **WHEN** the plaque is on `specifying` and the change has `proposal.md`
 - **THEN** `proposing` shows a `plan` door
@@ -426,19 +584,45 @@ The door SHALL be a circle with the artifact icon: `plan`, `spec`, `design`, `ta
 
 ### Requirement: A break opens one repair field
 
-A row SHALL show at most one repair field, and that field SHALL be the first checkout break the window can write. The settings sheet SHALL NOT open for it. After the write the row SHALL be read again and the field SHALL go. The next break SHALL show its own field. Ask, a gate, the merge, children, and blockers SHALL NOT be a repair. A model or agent hole SHALL be a board row that names the slot. It SHALL NOT be a field on that row, SHALL NOT be a cycle popup, and SHALL NOT open the settings sheet. Play on the affected cycles SHALL stay disabled.
+A row SHALL show at most one repair field, and that field SHALL be the first checkout break the window can write.
+
+The settings sheet SHALL NOT open for it.
+
+After the write the row SHALL be read again and the field SHALL go.
+
+The next break SHALL show its own field.
+
+Ask, a gate, the merge, children, and blockers SHALL NOT be a repair.
+
+A model or agent hole SHALL be a board row that names the slot.
+
+#### Scenario: An unnamed service is a field in the exclamation popup
+
+It SHALL NOT be a field on that row, SHALL NOT be a cycle popup, and SHALL NOT open the settings sheet.
+
+Play on the affected cycles SHALL stay disabled.
 
 The window SHALL write:
 
 - **Не назван сервис.** A service choice, including an empty string as the repository root on GitHub. The write is `sddService`.
+
 - **Конфига сервиса нет.** One queue name, and the window creates the file. The write is `openspec/config.yaml`. Hooks, ignore, and branch scope SHALL NOT be in this field.
+
 - **Нужна модель.** The board row names the empty slot.
+
 - **Модель не запускается.** The board row names the slot and the rejected id.
+
 - **Фабрике нужен агент.** The board row stays `фабрике ещё нужен агент`.
 
-The window SHALL show the path or the reason and SHALL NOT draw a field for: **Каталога нет**, **Очереди нет в конфиге сервиса**, **Конфиг не читается**, and **Несколько pull request**. It SHALL NOT create a catalog, SHALL NOT append a queue, SHALL NOT write a broken edit, and SHALL NOT close a pull request. A checkout field SHALL live in the exclamation popup. A healthy closed row SHALL NOT show that sign. A model or agent hole SHALL stay a board row, with play left disabled, and SHALL NOT be a cycle popup.
+The window SHALL show the path or the reason and SHALL NOT draw a field for: **Каталога нет**, **Очереди нет в конфиге сервиса**, **Конфиг не читается**, and **Несколько pull request**.
 
-#### Scenario: An unnamed service is a field in the exclamation popup
+It SHALL NOT create a catalog, SHALL NOT append a queue, SHALL NOT write a broken edit, and SHALL NOT close a pull request.
+
+A checkout field SHALL live in the exclamation popup.
+
+A healthy closed row SHALL NOT show that sign.
+
+A model or agent hole SHALL stay a board row, with play left disabled, and SHALL NOT be a cycle popup.
 
 - **WHEN** the cycle's break is `не назван сервис`
 - **THEN** the exclamation popup offers the service choice, an empty choice is the repository root, and the tile face does not show the field

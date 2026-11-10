@@ -126,9 +126,19 @@ When the judge returns text that is not a verdict and the run has a session, the
 
 ### Requirement: A remark lands on a diff line only when that line is in the diff
 
-A remark whose file and line are in the diff SHALL stay on that line. A line that is not in the diff SHALL keep the file and drop the line. A file that is not in the diff SHALL be left on the conversation. When the head is the archive commit, the diff SHALL end at its parent, and a remark on a change file SHALL be posted on the archive path at the pull request head. That remark MAY name the file by its path in the parent diff or by its archive path. The change text in the dossier SHALL be the parent's.
+A remark whose file and line are in the diff SHALL stay on that line.
+
+A line that is not in the diff SHALL keep the file and drop the line.
+
+A file that is not in the diff SHALL be left on the conversation.
+
+When the head is the archive commit, the diff SHALL end at its parent, and a remark on a change file SHALL be posted on the archive path at the pull request head.
+
+That remark MAY name the file by its path in the parent diff or by its archive path.
 
 #### Scenario: A line in the diff stays on that line
+
+The change text in the dossier SHALL be the parent's.
 
 - **WHEN** a remark names a file and a line that the diff adds
 - **THEN** the remark stays on that file and line

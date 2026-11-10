@@ -8,9 +8,19 @@ A sidebar line is one that takes a comment: a plan line, a design line, a spec l
 
 ### Requirement: A sidebar line can be selected and copied
 
-A sidebar line SHALL be one that takes a comment: a plan line, a design line, a spec line, or a diff line. A sidebar line SHALL be selectable and the selected text SHALL be copyable. A drag that leaves selected text SHALL NOT be a click. That drag SHALL NOT open the line's comment, and it SHALL NOT close one that is already open. The field SHALL stay as it was. A click that leaves no selection SHALL still open an empty field, SHALL still close an empty field, and SHALL still leave a field that holds text open.
+A sidebar line SHALL be one that takes a comment: a plan line, a design line, a spec line, or a diff line.
+
+A sidebar line SHALL be selectable and the selected text SHALL be copyable.
+
+A drag that leaves selected text SHALL NOT be a click.
+
+That drag SHALL NOT open the line's comment, and it SHALL NOT close one that is already open.
+
+The field SHALL stay as it was.
 
 #### Scenario: A sidebar line can be selected and copied
+
+A click that leaves no selection SHALL still open an empty field, SHALL still close an empty field, and SHALL still leave a field that holds text open.
 
 - **WHEN** a sidebar line, its selected text, and the copy of that text are already visible, together with a click that leaves no selection as the limit that can replace that selection
 - **THEN** a sidebar line can be selected and copied

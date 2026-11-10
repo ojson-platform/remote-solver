@@ -8,9 +8,23 @@ The ticket heading names the issue on the board and in the sidebar.
 
 ### Requirement: The ticket heading names the issue
 
-The board and the sidebar SHALL show `#<key>: <title>`. On the board the title SHALL start beside the key and SHALL continue on the following lines when it does not fit. It SHALL be cut with an ellipsis after the third line. The sidebar heading SHALL show the full title and SHALL continue on the next line when it does not fit. When the ticket has `owner/repo`, `#<key>` SHALL link to `https://github.com/<owner>/<repo>/issues/<key>` and SHALL NOT sit inside the control that opens the drawer. The colon and the title SHALL still open the drawer. A click on the rest of the plaque, outside the issue link and outside Take, SHALL open the drawer too. Without `owner/repo`, the key and the title SHALL be text.
+The board and the sidebar SHALL show `#<key>: <title>`.
+
+On the board the title SHALL start beside the key and SHALL continue on the following lines when it does not fit.
+
+It SHALL be cut with an ellipsis after the third line.
+
+The sidebar heading SHALL show the full title and SHALL continue on the next line when it does not fit.
+
+When the ticket has `owner/repo`, `#<key>` SHALL link to `https://github.com/<owner>/<repo>/issues/<key>` and SHALL NOT sit inside the control that opens the drawer.
 
 #### Scenario: The board shows the issue link beside the title
+
+The colon and the title SHALL still open the drawer.
+
+A click on the rest of the plaque, outside the issue link and outside Take, SHALL open the drawer too.
+
+Without `owner/repo`, the key and the title SHALL be text.
 
 - **WHEN** a cycle has repo `acme/billing`, key `1`, and title `Take me`
 - **THEN** the board shows `#1: Take me`, the key links to `https://github.com/acme/billing/issues/1`, and that link is not inside the open button

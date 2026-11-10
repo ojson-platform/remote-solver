@@ -31,9 +31,19 @@ Each document row SHALL keep the sentence from the latest `sdd:focus` comment, a
 
 ### Requirement: A row opens only when it has a fold
 
-When a cycle opens, the row of the plaque's layer SHALL be open when that row has a fold. A row with no fold SHALL stay closed, and a click on its head SHALL NOT open it. A fold is present for Plan or Design when a section has text or the review remark is shown, for Specify when a capability or the review remark is shown, for Tasks when a task is listed, for Code when a check line, a diff line, a focus remainder, an open pull request, an unanswered review, or a hook is shown, and for Accept always. A second click on an open row SHALL close it, and every row MAY then be closed. A click on the head of a row that has a fold, outside its gate or acceptance control, SHALL toggle that row, including the space the control opens above and below the name. The open row's head SHALL stick to the top of the sidebar scroll.
+When a cycle opens, the row of the plaque's layer SHALL be open when that row has a fold.
+
+A row with no fold SHALL stay closed, and a click on its head SHALL NOT open it.
 
 #### Scenario: An empty row stays closed
+
+A fold is present for Plan or Design when a section has text or the review remark is shown, for Specify when a capability or the review remark is shown, for Tasks when a task is listed, for Code when a check line, a diff line, a focus remainder, an open pull request, an unanswered review, or a hook is shown, and for Accept always.
+
+A second click on an open row SHALL close it, and every row MAY then be closed.
+
+A click on the head of a row that has a fold, outside its gate or acceptance control, SHALL toggle that row, including the space the control opens above and below the name.
+
+The open row's head SHALL stick to the top of the sidebar scroll.
 
 - **WHEN** the cycle is open on `proposing` and `proposal.md` is absent
 - **THEN** the Plan row is closed, its head is not a toggle, and a click on that head does not open it
@@ -55,9 +65,53 @@ When a cycle opens, the row of the plaque's layer SHALL be open when that row ha
 
 ### Requirement: A document row shows its file
 
-Plan SHALL show every `##` section of `proposal.md` that has text, including each later paragraph. A `##` section with no text SHALL NOT be shown. A `###` heading SHALL be a subsection heading. An Open questions section with no question SHALL NOT be shown. While a question is open, that section SHALL say that the plan is accepted only once no question is open. An answer to an open question SHALL be a review comment on the one open pull request, and the question line in `proposal.md` SHALL stay. When the issue branch exists, that file SHALL be the copy on the issue branch. When it does not, that file SHALL be the copy in the checkout. When the active change directory has no documents and the archive has them, Plan, Specify, Design, and Tasks SHALL show that archive copy, and a line comment SHALL name the archive path. The collapsed Plan row SHALL show the first line of Outcome once, cut with an ellipsis, and SHALL NOT repeat the Plan sentence beside it. The open Plan row SHALL hide that line and SHALL NOT show the Plan sentence. When Outcome has no line, the Plan row SHALL keep its sentence, unless that sentence is `solid`. Specify SHALL show each capability's changed requirements. Design SHALL show every `##` section of `design.md` that has text, including each later paragraph. Tasks SHALL list the scenario names from `tasks.md`, and a scenario name SHALL name the capability that owns it. Names wrapped in « » SHALL be those names. When a line has no « », the phrases after the task id, separated by `;`, SHALL be the names. When `tasks/<id>.md` exists, the task SHALL show each `##` section of that file that has text. The task's open or done mark SHALL be a short chip, and the first task SHALL have no rule above it. Code SHALL show the check. A check state `none` SHALL be named there. When a diff is present, Code SHALL say that a diff is present and SHALL NOT list the changed files or show the patch. When they exist, Code SHALL show the unanswered review and the hook.
+Plan SHALL show every `##` section of `proposal.md` that has text, including each later paragraph.
+
+A `##` section with no text SHALL NOT be shown.
+
+A `###` heading SHALL be a subsection heading.
+
+An Open questions section with no question SHALL NOT be shown.
+
+While a question is open, that section SHALL say that the plan is accepted only once no question is open.
+
+An answer to an open question SHALL be a review comment on the one open pull request, and the question line in `proposal.md` SHALL stay.
 
 #### Scenario: The Plan row shows the outcome
+
+When the issue branch exists, that file SHALL be the copy on the issue branch.
+
+When it does not, that file SHALL be the copy in the checkout.
+
+When the active change directory has no documents and the archive has them, Plan, Specify, Design, and Tasks SHALL show that archive copy, and a line comment SHALL name the archive path.
+
+The collapsed Plan row SHALL show the first line of Outcome once, cut with an ellipsis, and SHALL NOT repeat the Plan sentence beside it.
+
+The open Plan row SHALL hide that line and SHALL NOT show the Plan sentence.
+
+When Outcome has no line, the Plan row SHALL keep its sentence, unless that sentence is `solid`.
+
+Specify SHALL show each capability's changed requirements.
+
+Design SHALL show every `##` section of `design.md` that has text, including each later paragraph.
+
+Tasks SHALL list the scenario names from `tasks.md`, and a scenario name SHALL name the capability that owns it.
+
+Names wrapped in « » SHALL be those names.
+
+When a line has no « », the phrases after the task id, separated by `;`, SHALL be the names.
+
+When `tasks/<id>.md` exists, the task SHALL show each `##` section of that file that has text.
+
+The task's open or done mark SHALL be a short chip, and the first task SHALL have no rule above it.
+
+Code SHALL show the check.
+
+A check state `none` SHALL be named there.
+
+When a diff is present, Code SHALL say that a diff is present and SHALL NOT list the changed files or show the patch.
+
+When they exist, Code SHALL show the unanswered review and the hook.
 
 - **WHEN** `proposal.md` has an Outcome section, the cycle is open, and the issue branch does not exist
 - **THEN** the sidebar shows that Outcome from the checkout on the Plan row

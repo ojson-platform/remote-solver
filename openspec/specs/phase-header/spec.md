@@ -8,9 +8,59 @@ The phase header is the row of phase names over the board. It stays at the top o
 
 ### Requirement: The phase header stays at the top of the board
 
-The phase header SHALL be the row of phase names over the board scroll. The phase header SHALL stay at the top of the board while the board scrolls. The seven phase names SHALL stay aligned with the station columns under them. The header background SHALL stay transparent. The phase names SHALL stay over the board, on a transparent header, and a row that scrolls up SHALL fade out before it covers the letters. The empty band under the names SHALL go away. At rest the first row SHALL start at the bottom edge of the header and stay fully readable. The fade SHALL be the header's lower padding and nowhere below it. Content SHALL be gone through the letters, SHALL fade only across the padding under them, and SHALL be fully opaque from the bottom edge of the header. Scrolling a row up SHALL fade it inside those 7px and SHALL hide it before it reaches the letters. At rest the first row SHALL NOT be inside the fade. The header SHALL be 28px tall. The names SHALL be 10px type on a 1.35 line, centered in that 28px. The letters SHALL run from about 7px to 21px, so the padding under the letters SHALL be the last 7px of the header, from 20.75px to 28px. The fade SHALL belong in that lower padding and nowhere below it. The mask SHALL stay on the scrolling board. The names SHALL stay in the absolute `.head`, outside the mask, transparent, 28px tall, aligned with the station columns. The mask SHALL be `linear-gradient(to bottom, transparent 0 20.75px, #000 28px, #000 100%)`, with the `-webkit-mask-image` prefix as well. `padding-top` SHALL be `28px`, the header height. The first row SHALL start on that edge. The only air between the letters and the row SHALL be the header's own lower padding. A shown card SHALL clear the fade by the board's computed `padding-top`. That lead SHALL stay tied to the padding, so a shown card SHALL clear the fade when the padding changes. There SHALL be no second offset. The page bar above the board SHALL NOT be the phase header. Scrolling the sidebar SHALL NOT move this header, and scrolling the board SHALL NOT move the sidebar.
+The phase header SHALL be the row of phase names over the board scroll.
+
+The phase header SHALL stay at the top of the board while the board scrolls.
+
+The seven phase names SHALL stay aligned with the station columns under them.
+
+The header background SHALL stay transparent.
+
+The phase names SHALL stay over the board, on a transparent header, and a row that scrolls up SHALL fade out before it covers the letters.
+
+The empty band under the names SHALL go away.
 
 #### Scenario: The phase header stays at the top of the board while the board scrolls
+
+At rest the first row SHALL start at the bottom edge of the header and stay fully readable.
+
+The fade SHALL be the header's lower padding and nowhere below it.
+
+Content SHALL be gone through the letters, SHALL fade only across the padding under them, and SHALL be fully opaque from the bottom edge of the header.
+
+Scrolling a row up SHALL fade it inside those 7px and SHALL hide it before it reaches the letters.
+
+At rest the first row SHALL NOT be inside the fade.
+
+The header SHALL be 28px tall.
+
+The names SHALL be 10px type on a 1.35 line, centered in that 28px.
+
+The letters SHALL run from about 7px to 21px, so the padding under the letters SHALL be the last 7px of the header, from 20.75px to 28px.
+
+The fade SHALL belong in that lower padding and nowhere below it.
+
+The mask SHALL stay on the scrolling board.
+
+The names SHALL stay in the absolute `.head`, outside the mask, transparent, 28px tall, aligned with the station columns.
+
+The mask SHALL be `linear-gradient(to bottom, transparent 0 20.75px, #000 28px, #000 100%)`, with the `-webkit-mask-image` prefix as well.
+
+`padding-top` SHALL be `28px`, the header height.
+
+The first row SHALL start on that edge.
+
+The only air between the letters and the row SHALL be the header's own lower padding.
+
+A shown card SHALL clear the fade by the board's computed `padding-top`.
+
+That lead SHALL stay tied to the padding, so a shown card SHALL clear the fade when the padding changes.
+
+There SHALL be no second offset.
+
+The page bar above the board SHALL NOT be the phase header.
+
+Scrolling the sidebar SHALL NOT move this header, and scrolling the board SHALL NOT move the sidebar.
 
 - **WHEN** the phase header is already visible at the top of the board while the board scrolls, together with scrolling the sidebar as the limit that can replace that board scroll
 - **THEN** the phase header stays at the top of the board while the board scrolls

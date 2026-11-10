@@ -8,9 +8,29 @@ The open row accepts Plan, Specify, and Design in the place of the current gate.
 
 ### Requirement: The current phase offers acceptance in place of its gate
 
-The Plan row SHALL offer acceptance in the gate's place when the plaque is `proposing`, the proposal is present, no question is open, and one pull request is open. When Open questions has an open item, the Plan row SHALL show neither acceptance nor the proposing gate. The acceptance control SHALL use the plaque's frame. That row SHALL NOT show its gate. The Design row SHALL offer acceptance the same way for `designing` when no decision is open. The Specify row SHALL offer acceptance when the plaque is `specifying`, one pull request is open, and the specs are ready, and SHALL NOT show the specifying gate. The specs are ready when the change has a delta file, or when the proposal names no capability under Added or Modified. A baseline spec under `openspec/specs/` SHALL NOT by itself make the specs ready. A missing baseline for a Modified capability SHALL NOT offer acceptance. While this cycle's action is `restore-baseline`, `create-initial-specs`, or `improve-specs`, the row SHALL NOT offer acceptance and SHALL NOT show the specifying gate. When the row does not offer acceptance, that place SHALL be empty.
+The Plan row SHALL offer acceptance in the gate's place when the plaque is `proposing`, the proposal is present, no question is open, and one pull request is open.
+
+When Open questions has an open item, the Plan row SHALL show neither acceptance nor the proposing gate.
+
+The acceptance control SHALL use the plaque's frame.
+
+That row SHALL NOT show its gate.
+
+The Design row SHALL offer acceptance the same way for `designing` when no decision is open.
 
 #### Scenario: The current phase shows acceptance instead of its gate
+
+The Specify row SHALL offer acceptance when the plaque is `specifying`, one pull request is open, and the specs are ready, and SHALL NOT show the specifying gate.
+
+The specs are ready when the change has a delta file, or when the proposal names no capability under Added or Modified.
+
+A baseline spec under `openspec/specs/` SHALL NOT by itself make the specs ready.
+
+A missing baseline for a Modified capability SHALL NOT offer acceptance.
+
+While this cycle's action is `restore-baseline`, `create-initial-specs`, or `improve-specs`, the row SHALL NOT offer acceptance and SHALL NOT show the specifying gate.
+
+When the row does not offer acceptance, that place SHALL be empty.
 
 - **WHEN** the plaque is `proposing`, the proposal has no open question, one pull request is open, and the cycle is open
 - **THEN** the Plan row shows acceptance where the gate stood, that control uses the plaque's frame, the row does not show the proposing gate, and the designing line still has its gate

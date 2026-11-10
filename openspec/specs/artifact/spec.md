@@ -8,9 +8,19 @@ Each writing phase owns one change file. The cycle returns to the phase that sti
 
 ### Requirement: A writing phase publishes its own file
 
-`proposing` owns the proposal, `specifying` the delta, `designing` the design, and `tasking` the tasks. While that file is missing, or no pull request is open, the machine SHALL run the skill that writes and publishes it, and SHALL NOT open the review gate. For specifying, the delta is present when a delta file exists, or when the proposal names no capability. A capability is a line under `### Added` or `### Modified` in `## Capabilities`. A baseline spec under `openspec/specs/` does not make the delta present. When the delta is present that way and no pull request is open, the machine SHALL run the specify skill to publish the change, and the reason SHALL be `publish the change to the pull request`.
+`proposing` owns the proposal, `specifying` the delta, `designing` the design, and `tasking` the tasks.
+
+While that file is missing, or no pull request is open, the machine SHALL run the skill that writes and publishes it, and SHALL NOT open the review gate.
+
+For specifying, the delta is present when a delta file exists, or when the proposal names no capability.
+
+A capability is a line under `### Added` or `### Modified` in `## Capabilities`.
 
 #### Scenario: Proposing without a proposal writes one
+
+A baseline spec under `openspec/specs/` does not make the delta present.
+
+When the delta is present that way and no pull request is open, the machine SHALL run the specify skill to publish the change, and the reason SHALL be `publish the change to the pull request`.
 
 - **WHEN** the phase is `proposing` and the change has no proposal
 - **THEN** the machine runs the plan skill and does not set `wait-human`
@@ -37,9 +47,21 @@ Each writing phase owns one change file. The cycle returns to the phase that sti
 
 ### Requirement: A missing earlier file returns one phase
 
-`specifying` SHALL return to `proposing` when the proposal is missing. `designing` SHALL return to `specifying` when a named capability has no delta file. When the proposal names no capability, `designing` SHALL NOT return to `specifying` for a missing delta file. `tasking` SHALL return to `designing` when the design is missing. `implementing` SHALL return to `tasking` when the tasks are missing. Each check looks only at the previous phase's file. Specifying is ready without a delta file when the proposal names no capability.
+`specifying` SHALL return to `proposing` when the proposal is missing.
+
+`designing` SHALL return to `specifying` when a named capability has no delta file.
+
+When the proposal names no capability, `designing` SHALL NOT return to `specifying` for a missing delta file.
+
+`tasking` SHALL return to `designing` when the design is missing.
+
+`implementing` SHALL return to `tasking` when the tasks are missing.
+
+Each check looks only at the previous phase's file.
 
 #### Scenario: Specifying without a proposal returns to proposing
+
+Specifying is ready without a delta file when the proposal names no capability.
 
 - **WHEN** the phase is `specifying` and the change has no proposal
 - **THEN** the machine moves the issue to `proposing`
@@ -89,9 +111,25 @@ The prompt for a skill run SHALL include the issue title and body. It SHALL say 
 
 ### Requirement: The writing prompt carries the input revision
 
-For `specify`, `design`, and `tasks`, the prompt SHALL carry the current text of the previous artifact and the `sdd-absorbed` stamp in this step's file. A stamp that equals the revision of that text SHALL be one sentence and SHALL NOT include the text. For `tasks`, that prompt SHALL also name the delta revision on its own line. A missing file SHALL say that file does not exist yet. `plan` SHALL be told that the issue text is the upstream and that the proposal existing is not a reason to leave it. Any other skill SHALL be told that the action has no previous artifact. An unreadable previous artifact SHALL tell the run not to treat the existing file as already right. The revision SHALL be a hash of the current bytes. The prompt SHALL NOT be a diff against a commit.
+For `specify`, `design`, and `tasks`, the prompt SHALL carry the current text of the previous artifact and the `sdd-absorbed` stamp in this step's file.
+
+A stamp that equals the revision of that text SHALL be one sentence and SHALL NOT include the text.
+
+For `tasks`, that prompt SHALL also name the delta revision on its own line.
+
+A missing file SHALL say that file does not exist yet.
 
 #### Scenario: A design run after a spec edit carries that text
+
+`plan` SHALL be told that the issue text is the upstream and that the proposal existing is not a reason to leave it.
+
+Any other skill SHALL be told that the action has no previous artifact.
+
+An unreadable previous artifact SHALL tell the run not to treat the existing file as already right.
+
+The revision SHALL be a hash of the current bytes.
+
+The prompt SHALL NOT be a diff against a commit.
 
 - **WHEN** `design.md` has no stamp and the delta spec states a fact
 - **THEN** the design prompt contains that fact, names the input revision, and does not say the stamp matches
@@ -128,9 +166,21 @@ For `specify`, `design`, and `tasks`, the prompt SHALL carry the current text of
 
 ### Requirement: A stale stamp restarts the writing skill
 
-On `specifying`, when a delta exists and its stamp is not the proposal revision, the machine SHALL run the spec skill before the review gate and before `sdd:auto-spec`. On `designing`, an open decision SHALL wait before that check. When `design.md` exists, no decision is open, and its stamp is not the spec revision, the machine SHALL run the design skill before the review gate and before `sdd:auto-design`. On `tasking`, when `tasks.md` exists and its stamp is not the revision of the specs and the design, the machine SHALL run the tasks skill before it leaves for implementing. A commit of a phase file that leaves `sdd-absorbed` unchanged SHALL restart that skill even when the stamp equals the input revision. A matching stamp on an unchanged file SHALL leave the gate or the advance in place. `sdd accept` SHALL refuse while the stamp of that phase is behind.
+On `specifying`, when a delta exists and its stamp is not the proposal revision, the machine SHALL run the spec skill before the review gate and before `sdd:auto-spec`.
+
+On `designing`, an open decision SHALL wait before that check.
+
+When `design.md` exists, no decision is open, and its stamp is not the spec revision, the machine SHALL run the design skill before the review gate and before `sdd:auto-design`.
 
 #### Scenario: A stale spec stamp restarts specify before the auto advance
+
+On `tasking`, when `tasks.md` exists and its stamp is not the revision of the specs and the design, the machine SHALL run the tasks skill before it leaves for implementing.
+
+A commit of a phase file that leaves `sdd-absorbed` unchanged SHALL restart that skill even when the stamp equals the input revision.
+
+A matching stamp on an unchanged file SHALL leave the gate or the advance in place.
+
+`sdd accept` SHALL refuse while the stamp of that phase is behind.
 
 - **WHEN** the phase is `specifying`, `sdd:auto-spec` is set, and the delta stamp is not the proposal revision
 - **THEN** the machine runs the spec skill and does not advance
@@ -167,9 +217,19 @@ On `specifying`, when a delta exists and its stamp is not the proposal revision,
 
 ### Requirement: A task card names the delta it was cut from
 
-A task card SHALL name scenario titles and the delta revision `sdd-delta`, and SHALL NOT copy the scenario text. On `implementing`, when that revision is not the live delta, or a live scenario has no card, the machine SHALL return to `tasking` and SHALL NOT run the implement skill. On `implementing`, when every task line is checked and a delta scenario has no open or checked line, the machine SHALL return to `tasking` and SHALL NOT move to `verifying`. On `accepting`, that missing line SHALL make the machine wait and SHALL NOT archive the change. A checked line SHALL count as the scenario's task. Zero open lines SHALL NOT by itself make the cut complete.
+A task card SHALL name scenario titles and the delta revision `sdd-delta`, and SHALL NOT copy the scenario text.
+
+On `implementing`, when that revision is not the live delta, or a live scenario has no card, the machine SHALL return to `tasking` and SHALL NOT run the implement skill.
+
+On `implementing`, when every task line is checked and a delta scenario has no open or checked line, the machine SHALL return to `tasking` and SHALL NOT move to `verifying`.
 
 #### Scenario: A differing card revision returns implementing to tasking
+
+On `accepting`, that missing line SHALL make the machine wait and SHALL NOT archive the change.
+
+A checked line SHALL count as the scenario's task.
+
+Zero open lines SHALL NOT by itself make the cut complete.
 
 - **WHEN** `implementing` has an open task and the card revision is not the live delta
 - **THEN** the machine returns to `tasking` and does not run the implement skill

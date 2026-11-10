@@ -8,11 +8,19 @@ On `proposing`, `specifying`, and `designing` the machine opens the review, and 
 
 ### Requirement: The machine opens the review once
 
-When the phase's artifact is published, one pull request is open, and nothing in that artifact is open, the machine SHALL set `wait-human` and comment the ask once. A later poll SHALL leave the label and SHALL NOT comment the ask again. While that artifact stays ready, the later poll SHALL carry the same gate. An open item, or `wait-human` on any other phase, SHALL leave the gate off, and the reason SHALL be `sdd:wait-human is set on <phase>. Do the ask on the issue.` The ask SHALL name the artifact, the tracker's way to move the phase, and `sdd accept <key>`.
+When the phase's artifact is published, one pull request is open, and nothing in that artifact is open, the machine SHALL set `wait-human` and comment the ask once.
 
-On GitHub the ask SHALL be: review the artifact, replace `sdd:<phase>` with the gate label on this issue, or run `sdd accept <key>`.
+A later poll SHALL leave the label and SHALL NOT comment the ask again.
+
+While that artifact stays ready, the later poll SHALL carry the same gate.
+
+An open item, or `wait-human` on any other phase, SHALL leave the gate off, and the reason SHALL be `sdd:wait-human is set on <phase>.
 
 #### Scenario: A published proposal is asked once
+
+Do the ask on the issue.` The ask SHALL name the artifact, the tracker's way to move the phase, and `sdd accept <key>`.
+
+On GitHub the ask SHALL be: review the artifact, replace `sdd:<phase>` with the gate label on this issue, or run `sdd accept <key>`.
 
 - **WHEN** the phase is `proposing`, the proposal is published, one pull request is open, and no question is open
 - **THEN** the machine sets `wait-human` and comments the proposal ask once
@@ -54,9 +62,21 @@ On GitHub the ask SHALL be: review the artifact, replace `sdd:<phase>` with the 
 
 ### Requirement: A person closes the gate on the issue
 
-A person MAY leave the writing label on and add `proposed`, `specified`, or `designed`. On a ready artifact the machine SHALL move to the next phase, clear that phase's `wait-human`, drop the gate label, and comment `sdd:accept <from> → <to>`. The same poll SHALL then read the issue and perform the next determined effect, including the next review ask. On a missing artifact or an open item the machine SHALL drop the gate label and SHALL keep or restore the writing phase. It SHALL NOT comment that the phase moved. The next poll continues that writing phase. When the item is then closed, the machine SHALL post the review ask.
+A person MAY leave the writing label on and add `proposed`, `specified`, or `designed`.
+
+On a ready artifact the machine SHALL move to the next phase, clear that phase's `wait-human`, drop the gate label, and comment `sdd:accept <from> → <to>`.
+
+The same poll SHALL then read the issue and perform the next determined effect, including the next review ask.
+
+On a missing artifact or an open item the machine SHALL drop the gate label and SHALL keep or restore the writing phase.
 
 #### Scenario: Proposed on a ready proposal moves to specifying
+
+It SHALL NOT comment that the phase moved.
+
+The next poll continues that writing phase.
+
+When the item is then closed, the machine SHALL post the review ask.
 
 - **WHEN** a person adds `proposed` beside `proposing` and the proposal has nothing open
 - **THEN** the phase becomes `specifying`, the issue comment is `sdd:accept proposing → specifying`, and the same poll opens the spec review

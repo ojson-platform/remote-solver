@@ -50,9 +50,25 @@ When the tip commit contains a line `Sdd-Archive: issue-<key>` and the parent ba
 
 ### Requirement: The drawer shows the folded spec
 
-The drawer SHALL show a unified diff of the baseline against the folded spec. A changed row SHALL show the baseline line number on the left and the folded line number on the right. When the folded spec has no addition and no deletion, a row SHALL show one line number. A changed word inside a one-line replacement SHALL be marked. A run of more than six unchanged lines between changes SHALL be one gap row whose hidden rows are in the snapshot. More than three unchanged lines before the first change, or after the last change, SHALL be a gap that keeps the three lines next to the change. When a changed line lies in a scenario, the drawer SHALL show that requirement's heading and that scenario's heading, and the lines between those headings SHALL be one gap. Context beside that change SHALL NOT include a line from an earlier scenario. The section headings of the delta SHALL NOT appear in the rows.
+The drawer SHALL show a unified diff of the baseline against the folded spec.
+
+A changed row SHALL show the baseline line number on the left and the folded line number on the right.
+
+When the folded spec has no addition and no deletion, a row SHALL show one line number.
+
+A changed word inside a one-line replacement SHALL be marked.
+
+A run of more than six unchanged lines between changes SHALL be one gap row whose hidden rows are in the snapshot.
 
 #### Scenario: A changed line shows both numbers and the changed words
+
+More than three unchanged lines before the first change, or after the last change, SHALL be a gap that keeps the three lines next to the change.
+
+When a changed line lies in a scenario, the drawer SHALL show that requirement's heading and that scenario's heading, and the lines between those headings SHALL be one gap.
+
+Context beside that change SHALL NOT include a line from an earlier scenario.
+
+The section headings of the delta SHALL NOT appear in the rows.
 
 - **WHEN** one line of a requirement is replaced by one line
 - **THEN** the deletion shows the baseline line number, the addition shows the folded line number, and the changed words are marked
@@ -112,9 +128,31 @@ The fold control SHALL be centered. The first capability SHALL NOT have a rule a
 
 ### Requirement: A line comment uses a thread when the line has an anchor
 
-A row copied from the delta SHALL carry an anchor: the delta path, the line number in that file, and side `right`. Choosing that row and sending text SHALL call `openThread` with the person's text only. A row without an anchor SHALL call `speak` with the visible line quoted above the text. A refused thread SHALL call `speak` with the same quote and SHALL NOT put the host error in the snapshot. Both calls failing SHALL yield `комментарий не записан`. A Plan body line SHALL carry an anchor to that line of `proposal.md`. An open question SHALL stay a conversation reply. A Design body line SHALL carry an anchor to that line of `design.md`. That plan thread SHALL be on `openspec/changes/issue-<key>/proposal.md`, that design thread SHALL be on `openspec/changes/issue-<key>/design.md`, and the pull-request conversation SHALL receive no quote for either thread. An open question of the design SHALL stay a conversation reply. A `- [ ]` line of the design outside Open questions SHALL open a thread. A `- [ ]` line outside Open questions SHALL open a thread even when its text equals an open question.
+A row copied from the delta SHALL carry an anchor: the delta path, the line number in that file, and side `right`.
+
+Choosing that row and sending text SHALL call `openThread` with the person's text only.
+
+A row without an anchor SHALL call `speak` with the visible line quoted above the text.
+
+A refused thread SHALL call `speak` with the same quote and SHALL NOT put the host error in the snapshot.
+
+Both calls failing SHALL yield `комментарий не записан`.
 
 #### Scenario: A line copied from the delta opens a thread
+
+A Plan body line SHALL carry an anchor to that line of `proposal.md`.
+
+An open question SHALL stay a conversation reply.
+
+A Design body line SHALL carry an anchor to that line of `design.md`.
+
+That plan thread SHALL be on `openspec/changes/issue-<key>/proposal.md`, that design thread SHALL be on `openspec/changes/issue-<key>/design.md`, and the pull-request conversation SHALL receive no quote for either thread.
+
+An open question of the design SHALL stay a conversation reply.
+
+A `- [ ]` line of the design outside Open questions SHALL open a thread.
+
+A `- [ ]` line outside Open questions SHALL open a thread even when its text equals an open question.
 
 - **WHEN** the person comments a line that the delta contributed and one pull request is open
 - **THEN** the review thread is opened on the delta path at the delta line with the person's text only

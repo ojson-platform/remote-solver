@@ -160,9 +160,21 @@ A classified layer marker on an open thread SHALL move the phase, or start the c
 
 ### Requirement: An open item keeps its file's layer
 
-An open thread whose line is an unchecked `- [ ]` item under `## Open decisions` in `design.md` SHALL be the `design` layer. An open thread whose line is an unchecked `- [ ]` item under `## Open questions` in `proposal.md` SHALL be the `proposal` layer. The latest reply's marker SHALL NOT replace that layer, except a reply that is `fixed`. `threads --layer` SHALL list the thread under that layer and SHALL NOT list it as unmarked. A thread on any other line, and a thread on a checked item, SHALL keep the marker its reply carries. `thread fix` SHALL refuse while the thread's line is still that unchecked item. The thread SHALL stay open.
+An open thread whose line is an unchecked `- [ ]` item under `## Open decisions` in `design.md` SHALL be the `design` layer.
+
+An open thread whose line is an unchecked `- [ ]` item under `## Open questions` in `proposal.md` SHALL be the `proposal` layer.
+
+The latest reply's marker SHALL NOT replace that layer, except a reply that is `fixed`.
+
+`threads --layer` SHALL list the thread under that layer and SHALL NOT list it as unmarked.
 
 #### Scenario: A spec marker on an open decision stays on design
+
+A thread on any other line, and a thread on a checked item, SHALL keep the marker its reply carries.
+
+`thread fix` SHALL refuse while the thread's line is still that unchecked item.
+
+The thread SHALL stay open.
 
 - **WHEN** `designing` has an unchecked Open decisions item and the open thread on that line marks `spec`
 - **THEN** the machine improves the design and does not move the issue to `specifying`, and `threads --layer design` lists that thread

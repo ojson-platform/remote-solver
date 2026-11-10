@@ -8,9 +8,27 @@ The focus pager is the pair of words on the focus block. A word that cannot move
 
 ### Requirement: The focus pager is one control on the focus row, opposite the badge
 
-The focus pager SHALL be one control on the focus row, opposite the badge. That control SHALL show a back chevron, the current page and the count, and a forward chevron, in the form `< 11/12 >`. The count SHALL run from the oldest page, so the latest page SHALL read `12/12`. A chevron that cannot move SHALL stay in place and go quiet, so the number SHALL NOT jump. A single written focus SHALL leave the control out. The row SHALL then be the badge and the prose. Back SHALL still walk older written comments, newest first. Forward SHALL still return toward now. Opening SHALL still land on the latest page. The badge and the prose SHALL stay as they are.
+The focus pager SHALL be one control on the focus row, opposite the badge.
+
+That control SHALL show a back chevron, the current page and the count, and a forward chevron, in the form `< 11/12 >`.
+
+The count SHALL run from the oldest page, so the latest page SHALL read `12/12`.
+
+A chevron that cannot move SHALL stay in place and go quiet, so the number SHALL NOT jump.
+
+A single written focus SHALL leave the control out.
+
+The row SHALL then be the badge and the prose.
 
 #### Scenario: One control on the focus row, opposite the badge, shows a back chevron, the current page and the count, and a forward chevron, in the form `< 11/12 >`
+
+Back SHALL still walk older written comments, newest first.
+
+Forward SHALL still return toward now.
+
+Opening SHALL still land on the latest page.
+
+The badge and the prose SHALL stay as they are.
 
 - **WHEN** one control, the focus row, the badge, a back chevron, the current page, the count, and a forward chevron are already visible, and that control already shows `< 11/12 >` opposite the badge, together with the words «назад» and «вперёд» as the limit that can replace that control
 - **THEN** one control on the focus row, opposite the badge, shows a back chevron, the current page and the count, and a forward chevron, in the form `< 11/12 >`

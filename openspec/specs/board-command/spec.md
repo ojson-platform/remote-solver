@@ -8,11 +8,79 @@
 
 ### Requirement: The board command serves this repository
 
-`remote-solver board` SHALL serve the window for the GitHub repository of the working directory, print its URL, and run the machine spy in that same process. The home file SHALL be `~/.aifactory/config.yaml` when the command does not name one. When that file is missing, the watch list SHALL be that repository's `owner/repo`. Open issues that carry `sdd:cycle` SHALL be the cycles. The working directory SHALL be the gathered checkout for that repository, and an empty service SHALL mean that directory. Another repository on the watch list SHALL stay under the GitHub root. Take SHALL assign the process login. The window's spy SHALL add `sdd:proposing` for a phaseless cycle this manager holds. The machine spy SHALL start an agent for a cycle it would start from `remote-solver spy`. While that agent runs, the window SHALL treat the step as leading. While a worker is on a turn, the page SHALL show that issue, its phase, and its action, as `#<issue> <phase> → <action>`. A later turn of the same worker SHALL replace that line. When the worker leaves the turn, that line SHALL go, and another worker's line SHALL stay. While the page stays open it SHALL read the tracker again about every minute. That read SHALL learn whether the one open pull request differs from its base without reading the diff text. When that head is the archive commit, the check SHALL use the parent of the head. A spy poll that already read the tracker SHALL paint the page from that reading and SHALL NOT read the tracker again for that poll. When that poll matches the tickets, the review, and the branch fingerprints already stored, the generation SHALL stay. When that reading includes the threads and the conversation of one open pull request, the page SHALL show that thread and SHALL NOT read those threads or pull request comments again. A cycle the spy did not read SHALL still have its threads read when the page refreshes. The spy SHALL read an open pull request's threads once. When the home agent is cursor, a step SHALL use that mode's model from the merged factory config. Any other home agent, and an empty agent, SHALL keep the built-in model for that mode.
+`remote-solver board` SHALL serve the window for the GitHub repository of the working directory, print its URL, and run the machine spy in that same process.
 
-`GET /snapshot` SHALL return a JSON snapshot of the header, the rows, and the open cycle's spine. When a cycle's branch summary is already stored, the snapshot SHALL build that cycle's plaque from the summary and SHALL NOT open the branch again for the plaque. `GET /` SHALL remain an HTML page that loads the client. `GET /events` SHALL be a server-sent stream of `change` events carrying the generation. A successful `POST /act` or `POST /take` SHALL return that snapshot as JSON. A refused gesture SHALL stay a text error. The snapshot generation SHALL start at 0 and SHALL grow when the turn changes, when a tracker read commits a change to the tickets, the review, or a branch fingerprint, and when a gesture is written. Reading the page, a refused gesture, setting the same turn again, and a tracker read that matches the tickets, the review, and the branch fingerprints SHALL NOT grow it. An open client SHALL receive a new generation without reloading the page. The snapshot's spy line SHALL be the current turn line, and that cycle's row SHALL carry the turn's action. When a plaque has no top line and no other bottom line, the snapshot's bottom line SHALL be the worker's action. When the open cycle is specifying and one pull request is open, the snapshot's Specify layer SHALL offer acceptance when `openspec/specs/acceptance/spec.md` offers it, and SHALL offer neither acceptance nor the specifying gate when it does not. An error the page would show between the header and the board SHALL be in the snapshot that is sent next, and SHALL be absent from the snapshot after that.
+The home file SHALL be `~/.aifactory/config.yaml` when the command does not name one.
+
+When that file is missing, the watch list SHALL be that repository's `owner/repo`.
+
+Open issues that carry `sdd:cycle` SHALL be the cycles.
 
 #### Scenario: The home file is the factory file when the command names none
+
+The working directory SHALL be the gathered checkout for that repository, and an empty service SHALL mean that directory.
+
+Another repository on the watch list SHALL stay under the GitHub root.
+
+Take SHALL assign the process login.
+
+The window's spy SHALL add `sdd:proposing` for a phaseless cycle this manager holds.
+
+The machine spy SHALL start an agent for a cycle it would start from `remote-solver spy`.
+
+While that agent runs, the window SHALL treat the step as leading.
+
+While a worker is on a turn, the page SHALL show that issue, its phase, and its action, as `#<issue> <phase> → <action>`.
+
+A later turn of the same worker SHALL replace that line.
+
+When the worker leaves the turn, that line SHALL go, and another worker's line SHALL stay.
+
+While the page stays open it SHALL read the tracker again about every minute.
+
+That read SHALL learn whether the one open pull request differs from its base without reading the diff text.
+
+When that head is the archive commit, the check SHALL use the parent of the head.
+
+A spy poll that already read the tracker SHALL paint the page from that reading and SHALL NOT read the tracker again for that poll.
+
+When that poll matches the tickets, the review, and the branch fingerprints already stored, the generation SHALL stay.
+
+When that reading includes the threads and the conversation of one open pull request, the page SHALL show that thread and SHALL NOT read those threads or pull request comments again.
+
+A cycle the spy did not read SHALL still have its threads read when the page refreshes.
+
+The spy SHALL read an open pull request's threads once.
+
+When the home agent is cursor, a step SHALL use that mode's model from the merged factory config.
+
+Any other home agent, and an empty agent, SHALL keep the built-in model for that mode.
+
+`GET /snapshot` SHALL return a JSON snapshot of the header, the rows, and the open cycle's spine.
+
+When a cycle's branch summary is already stored, the snapshot SHALL build that cycle's plaque from the summary and SHALL NOT open the branch again for the plaque.
+
+`GET /` SHALL remain an HTML page that loads the client.
+
+`GET /events` SHALL be a server-sent stream of `change` events carrying the generation.
+
+A successful `POST /act` or `POST /take` SHALL return that snapshot as JSON.
+
+A refused gesture SHALL stay a text error.
+
+The snapshot generation SHALL start at 0 and SHALL grow when the turn changes, when a tracker read commits a change to the tickets, the review, or a branch fingerprint, and when a gesture is written.
+
+Reading the page, a refused gesture, setting the same turn again, and a tracker read that matches the tickets, the review, and the branch fingerprints SHALL NOT grow it.
+
+An open client SHALL receive a new generation without reloading the page.
+
+The snapshot's spy line SHALL be the current turn line, and that cycle's row SHALL carry the turn's action.
+
+When a plaque has no top line and no other bottom line, the snapshot's bottom line SHALL be the worker's action.
+
+When the open cycle is specifying and one pull request is open, the snapshot's Specify layer SHALL offer acceptance when `openspec/specs/acceptance/spec.md` offers it, and SHALL offer neither acceptance nor the specifying gate when it does not.
+
+An error the page would show between the header and the board SHALL be in the snapshot that is sent next, and SHALL be absent from the snapshot after that.
 
 - **WHEN** the command does not name a home file
 - **THEN** the home file is `~/.aifactory/config.yaml`

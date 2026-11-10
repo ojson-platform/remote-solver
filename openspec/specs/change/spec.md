@@ -46,9 +46,19 @@ When both the active directory and the archive contain the change, the machine S
 
 ### Requirement: The archive commit leaves the documents on its parent
 
-When the tip commit of the issue branch contains a line `Sdd-Archive: issue-<key>`, the plaque and the spine SHALL read the change documents and the baselines from the parent of that commit. `readChange` SHALL read the tip, report the change archived, and report no active proposal. A path shown for those documents SHALL be the archive path. The fingerprint of that reading SHALL differ from a reading of the same documents at their active paths. A tip whose message does not contain that line SHALL be read as itself, including when an ancestor contains the line. When that parent cannot be resolved, a lenient read SHALL use the tip and a strict read SHALL fail.
+When the tip commit of the issue branch contains a line `Sdd-Archive: issue-<key>`, the plaque and the spine SHALL read the change documents and the baselines from the parent of that commit.
+
+`readChange` SHALL read the tip, report the change archived, and report no active proposal.
+
+A path shown for those documents SHALL be the archive path.
+
+The fingerprint of that reading SHALL differ from a reading of the same documents at their active paths.
 
 #### Scenario: A marked tip is read from its parent
+
+A tip whose message does not contain that line SHALL be read as itself, including when an ancestor contains the line.
+
+When that parent cannot be resolved, a lenient read SHALL use the tip and a strict read SHALL fail.
 
 - **WHEN** the tip commit contains `Sdd-Archive: issue-<key>` and the parent still has the proposal
 - **THEN** the spine shows that proposal, the change reports archived and no active proposal, the proposal path is the archive path, and its fingerprint differs from a reading of the parent as itself

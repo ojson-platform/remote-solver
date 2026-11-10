@@ -8,9 +8,21 @@ A cycle is finished when its pull request is merged and its change is archived. 
 
 ### Requirement: An archived change through tasking is restored
 
-On `proposing`, `specifying`, `designing`, and `tasking`, an archived change whose pull request is still open SHALL be restored and the machine SHALL start that step. Tasks that are all checked SHALL NOT stop the restore. The issue SHALL stay open. When the assignee is this manager, the card SHALL stay on the board, and a later reading of the open list SHALL show the card again. A gate label on that writing phase SHALL NOT move the phase before the restore. The next poll, once the change is restored, SHALL move it. The issue SHALL stay open, and when the assignee is this manager the card SHALL stay on the board.
+On `proposing`, `specifying`, `designing`, and `tasking`, an archived change whose pull request is still open SHALL be restored and the machine SHALL start that step.
+
+Tasks that are all checked SHALL NOT stop the restore.
+
+The issue SHALL stay open.
+
+When the assignee is this manager, the card SHALL stay on the board, and a later reading of the open list SHALL show the card again.
+
+A gate label on that writing phase SHALL NOT move the phase before the restore.
 
 #### Scenario: An open pull request on tasking is restored
+
+The next poll, once the change is restored, SHALL move it.
+
+The issue SHALL stay open, and when the assignee is this manager the card SHALL stay on the board.
 
 - **WHEN** the phase is `tasking`, the assignee is this manager, the pull request is still open, the change is archived, and every task is checked
 - **THEN** the machine restores the change and starts that step, the issue stays open, and the card stays on the board
@@ -88,11 +100,11 @@ When the board places a closed issue, the card SHALL leave when the phase is `ac
 
 A cycle is finished when its pull request is merged and its change is archived. The machine SHALL close the issue, so the board's open list no longer has the cycle. The machine SHALL NOT restore that change and SHALL NOT start another step on it. The cycle SHALL leave the board, and a reload SHALL NOT bring it back. Tasks that are all checked SHALL NOT keep a finished cycle on the board.
 
+#### Scenario: A finished cycle leaves the board and a reload does not bring it back
+
 On `implementing`, the machine SHALL NOT move a finished cycle to `tasking` to restore it, SHALL NOT start an open task, and SHALL NOT move it to `verifying` to wait for an open pull request. On `verifying`, the machine SHALL NOT wait because there is no open pull request. On `proposed`, `specified`, and `designed`, the machine SHALL NOT move the phase and then restore the change.
 
 A cycle that carries `sdd:cancelled` SHALL NOT be closed by this requirement.
-
-#### Scenario: A finished cycle leaves the board and a reload does not bring it back
 
 - **WHEN** the phase is `tasking`, the assignee is this manager, the pull request is merged, the change is archived, every task is checked, the card is on the board, and the board is reloaded
 - **THEN** the finished cycle has left the board and the reload does not bring it back

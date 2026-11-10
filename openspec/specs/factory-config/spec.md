@@ -41,9 +41,19 @@ The service overlay SHALL be `.aifactory/config.yaml` at the checkout root. A mi
 
 ### Requirement: The merged config is one agent and that agent's fields
 
-The merged factory config SHALL be one agent and that agent's fields: the two skill-mode models, and effort and speed only when that agent has them. The two model slots MAY use the same id. The window's spy SHALL take the agent and the models for a step from this merged config. A running step SHALL keep the model it started with. The next step SHALL read the new file. The machine without the window SHALL be satisfied by the service config: queues are required, and `base`, `branch-scope`, and `ignore-comments` have defaults.
+The merged factory config SHALL be one agent and that agent's fields: the two skill-mode models, and effort and speed only when that agent has them.
+
+The two model slots MAY use the same id.
+
+The window's spy SHALL take the agent and the models for a step from this merged config.
+
+A running step SHALL keep the model it started with.
+
+The next step SHALL read the new file.
 
 #### Scenario: A running step keeps its model
+
+The machine without the window SHALL be satisfied by the service config: queues are required, and `base`, `branch-scope`, and `ignore-comments` have defaults.
 
 - **WHEN** a step has started and the manager then changes `models.mechanical`
 - **THEN** that step keeps the model it started with, and the next step reads the new file
@@ -55,9 +65,19 @@ The merged factory config SHALL be one agent and that agent's fields: the two sk
 
 ### Requirement: A known pair is written with the agent
 
-Choosing an agent SHALL NOT read a live model catalog. A catalog that disagrees with the table below SHALL NOT change the pair. When the agent has a known pair, that pair SHALL be written with the agent. When it has none, both models SHALL be empty. The known pairs SHALL be: cursor `composer-2.5-fast` and `grok-4.7-high-fast`; codex `gpt-6-luna` and `gpt-6.1-sol`; claude-code `sonnet` and `opus`; opencode `moonshotai/kimi-k2.7-code` and `moonshotai/kimi-k3`. The agents the factory can run SHALL be cursor, codex, claude-code, and opencode.
+Choosing an agent SHALL NOT read a live model catalog.
+
+A catalog that disagrees with the table below SHALL NOT change the pair.
+
+When the agent has a known pair, that pair SHALL be written with the agent.
+
+When it has none, both models SHALL be empty.
+
+The known pairs SHALL be: cursor `composer-2.5-fast` and `grok-4.7-high-fast`; codex `gpt-6-luna` and `gpt-6.1-sol`; claude-code `sonnet` and `opus`; opencode `moonshotai/kimi-k2.7-code` and `moonshotai/kimi-k3`.
 
 #### Scenario: Cursor writes its pair
+
+The agents the factory can run SHALL be cursor, codex, claude-code, and opencode.
 
 - **WHEN** the manager chooses cursor
 - **THEN** `models.mechanical` is `composer-2.5-fast` and `models.judgment` is `grok-4.7-high-fast`
@@ -81,9 +101,9 @@ Choosing an agent SHALL NOT read a live model catalog. A catalog that disagrees 
 
 Changing the agent SHALL replace the set, at home and on the overlay. The home file SHALL write the known values of the new set. The overlay SHALL write the new agent, the known pair, and the default effort and speed. A key the agent does not have SHALL be absent. An empty string SHALL NOT be written. Old effort and speed keys SHALL NOT remain. Changing the agent SHALL NOT write an empty model.
 
-Home and overlay defaults SHALL be: cursor has no effort field and no speed field; codex writes effort `low` for `mechanical` and `high` for `judgment`, and does not write speed; claude-code writes effort `medium` for both skill modes and has no speed field; opencode has no effort field and no speed field.
-
 #### Scenario: Codex replaces a cursor set
+
+Home and overlay defaults SHALL be: cursor has no effort field and no speed field; codex writes effort `low` for `mechanical` and `high` for `judgment`, and does not write speed; claude-code writes effort `medium` for both skill modes and has no speed field; opencode has no effort field and no speed field.
 
 - **WHEN** the home agent changes from cursor to codex
 - **THEN** the file has codex, `gpt-6-luna`, `gpt-6.1-sol`, and effort `low` and `high`, and it has no speed key and no cursor model id
@@ -95,9 +115,27 @@ Home and overlay defaults SHALL be: cursor has no effort field and no speed fiel
 
 ### Requirement: Effort and speed are the agent's own fields
 
-The window SHALL show the fields of the chosen agent. Cursor SHALL have no separate effort field and no separate speed field. For an agent that has effort, `effort` SHALL be one of `low`, `medium`, `high`, `xhigh`, and `max`, and the window SHALL show only the words that skill mode's model accepts. For an agent that has speed, `speed` SHALL be `fast`, and a missing key SHALL mean ordinary speed. Codex SHALL have a speed field, and the default SHALL be to omit the key. Claude-code and the OpenCode pair SHALL have no speed field. The OpenCode pair SHALL have no effort field. Empty effort and empty speed SHALL mean the agent's default and SHALL NOT stop the window's spy. An empty model SHALL stop the window spy's steps for that service, and SHALL stop «Взять» on a cycle of that service that has no phase. It SHALL NOT stop «Взять» on a cycle that already has a phase.
+The window SHALL show the fields of the chosen agent.
+
+Cursor SHALL have no separate effort field and no separate speed field.
+
+For an agent that has effort, `effort` SHALL be one of `low`, `medium`, `high`, `xhigh`, and `max`, and the window SHALL show only the words that skill mode's model accepts.
+
+For an agent that has speed, `speed` SHALL be `fast`, and a missing key SHALL mean ordinary speed.
+
+Codex SHALL have a speed field, and the default SHALL be to omit the key.
 
 #### Scenario: Empty effort does not stop a step
+
+Claude-code and the OpenCode pair SHALL have no speed field.
+
+The OpenCode pair SHALL have no effort field.
+
+Empty effort and empty speed SHALL mean the agent's default and SHALL NOT stop the window's spy.
+
+An empty model SHALL stop the window spy's steps for that service, and SHALL stop «Взять» on a cycle of that service that has no phase.
+
+It SHALL NOT stop «Взять» on a cycle that already has a phase.
 
 - **WHEN** codex has an empty effort and both models are set
 - **THEN** the window's spy is not stopped by that empty effort

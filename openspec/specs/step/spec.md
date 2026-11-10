@@ -8,9 +8,29 @@
 
 ### Requirement: Step settles one issue and prints its decision
 
-`step <key>` SHALL apply that issue's mechanical phase moves and print the decision that stops the settlement. When that decision is a merge, `step` SHALL merge the pull request and print the following decision: the issue is `accepted` and closed, and the printed decision is `done`. It SHALL NOT start a skill. It SHALL NOT settle any other issue. Every printed decision SHALL carry `queue` and `base`, including a decision printed because the issue is outside the cycle. `queue` SHALL be the earliest configured queue whose name is in the issue labels. When no configured queue name is in the labels, `queue` SHALL be the first configured queue name. `base` SHALL be the pull request base branch. An issue whose service field names a directory other than the service root SHALL wait with reason `service is` that directory and SHALL NOT move. An empty service field SHALL mean the directory `step` was started from. Text in the issue body SHALL NOT name the service.
+`step <key>` SHALL apply that issue's mechanical phase moves and print the decision that stops the settlement.
+
+When that decision is a merge, `step` SHALL merge the pull request and print the following decision: the issue is `accepted` and closed, and the printed decision is `done`.
+
+It SHALL NOT start a skill.
+
+It SHALL NOT settle any other issue.
+
+Every printed decision SHALL carry `queue` and `base`, including a decision printed because the issue is outside the cycle.
 
 #### Scenario: One issue moves and another stays
+
+`queue` SHALL be the earliest configured queue whose name is in the issue labels.
+
+When no configured queue name is in the labels, `queue` SHALL be the first configured queue name.
+
+`base` SHALL be the pull request base branch.
+
+An issue whose service field names a directory other than the service root SHALL wait with reason `service is` that directory and SHALL NOT move.
+
+An empty service field SHALL mean the directory `step` was started from.
+
+Text in the issue body SHALL NOT name the service.
 
 - **WHEN** `step` is run for an issue that is `proposed` with no proposal, and another issue is `implementing` with an open task
 - **THEN** the first issue moves to `proposing` and the printed decision is that issue's skill
@@ -73,9 +93,25 @@ When `step` is given `--auto-plan`, `--auto-spec`, or `--auto-design`, it SHALL 
 
 ### Requirement: Worktree prepares the session checkout
 
-`worktree <key>` SHALL check out branch `sdd/<key>` at `.worktrees/sdd-<key>`, creating the checkout when it is missing and reusing it when it exists, including when it is dirty. When that branch is already checked out in another worktree, `worktree` SHALL reuse that checkout and SHALL NOT add a second one. The spy SHALL prepare this same checkout. It SHALL print that checkout path. The package links SHALL be in that checkout. `.sandcastle/service-root` in that checkout SHALL name the service root `worktree` was run from. A dirty file SHALL remain. The service status SHALL NOT list `.worktrees`. A `node_modules` link that already names the service `node_modules` SHALL stay pointed there when `worktree` runs again from that checkout.
+`worktree <key>` SHALL check out branch `sdd/<key>` at `.worktrees/sdd-<key>`, creating the checkout when it is missing and reusing it when it exists, including when it is dirty.
+
+When that branch is already checked out in another worktree, `worktree` SHALL reuse that checkout and SHALL NOT add a second one.
+
+The spy SHALL prepare this same checkout.
+
+It SHALL print that checkout path.
+
+The package links SHALL be in that checkout.
 
 #### Scenario: A missing checkout is created
+
+`.sandcastle/service-root` in that checkout SHALL name the service root `worktree` was run from.
+
+A dirty file SHALL remain.
+
+The service status SHALL NOT list `.worktrees`.
+
+A `node_modules` link that already names the service `node_modules` SHALL stay pointed there when `worktree` runs again from that checkout.
 
 - **WHEN** `worktree` is run for an issue whose checkout is missing
 - **THEN** `.worktrees/sdd-<key>` exists on branch `sdd/<key>`, the package links are present, and the printed path is that checkout

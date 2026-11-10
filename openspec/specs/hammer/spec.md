@@ -8,9 +8,33 @@ While the spy's running set contains the issue, the task that wears `impl` also 
 
 ### Requirement: The plaque of the phase a worker is in wears the hammer
 
-The hammer SHALL hang on the plaque of the phase the worker is in, at that plaque's top-right corner. It SHALL be bare, brass, and 22px, 8px above the plaque and 14px past its right edge, with no frame of its own, and it SHALL NOT take clicks. A worker improving a spec SHALL hang it on the specifying plaque. A worker archiving SHALL hang it on the accepting plaque. Any phase the running set is actually working SHALL get the same mark. When the worker leaves, the hammer SHALL go and the `impl` badge SHALL stay. A cycle that is waiting for a person SHALL show no hammer. The plaque SHALL be the mark. The Tasks-row hammer SHALL NOT stay beside it. The hammer SHALL stay the chosen mark: one filled path, blunt poll and a 45° wedge, handle through the middle. That path SHALL be `M2 4 H8 V8 H22 L26 12 L22 16 H8 V20 H2 Z M12 12 H16 V30 H12 Z`. Around the handle, `transform-origin: 43.75% 93.75%`, the hammer SHALL draw back, strike about 45°, return to rest, and wait longer than that swing. It SHALL repeat while the worker stays.
+The hammer SHALL hang on the plaque of the phase the worker is in, at that plaque's top-right corner.
+
+It SHALL be bare, brass, and 22px, 8px above the plaque and 14px past its right edge, with no frame of its own, and it SHALL NOT take clicks.
+
+A worker improving a spec SHALL hang it on the specifying plaque.
+
+A worker archiving SHALL hang it on the accepting plaque.
+
+Any phase the running set is actually working SHALL get the same mark.
 
 #### Scenario: The hammer hangs on the plaque of the phase the worker is in
+
+When the worker leaves, the hammer SHALL go and the `impl` badge SHALL stay.
+
+A cycle that is waiting for a person SHALL show no hammer.
+
+The plaque SHALL be the mark.
+
+The Tasks-row hammer SHALL NOT stay beside it.
+
+The hammer SHALL stay the chosen mark: one filled path, blunt poll and a 45° wedge, handle through the middle.
+
+That path SHALL be `M2 4 H8 V8 H22 L26 12 L22 16 H8 V20 H2 Z M12 12 H16 V30 H12 Z`.
+
+Around the handle, `transform-origin: 43.75% 93.75%`, the hammer SHALL draw back, strike about 45°, return to rest, and wait longer than that swing.
+
+It SHALL repeat while the worker stays.
 
 - **WHEN** the hammer is already hanging on the plaque of the phase the worker is in, together with the Tasks row as the limit that can replace that plaque
 - **THEN** the hammer hangs on the plaque of the phase the worker is in

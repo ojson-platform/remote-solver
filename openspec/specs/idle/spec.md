@@ -8,9 +8,21 @@ A skill run that changes nothing is not started again until the decision changes
 
 ### Requirement: A run with no commit is not repeated
 
-When a skill run produces no commit, the machine SHALL comment `sdd:refused` and that effect's signature on the issue. The next poll SHALL NOT start that effect while the refusal is the latest machine comment and the phase, the action, and the reason are unchanged. A later person comment SHALL clear the refusal. A different phase, action, or reason SHALL start. The spy SHALL NOT keep the mark in its own memory. An exit other than the no-commit exit SHALL NOT post the refusal, so the same decision MAY start again. When one worker runs a later turn and that turn produces no commit, the refusal SHALL name that later turn.
+When a skill run produces no commit, the machine SHALL comment `sdd:refused` and that effect's signature on the issue.
+
+The next poll SHALL NOT start that effect while the refusal is the latest machine comment and the phase, the action, and the reason are unchanged.
+
+A later person comment SHALL clear the refusal.
+
+A different phase, action, or reason SHALL start.
+
+The spy SHALL NOT keep the mark in its own memory.
 
 #### Scenario: A later turn with no commit stays idle
+
+An exit other than the no-commit exit SHALL NOT post the refusal, so the same decision MAY start again.
+
+When one worker runs a later turn and that turn produces no commit, the refusal SHALL name that later turn.
 
 - **WHEN** one worker's first turn commits and its next turn does not
 - **THEN** the spy does not start that later turn again

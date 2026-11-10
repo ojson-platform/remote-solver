@@ -32,9 +32,17 @@ On `specifying`, each id under Capabilities / Modified that has no `openspec/spe
 
 ### Requirement: An Added shelf is published before the delta
 
-Before a delta file exists, an Added id that `## Shelf` does not list SHALL be restored. The restore publishes the look: a rule this checkout shows moves to Modified and its baseline is written; a rule this checkout does not show stays Added and no baseline is written; every capability id is listed under `## Shelf`. An Added id that `## Shelf` already lists SHALL NOT be restored again. Once a delta file exists, an Added id SHALL NOT be restored for this look. A Modified id with no baseline SHALL still be restored when a delta and a spec thread already exist.
+Before a delta file exists, an Added id that `## Shelf` does not list SHALL be restored.
+
+The restore publishes the look: a rule this checkout shows moves to Modified and its baseline is written; a rule this checkout does not show stays Added and no baseline is written; every capability id is listed under `## Shelf`.
+
+An Added id that `## Shelf` already lists SHALL NOT be restored again.
+
+Once a delta file exists, an Added id SHALL NOT be restored for this look.
 
 #### Scenario: An unjudged Added id is restored before the delta
+
+A Modified id with no baseline SHALL still be restored when a delta and a spec thread already exist.
 
 - **WHEN** the phase is `specifying`, the proposal names an id only as Added, `## Shelf` does not list it, and no delta file exists
 - **THEN** the machine restores that shelf

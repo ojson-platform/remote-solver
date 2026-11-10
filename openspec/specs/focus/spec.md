@@ -8,9 +8,55 @@ Focus is the machine's record on a cycle of which layers are solid and which gap
 
 ### Requirement: The skill writes a focus comment when the artifact is published
 
-The skill of the phase SHALL write a focus comment when that phase's artifact is published. The skill SHALL write a focus comment when a visit leaves something a person will read later. A separate review of that artifact SHALL NOT write the focus comment. A separate review step SHALL NOT write the focus. The comment SHALL be prose for one phase, or prose for the whole pull request. The first line SHALL be the marker `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, `sdd:focus:code`, `sdd:focus:accept`, or `sdd:focus` for the whole pull request. A pattern in place of those markers SHALL NOT be that first line. Older focus comments SHALL remain. Older comments SHALL remain. The same text SHALL NOT add another comment. The machine SHALL NOT append the layer ledger (`Plan solid`, `thread N`, `file:line`) as the comment a person reads. There SHALL be no ledger. A run with no signal SHALL leave the latest focus comment unchanged. The skill SHALL NOT write a focus comment when the cycle has no change file. A published proposal SHALL use `sdd:focus:plan`. A published delta spec SHALL use `sdd:focus:spec`. A published design SHALL use `sdd:focus:design`. Published tasks SHALL use `sdd:focus:tasks`. A code slice, or a code change that answers a review thread, SHALL use `sdd:focus:code`. The archive commit SHALL use `sdd:focus:accept`. The archive SHALL write this comment every time, including when `sdd:auto-merge` is set. When the document was published, `sdd:auto-plan`, `sdd:auto-spec`, and `sdd:auto-design` SHALL NOT skip the comment. A visit that fixes review threads of its own phase SHALL write that phase's marker even when the diff is small. Verify, labeling threads, a rebase-only commit, and a publish that carries no phase artifact SHALL NOT write a focus comment.
+The skill of the phase SHALL write a focus comment when that phase's artifact is published.
+
+The skill SHALL write a focus comment when a visit leaves something a person will read later.
+
+A separate review of that artifact SHALL NOT write the focus comment.
+
+A separate review step SHALL NOT write the focus.
+
+The comment SHALL be prose for one phase, or prose for the whole pull request.
 
 #### Scenario: The skill of the phase writes this comment when the artifact is published
+
+The first line SHALL be the marker `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, `sdd:focus:code`, `sdd:focus:accept`, or `sdd:focus` for the whole pull request.
+
+A pattern in place of those markers SHALL NOT be that first line.
+
+Older focus comments SHALL remain.
+
+Older comments SHALL remain.
+
+The same text SHALL NOT add another comment.
+
+The machine SHALL NOT append the layer ledger (`Plan solid`, `thread N`, `file:line`) as the comment a person reads.
+
+There SHALL be no ledger.
+
+A run with no signal SHALL leave the latest focus comment unchanged.
+
+The skill SHALL NOT write a focus comment when the cycle has no change file.
+
+A published proposal SHALL use `sdd:focus:plan`.
+
+A published delta spec SHALL use `sdd:focus:spec`.
+
+A published design SHALL use `sdd:focus:design`.
+
+Published tasks SHALL use `sdd:focus:tasks`.
+
+A code slice, or a code change that answers a review thread, SHALL use `sdd:focus:code`.
+
+The archive commit SHALL use `sdd:focus:accept`.
+
+The archive SHALL write this comment every time, including when `sdd:auto-merge` is set.
+
+When the document was published, `sdd:auto-plan`, `sdd:auto-spec`, and `sdd:auto-design` SHALL NOT skip the comment.
+
+A visit that fixes review threads of its own phase SHALL write that phase's marker even when the diff is small.
+
+Verify, labeling threads, a rebase-only commit, and a publish that carries no phase artifact SHALL NOT write a focus comment.
 
 - **WHEN** the phase's artifact is published and the skill of that phase is already the writer of this focus comment, together with a separate review of that artifact
 - **THEN** the skill of the phase writes this focus comment, and the separate review does not
@@ -167,9 +213,55 @@ The focus names SHALL be the mirror names. A `proposal` marker SHALL land on Pla
 - **THEN** no thread is planted on Change
 ### Requirement: The prose says what the phase produced
 
-The prose SHALL say what this phase produced. When something is weak or must be looked at, the prose SHALL say that too. When the artifact still has open questions, the prose SHALL point at them by place and count and SHALL NOT restate them. A clean phase SHALL omit the weak-spot sentence. A phase with no open questions SHALL omit the pointer. There SHALL be no fixed heading the writer fills in. The prose SHALL be Russian, short, and have no headings. The prose SHALL contain no diff and SHALL NOT choose the next phase. The first paragraph SHALL answer that phase's question, because the spine row keeps the first sentence. A clean first visit SHALL be one paragraph. A further paragraph SHALL appear only for a refusal, open questions, a weak check, or a remark. There SHALL be no ledger and no fixed heading. The paragraph of a published proposal SHALL say what changes for the reader of the ticket and what was refused. On a published proposal the second paragraph SHALL appear only for open questions, and it SHALL give their place and count, not their text. A published delta spec SHALL say which promise is new and which existing promise changed, SHALL name the scenario without which the decision cannot be understood, and SHALL name a promise the issue asked for that the spec does not make. A published design SHALL say where the behavior lives and which alternative was rejected, what is deliberately not built, and where the behavior is observed. The slices of published tasks SHALL be in the order a person would notice them. A slice that waits on another SHALL be named. A code slice, or a code change that answers a review thread, SHALL say what became true after this commit, what the slice left untouched, and a check that does not prove it. The archive comment SHALL say what the person has now, what was left out on purpose, and how many capabilities and scenarios there are and whether tests cover them. A visit that fixes review threads of its own phase SHALL keep the previous comment of that phase. The first paragraph SHALL be the updated answer to the phase question. The next paragraph SHALL name the remarks in their own words and what changed because of them, including scenario names when scenarios appeared. A last paragraph SHALL appear only when something remains to look at, and it SHALL say what to look at.
+The prose SHALL say what this phase produced.
+
+When something is weak or must be looked at, the prose SHALL say that too.
+
+When the artifact still has open questions, the prose SHALL point at them by place and count and SHALL NOT restate them.
+
+A clean phase SHALL omit the weak-spot sentence.
+
+A phase with no open questions SHALL omit the pointer.
+
+There SHALL be no fixed heading the writer fills in.
+
+The prose SHALL be Russian, short, and have no headings.
 
 #### Scenario: The prose says what this phase produced
+
+The prose SHALL contain no diff and SHALL NOT choose the next phase.
+
+The first paragraph SHALL answer that phase's question, because the spine row keeps the first sentence.
+
+A clean first visit SHALL be one paragraph.
+
+A further paragraph SHALL appear only for a refusal, open questions, a weak check, or a remark.
+
+There SHALL be no ledger and no fixed heading.
+
+The paragraph of a published proposal SHALL say what changes for the reader of the ticket and what was refused.
+
+On a published proposal the second paragraph SHALL appear only for open questions, and it SHALL give their place and count, not their text.
+
+A published delta spec SHALL say which promise is new and which existing promise changed, SHALL name the scenario without which the decision cannot be understood, and SHALL name a promise the issue asked for that the spec does not make.
+
+A published design SHALL say where the behavior lives and which alternative was rejected, what is deliberately not built, and where the behavior is observed.
+
+The slices of published tasks SHALL be in the order a person would notice them.
+
+A slice that waits on another SHALL be named.
+
+A code slice, or a code change that answers a review thread, SHALL say what became true after this commit, what the slice left untouched, and a check that does not prove it.
+
+The archive comment SHALL say what the person has now, what was left out on purpose, and how many capabilities and scenarios there are and whether tests cover them.
+
+A visit that fixes review threads of its own phase SHALL keep the previous comment of that phase.
+
+The first paragraph SHALL be the updated answer to the phase question.
+
+The next paragraph SHALL name the remarks in their own words and what changed because of them, including scenario names when scenarios appeared.
+
+A last paragraph SHALL appear only when something remains to look at, and it SHALL say what to look at.
 
 - **WHEN** what this phase produced is already visible, together with a fixed heading
 - **THEN** the prose says what this phase produced

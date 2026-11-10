@@ -32,9 +32,23 @@ The pager's open page SHALL be a live page in four cases. The window SHALL compu
 
 ### Requirement: The live text is the case that holds
 
-A worker on this issue SHALL make the text the phase and the action the machine gave the worker. The next action that is ready and did not start because the cap is full SHALL make the text that next action. When the cycle waits on another issue, the text SHALL name who and the phase the wait runs until. A child SHALL be named the way the decision names that child. A blocker SHALL be named the way the decision names that blocker. One number SHALL be named once. When checks are still running, the text SHALL say checks are still running. When checks are red and the failure has not been handed to a worker yet, the text SHALL say checks are red and the failure has not been handed to a worker yet.
+A worker on this issue SHALL make the text the phase and the action the machine gave the worker.
+
+The next action that is ready and did not start because the cap is full SHALL make the text that next action.
+
+When the cycle waits on another issue, the text SHALL name who and the phase the wait runs until.
+
+A child SHALL be named the way the decision names that child.
+
+A blocker SHALL be named the way the decision names that blocker.
+
+One number SHALL be named once.
 
 #### Scenario: A worker on this issue shows the phase and the action
+
+When checks are still running, the text SHALL say checks are still running.
+
+When checks are red and the failure has not been handed to a worker yet, the text SHALL say checks are red and the failure has not been handed to a worker yet.
 
 - **WHEN** a worker is already on this issue, the phase is already `specifying`, the action the machine gave the worker is already `create-initial-specs`, and the text is already that phase and that action, together with the next action `create-design` that the cap held back as the limit that can replace that phase and that action
 - **THEN** the text is `specifying` and `create-initial-specs`

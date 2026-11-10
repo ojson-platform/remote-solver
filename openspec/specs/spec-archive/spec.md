@@ -27,9 +27,25 @@ The accept step SHALL fold a delta into its baseline with `openspec archive issu
 
 ### Requirement: One commit holds the fold
 
-The accept step SHALL record, in one commit, the folded baseline and the move of the change into `openspec/changes/archive/issue-<key>/`. The command SHALL archive to `openspec/changes/archive/<date>-issue-<key>/`. Before the commit, the step SHALL move that directory to `openspec/changes/archive/issue-<key>/`. That commit's body SHALL contain a line `Sdd-Archive: issue-<key>`. That commit SHALL stay the tip until unarchive. The machine, the window, review, and unarchive SHALL keep reading `archive/issue-<key>`. Unarchive SHALL stay a revert of the archive commit. The step SHALL NOT merge the pull request. `openspec validate --all --strict --no-interactive` SHALL still run before the commit.
+The accept step SHALL record, in one commit, the folded baseline and the move of the change into `openspec/changes/archive/issue-<key>/`.
+
+The command SHALL archive to `openspec/changes/archive/<date>-issue-<key>/`.
+
+Before the commit, the step SHALL move that directory to `openspec/changes/archive/issue-<key>/`.
+
+That commit's body SHALL contain a line `Sdd-Archive: issue-<key>`.
+
+That commit SHALL stay the tip until unarchive.
 
 #### Scenario: The step still makes one commit
+
+The machine, the window, review, and unarchive SHALL keep reading `archive/issue-<key>`.
+
+Unarchive SHALL stay a revert of the archive commit.
+
+The step SHALL NOT merge the pull request.
+
+`openspec validate --all --strict --no-interactive` SHALL still run before the commit.
 
 - **WHEN** the step already makes one commit, together with a second commit as the limit that can replace that one commit
 - **THEN** the step makes one commit

@@ -49,9 +49,9 @@ A child is an open cycle issue this issue is the parent of, by the host parent l
 
 While a task is open, the machine SHALL run that task before it looks at links and SHALL NOT wait on a link, unless the open pull request conflicts with its base. A conflict SHALL be rebased first. When no task is open and the pull request does not conflict, it SHALL wait until every child is `accepted`, then wait while a blocker is open. A closed issue SHALL NOT hold that wait and SHALL NOT hold the parent. After those waits the machine SHALL move to `verifying`.
 
-A finished parent is the finished-cycle exception to that move. The parent is finished when its pull request is merged and its change is archived. While a child is short of `accepted` or an open blocker remains, the machine SHALL wait and SHALL NOT close. An open task SHALL still run. Tasks that are all checked SHALL NOT replace that wait.
-
 #### Scenario: An open task runs before the children are checked
+
+A finished parent is the finished-cycle exception to that move. The parent is finished when its pull request is merged and its change is archived. While a child is short of `accepted` or an open blocker remains, the machine SHALL wait and SHALL NOT close. An open task SHALL still run. Tasks that are all checked SHALL NOT replace that wait.
 
 - **WHEN** `implementing` has an unchecked task and a child that is not accepted
 - **THEN** the machine runs the next task and does not wait on the child
@@ -123,9 +123,9 @@ Rolling this issue back SHALL change only this issue's phase. The linked issue S
 
 The machine SHALL read parent, blocks, blocked-by, and depends-on from the host's own issue links, on GitHub and on Arcanum. A parent link SHALL be a child: an open cycle issue this issue is the parent of. A blocked-by link and a depends-on link SHALL be blockers: issues this issue waits on. A blocks link SHALL be the other side and SHALL NOT hold this issue. One issue on two of these links SHALL count once for the wait.
 
-The machine SHALL write those links when the flow creates a child cycle or a dependency, and it SHALL NOT write a body line. The flow that opens a child cycle or a dependency SHALL write the host link and SHALL NOT write a body line.
-
 #### Scenario: The machine reads parent, blocks, blocked-by, and depends-on from the host's own issue links
+
+The machine SHALL write those links when the flow creates a child cycle or a dependency, and it SHALL NOT write a body line. The flow that opens a child cycle or a dependency SHALL write the host link and SHALL NOT write a body line.
 
 - **WHEN** parent, blocks, blocked-by, and depends-on are already read from the host's own issue links on GitHub and on Arcanum, together with a `Parent:` line or a `Depends:` line in the body as the limit that can replace those links
 - **THEN** the machine reads parent, blocks, blocked-by, and depends-on from the host's own issue links, on GitHub and on Arcanum
@@ -159,4 +159,3 @@ The machine SHALL write those links when the flow creates a child cycle or a dep
 
 - **WHEN** one issue is already on two of these links and already counts once for the wait, together with counting that issue twice as the limit that can replace that
 - **THEN** one issue on two of these links counts once for the wait
-

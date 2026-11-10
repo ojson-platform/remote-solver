@@ -85,9 +85,23 @@ The verbs SHALL be this manager's roles, in the sidebar of the open cycle. A clo
 
 ### Requirement: The window runs one press and does not keep the role
 
-The manager SHALL run a verb on one cycle, including from the pool. That SHALL be one run on that cycle. The role SHALL NOT stay on the cycle, and entering a phase SHALL NOT repeat it. `sdd step` and the spy SHALL NOT start a role. The window SHALL run the outcome itself, with no model and no step. An empty factory config, an agent that does not answer, and an empty model SHALL NOT disable the verb. The role SHALL NOT change the phase or the assignee, and SHALL NOT write `openspec/config.yaml`. The reviewer SHALL remain the `accepting` pass on `auto-review`.
+The manager SHALL run a verb on one cycle, including from the pool.
+
+That SHALL be one run on that cycle.
+
+The role SHALL NOT stay on the cycle, and entering a phase SHALL NOT repeat it.
+
+`sdd step` and the spy SHALL NOT start a role.
+
+The window SHALL run the outcome itself, with no model and no step.
+
+An empty factory config, an agent that does not answer, and an empty model SHALL NOT disable the verb.
+
+The role SHALL NOT change the phase or the assignee, and SHALL NOT write `openspec/config.yaml`.
 
 #### Scenario: A drag does not move the phase
+
+The reviewer SHALL remain the `accepting` pass on `auto-review`.
 
 - **WHEN** the manager runs a verb on a cycle in `implementing`
 - **THEN** the phase stays `implementing` and the assignee stays
@@ -101,4 +115,3 @@ The manager SHALL run a verb on one cycle, including from the pool. That SHALL b
 
 - **WHEN** the window's spy reads a cycle that once received a role
 - **THEN** the spy does not run that role again
-

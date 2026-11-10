@@ -8,9 +8,21 @@
 
 ### Requirement: Plan applies mechanical moves and prints one decision
 
-`plan` SHALL apply every mechanical phase move before it prints. The printed decision SHALL be the first remaining skill action, otherwise the first merge, otherwise one wait that names every remaining issue. An issue assigned to another login, and an issue with no assignee, SHALL NOT be in that reading. `plan` SHALL NOT merge a pull request. A printed decision SHALL carry `base`, the pull request base branch. When the decision has an issue, `queue` SHALL be the earliest configured queue whose name is in that issue's labels. When the decision has no issue, `queue` SHALL be the first configured queue name.
+`plan` SHALL apply every mechanical phase move before it prints.
+
+The printed decision SHALL be the first remaining skill action, otherwise the first merge, otherwise one wait that names every remaining issue.
+
+An issue assigned to another login, and an issue with no assignee, SHALL NOT be in that reading.
+
+`plan` SHALL NOT merge a pull request.
+
+A printed decision SHALL carry `base`, the pull request base branch.
 
 #### Scenario: A phase move is applied and the first skill is printed
+
+When the decision has an issue, `queue` SHALL be the earliest configured queue whose name is in that issue's labels.
+
+When the decision has no issue, `queue` SHALL be the first configured queue name.
 
 - **WHEN** one issue is `proposed` with no proposal, another is `implementing` with an open task, and a third is `accepting` with green checks, an archived change, and `auto-merge`
 - **THEN** the first issue moves to `proposing` and the printed decision is that issue's skill

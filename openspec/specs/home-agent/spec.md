@@ -54,9 +54,29 @@ Choosing the agent the home file already records SHALL change nothing. The home 
 
 ### Requirement: The layer agent does not record the home agent
 
-The select labeled `агент слоя` SHALL remain the override for that one checkout. Choosing an agent on `агент слоя` SHALL write that checkout's overlay with the new agent, that agent's known pair, and the default effort and speed. A key the agent does not have SHALL stay absent. Old effort and speed keys SHALL NOT remain. That choice SHALL NOT write the home agent. An empty `агент слоя` SHALL mean the home agent. While `агент слоя` is empty, the overlay models, effort, and speed SHALL keep following the merged factory. While `агент слоя` is empty, the home agent is `cursor`, and the overlay file already records effort and speed, the overlay fields SHALL still show that effort and that speed. A missing effort or speed on that agent's known pair SHALL NOT drop the recorded key. The checkout overlay SHALL stay out of the repository. While the home file has no agent, the board row SHALL stay `фабрике ещё нужен агент`, the lamp SHALL stay `шаги стоят`, and Take SHALL NOT act.
+The select labeled `агент слоя` SHALL remain the override for that one checkout.
+
+Choosing an agent on `агент слоя` SHALL write that checkout's overlay with the new agent, that agent's known pair, and the default effort and speed.
+
+A key the agent does not have SHALL stay absent.
+
+Old effort and speed keys SHALL NOT remain.
+
+That choice SHALL NOT write the home agent.
+
+An empty `агент слоя` SHALL mean the home agent.
 
 #### Scenario: An overlay agent leaves the factory needing an agent
+
+While `агент слоя` is empty, the overlay models, effort, and speed SHALL keep following the merged factory.
+
+While `агент слоя` is empty, the home agent is `cursor`, and the overlay file already records effort and speed, the overlay fields SHALL still show that effort and that speed.
+
+A missing effort or speed on that agent's known pair SHALL NOT drop the recorded key.
+
+The checkout overlay SHALL stay out of the repository.
+
+While the home file has no agent, the board row SHALL stay `фабрике ещё нужен агент`, the lamp SHALL stay `шаги стоят`, and Take SHALL NOT act.
 
 - **WHEN** the home file has no agent, one checkout is chosen, the overlay has no effort key and no speed key, the manager chooses `cursor` on `агент слоя`, and leaving the merged factory's models, effort, and speed in place is the other value that choice could write
 - **THEN** the checkout overlay records the new agent `cursor`, the known pair mechanical `composer-2.5-fast` and judgment `grok-4.7-high-fast`, and the default effort and speed, so the effort key stays absent and the speed key stays absent, the home file still has no agent, the board row is `фабрике ещё нужен агент`, the lamp is `шаги стоят`, and Take does not act

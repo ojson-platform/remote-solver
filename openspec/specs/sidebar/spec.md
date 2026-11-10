@@ -69,9 +69,23 @@ The unanswered block SHALL be present when a thread has no marker, or the conver
 
 ### Requirement: The hook block shows sddHooks in field order
 
-The hook block SHALL show each string point of `sddHooks` as the action, the point name, and the paragraph, in the order of the field. A newline SHALL stay inside the paragraph. An action or a point other than `before` or `after` SHALL keep its place in that order. A point whose value is not a string SHALL show the action, the point name, and the line `поле хука не читается`, and the other points of that map SHALL remain. A readable map with no points, a missing field, and an empty value SHALL leave no hook block. A value that is not a map SHALL show one line `поле хука не читается` and no paragraphs. After a role writes the field, the open row SHALL show the new field. The window SHALL NOT write `sddHooks`.
+The hook block SHALL show each string point of `sddHooks` as the action, the point name, and the paragraph, in the order of the field.
+
+A newline SHALL stay inside the paragraph.
+
+An action or a point other than `before` or `after` SHALL keep its place in that order.
+
+A point whose value is not a string SHALL show the action, the point name, and the line `поле хука не читается`, and the other points of that map SHALL remain.
 
 #### Scenario: Points stay in field order
+
+A readable map with no points, a missing field, and an empty value SHALL leave no hook block.
+
+A value that is not a map SHALL show one line `поле хука не читается` and no paragraphs.
+
+After a role writes the field, the open row SHALL show the new field.
+
+The window SHALL NOT write `sddHooks`.
 
 - **WHEN** `sddHooks` lists `archive.before` and then `create-proposal.after`
 - **THEN** the hook block shows `archive` `before` first and `create-proposal` `after` second

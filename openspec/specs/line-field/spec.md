@@ -8,9 +8,39 @@ A document line and a document remark take a comment in the pool frame. Where th
 
 ### Requirement: A line field opens on a document line
 
-When one pull request is open, each non-empty line of the plan and of the design SHALL highlight while the pointer is over it, or while that line's field is open. The line text SHALL stay aligned with the section headings. The highlight SHALL change the background and SHALL NOT draw a bar on the left. A click SHALL open a field on that line. A second click on a line whose field is empty SHALL close that field. A second click on a line whose field holds text SHALL leave it open. A field that already holds text SHALL stay open when another line is opened. An empty field SHALL close when another line is opened. The field SHALL close from a cross, and from Escape when the caret is inside it. Sending the field SHALL follow `openspec/specs/spec-diff/spec.md`. A comment field SHALL be the pool card. A line field SHALL sit below its line so its close circle clears the text. The document remark SHALL use the line field's inset and SHALL sit as far below the block above it as a line field sits below its line. A focused field SHALL turn that hairline brass. The line field's close control SHALL be a circled cross on the field's top-right corner. The send mark SHALL sit inside the field.
+When one pull request is open, each non-empty line of the plan and of the design SHALL highlight while the pointer is over it, or while that line's field is open.
+
+The line text SHALL stay aligned with the section headings.
+
+The highlight SHALL change the background and SHALL NOT draw a bar on the left.
+
+A click SHALL open a field on that line.
+
+A second click on a line whose field is empty SHALL close that field.
+
+A second click on a line whose field holds text SHALL leave it open.
 
 #### Scenario: A line field uses the pool frame
+
+A field that already holds text SHALL stay open when another line is opened.
+
+An empty field SHALL close when another line is opened.
+
+The field SHALL close from a cross, and from Escape when the caret is inside it.
+
+Sending the field SHALL follow `openspec/specs/spec-diff/spec.md`.
+
+A comment field SHALL be the pool card.
+
+A line field SHALL sit below its line so its close circle clears the text.
+
+The document remark SHALL use the line field's inset and SHALL sit as far below the block above it as a line field sits below its line.
+
+A focused field SHALL turn that hairline brass.
+
+The line field's close control SHALL be a circled cross on the field's top-right corner.
+
+The send mark SHALL sit inside the field.
 
 - **WHEN** one pull request is open and the cycle is open
 - **THEN** the line field is the pool card and sits below its line so its close circle clears the text, its close control is a circle, its send mark sits inside it, and a focused field uses a brass hairline. The document remark uses that same inset and sits as far below the block above it as the line field sits below its line. The line highlight changes the background, the line text stays aligned with the section headings, and the highlight draws no bar on the left

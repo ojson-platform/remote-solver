@@ -8,9 +8,31 @@ The focus block pages the written focus comments and opens on the latest, in ful
 
 ### Requirement: The focus block shows the latest written focus
 
-The focus block SHALL page the written focus comments. A written focus comment SHALL be a focus comment that is not a manager comment, and a comment whose first line is `sdd:focus:accept` SHALL be one of those pages. Opening the sidebar SHALL land on now: the latest written focus, in full. Back SHALL walk the older written comments, newest first, each in full. Forward SHALL return toward now. Switching tickets SHALL land on now for that ticket. While an older page is open and a new focus comment appears, the block SHALL return to now. The badge SHALL be that comment's marker. The prose under the badge SHALL be the comment after the marker line. When the marker is `sdd:focus`, a line whose first word is Change, Plan, Specify, Design, Tasks, or Code SHALL stay in that prose, and the other lines SHALL remain. When the marker is `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, `sdd:focus:code`, or `sdd:focus:accept`, the prose SHALL be the comment after the marker as written. When the issue has no focus comment, the block SHALL be absent.
+The focus block SHALL page the written focus comments.
+
+A written focus comment SHALL be a focus comment that is not a manager comment, and a comment whose first line is `sdd:focus:accept` SHALL be one of those pages.
+
+Opening the sidebar SHALL land on now: the latest written focus, in full.
+
+Back SHALL walk the older written comments, newest first, each in full.
+
+Forward SHALL return toward now.
+
+Switching tickets SHALL land on now for that ticket.
 
 #### Scenario: The focus block pages the written focus comments
+
+While an older page is open and a new focus comment appears, the block SHALL return to now.
+
+The badge SHALL be that comment's marker.
+
+The prose under the badge SHALL be the comment after the marker line.
+
+When the marker is `sdd:focus`, a line whose first word is Change, Plan, Specify, Design, Tasks, or Code SHALL stay in that prose, and the other lines SHALL remain.
+
+When the marker is `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, `sdd:focus:code`, or `sdd:focus:accept`, the prose SHALL be the comment after the marker as written.
+
+When the issue has no focus comment, the block SHALL be absent.
 
 - **WHEN** the focus block and the written focus comments are already visible, and the focus block already pages those comments, together with a single latest comment and no other page as the limit that can replace those pages
 - **THEN** the focus block pages the written focus comments

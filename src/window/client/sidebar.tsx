@@ -613,34 +613,51 @@ function TaskFile({
     return null;
   }
   const path = `${root}/tasks/${task.id}.md`;
+  const paint = (lines: SpineTask['sections'][number]['lines']): ReactNode[] => {
+    const out: ReactNode[] = [];
+    let gap = false;
+    for (const line of lines) {
+      if (line.text.trim() === '') {
+        if (!gap) {
+          out.push(<span className="gap" key={line.line} />);
+        }
+        gap = true;
+        continue;
+      }
+      gap = false;
+      const text = line.text.trimEnd();
+      if (!pull) {
+        out.push(
+          <p className="line" key={line.line}>
+            {text}
+          </p>,
+        );
+        continue;
+      }
+      out.push(
+        <span key={line.line}>
+          <button
+            type="button"
+            className="line"
+            data-line={text}
+            data-path={path}
+            data-at={line.line}
+            data-side="right"
+          >
+            {text}
+          </button>
+          <PostedComments comments={commentsOnLine(blocks, path, line.line)} />
+        </span>,
+      );
+    }
+    return out;
+  };
   return (
     <div className="doc">
       {sections.map(section => (
         <section className="plan-section" key={section.heading}>
           <h3>{section.heading}</h3>
-          {section.lines.map(line =>
-            line.text.trim() === '' ? (
-              <span className="gap" key={line.line} />
-            ) : !pull ? (
-              <p className="line" key={line.line}>
-                {line.text}
-              </p>
-            ) : (
-              <span key={line.line}>
-                <button
-                  type="button"
-                  className="line"
-                  data-line={line.text}
-                  data-path={path}
-                  data-at={line.line}
-                  data-side="right"
-                >
-                  {line.text}
-                </button>
-                <PostedComments comments={commentsOnLine(blocks, path, line.line)} />
-              </span>
-            ),
-          )}
+          {paint(section.lines)}
         </section>
       ))}
     </div>

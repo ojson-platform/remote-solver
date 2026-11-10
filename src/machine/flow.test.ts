@@ -146,7 +146,7 @@ test('a person who moves the gate label on the issue gets a record, or the chang
   const held = await resolveIssue('5', options);
   assert.equal(held.kind, 'wait');
   if (held.kind === 'wait') {
-    assert.match(held.reason, /open question/);
+    assert.match(held.reason, /Open questions/);
   }
   assert.deepEqual(await open.tracker.labels('5'), ['Sandcastle', 'sdd:cycle', 'sdd:proposing']);
   const notes = () => open.calls.filter(call => call.startsWith('body:'));

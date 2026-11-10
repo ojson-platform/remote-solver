@@ -500,9 +500,10 @@ export function openWindow(
     },
     chooseCheckout(next: string) {
       if (!checkout.gatheredCheckouts().includes(next)) {
-        return;
+        return false;
       }
       remember(next);
+      return true;
     },
     serviceConfig: () => service.view(),
     childQueue: () => service.childQueue(),

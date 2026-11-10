@@ -52,6 +52,15 @@ export async function pullSnapshots(
   return snapshots;
 }
 
+/** A cycle this login holds: the queue, the cycle label, and this assignee. */
+export function ownCycle(issue: IssueRecord, login: string, queues: QueueConfig[]): boolean {
+  return (
+    (issue.assignee ?? '') === login &&
+    queueOf(issue.labels, queues) !== undefined &&
+    issue.labels.includes('sdd:cycle')
+  );
+}
+
 export async function loadCycle(
   tracker: Tracker,
   review: Review,
@@ -63,12 +72,7 @@ export async function loadCycle(
   const issues = await tracker.listOpen();
   const me = await tracker.login();
   const cycles = issues
-    .filter(
-      issue =>
-        (issue.assignee ?? '') === me &&
-        queueOf(issue.labels, queues) !== undefined &&
-        issue.labels.includes('sdd:cycle'),
-    )
+    .filter(issue => ownCycle(issue, me, queues))
     .sort((a, b) => a.key.localeCompare(b.key, undefined, {numeric: true}));
   const pulls = new Map<string, PullSnapshot[]>();
   const changes = new Map<string, ChangeView>();

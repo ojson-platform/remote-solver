@@ -140,7 +140,7 @@ test('open questions block proposing even when the auto tag is set', () => {
   );
   assert.equal(decision.kind, 'wait');
   if (decision.kind === 'wait') {
-    assert.match(decision.reason, /2 open question/);
+    assert.match(decision.reason, /still has open items under ## Open questions/);
   }
 });
 

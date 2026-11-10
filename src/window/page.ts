@@ -84,7 +84,7 @@ type Surface = {
   gateMark: (key: string, station: string, side?: boolean) => void;
   lastGate: (key: string, station: string, side?: boolean) => boolean;
   plantQueue: (key: string, name: string) => boolean;
-  chooseCheckout: (next: string) => void;
+  chooseCheckout: (next: string) => boolean;
   chooseOverlayAgent: (agentId: string) => void;
   clearOverlayAgent: () => void;
   leaveOverlayModel: (mode: SkillMode, value: string) => void;
@@ -441,8 +441,7 @@ async function apply(
   }
   if (act === 'choose-checkout') {
     const checkout = params.get('checkout');
-    if (checkout) {
-      surface.chooseCheckout(checkout);
+    if (checkout && surface.chooseCheckout(checkout)) {
       view.serviceDirty = false;
     }
     return finish(surface, params, act, view);

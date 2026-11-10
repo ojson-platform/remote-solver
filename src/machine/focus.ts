@@ -165,7 +165,8 @@ const MARKER_SHAPE: Record<FocusMarkerLine, {need: RegExp[]; maxParas: number}> 
   },
   'sdd:focus:spec': {
     need: [
-      /нов|измен|new|existing promise changed/i,
+      /нов|new promise/i,
+      /измен|existing promise changed/i,
       /сценар|scenario without/i,
       /не даём|does not make/i,
     ],

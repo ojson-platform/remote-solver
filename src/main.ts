@@ -48,7 +48,6 @@ export async function driveIssue(
 ): Promise<DriveResult> {
   const held = tryHoldIssue(box.root, key);
   if (!held) {
-    console.log(`#${key} already running`);
     return {code: 0, busy: true};
   }
   try {

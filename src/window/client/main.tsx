@@ -680,7 +680,7 @@ function boot(): void {
     }
     const row = target?.closest('.spine .row');
     const toggles =
-      target !== null && (headClickToggles(target) || target.closest('label') !== null);
+      target !== null && headClickToggles(target);
     if (
       row &&
       toggles &&

@@ -37,7 +37,7 @@ A quiet card for writing. Choosing a line of a change document opens one. The se
 _Avoid_: Textarea, input
 
 **Live page**:
-The pager's open page while a worker is on this issue, a ready action is held by the cap, the cycle waits on another issue, or checks are the live case. The window computes it from the settled decision and from whether a worker is on this issue. It is not a comment and not a history slot, and it leaves when the reason passes. Its badge is its own word, not a phase marker.
+The pager's open page while a worker is on this issue, a ready action is held by the cap, the cycle waits on another issue, or checks are the live case, unless the review gate for the proposal, the spec, the design, or accepting is on. On that gate, now stays the written focus. A written focus stays a focus. The window computes the live page from the settled decision and from whether a worker is on this issue. It is not a comment and not a history slot, and it leaves when the reason passes. Its badge is its own word, not a phase marker.
 _Avoid_: Focus comment, status line
 
 **Focus block**:

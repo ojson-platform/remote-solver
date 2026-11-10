@@ -7,7 +7,10 @@ const LABEL = (phase: string) => `sdd:${phase}`;
 export async function setPhase(
   key: string,
   phase: Phase,
-  tracker: Tracker,
+  tracker: {
+    editLabels(key: string, add: string[], remove: string[]): Promise<void>;
+    labels?(key: string): Promise<readonly string[]>;
+  },
   options?: {allowGate?: boolean; labels?: readonly string[]},
 ): Promise<void> {
   if (!options?.allowGate && (GATE_PHASES as readonly string[]).includes(phase)) {
@@ -15,7 +18,11 @@ export async function setPhase(
       `Refusing to set gate label sdd:${phase}. A person changes the phase on the issue, or runs sdd accept ${key}.`,
     );
   }
-  const names = options?.labels ? [...options.labels] : await tracker.labels(key);
+  const listed = options?.labels ?? (tracker.labels ? await tracker.labels(key) : undefined);
+  if (!listed) {
+    throw new Error(`setPhase needs the current labels of #${key}`);
+  }
+  const names = [...listed];
   const remove = removedPhaseLabels(names, phase);
   await tracker.editLabels(key, [LABEL(phase)], remove);
 }

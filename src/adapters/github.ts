@@ -399,8 +399,12 @@ async function ghOnce(args: string[], input: string | undefined, run: GhCommand)
     }
     if (rateLimited(stdout, stderr) && githubPauseRemaining() === 0) {
       const named = resetMillis(stdout);
-      const learned = named !== undefined && named > Date.now() ? named : await learnReset();
-      pausedUntil = learned !== undefined && learned > Date.now() ? learned : Date.now() + 60_000;
+      if (named !== undefined) {
+        pausedUntil = named;
+      } else {
+        const learned = await learnReset();
+        pausedUntil = learned !== undefined ? learned : Date.now() + 60_000;
+      }
     }
     throw error;
   }

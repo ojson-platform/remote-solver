@@ -539,6 +539,12 @@ spec('focus', () => {
     scenario('Marker shape rejects a single token instead of the full phase paragraph', () => {
       assert.equal(validateFocusBody('sdd:focus:plan\nотказ\n'), 'prose missing required shape for marker');
       assert.equal(validateFocusBody('sdd:focus:accept\nесть\n'), 'prose missing required shape for marker');
+      assert.equal(
+        validateFocusBody(
+          'sdd:focus:spec\nНовое обещание — проза. Сценарий «The prose is Russian» без него непонятен. Пагинацию не даём.\n',
+        ),
+        'prose missing required shape for marker',
+      );
     });
 
     scenario('A thread-fix visit on plan allows remarks in the second paragraph', () => {

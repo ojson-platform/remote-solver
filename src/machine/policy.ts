@@ -601,7 +601,7 @@ function decideOpen(
       return hand({
         kind: 'wait',
         issue: issue.key,
-        reason: `${change.openQuestions} open question(s) in proposal.md`,
+        reason: gateBlocker(issue.key, phase, change) ?? 'open questions in proposal.md',
       });
     }
     return hand(reviewGate(issue.key, 'proposal', 'proposing', 'proposed'));

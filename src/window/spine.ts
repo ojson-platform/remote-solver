@@ -103,14 +103,28 @@ function isDocLayer(value: string): value is DocLayer {
   return (LAYER_NAMES as readonly string[]).includes(value);
 }
 
+function headingName(line: string): string | undefined {
+  if (!line.startsWith('## ')) {
+    return undefined;
+  }
+  const name = line.slice(3).trim();
+  return name === '' ? undefined : name;
+}
+
 function section(text: string, heading: string): string {
-  const match = new RegExp(`^## ${heading}\\s*$`, 'm').exec(text);
-  if (!match) {
+  const lines = text.split('\n');
+  const at = lines.findIndex(line => headingName(line) === heading);
+  if (at < 0) {
     return '';
   }
-  const rest = text.slice(match.index + match[0].length);
-  const next = rest.search(/^## /m);
-  return (next === -1 ? rest : rest.slice(0, next)).trim();
+  const rest: string[] = [];
+  for (let index = at + 1; index < lines.length; index += 1) {
+    if (headingName(lines[index] ?? '') !== undefined) {
+      break;
+    }
+    rest.push(lines[index] ?? '');
+  }
+  return rest.join('\n').trim();
 }
 
 function oneLine(text: string): string {
@@ -142,9 +156,10 @@ function sectionsOf(text: string): SpineSection[] {
   };
   for (let index = 0; index < source.length; index += 1) {
     const raw = source[index] ?? '';
-    if (raw.startsWith('## ')) {
+    const name = headingName(raw);
+    if (name !== undefined) {
       flush();
-      heading = raw.slice(3).trim();
+      heading = name;
       body = [];
       continue;
     }

@@ -269,7 +269,7 @@ export function idle() {
     gateMark: () => {},
     lastGate: () => false,
     plantQueue: () => false,
-    chooseCheckout: () => {},
+    chooseCheckout: () => false,
     chooseOverlayAgent: () => {},
     clearOverlayAgent: () => {},
     leaveOverlayModel: () => {},

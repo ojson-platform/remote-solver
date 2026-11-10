@@ -180,10 +180,8 @@ function showFile(root: string, ref: string, rel: string, strict: boolean): stri
       stdio: ['ignore', 'pipe', 'pipe'],
     });
   } catch (error) {
-    if (!strict || absentOnRef(error)) {
-      return '';
-    }
-    throw error;
+    gitMiss(error, strict);
+    return '';
   }
 }
 
@@ -306,7 +304,7 @@ function filesOfRef(root: string, ref: string | null, strict: boolean): FileSour
       if (covered(rel)) {
         return treeHas(load().tree, rel);
       }
-      return existsOnRef(root, ref, rel);
+      return existsOnRef(root, ref, rel, strict);
     },
     read(rel) {
       if (!ref) {
@@ -479,11 +477,20 @@ export function strictContentBranchFiles(
   return filesOnContent(root, key, prefix, true);
 }
 
-function existsOnRef(root: string, ref: string, rel: string): boolean {
+/** A missing path is absent. Any other git failure throws when the read is strict. */
+function gitMiss(error: unknown, strict: boolean): boolean {
+  if (!strict || absentOnRef(error)) {
+    return true;
+  }
+  throw error;
+}
+
+function existsOnRef(root: string, ref: string, rel: string, strict: boolean): boolean {
   try {
     execFileSync('git', ['cat-file', '-e', `${ref}:${rel}`], {cwd: root, stdio: 'ignore'});
     return true;
-  } catch {
+  } catch (error) {
+    gitMiss(error, strict);
     return false;
   }
 }

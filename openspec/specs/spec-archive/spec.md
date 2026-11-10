@@ -8,7 +8,7 @@ The accept step folds a delta into the baseline by editing it, and records that 
 
 ### Requirement: The accept step folds a delta with the archive command
 
-The accept step SHALL fold a delta into its baseline with `openspec archive issue-<key> --yes` instead of editing that baseline by hand. The command SHALL apply RENAMED, then REMOVED, then MODIFIED, then ADDED. A rename SHALL take effect before a modification of that requirement. A removal SHALL drop the named requirement and SHALL NOT copy prose from the removal. A modification SHALL replace that requirement with the delta's block. An addition SHALL append. The scenario meaning SHALL be kept.
+The accept step SHALL fold a delta into its baseline with `openspec archive issue-<key> --yes` instead of editing that baseline by hand. The fold order SHALL be the one `archive-fold` requires. A rename SHALL take effect before a modification of that requirement. A removal SHALL drop the named requirement and SHALL NOT copy prose from the removal. A modification SHALL replace that requirement with the delta's block. An addition SHALL append. The scenario meaning SHALL be kept.
 
 #### Scenario: The accept step folds a delta with the archive command instead of editing the baseline by hand
 

@@ -83,13 +83,14 @@ export function machine(root = process.cwd(), options: MachineOptions = {}): Mac
 /** One settlement of one issue. The reading performs a merge and settles again. */
 export function turn(box: Machine, key: string): ReturnType<typeof performIssue> {
   const pending = box.vcs.tipMessage ? box.vcs.tipMessage(key) : Promise.resolve(undefined);
-  return pending.then(tip =>
+  return pending.then(async tip =>
     performIssue(key, {
       tracker: box.tracker,
       review: box.review,
       files: box.vcs.filesAt(key),
       queues: box.config.queues,
       root: box.root,
+      login: await box.tracker.login(),
       tip,
       checkout: () =>
         box.vcs.prepare(key, {worktreesDir: '.worktrees', links: packageLinks(solverRoot())}),

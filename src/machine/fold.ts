@@ -1,18 +1,13 @@
 import {execFileSync} from 'node:child_process';
+import {openspecExecutable} from '../openspec/openspec-cli.ts';
 import {existsSync, readdirSync, readFileSync, renameSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
-import {fileURLToPath} from 'node:url';
 
 const DATED_ARCHIVE_DIR = /^\d{4}-\d{2}-\d{2}-issue-\d+$/;
 const PLACEHOLDER_PURPOSE = /TBD - created by archiving change/;
 
-function packageRoot(): string {
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  return path.resolve(here, '../..');
-}
-
 function openspecBin(): string {
-  return path.join(packageRoot(), 'node_modules', '.bin', 'openspec');
+  return openspecExecutable();
 }
 
 function git(root: string, args: string[]): string {

@@ -20,7 +20,7 @@ An open thread of layer `spec`: steps 1–3 do not write the delta again.
 2. Run `openspec instructions specs --change issue-<issue> --json`. Write `openspec/changes/issue-<issue>/specs/<capability>/spec.md` from its `template`, sections by § Delta. A scenario is checked from outside, without reading code. A sentence in the proposal Outcome or Constraints that names what the caller sees is a Scenario of this capability. The Scenario names each thing that sentence names. Another capability does not stand in for it. The Scenario's WHEN shows each of those things already visible. Its THEN states those same values.
 3. When the block names an input revision: edit the requirements and scenarios that text changes, including ones it no longer names.
 4. `improve-specs`: Fix thread (`CONTEXT.md`), layer `spec`. A thread that drops a requirement or scenario writes that drop in the delta. `proposal.md` stays. An answer that says what a named capability does rewrites that capability's scenario.
-5. Run `openspec validate --all --strict --no-interactive`. Exit non-zero on a spec this change owns: fix that file and run it again. A failure in a spec this change does not own: do not edit it. Do not publish while a spec this change owns fails.
+5. Run `openspec validate --all --strict --no-interactive`. A non-zero exit is § Delta. Do not publish while a spec this change owns fails.
 6. Publish (`CONTEXT.md`). When a delta spec is in the commit, focus with marker `sdd:focus:spec`. Mirror: `Specify`.
 
 ## Check

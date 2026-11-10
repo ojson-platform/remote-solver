@@ -6,8 +6,8 @@ import {cycleRecord, decide, effectSignature, refusalBody, type Decision} from '
 import type {FileSource, IssueRecord, Review, Tracker} from './port.ts';
 import type {PullSnapshot} from './policy.ts';
 import {queueOf} from './queues.ts';
+import {ownCycle, pullSnapshots, type CycleSnapshot} from './snapshot.ts';
 import {sameService, type QueueConfig} from './service-config.ts';
-import {pullSnapshots, type CycleSnapshot} from './snapshot.ts';
 
 /** Archive focus. The first line is the marker; the prose matches the accept shape. */
 const ACCEPT_FOCUS =
@@ -80,6 +80,8 @@ type IssueRead = {
   restore?: (root: string, key: string) => void;
   /** This checkout. A foreign `service` waits before any label write. */
   root?: string;
+  /** When set, a cycle reaches the decision only when this login holds it. */
+  login?: string;
 };
 
 /** The service field names another directory. The verb and the poll share this wait. */
@@ -116,12 +118,15 @@ async function walk(key: string, options: IssueRead): Promise<Decision> {
   let pulls = options.pulls;
   for (let step = 0; step < 12; step += 1) {
     const open = await options.tracker.listOpen();
-    const record = open.find(
-      issue =>
-        issue.key === key &&
-        queueOf(issue.labels, options.queues) !== undefined &&
-        issue.labels.includes('sdd:cycle'),
-    );
+    const record = open.find(issue => {
+      if (issue.key !== key) {
+        return false;
+      }
+      if (options.login !== undefined) {
+        return ownCycle(issue, options.login, options.queues);
+      }
+      return queueOf(issue.labels, options.queues) !== undefined && issue.labels.includes('sdd:cycle');
+    });
     if (!record) {
       return {kind: 'done', issue: key, reason: 'not in the open cycle'};
     }
@@ -232,6 +237,7 @@ export async function resolveCycle(
   busy: ReadonlySet<string> = new Set(),
   filesAt?: (key: string) => FileSource,
   root?: string,
+  login?: string,
 ): Promise<Decision[]> {
   const empty = queueLabelOf(snapshot, queues);
   if (empty.length) {
@@ -256,6 +262,7 @@ export async function resolveCycle(
         issues: snapshot.issues,
         tip: snapshot.tips ? (tip ?? '') : '',
         root,
+        login,
       }),
     );
   }
@@ -295,6 +302,7 @@ export async function performIssue(
     fold?: (root: string, key: string) => void;
     restore?: (root: string, key: string) => void;
     root?: string;
+    login?: string;
   },
 ): Promise<Decision> {
   const decision = await walk(key, {...options, perform: true});
@@ -315,9 +323,11 @@ export async function performCycle(
     checkout?: (key: string) => Promise<string>;
     readTip?: (key: string) => Promise<string | undefined>;
     root?: string;
+    login?: string;
   },
   busy: ReadonlySet<string> = new Set(),
 ): Promise<Decision[]> {
+  const login = options.login ?? (await options.tracker.login());
   const decisions = await resolveCycle(
     snapshot,
     options.tracker,
@@ -325,6 +335,7 @@ export async function performCycle(
     busy,
     undefined,
     options.root,
+    login,
   );
   const performed: Decision[] = [];
   for (const decision of decisions) {
@@ -345,6 +356,7 @@ export async function performCycle(
         checkout: options.checkout ? () => options.checkout!(decision.issue!) : undefined,
         readTip: options.readTip ? () => options.readTip!(decision.issue!) : undefined,
         root: options.root,
+        login,
       }),
     );
   }

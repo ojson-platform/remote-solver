@@ -1243,6 +1243,53 @@ spec('spec-diff', () => {
         },
       );
     });
+    scenario('A refused send from «Записать» does not post a conversation comment', async () => {
+      const {baseline, delta, newLine} = replacedLines();
+      const reply = 'Смотрите сюда.';
+      let threadCalls = 0;
+      let speakCalls = 0;
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1})],
+          threadPull: async () => {
+            threadCalls += 1;
+            throw new Error('host refused the thread');
+          },
+          speakPull: async () => {
+            speakCalls += 1;
+            throw new Error('no speak');
+          },
+        },
+        async (page, window, paths) => {
+          const {shot} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const added = specView(shot, SPEC_ID).flat.find(
+            row => row.kind === 'add' && row.text === newLine,
+          );
+          assert.ok(added);
+          const anchor = added.anchor;
+          assert.ok(anchor);
+          const posted = await post(
+            page.url,
+            'act',
+            answerFields({
+              line: newLine,
+              reply,
+              path: anchor.path,
+              at: String(anchor.line),
+              side: anchor.side,
+              hold: '1',
+            }),
+          );
+          assert.equal(posted.status, 200);
+          const next = JSON.parse(posted.body) as WindowSnapshot;
+          assert.equal(threadCalls, 1);
+          assert.equal(speakCalls, 0);
+          assert.equal(next.status, 'комментарий не записан');
+          assert.equal(JSON.stringify(next).includes('host refused the thread'), false);
+        },
+      );
+    });
     scenario('Both writes failing leave the comment unrecorded', async () => {
       const {baseline, delta, newLine} = replacedLines();
       const reply = 'Смотрите сюда.';

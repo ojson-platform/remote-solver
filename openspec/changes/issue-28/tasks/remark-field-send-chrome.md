@@ -1,10 +1,9 @@
-A new remark stays in the window until send
+- A new remark stays in the window until send
+- The send control on the remark field posts every unsent remark as its own review thread
+- «Принять» stays on the phase row
+- The send control does not take its place
 
-The send control on the remark field posts every unsent remark as its own review thread
-
-«Принять» stays on the phase row
-
-The send control does not take its place
+sdd-delta: 6bfb0d887ae27abd
 
 ## Source
 

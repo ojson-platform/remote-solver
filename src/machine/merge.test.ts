@@ -4,14 +4,34 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {memoryPorts} from '../adapters/github.ts';
 import {resolveIssue} from './flow.ts';
-import {decide, settle} from './policy.ts';
+import type {ChangeView} from './change.ts';
+import {decide, settle, type Decision, type PullSnapshot} from './policy.ts';
+import type {IssueRecord} from './port.ts';
 import {reviewOf} from './review.ts';
-import {action, change, files, issue, pull} from './harness.ts';
+import {action, asFolded, change, files, foldedTip, issue, pull} from './harness.ts';
+
+function onDisk(
+  row: IssueRecord,
+  issues: IssueRecord[],
+  pulls: PullSnapshot[],
+  view: ChangeView,
+): Decision {
+  return decide(row, issues, pulls, view, view.archived ? asFolded(row) : undefined);
+}
+
+function settled(
+  row: IssueRecord,
+  issues: IssueRecord[],
+  pulls: PullSnapshot[],
+  view: ChangeView,
+): ReturnType<typeof settle> {
+  return settle(row, issues, pulls, view, view.archived ? foldedTip(row.key) : undefined);
+}
 
 spec('merge', () => {
   requirement('An early archived change is restored', () => {
     scenario('Tasking restores an archived change', () => {
-      const decision = decide(
+      const decision = onDisk(
         issue(1, ['sdd:tasking']),
         [],
         [pull(9)],
@@ -21,7 +41,7 @@ spec('merge', () => {
     });
     scenario('An archived change is restored before an unlabeled thread', () => {
       const review = reviewOf([{resolved: false, body: 'please rename'}], []);
-      const decision = decide(
+      const decision = onDisk(
         issue(1, ['sdd:tasking']),
         [],
         [pull(9, {review})],
@@ -30,7 +50,7 @@ spec('merge', () => {
       assert.equal(action(decision), 'unarchive');
     });
     scenario('Implementing restores an archived change before a code repair', () => {
-      const decision = decide(
+      const decision = onDisk(
         issue(1, ['sdd:implementing']),
         [],
         [
@@ -43,7 +63,7 @@ spec('merge', () => {
       assert.equal(action(decision), 'unarchive');
     });
     scenario('Accepting with a code thread restores before the repair', () => {
-      const settled = settle(
+      const walked = settled(
         issue(1, ['sdd:accepting']),
         [],
         [
@@ -54,13 +74,13 @@ spec('merge', () => {
         change({archived: true}),
       );
       assert.deepEqual(
-        settled.transitions.map(step => step.to),
+        walked.transitions.map(step => step.to),
         ['implementing'],
       );
-      assert.equal(action(settled.decision), 'unarchive');
+      assert.equal(action(walked.decision), 'unarchive');
     });
     scenario('A merged pull request stays archived', () => {
-      const decision = decide(
+      const decision = onDisk(
         issue(1, ['sdd:implementing']),
         [],
         [pull(9, {state: 'MERGED'})],
@@ -72,16 +92,16 @@ spec('merge', () => {
 
   requirement('Accepting archives before it merges', () => {
     scenario('Accepting archives a change that is still open', () => {
-      const decision = decide(issue(1, ['sdd:accepting']), [], [pull(9)], change({proposal: true}));
+      const decision = onDisk(issue(1, ['sdd:accepting']), [], [pull(9)], change({proposal: true}));
       assert.equal(action(decision), 'archive');
     });
     scenario('Accepting with no pull request does not archive', () => {
-      const decision = decide(issue(1, ['sdd:accepting']), [], [], change({proposal: true}));
+      const decision = onDisk(issue(1, ['sdd:accepting']), [], [], change({proposal: true}));
       assert.equal(decision.kind, 'wait');
       assert.notEqual(action(decision), 'archive');
     });
     scenario('Auto-merge merges a green archived pull request', () => {
-      const decision = decide(
+      const decision = onDisk(
         issue(1, ['sdd:accepting', 'sdd:auto-merge']),
         [],
         [pull(9, {checks: 'green'})],
@@ -90,7 +110,7 @@ spec('merge', () => {
       assert.equal(decision.kind, 'merge');
     });
     scenario('Without auto-merge the person merges', () => {
-      const decision = decide(
+      const decision = onDisk(
         issue(1, ['sdd:accepting']),
         [],
         [pull(9, {checks: 'green'})],
@@ -102,7 +122,7 @@ spec('merge', () => {
       }
     });
     scenario('Auto-merge waits for green checks', () => {
-      const decision = decide(
+      const decision = onDisk(
         issue(1, ['sdd:accepting', 'sdd:auto-merge']),
         [],
         [pull(9, {checks: 'pending'})],
@@ -115,7 +135,7 @@ spec('merge', () => {
 
   requirement('Accepted does not merge', () => {
     scenario('Accepted with an open change does not archive it', () => {
-      const decision = decide(
+      const decision = onDisk(
         issue(1, ['sdd:accepted']),
         [],
         [pull(9, {state: 'MERGED'})],
@@ -143,12 +163,13 @@ spec('merge', () => {
         files,
         queues: [{name: 'Sandcastle'}],
         change: change({archived: true}),
+        tip: foldedTip('5'),
       });
       assert.equal(decision.kind, 'done');
       assert.equal((await tracker.issue('5')).state, 'CLOSED');
     });
     scenario('Accepted waits while the pull request is open', () => {
-      const decision = decide(
+      const decision = onDisk(
         issue(1, ['sdd:accepted', 'sdd:auto-merge']),
         [],
         [pull(9, {checks: 'green'})],

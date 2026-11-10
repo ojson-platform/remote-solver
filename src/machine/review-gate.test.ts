@@ -40,7 +40,8 @@ spec('review-gate', () => {
       assert.equal(asks().length, 1);
       assert.equal(held.kind, 'wait');
       if (held.kind === 'wait') {
-        assert.deepEqual(held.gate, {artifact: 'proposal', from: 'proposing', to: 'proposed'});
+        assert.equal(held.gate, undefined);
+        assert.match(held.reason, /^Review the proposal/);
       }
     });
     scenario('An open question is not the review gate', () => {

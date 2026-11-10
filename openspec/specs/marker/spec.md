@@ -20,6 +20,15 @@ In one reply, `fixed` SHALL win, then `note`, then a lowercase `layer`, then `be
 - **WHEN** a reply contains `layer` with a value that is not all lowercase
 - **THEN** the marker is nothing
 
+### Requirement: The instruction is the first comment
+
+The skill SHALL receive the first non-empty comment on the thread as the instruction. The latest comment SHALL stay the body the marker is read from. The marker SHALL be read from that latest body, not from the instruction.
+
+#### Scenario: The instruction is the first comment and the body stays the latest
+
+- **WHEN** a thread's first comment asks to quote a refusal and its latest comment is the layer marker
+- **THEN** the instruction is the first comment, the body is the latest comment, and the marker is that layer
+
 ### Requirement: An unmarked remark is classified before the phase moves
 
 An open thread with no marker SHALL be classified before a rollback or a phase skill. The last conversation comment SHALL be unanswered when a person wrote it and it carries no marker. A robot comment, or any marker, SHALL leave the conversation answered. A resolved thread SHALL NOT count. A thread whose latest reply is `fixed` SHALL NOT be unanswered, SHALL NOT name a layer, and SHALL NOT appear as unmarked.

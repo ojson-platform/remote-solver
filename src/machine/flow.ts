@@ -1,13 +1,30 @@
 import {readChange, type ChangeView} from './change.ts';
 import {foldChange, restoreChange} from './fold.ts';
 import {gateAsk, openWait} from './labels.ts';
-import {archiveMark, labelsAfterAdvance} from './phase.ts';
+import {labelsAfterAdvance} from './phase.ts';
 import {cycleRecord, decide, effectSignature, refusalBody, type Decision} from './policy.ts';
 import type {FileSource, IssueRecord, Review, Tracker} from './port.ts';
 import type {PullSnapshot} from './policy.ts';
 import {queueOf} from './queues.ts';
 import type {QueueConfig} from './service-config.ts';
 import {pullSnapshots, type CycleSnapshot} from './snapshot.ts';
+
+/** Archive focus. The first line is the marker; the prose matches the accept shape. */
+const ACCEPT_FOCUS =
+  'sdd:focus:accept\nThe baseline has now the folded change; the dated archive directory is left out on purpose. The capability, its scenarios, and the tests are in the archive commit.\n';
+
+/** A fold that would publish a spec with no requirement. The reason names that spec. */
+export function emptyBaselineWait(text: string, capabilities: readonly string[]): string | null {
+  if (!/at least one requirement|no requirement/i.test(text)) {
+    return null;
+  }
+  const named =
+    text.match(/openspec\/specs\/[A-Za-z0-9._/-]+\/spec\.md/)?.[0] ??
+    (capabilities[0]
+      ? `openspec/specs/${capabilities[0]}/spec.md`
+      : 'openspec/specs/<capability>/spec.md');
+  return `the rebuilt spec would have no requirement: ${named}`;
+}
 
 function queueLabelOf(snapshot: CycleSnapshot, queues: readonly QueueConfig[]): Decision[] {
   if (snapshot.cycles.length > 0) {
@@ -58,6 +75,9 @@ type IssueRead = {
   perform?: boolean;
   checkout?: () => Promise<string>;
   readTip?: () => Promise<string | undefined>;
+  /** Replaces the archive command. Tests use this; the poll uses `foldChange`. */
+  fold?: (root: string, key: string) => void;
+  restore?: (root: string, key: string) => void;
 };
 
 function nextLabels(before: string[], decision: Decision): string[] {
@@ -92,7 +112,7 @@ async function walk(key: string, options: IssueRead): Promise<Decision> {
       return {kind: 'done', issue: key, reason: 'not in the open cycle'};
     }
     const view = change ?? readChange(key, options.files);
-    const message = tip !== undefined ? tip : view.archived ? archiveMark(key) : '';
+    const message = tip ?? '';
     const loaded =
       pulls ??
       (options.review ? await pullSnapshots(options.review, key, options.files) : []);
@@ -141,7 +161,9 @@ async function walk(key: string, options: IssueRead): Promise<Decision> {
       await options.review.merge(decision.pull);
       pulls = undefined;
       change = undefined;
-      tip = await options.readTip?.();
+      if (options.readTip) {
+        tip = await options.readTip();
+      }
       continue;
     }
     if ((decision.kind === 'archive' || decision.kind === 'unarchive') && options.checkout) {
@@ -149,12 +171,16 @@ async function walk(key: string, options: IssueRead): Promise<Decision> {
       if (dir) {
         try {
           if (decision.kind === 'archive') {
-            foldChange(dir, key);
+            (options.fold ?? foldChange)(dir, key);
           } else {
-            restoreChange(dir, key);
+            (options.restore ?? restoreChange)(dir, key);
           }
         } catch (error) {
           const reason = error instanceof Error ? error.message : 'fold failed';
+          const baseline = emptyBaselineWait(reason, view.capabilities);
+          if (baseline) {
+            return {kind: 'wait', issue: key, reason: baseline};
+          }
           const signature = effectSignature({
             phase: decision.phase,
             action: decision.kind,
@@ -163,9 +189,14 @@ async function walk(key: string, options: IssueRead): Promise<Decision> {
           await options.tracker.comment(key, refusalBody(signature));
           return {kind: 'wait', issue: key, reason: `refused ${decision.kind}: ${reason}`};
         }
+        if (decision.kind === 'archive') {
+          await options.tracker.comment(key, ACCEPT_FOCUS);
+        }
         pulls = undefined;
         change = undefined;
-        tip = await options.readTip?.();
+        if (options.readTip) {
+        tip = await options.readTip();
+      }
         continue;
       }
     }
@@ -202,7 +233,7 @@ export async function resolveCycle(
         change,
         pulls: snapshot.pulls.get(record.key) ?? [],
         issues: snapshot.issues,
-        tip: snapshot.tips ? (tip ?? '') : undefined,
+        tip: snapshot.tips ? (tip ?? '') : '',
       }),
     );
   }
@@ -239,6 +270,8 @@ export async function performIssue(
     tip?: string;
     checkout?: () => Promise<string>;
     readTip?: () => Promise<string | undefined>;
+    fold?: (root: string, key: string) => void;
+    restore?: (root: string, key: string) => void;
   },
 ): Promise<Decision> {
   const decision = await walk(key, {...options, perform: true});
@@ -277,7 +310,7 @@ export async function performCycle(
         review: options.review,
         files: options.filesAt(decision.issue),
         queues: options.queues,
-        tip: snapshot.tips ? (tip ?? '') : undefined,
+        tip: snapshot.tips ? (tip ?? '') : '',
         checkout: options.checkout ? () => options.checkout!(decision.issue!) : undefined,
         readTip: options.readTip ? () => options.readTip!(decision.issue!) : undefined,
       }),

@@ -5,7 +5,6 @@ import path from 'node:path';
 import {cardGap, HEADINGS, specsReady, unslicedScenario, type ChangeView} from './change.ts';
 import {changeDir} from './naming.ts';
 import {
-  archiveMark,
   foldedFromTip,
   GATE_CLOSES,
   labelsAfterAdvance,
@@ -47,7 +46,7 @@ export function severalOpenReason(ids: string[]): string {
   return `cycle stopped until one open PR remains: ${ids.join(', ')}`;
 }
 
-/** One open pull request is reused. None means create. Several is the stop above. */
+/** One open pull request is reused. None means create. Several names the open ones. */
 export function publishChoice(
   openIds: string[],
 ): {ok: true; id: string | null} | {ok: false; reason: string} {
@@ -122,24 +121,24 @@ export function stampBehind(phase: Phase, change: ChangeView): string | null {
   if (
     phase === 'specifying' &&
     change.delta &&
-    change.proposalRevision !== '' &&
-    change.specStamp !== change.proposalRevision
+    (change.specDrift ||
+      (change.proposalRevision !== '' && change.specStamp !== change.proposalRevision))
   ) {
     return 'the proposal revision is not the stamp';
   }
   if (
     phase === 'designing' &&
     change.design &&
-    change.specsRevision !== '' &&
-    change.designStamp !== change.specsRevision
+    (change.designDrift ||
+      (change.specsRevision !== '' && change.designStamp !== change.specsRevision))
   ) {
     return 'the spec revision is not the stamp';
   }
   if (
     phase === 'tasking' &&
     change.tasks &&
-    change.tasksInputRevision !== '' &&
-    change.tasksStamp !== change.tasksInputRevision
+    (change.tasksDrift ||
+      (change.tasksInputRevision !== '' && change.tasksStamp !== change.tasksInputRevision))
   ) {
     return 'the design revision is not the stamp';
   }
@@ -260,6 +259,22 @@ export function refusalOf(notes: readonly IssueNote[]): string | null {
   return null;
 }
 
+/** The review ask already on the issue. The wait label is not this text. */
+export function askOf(notes: readonly IssueNote[]): string | null {
+  for (let index = notes.length - 1; index >= 0; index -= 1) {
+    const note = notes[index];
+    if (note.manager) {
+      continue;
+    }
+    const body = note.body.startsWith(ROBOT_MARK) ? note.body.slice(ROBOT_MARK.length) : note.body;
+    const head = body.trim().split('\n')[0]?.trim() ?? '';
+    if (head.startsWith('Review the ')) {
+      return body.trim();
+    }
+  }
+  return null;
+}
+
 function blockRepeated(decision: Decision, refused: string | null): Decision {
   if (refused === null) {
     return decision;
@@ -278,7 +293,11 @@ function blockRepeated(decision: Decision, refused: string | null): Decision {
   return {kind: 'wait', issue: decision.issue, reason: `refused ${effect.action}: ${effect.reason}`};
 }
 
-export function cycleRecord(issue: IssueRecord, tip: string, notes: readonly IssueNote[] = []): CycleRecord {
+export function cycleRecord(
+  issue: IssueRecord,
+  tip = '',
+  notes: readonly IssueNote[] = [],
+): CycleRecord {
   const names = issue.labels;
   const accept: GateEvent | null = names.includes('sdd:designed')
     ? 'designed'
@@ -291,9 +310,10 @@ export function cycleRecord(issue: IssueRecord, tip: string, notes: readonly Iss
   return {
     phase,
     hold:
-      names.includes('sdd:wait-human') && phase
+      askOf(notes) ??
+      (names.includes('sdd:wait-human') && phase
         ? `sdd:wait-human is set on ${phase}. Do the ask on the issue.`
-        : null,
+        : null),
     folded: foldedFromTip(tip, issue.key),
     cycle: names.includes('sdd:cycle'),
     autoPlan: names.includes('sdd:auto-plan'),
@@ -303,11 +323,6 @@ export function cycleRecord(issue: IssueRecord, tip: string, notes: readonly Iss
     accept,
     refused: refusalOf(notes),
   };
-}
-
-/** A test harness that still says `archived` stands for the tip line. A passed tip replaces it. */
-function legacyTip(issue: IssueRecord, change: ChangeView): string {
-  return change.archived ? archiveMark(issue.key) : '';
 }
 
 /** Archived with a merged pull request and none open: the cycle is finished. */
@@ -355,9 +370,36 @@ export function decide(
   issues: IssueRecord[],
   pulls: PullSnapshot[],
   change: ChangeView,
-  record: CycleRecord = cycleRecord(issue, legacyTip(issue, change)),
+  record: CycleRecord = cycleRecord(issue),
 ): Decision {
-  return blockRepeated(decideOpen(issue, issues, pulls, change, record), record.refused);
+  return holdOpenPulls(
+    blockRepeated(decideOpen(issue, issues, pulls, change, record), record.refused),
+    issue,
+    pulls,
+  );
+}
+
+/** Several open pull requests hold every exit except an open task and a wait that is not a gate. */
+function holdOpenPulls(
+  decision: Decision,
+  issue: IssueRecord,
+  pulls: readonly PullSnapshot[],
+): Decision {
+  const ids = pulls.filter(pr => pr.state === 'OPEN').map(pr => pr.id);
+  if (ids.length <= 1 || decision.issue === null) {
+    return decision;
+  }
+  if (decision.kind === 'agent' && decision.action === 'implement-next-task') {
+    return decision;
+  }
+  if (
+    decision.kind === 'wait' &&
+    !decision.gate &&
+    !/merge|archiv|finished/i.test(decision.reason)
+  ) {
+    return decision;
+  }
+  return {kind: 'wait', issue: issue.key, reason: severalOpenReason(ids)};
 }
 
 function decideOpen(
@@ -365,33 +407,15 @@ function decideOpen(
   issues: IssueRecord[],
   pulls: PullSnapshot[],
   change: ChangeView,
-  record: CycleRecord = cycleRecord(issue, legacyTip(issue, change)),
+  record: CycleRecord = cycleRecord(issue),
 ): Decision {
   if (record.phase === 'cancelled') {
     return {kind: 'done', issue: issue.key, reason: 'cancelled'};
   }
   const open = pulls.filter(pr => pr.state === 'OPEN');
   const phase = record.phase;
-  if (open.length > 1) {
-    const openTask =
-      phase === 'implementing' &&
-      change.tasks &&
-      change.openTasks > 0 &&
-      !open.some(pr => pr.conflict);
-    if (openTask) {
-      return agent(
-        issue.key,
-        'implement-next-task',
-        phase,
-        String(open[0].id),
-        'next open task',
-      );
-    }
-    return {
-      kind: 'wait',
-      issue: issue.key,
-      reason: severalOpenReason(open.map(pr => pr.id)),
-    };
+  if (open.length > 1 && phase === 'implementing' && change.tasks && change.openTasks > 0) {
+    return agent(issue.key, 'implement-next-task', phase, String(open[0].id), 'next open task');
   }
   if (!phase) {
     return {kind: 'advance', issue: issue.key, to: 'proposing', reason: 'enter the cycle'};
@@ -451,6 +475,26 @@ function decideOpen(
       issue: issue.key,
       to: back,
       reason: 'review thread sent the change back',
+    };
+  }
+
+  // One conflict move, after the back move and before the shelf and the gate.
+  const conflicted = open.find(pr => pr.conflict);
+  if (conflicted && phase) {
+    if (phase === 'implementing') {
+      return agent(
+        issue.key,
+        'fix-implementation',
+        phase,
+        String(conflicted.id),
+        'rebase onto the base',
+      );
+    }
+    return {
+      kind: 'advance',
+      issue: issue.key,
+      to: 'implementing',
+      reason: 'pull request conflicts with the base',
     };
   }
 
@@ -531,22 +575,20 @@ function decideOpen(
   // A skill stopped for a person, or the machine opened the review gate.
   // The gate holds when no classified thread asks for a layer.
   if (record.hold !== null) {
-    const review =
-      phase === 'proposing'
-        ? {artifact: 'proposal', to: 'proposed' as const}
+    const asked = record.hold.startsWith('Review the ');
+    const review = asked
+      ? null
+      : phase === 'proposing'
+        ? {artifact: 'proposal' as const, to: 'proposed' as const}
         : phase === 'specifying'
-          ? {artifact: 'spec', to: 'specified' as const}
+          ? {artifact: 'spec' as const, to: 'specified' as const}
           : phase === 'designing'
-            ? {artifact: 'design', to: 'designed' as const}
+            ? {artifact: 'design' as const, to: 'designed' as const}
             : null;
     if (review && !gateBlocker(issue.key, phase, change)) {
       return hand(reviewGate(issue.key, review.artifact, phase, review.to));
     }
-    return hand({
-      kind: 'wait',
-      issue: issue.key,
-      reason: `sdd:wait-human is set on ${phase}. Do the ask on the issue.`,
-    });
+    return hand({kind: 'wait', issue: issue.key, reason: record.hold});
   }
 
   if (phase === 'proposing') {
@@ -688,9 +730,6 @@ function decideOpen(
     if (!change.tasks) {
       return {kind: 'advance', issue: issue.key, to: 'tasking', reason: 'tasks.md is missing'};
     }
-    if (pr?.conflict) {
-      return agent(issue.key, 'fix-implementation', phase, String(pr.id), 'rebase onto the base');
-    }
     const card = cardGap(change);
     if (card) {
       return {kind: 'advance', issue: issue.key, to: 'tasking', reason: card};
@@ -718,14 +757,6 @@ function decideOpen(
   if (phase === 'verifying') {
     if (!pr) {
       return {kind: 'wait', issue: issue.key, reason: 'verifying needs an open pull request'};
-    }
-    if (pr.conflict) {
-      return {
-        kind: 'advance',
-        issue: issue.key,
-        to: 'implementing',
-        reason: 'pull request conflicts with the base',
-      };
     }
     if (pr.checks === 'red') {
       return agent(issue.key, 'classify-failures', phase, String(pr.id), 'red checks');
@@ -765,8 +796,12 @@ function decideOpen(
 export function accept(
   issue: IssueRecord,
   change: ChangeView,
-  record: CycleRecord = cycleRecord(issue, legacyTip(issue, change)),
+  record: CycleRecord = cycleRecord(issue),
+  pulls?: readonly {state: string}[],
 ): Decision {
+  if (pulls !== undefined && pulls.filter(pr => pr.state === 'OPEN').length !== 1) {
+    return {kind: 'wait', issue: issue.key, reason: 'accept needs one open pull request'};
+  }
   if (!record.cycle) {
     return {kind: 'wait', issue: issue.key, reason: `#${issue.key} has no sdd:cycle label`};
   }
@@ -799,7 +834,7 @@ export function settle(
   change: ChangeView,
   tip?: string,
 ): Settlement {
-  const message = tip ?? legacyTip(issue, change);
+  const message = tip ?? '';
   let labels = [...issue.labels];
   const transitions: Settlement['transitions'] = [];
   for (let step = 0; step < 12; step += 1) {

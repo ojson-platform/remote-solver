@@ -384,10 +384,12 @@ async function accept(box: Machine, rest: string[]): Promise<void> {
   const key = need(rest[0], usage);
   const record = await box.tracker.issue(key);
   const tip = box.vcs.tipMessage ? await box.vcs.tipMessage(key) : '';
+  const pulls = await box.review.pulls(key);
   const decision = acceptGate(
     record,
     readChange(key, box.vcs.filesAt(key)),
     cycleRecord(record, tip),
+    pulls,
   );
   if (decision.kind !== 'advance') {
     throw new Error(decision.reason);

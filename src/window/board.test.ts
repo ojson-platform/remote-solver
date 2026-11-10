@@ -152,6 +152,7 @@ async function proveFinishedCycleLeavesBoardAfterReload(phase: 'tasking' | 'veri
     files: checkoutFiles(checkout),
     queues: [{name: 'alpha'}],
     change: finishedCycleChange,
+    tip: 'Sdd-Archive: issue-9\n',
   });
   await reloadTickets();
   assert.ok(!visibleKeys(window.board()).includes('9'));

@@ -30,6 +30,11 @@ When more than one open pull request belongs to the issue, the machine SHALL wai
 - **WHEN** `implementing` has an open task and two open pull requests belong to the issue
 - **THEN** the machine runs that task and names neither pull request as a wait
 
+#### Scenario: An open task still runs when one of two pull requests conflicts
+
+- **WHEN** `implementing` has an open task and one of two open pull requests conflicts with the base
+- **THEN** the machine runs that task and does not rebase
+
 ### Requirement: None creates a pull request, one is reused
 
 `publish` on a clean tree SHALL push the issue branch. With no open pull request it SHALL open one using the given title. With one open pull request it SHALL keep that pull request and SHALL NOT open another. The title links a pull request to the issue only when it starts with `#<key>:` or `#<key> `.

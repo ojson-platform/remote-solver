@@ -31,6 +31,12 @@ export type ChangeView = {
   designStamp: string;
   /** `sdd-absorbed` in `tasks.md`. */
   tasksStamp: string;
+  /** A spec changed in the latest commit and its `sdd-absorbed` line did not. */
+  specDrift: boolean;
+  /** `design.md` changed in the latest commit and its `sdd-absorbed` line did not. */
+  designDrift: boolean;
+  /** `tasks.md` changed in the latest commit and its `sdd-absorbed` line did not. */
+  tasksDrift: boolean;
   /** Scenario titles under ADDED and MODIFIED in the delta. */
   deltaScenarios: string[];
   /** Scenario titles named on the task cards. */
@@ -40,6 +46,22 @@ export type ChangeView = {
   /** Scenario titles named by an open or checked line in `tasks.md`. */
   slicedScenarios: string[];
 };
+
+/** The file changed and the stamp line did not. No parent text means no drift. */
+function leftUnstamped(current: string, previous: string | undefined): boolean {
+  if (previous === undefined || previous === '' || previous === current) {
+    return false;
+  }
+  const stamp = absorbedStamp(current);
+  return stamp !== '' && stamp === absorbedStamp(previous);
+}
+
+function drifted(files: FileSource, rels: readonly string[]): boolean {
+  if (!files.parent) {
+    return false;
+  }
+  return rels.some(rel => leftUnstamped(files.read(rel), files.parent?.(rel)));
+}
 
 /** The `sdd-absorbed` line a phase file moves when it folds its input. */
 export function absorbedStamp(text: string): string {
@@ -306,6 +328,9 @@ export function readChange(key: string, files: FileSource): ChangeView {
     specStamp: sharedStamp(specChunks.map(chunk => chunk.text)),
     designStamp: absorbedStamp(designText),
     tasksStamp: absorbedStamp(tasksText),
+    specDrift: drifted(files, specRels),
+    designDrift: drifted(files, docs.has(designPath) ? [designPath] : []),
+    tasksDrift: drifted(files, docs.has(tasksPath) ? [tasksPath] : []),
     deltaScenarios: specChunks.flatMap(chunk => deltaScenarioNames(chunk.text)),
     cardScenarios: cardTexts.flatMap(cardScenarioNames),
     cardRevision: sharedDelta(cardTexts),

@@ -134,6 +134,8 @@ export type FileSource = {
   list(rel: string): string[];
   /** True when this read failed and the bytes are not the branch. */
   failed?: () => boolean;
+  /** Text of this path at the parent commit. Absent when the source has no history. */
+  parent?(rel: string): string;
 };
 
 /** A path in this package, linked as `.sandcastle/<to>` inside a checkout. */

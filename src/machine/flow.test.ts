@@ -8,7 +8,7 @@ import {markRobot} from './marker.ts';
 import {queueOf} from './queues.ts';
 import {loadCycle} from './snapshot.ts';
 import {memoryPorts} from '../adapters/github.ts';
-import {change} from './harness.ts';
+import {change, foldedTip} from './harness.ts';
 import type {FileSource} from './port.ts';
 
 const FINISHED_CLOSE =
@@ -104,7 +104,8 @@ test('the machine opens the review gate with one ask and does not repeat it', as
   const held = await resolveIssue('5', options);
   assert.equal(held.kind, 'wait');
   if (held.kind === 'wait') {
-    assert.deepEqual(held.gate, {artifact: 'proposal', from: 'proposing', to: 'proposed'});
+    assert.equal(held.gate, undefined);
+    assert.match(held.reason, /^Review the proposal/);
   }
   assert.equal(asks().length, 1);
 });
@@ -222,6 +223,7 @@ test('resolveIssue closes an accepted issue once the pull request is merged', as
     files,
     queues: [{name: 'Sandcastle'}],
     change: change({archived: true}),
+    tip: foldedTip('424242'),
   });
   assert.deepEqual(held, {kind: 'wait', issue: '424242', reason: 'wait for merge of PR #9'});
   assert.equal(
@@ -247,6 +249,7 @@ test('resolveIssue closes an accepted issue once the pull request is merged', as
     files,
     queues: [{name: 'Sandcastle'}],
     change: change({archived: true}),
+    tip: foldedTip('424242'),
   });
   assert.equal(decision.kind, 'done');
   assert.equal(merged.calls.filter(call => call.startsWith('close:')).length, 1);
@@ -276,6 +279,7 @@ test('performIssue merges a green archived pull request and settles the close', 
     review,
     files: archived,
     queues: [{name: 'Sandcastle'}],
+    tip: 'Sdd-Archive: issue-3\n',
   });
   assert.equal(decision.kind, 'done');
   if (decision.kind === 'done') {
@@ -284,6 +288,80 @@ test('performIssue merges a green archived pull request and settles the close', 
   assert.equal(calls.filter(call => call === 'merge:9').length, 1);
   assert.equal((await tracker.labels('3')).includes('sdd:accepted'), false);
   assert.equal((await tracker.issue('3')).state, 'CLOSED');
+});
+
+spec('spec-archive', () => {
+  requirement('A refusal does not publish', () => {
+    scenario('The machine waits and names the baseline instead of refusing', async () => {
+      const {tracker, review} = memoryPorts({
+        issues: [
+          {
+            key: '3',
+            title: '#3: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['Sandcastle', 'sdd:cycle', 'sdd:accepting'],
+          },
+        ],
+        pulls: {'3': [{id: '9', title: '#3: title', state: 'OPEN'}]},
+      });
+      const decision = await performIssue('3', {
+        tracker,
+        review,
+        files: {exists: () => false, read: () => '', list: () => []},
+        queues: [{name: 'Sandcastle'}],
+        change: change({proposal: true, capabilities: ['section']}),
+        tip: '',
+        checkout: async () => '/tmp/unused',
+        fold() {
+          throw new Error('Spec must have at least one requirement');
+        },
+      });
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.match(decision.reason, /openspec\/specs\/section\/spec\.md/);
+      }
+      const notes = await tracker.comments('3');
+      assert.equal(notes.some(note => note.body.includes('sdd:refused')), false);
+    });
+  });
+});
+
+spec('focus', () => {
+  requirement('The skill writes a focus comment when the artifact is published', () => {
+    scenario('The machine writes sdd:focus:accept after the archive commit', async () => {
+      const {tracker, review} = memoryPorts({
+        issues: [
+          {
+            key: '3',
+            title: '#3: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['Sandcastle', 'sdd:cycle', 'sdd:accepting'],
+          },
+        ],
+        pulls: {'3': [{id: '9', title: '#3: title', state: 'OPEN'}]},
+        checks: {'9': {checks: 'green'}},
+      });
+      let folded = false;
+      const decision = await performIssue('3', {
+        tracker,
+        review,
+        files: {exists: () => false, read: () => '', list: () => []},
+        queues: [{name: 'Sandcastle'}],
+        change: change({proposal: true}),
+        tip: '',
+        checkout: async () => '/tmp/unused',
+        fold() {
+          folded = true;
+        },
+        readTip: async () => (folded ? 'Sdd-Archive: issue-3\n' : ''),
+      });
+      assert.equal(decision.kind, 'wait');
+      const notes = await tracker.comments('3');
+      assert.equal(notes.some(note => note.body.startsWith('sdd:focus:accept')), true);
+    });
+  });
 });
 
 spec('finished-cycle', () => {
@@ -307,6 +385,7 @@ spec('finished-cycle', () => {
         files,
         queues: [{name: 'Sandcastle'}],
         change: finishedChange,
+        tip: foldedTip('9'),
       });
       assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
       assert.equal((await tracker.issue('9')).state, 'CLOSED');
@@ -327,9 +406,14 @@ spec('finished-cycle', () => {
         ],
         pulls: {'9': [{id: '25', title: '#9: title', state: 'MERGED'}]},
       });
-      const snapshot = await loadCycle(tracker, review, () => archivedIssue9Files(), [
-        {name: 'Sandcastle'},
-      ]);
+      const snapshot = await loadCycle(
+        tracker,
+        review,
+        () => archivedIssue9Files(),
+        [{name: 'Sandcastle'}],
+        undefined,
+        async key => foldedTip(key),
+      );
       assert.ok(snapshot.cycles.some(cycle => cycle.key === '9'));
       const decisions = await resolveCycle(snapshot, tracker, [{name: 'Sandcastle'}]);
       assert.deepEqual(decisions, [{kind: 'done', issue: '9', reason: 'finished cycle'}]);
@@ -356,6 +440,7 @@ spec('finished-cycle', () => {
         files: archivedIssue9Files(),
         queues: [{name: 'Sandcastle'}],
         change: change({archived: true, tasks: false}),
+        tip: foldedTip('9'),
       });
       assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
       assert.equal((await tracker.issue('9')).state, 'CLOSED');
@@ -382,6 +467,7 @@ spec('finished-cycle', () => {
         files: archivedIssue9Files(),
         queues: [{name: 'Sandcastle'}],
         change: {...finishedChange, openTasks: 1},
+        tip: foldedTip('9'),
       });
       assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
       assert.equal((await tracker.issue('9')).state, 'CLOSED');
@@ -408,6 +494,7 @@ spec('finished-cycle', () => {
         files: archivedIssue9Files(),
         queues: [{name: 'Sandcastle'}],
         change: finishedChange,
+        tip: foldedTip('9'),
       });
       assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
       assert.equal((await tracker.issue('9')).state, 'CLOSED');
@@ -434,6 +521,7 @@ spec('finished-cycle', () => {
         files: archivedIssue9Files(),
         queues: [{name: 'Sandcastle'}],
         change: finishedChange,
+        tip: foldedTip('9'),
       });
       assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
       assert.equal((await tracker.issue('9')).state, 'CLOSED');
@@ -462,6 +550,7 @@ spec('finished-cycle', () => {
         files: archivedIssue9Files(),
         queues: [{name: 'Sandcastle'}],
         change: finishedChange,
+        tip: foldedTip('9'),
       });
       assert.notEqual(decision.kind, 'done');
       assert.equal((await tracker.issue('9')).state, 'OPEN');
@@ -487,6 +576,7 @@ spec('finished-cycle', () => {
         files: archivedIssue9Files(),
         queues: [{name: 'Sandcastle'}],
         change: finishedChange,
+        tip: foldedTip('9'),
       });
       assert.equal(decision.kind, 'unarchive');
       assert.equal((await tracker.issue('9')).state, 'OPEN');
@@ -518,6 +608,7 @@ spec('finished-cycle', () => {
         review,
         files: archivedIssue3,
         queues: [{name: 'Sandcastle'}],
+        tip: foldedTip('3'),
       });
       assert.equal(decision.kind, 'done');
       assert.equal((await tracker.labels('3')).includes('sdd:accepted'), false);
@@ -543,6 +634,7 @@ spec('finished-cycle', () => {
         review,
         files: archivedIssue3,
         queues: [{name: 'Sandcastle'}],
+        tip: foldedTip('3'),
       });
       assert.equal(decision.kind, 'done');
       assert.equal((await tracker.issue('3')).state, 'CLOSED');

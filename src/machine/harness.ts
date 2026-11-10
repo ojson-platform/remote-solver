@@ -1,6 +1,16 @@
 import type {ChangeView} from './change.ts';
-import type {Decision, PullSnapshot} from './policy.ts';
+import {archiveMark} from './phase.ts';
+import {cycleRecord, type CycleRecord, type Decision, type IssueNote, type PullSnapshot} from './policy.ts';
 import type {FileSource, IssueRecord} from './port.ts';
+
+/** The archive line for a change the test means as folded. The directory is not this line. */
+export function asFolded(row: IssueRecord, notes: readonly IssueNote[] = []): CycleRecord {
+  return cycleRecord(row, archiveMark(row.key), notes);
+}
+
+export function foldedTip(key: string | number): string {
+  return `${archiveMark(String(key))}\n`;
+}
 
 export const files: FileSource = {exists: () => false, read: () => '', list: () => []};
 
@@ -24,6 +34,9 @@ export function change(over: Partial<ChangeView> = {}): ChangeView {
     specStamp: '',
     designStamp: '',
     tasksStamp: '',
+    specDrift: false,
+    designDrift: false,
+    tasksDrift: false,
     deltaScenarios: [],
     cardScenarios: [],
     cardRevision: '',

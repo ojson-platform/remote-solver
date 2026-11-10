@@ -221,6 +221,23 @@ spec('change', () => {
     });
   });
 
+  requirement('A phase file edited without moving the stamp is behind', () => {
+    scenario('design.md changes and sdd-absorbed does not', () => {
+      const design = 'openspec/changes/issue-7/design.md';
+      const specPath = 'openspec/changes/issue-7/specs/section/spec.md';
+      const stamp = 'sdd-absorbed: abcdef0123456789\n';
+      const source: FileSource = {
+        exists: rel => rel === design || rel === specPath,
+        read: rel => (rel === design ? `${stamp}\nThe new line.\n` : `${stamp}\nFact.\n`),
+        list: () => [design, specPath],
+        parent: rel => (rel === design ? `${stamp}\nThe old line.\n` : ''),
+      };
+      const view = readChange('7', source);
+      assert.equal(view.designDrift, true);
+      assert.equal(view.designStamp, 'abcdef0123456789');
+    });
+  });
+
   requirement('The active change wins over the archive', () => {
     scenario('Both copies present, the active text is read', () => {
       const source: FileSource = {

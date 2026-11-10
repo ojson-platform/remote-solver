@@ -46,6 +46,7 @@ async function runStep(
       head: () => '',
       published: () => true,
       dirty: () => [],
+      tipMessage: async key => (key === '3' ? 'Sdd-Archive: issue-3\n' : ''),
     },
     runtime: {
       async run() {

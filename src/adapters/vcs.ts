@@ -343,6 +343,12 @@ function filesOfRef(root: string, ref: string | null, strict: boolean): FileSour
     failed() {
       return load().failed;
     },
+    parent(rel) {
+      if (!ref) {
+        return '';
+      }
+      return showFile(root, `${ref}^`, rel, false);
+    },
   };
 }
 

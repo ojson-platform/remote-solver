@@ -29,6 +29,7 @@ async function runPlan(
       head: () => '',
       published: () => true,
       dirty: () => [],
+      tipMessage: async key => (key === '3' ? 'Sdd-Archive: issue-3\n' : ''),
     },
   });
   const logged = console.log;

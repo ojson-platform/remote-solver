@@ -67,46 +67,21 @@ export function phaseOf(labels: string[]): Phase | null {
   return null;
 }
 
-/** Where a gate event sits: accepting the writing phase reaches the next one. */
+/** Index of a working phase. A gate event is not a rank. */
 export function phaseRank(phase: Phase): number {
-  const index = (PHASES as readonly string[]).indexOf(phase);
-  if (index >= 0) {
-    return index;
-  }
-  if (phase === 'proposed') {
-    return (PHASES as readonly string[]).indexOf('specifying');
-  }
-  if (phase === 'specified') {
-    return (PHASES as readonly string[]).indexOf('designing');
-  }
-  if (phase === 'designed') {
-    return (PHASES as readonly string[]).indexOf('tasking');
-  }
-  return -1;
+  return (PHASES as readonly string[]).indexOf(phase);
 }
 
-/** Rank of the labels, including a gate event left on without its writing phase. */
+/** Rank of the working phase the labels name. A lone gate event stays that writing phase. */
 export function reachedRank(labels: readonly string[]): number {
   if (labels.includes('sdd:cancelled')) {
     return -1;
   }
-  let rank = -1;
   const phase = phaseOf([...labels]);
-  if (phase) {
-    rank = phaseRank(phase);
+  if (!phase) {
+    return -1;
   }
-  // The gate means that writing phase is already accepted, even before the
-  // next poll moves the label.
-  if (labels.includes('sdd:designed')) {
-    rank = Math.max(rank, phaseRank('designed'));
-  }
-  if (labels.includes('sdd:specified')) {
-    rank = Math.max(rank, phaseRank('specified'));
-  }
-  if (labels.includes('sdd:proposed')) {
-    rank = Math.max(rank, phaseRank('proposed'));
-  }
-  return rank;
+  return phaseRank(phase);
 }
 
 export function removedPhaseLabels(labels: string[], to: Phase): string[] {

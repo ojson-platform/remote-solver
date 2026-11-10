@@ -175,6 +175,22 @@ spec('artifact', () => {
         assert.deepEqual(decision.gate, {artifact: 'spec', from: 'specifying', to: 'specified'});
       }
     });
+    scenario('A phase file edited without moving the stamp restarts the skill', () => {
+      const decision = decide(
+        issue(1, ['sdd:designing']),
+        [],
+        [pull(9)],
+        change({
+          proposal: true,
+          delta: true,
+          design: true,
+          designStamp: 'ccc',
+          specsRevision: 'ccc',
+          designDrift: true,
+        }),
+      );
+      assert.equal(action(decision), 'create-design');
+    });
     scenario('A stale design stamp restarts design before the auto advance', () => {
       const decision = decide(
         issue(1, ['sdd:designing', 'sdd:auto-design']),

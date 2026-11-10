@@ -50,6 +50,18 @@ spec('pull-request', () => {
         assert.equal(decision.action, 'implement-next-task');
       }
     });
+    scenario('An open task still runs when one of two pull requests conflicts', () => {
+      const decision = decide(
+        issue(1, ['sdd:implementing']),
+        [],
+        [pull(3, {conflict: true}), pull(4)],
+        change({tasks: true, openTasks: 1}),
+      );
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'implement-next-task');
+      }
+    });
   });
 
   requirement('None creates a pull request, one is reused', () => {

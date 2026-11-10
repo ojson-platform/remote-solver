@@ -105,7 +105,7 @@ A new spec SHALL NOT keep the Purpose the command writes (`TBD - created by arch
 
 ### Requirement: A refusal does not publish
 
-When the command refuses, the step SHALL NOT publish. A refusal because a baseline would have no requirement SHALL be a Wait that names that baseline.
+When the command refuses, the step SHALL NOT publish. A refusal because a baseline would have no requirement SHALL be a Wait that names that baseline, and the machine SHALL NOT post `sdd:refused` for that refusal.
 
 #### Scenario: When the command refuses, the step does not publish
 
@@ -116,3 +116,8 @@ When the command refuses, the step SHALL NOT publish. A refusal because a baseli
 
 - **WHEN** the command has already refused because a baseline would have no requirement, and the Wait already names that baseline, together with a Wait that does not name that baseline as the limit that can replace that Wait
 - **THEN** a refusal because a baseline would have no requirement is a Wait that names that baseline
+
+#### Scenario: The machine waits and names the baseline instead of refusing
+
+- **WHEN** the fold reports that the rebuilt spec would have no requirement
+- **THEN** the machine waits, names `openspec/specs/<capability>/spec.md`, and does not post `sdd:refused`

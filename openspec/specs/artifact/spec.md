@@ -128,7 +128,7 @@ For `specify`, `design`, and `tasks`, the prompt SHALL carry the current text of
 
 ### Requirement: A stale stamp restarts the writing skill
 
-On `specifying`, when a delta exists and its stamp is not the proposal revision, the machine SHALL run the spec skill before the review gate and before `sdd:auto-spec`. On `designing`, an open decision SHALL wait before that check. When `design.md` exists, no decision is open, and its stamp is not the spec revision, the machine SHALL run the design skill before the review gate and before `sdd:auto-design`. On `tasking`, when `tasks.md` exists and its stamp is not the revision of the specs and the design, the machine SHALL run the tasks skill before it leaves for implementing. A matching stamp SHALL leave the gate or the advance in place. `sdd accept` SHALL refuse while the stamp of that phase is behind.
+On `specifying`, when a delta exists and its stamp is not the proposal revision, the machine SHALL run the spec skill before the review gate and before `sdd:auto-spec`. On `designing`, an open decision SHALL wait before that check. When `design.md` exists, no decision is open, and its stamp is not the spec revision, the machine SHALL run the design skill before the review gate and before `sdd:auto-design`. On `tasking`, when `tasks.md` exists and its stamp is not the revision of the specs and the design, the machine SHALL run the tasks skill before it leaves for implementing. A commit of a phase file that leaves `sdd-absorbed` unchanged SHALL restart that skill even when the stamp equals the input revision. A matching stamp on an unchanged file SHALL leave the gate or the advance in place. `sdd accept` SHALL refuse while the stamp of that phase is behind.
 
 #### Scenario: A stale spec stamp restarts specify before the auto advance
 
@@ -139,6 +139,11 @@ On `specifying`, when a delta exists and its stamp is not the proposal revision,
 
 - **WHEN** the phase is `specifying` and the delta stamp equals the proposal revision
 - **THEN** the machine opens the review gate
+
+#### Scenario: A phase file edited without moving the stamp restarts the skill
+
+- **WHEN** `design.md` differs from its parent commit, its `sdd-absorbed` line is unchanged, and that stamp equals the spec revision
+- **THEN** the machine runs the design skill
 
 #### Scenario: A stale design stamp restarts design before the auto advance
 

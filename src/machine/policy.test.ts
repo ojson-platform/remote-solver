@@ -13,10 +13,12 @@ import {
   settle,
   severalOpenReason,
   writingGate,
+  type Decision,
   type PullSnapshot,
 } from './policy.ts';
 import type {FileSource, IssueRecord} from './port.ts';
 import {emptyReview} from './review.ts';
+import {asFolded, foldedTip} from './harness.ts';
 import {
   cycle,
   MANAGER,
@@ -45,12 +47,34 @@ function change(over: Partial<ChangeView> = {}): ChangeView {
     specStamp: '',
     designStamp: '',
     tasksStamp: '',
+    specDrift: false,
+    designDrift: false,
+    tasksDrift: false,
     deltaScenarios: [],
     cardScenarios: [],
     cardRevision: '',
     slicedScenarios: [],
     ...over,
   };
+}
+
+/** Tests that pass `archived: true` mean the archive line, not the directory. */
+function judged(
+  row: IssueRecord,
+  issues: IssueRecord[],
+  pulls: PullSnapshot[],
+  view: ChangeView,
+): Decision {
+  return decide(row, issues, pulls, view, view.archived ? asFolded(row) : undefined);
+}
+
+function settled(
+  row: IssueRecord,
+  issues: IssueRecord[],
+  pulls: PullSnapshot[],
+  view: ChangeView,
+): ReturnType<typeof settle> {
+  return settle(row, issues, pulls, view, view.archived ? foldedTip(row.key) : undefined);
 }
 
 function issue(
@@ -83,7 +107,7 @@ function pull(id: number | string, over: Partial<PullSnapshot> = {}): PullSnapsh
 const ready = change({proposal: true, delta: true, design: true, tasks: true});
 
 test('a cycle with no phase enters proposing', () => {
-  const decision = decide(issue(1, ['Sandcastle', 'sdd:cycle']), [], [], change());
+  const decision = judged(issue(1, ['Sandcastle', 'sdd:cycle']), [], [], change());
   assert.deepEqual(decision, {
     kind: 'advance',
     issue: '1',
@@ -93,12 +117,12 @@ test('a cycle with no phase enters proposing', () => {
 });
 
 test('cancelled is done', () => {
-  const decision = decide(issue(1, ['sdd:cancelled', 'sdd:proposing']), [], [], change());
+  const decision = judged(issue(1, ['sdd:cancelled', 'sdd:proposing']), [], [], change());
   assert.equal(decision.kind, 'done');
 });
 
 test('proposing without a proposal asks the plan skill to write one', () => {
-  const decision = decide(issue(1, ['sdd:proposing']), [], [pull(9)], change());
+  const decision = judged(issue(1, ['sdd:proposing']), [], [pull(9)], change());
   assert.equal(decision.kind, 'agent');
   if (decision.kind === 'agent') {
     assert.equal(decision.action, 'create-proposal');
@@ -108,7 +132,7 @@ test('proposing without a proposal asks the plan skill to write one', () => {
 });
 
 test('open questions block proposing even when the auto tag is set', () => {
-  const decision = decide(
+  const decision = judged(
     issue(1, ['sdd:proposing', 'sdd:auto-plan']),
     [],
     [pull(9)],
@@ -121,7 +145,7 @@ test('open questions block proposing even when the auto tag is set', () => {
 });
 
 test('auto-plan advances once the proposal has no open questions', () => {
-  const decision = decide(
+  const decision = judged(
     issue(1, ['sdd:proposing', 'sdd:auto-plan']),
     [],
     [pull(9)],
@@ -136,7 +160,7 @@ test('auto-plan advances once the proposal has no open questions', () => {
 });
 
 test('wait-human holds even when the auto tag is set', () => {
-  const held = decide(
+  const held = judged(
     issue(1, ['sdd:specifying', 'sdd:wait-human', 'sdd:auto-spec']),
     [],
     [pull(9)],
@@ -174,25 +198,25 @@ const gates = [
 
 for (const gate of gates) {
   test(`a published ${gate.artifact} without ${gate.tag} opens the review gate once`, () => {
-    const opened = decide(issue(1, [`sdd:${gate.phase}`]), [], [pull(9)], ready);
+    const opened = judged(issue(1, [`sdd:${gate.phase}`]), [], [pull(9)], ready);
     assert.equal(opened.kind, 'wait');
     if (opened.kind === 'wait') {
       assert.deepEqual(opened.gate, {artifact: gate.artifact, from: gate.phase, to: gate.gate});
     }
 
-    const held = decide(issue(1, [`sdd:${gate.phase}`, 'sdd:wait-human']), [], [pull(9)], ready);
+    const held = judged(issue(1, [`sdd:${gate.phase}`, 'sdd:wait-human']), [], [pull(9)], ready);
     assert.equal(held.kind, 'wait');
     if (held.kind === 'wait') {
       assert.deepEqual(held.gate, {artifact: gate.artifact, from: gate.phase, to: gate.gate});
     }
 
-    const auto = decide(issue(1, [`sdd:${gate.phase}`, gate.tag]), [], [pull(9)], ready);
+    const auto = judged(issue(1, [`sdd:${gate.phase}`, gate.tag]), [], [pull(9)], ready);
     assert.deepEqual(auto, {kind: 'advance', issue: '1', to: gate.next, reason: gate.tag});
   });
 
   test(`a person who sets ${gate.gate} on a ready change moves it to ${gate.next}`, () => {
     const labels = [`sdd:${gate.phase}`, `sdd:${gate.gate}`, 'sdd:wait-human'];
-    const decision = decide(issue(1, labels), [], [pull(9)], ready);
+    const decision = judged(issue(1, labels), [], [pull(9)], ready);
     assert.deepEqual(decision, {
       kind: 'advance',
       issue: '1',
@@ -204,7 +228,7 @@ for (const gate of gates) {
 }
 
 test('a gate label over a missing artifact drops and asks for the file', () => {
-  const decision = decide(
+  const decision = judged(
     issue(1, ['sdd:specified']),
     [],
     [pull(9)],
@@ -221,7 +245,7 @@ test('a gate label over a missing artifact drops and asks for the file', () => {
 
 test('a gate label over open items drops, waits without an ask, and asks once they are closed', () => {
   const open = change({proposal: true, delta: true, design: true, openDecisions: 1});
-  const reverted = settle(issue(1, ['sdd:cycle', 'sdd:designed']), [], [pull(9)], open);
+  const reverted = settled(issue(1, ['sdd:cycle', 'sdd:designed']), [], [pull(9)], open);
   assert.deepEqual(
     reverted.transitions.map(transition => transition.to),
     [],
@@ -234,7 +258,7 @@ test('a gate label over open items drops, waits without an ask, and asks once th
     assert.match(reverted.decision.reason, /open decision/);
   }
 
-  const closed = settle(issue(1, reverted.labels), [], [pull(9)], ready);
+  const closed = settled(issue(1, reverted.labels), [], [pull(9)], ready);
   assert.equal(closed.decision.kind, 'wait');
   if (closed.decision.kind === 'wait') {
     assert.deepEqual(closed.decision.gate, {artifact: 'design', from: 'designing', to: 'designed'});
@@ -242,7 +266,7 @@ test('a gate label over open items drops, waits without an ask, and asks once th
 });
 
 test('an unlabeled thread is classified before a held review gate', () => {
-  const decision = decide(
+  const decision = judged(
     issue(1, ['sdd:designing', 'sdd:wait-human']),
     [],
     [pull(9, {review: {unanswered: true, rollback: null, layers: []}})],
@@ -255,7 +279,7 @@ test('an unlabeled thread is classified before a held review gate', () => {
 });
 
 test('a classified earlier marker rolls back while the review gate is held', () => {
-  const decision = decide(
+  const decision = judged(
     issue(1, ['sdd:designing', 'sdd:wait-human']),
     [],
     [pull(9, {review: {unanswered: false, rollback: 'specifying', layers: ['spec', 'design']}})],
@@ -270,7 +294,7 @@ test('a classified earlier marker rolls back while the review gate is held', () 
 });
 
 test('a classified marker on the current layer starts its action while the review gate is held', () => {
-  const decision = decide(
+  const decision = judged(
     issue(1, ['sdd:designing', 'sdd:wait-human']),
     [],
     [pull(9, {review: {unanswered: false, rollback: 'designing', layers: ['design']}})],
@@ -284,7 +308,7 @@ test('a classified marker on the current layer starts its action while the revie
 });
 
 test('an unlabeled thread is classified before the phase moves', () => {
-  const decision = decide(
+  const decision = judged(
     issue(1, ['sdd:implementing']),
     [],
     [pull(9, {review: {unanswered: true, rollback: null, layers: []}})],
@@ -297,7 +321,7 @@ test('an unlabeled thread is classified before the phase moves', () => {
 });
 
 test('a marker for an earlier phase moves the machine there', () => {
-  const decision = decide(
+  const decision = judged(
     issue(1, ['sdd:implementing']),
     [],
     [pull(9, {review: {unanswered: false, rollback: 'specifying', layers: ['spec', 'code']}})],
@@ -312,7 +336,7 @@ test('a marker for an earlier phase moves the machine there', () => {
 });
 
 test('out does not move the phase, and a code marker fixes implementation', () => {
-  const decision = decide(
+  const decision = judged(
     issue(1, ['sdd:implementing']),
     [],
     [pull(9, {review: {unanswered: false, rollback: 'implementing', layers: ['out', 'code']}})],
@@ -326,7 +350,7 @@ test('out does not move the phase, and a code marker fixes implementation', () =
 });
 
 test('specifying restores a missing baseline before writing a delta', () => {
-  const decision = decide(
+  const decision = judged(
     issue(1, ['sdd:specifying']),
     [],
     [pull(9)],
@@ -340,7 +364,7 @@ test('specifying restores a missing baseline before writing a delta', () => {
 });
 
 test('specifying restores a missing baseline before it improves the specs', () => {
-  const decision = decide(
+  const decision = judged(
     issue(1, ['sdd:specifying']),
     [],
     [pull(9, {review: {unanswered: false, rollback: 'specifying', layers: ['spec']}})],
@@ -356,7 +380,7 @@ test('specifying restores a missing baseline before it improves the specs', () =
 test('tasking waits for a child that is not specified yet', () => {
   const parent = issue(1, ['sdd:tasking']);
   const child = issue(2, ['sdd:cycle', 'sdd:specifying'], {parent: '1'});
-  const decision = decide(parent, [parent, child], [pull(9)], ready);
+  const decision = judged(parent, [parent, child], [pull(9)], ready);
   assert.equal(decision.kind, 'wait');
   if (decision.kind === 'wait') {
     assert.match(decision.reason, /#2/);
@@ -366,19 +390,19 @@ test('tasking waits for a child that is not specified yet', () => {
 test('implementing waits for an open blocker, then verifies when the tasks are done', () => {
   const parent = issue(1, ['sdd:implementing'], {dependsOn: ['8']});
   const blocker = issue(8, ['sdd:cycle', 'sdd:implementing']);
-  const waiting = decide(parent, [parent, blocker], [pull(9)], ready);
+  const waiting = judged(parent, [parent, blocker], [pull(9)], ready);
   assert.equal(waiting.kind, 'wait');
-  const done = decide(issue(1, ['sdd:implementing']), [], [pull(9)], ready);
+  const done = judged(issue(1, ['sdd:implementing']), [], [pull(9)], ready);
   assert.deepEqual(done, {kind: 'advance', issue: '1', to: 'verifying', reason: 'no open tasks'});
 });
 
 test('verifying classifies red checks, and follows a marker once one exists', () => {
-  const red = decide(issue(1, ['sdd:verifying']), [], [pull(9, {checks: 'red'})], ready);
+  const red = judged(issue(1, ['sdd:verifying']), [], [pull(9, {checks: 'red'})], ready);
   assert.equal(red.kind, 'agent');
   if (red.kind === 'agent') {
     assert.equal(red.action, 'classify-failures');
   }
-  const back = decide(
+  const back = judged(
     issue(1, ['sdd:verifying']),
     [],
     [
@@ -398,9 +422,9 @@ test('verifying classifies red checks, and follows a marker once one exists', ()
 });
 
 test('verifying accepts a pull request once its checks are green', () => {
-  const waiting = decide(issue(1, ['sdd:verifying']), [], [pull(9, {checks: 'pending'})], ready);
+  const waiting = judged(issue(1, ['sdd:verifying']), [], [pull(9, {checks: 'pending'})], ready);
   assert.equal(waiting.kind, 'wait');
-  const accepted = decide(issue(1, ['sdd:verifying']), [], [pull(9, {checks: 'green'})], ready);
+  const accepted = judged(issue(1, ['sdd:verifying']), [], [pull(9, {checks: 'green'})], ready);
   assert.deepEqual(accepted, {
     kind: 'advance',
     issue: '1',
@@ -410,7 +434,7 @@ test('verifying accepts a pull request once its checks are green', () => {
 });
 
 test('a green pull request with a marker rolls back', () => {
-  const decision = decide(
+  const decision = judged(
     issue(1, ['sdd:verifying']),
     [],
     [
@@ -429,8 +453,21 @@ test('a green pull request with a marker rolls back', () => {
   });
 });
 
-test('several open pull requests hold the phase line', () => {
+test('an archive directory without the tip line is not folded', () => {
   const decision = decide(
+    issue(1, ['sdd:accepted']),
+    [],
+    [pull(9, {state: 'MERGED'})],
+    change({archived: true}),
+  );
+  assert.equal(decision.kind, 'wait');
+  if (decision.kind === 'wait') {
+    assert.match(decision.reason, /not archived/);
+  }
+});
+
+test('several open pull requests hold the phase line', () => {
+  const decision = judged(
     issue(1, ['sdd:proposing']),
     [],
     [pull(3), pull(4)],
@@ -440,14 +477,14 @@ test('several open pull requests hold the phase line', () => {
   if (decision.kind === 'wait') {
     assert.equal(decision.reason, severalOpenReason(['3', '4']));
   }
-  const accepted = decide(
+  const accepted = judged(
     issue(1, ['sdd:accepted']),
     [],
     [pull(3), pull(4)],
     change({archived: true}),
   );
   assert.equal(accepted.reason, severalOpenReason(['3', '4']));
-  const gate = decide(
+  const gate = judged(
     issue(1, ['sdd:proposing', 'sdd:proposed']),
     [],
     [pull(3), pull(4)],
@@ -457,7 +494,7 @@ test('several open pull requests hold the phase line', () => {
   if (gate.kind === 'wait') {
     assert.equal(gate.reason, severalOpenReason(['3', '4']));
   }
-  const entering = decide(issue(1, ['sdd:cycle']), [], [pull(3), pull(4)], change());
+  const entering = judged(issue(1, ['sdd:cycle']), [], [pull(3), pull(4)], change());
   assert.equal(entering.kind, 'wait');
 });
 
@@ -468,7 +505,7 @@ test('publish reuses one open pull request and refuses several', () => {
 });
 
 test('accepted archives a change that is still open, then closes only a merged pull request', () => {
-  const archive = decide(
+  const archive = judged(
     issue(1, ['sdd:accepted']),
     [],
     [pull(9, {state: 'MERGED'})],
@@ -478,19 +515,19 @@ test('accepted archives a change that is still open, then closes only a merged p
   if (archive.kind === 'wait') {
     assert.match(archive.reason, /not archived/);
   }
-  const open = decide(issue(1, ['sdd:accepted']), [], [pull(9)], change({archived: true}));
+  const open = judged(issue(1, ['sdd:accepted']), [], [pull(9)], change({archived: true}));
   assert.deepEqual(open, {
     kind: 'wait',
     issue: '1',
     reason: 'wait for green checks before merge of PR #9',
   });
-  const missing = decide(issue(1, ['sdd:accepted']), [], [], change({archived: true}));
+  const missing = judged(issue(1, ['sdd:accepted']), [], [], change({archived: true}));
   assert.deepEqual(missing, {
     kind: 'wait',
     issue: '1',
     reason: 'accepted needs a merged pull request',
   });
-  const close = decide(
+  const close = judged(
     issue(1, ['sdd:accepted']),
     [],
     [pull(9, {state: 'MERGED'})],
@@ -502,28 +539,28 @@ test('accepted archives a change that is still open, then closes only a merged p
 test('a green archived pull request waits for a person to merge, and sdd:auto-merge merges', () => {
   const green = pull(9, {checks: 'green'});
   const ready = change({archived: true});
-  assert.deepEqual(decide(issue(1, ['sdd:accepting']), [], [green], ready), {
+  assert.deepEqual(judged(issue(1, ['sdd:accepting']), [], [green], ready), {
     kind: 'wait',
     issue: '1',
     reason: 'wait for merge of PR #9',
   });
-  assert.deepEqual(decide(issue(1, ['sdd:accepting', 'sdd:auto-merge']), [], [green], ready), {
+  assert.deepEqual(judged(issue(1, ['sdd:accepting', 'sdd:auto-merge']), [], [green], ready), {
     kind: 'merge',
     issue: '1',
     pull: '9',
     reason: 'merge PR #9',
   });
-  assert.deepEqual(decide(issue(1, ['sdd:accepted']), [], [green], ready), {
+  assert.deepEqual(judged(issue(1, ['sdd:accepted']), [], [green], ready), {
     kind: 'wait',
     issue: '1',
     reason: 'wait for merge of PR #9',
   });
-  assert.deepEqual(decide(issue(1, ['sdd:accepting']), [], [pull(9, {state: 'MERGED'})], ready), {
+  assert.deepEqual(judged(issue(1, ['sdd:accepting']), [], [pull(9, {state: 'MERGED'})], ready), {
     kind: 'done',
     issue: '1',
     reason: 'finished cycle',
   });
-  const pending = decide(
+  const pending = judged(
     issue(1, ['sdd:accepting', 'sdd:auto-merge']),
     [],
     [pull(9, {checks: 'pending'})],
@@ -533,7 +570,7 @@ test('a green archived pull request waits for a person to merge, and sdd:auto-me
 });
 
 test('an accepting pull request rolls back when an open thread marks code', () => {
-  const decision = decide(
+  const decision = judged(
     issue(1, ['sdd:accepting']),
     [],
     [
@@ -609,7 +646,7 @@ test('the human gate refuses a phase it does not close', () => {
 });
 
 test('settle walks mechanical advances on labels and stops to close an accepted issue', () => {
-  const walked = settle(
+  const walked = settled(
     issue(1, ['sdd:cycle', 'sdd:proposed', 'sdd:auto-spec', 'sdd:auto-design', 'sdd:wait-human']),
     [],
     [pull(9)],
@@ -623,11 +660,11 @@ test('settle walks mechanical advances on labels and stops to close an accepted 
   assert.ok(!walked.labels.includes('sdd:wait-human'));
   assert.ok(walked.labels.includes('sdd:verifying'));
 
-  const held = settle(issue(1, ['sdd:accepted']), [], [pull(9)], change({archived: true}));
+  const held = settled(issue(1, ['sdd:accepted']), [], [pull(9)], change({archived: true}));
   assert.deepEqual(held.transitions, []);
   assert.equal(held.decision.kind, 'wait');
 
-  const closing = settle(
+  const closing = settled(
     issue(1, ['sdd:accepted']),
     [],
     [pull(9, {state: 'MERGED'})],
@@ -669,13 +706,13 @@ function archivedIssue9Files(): FileSource {
 
 test('An open pull request on tasking is restored', () => {
   const record = issue(9, ['sdd:tasking']);
-  const decision = decide(record, [], [openPull], archivedOpen);
+  const decision = judged(record, [], [openPull], archivedOpen);
   assert.equal(decision.kind, 'unarchive');
   if (decision.kind === 'unarchive') {
     assert.equal(decision.phase, 'tasking');
   }
   assert.notEqual(decision.kind, 'done');
-  const afterRestore = decide(record, [], [openPull], {...archivedOpen, archived: false});
+  const afterRestore = judged(record, [], [openPull], {...archivedOpen, archived: false});
   assert.deepEqual(afterRestore, {
     kind: 'advance',
     issue: '9',
@@ -686,10 +723,10 @@ test('An open pull request on tasking is restored', () => {
 
 test('A proposed gate restores before it moves', () => {
   const record = issue(9, ['sdd:proposed', 'sdd:proposing']);
-  const walked = settle(record, [], [openPull], archivedOpen);
+  const walked = settled(record, [], [openPull], archivedOpen);
   assert.deepEqual(walked.transitions, []);
   assert.equal(walked.decision.kind, 'unarchive');
-  const moved = decide(record, [], [openPull], {...archivedOpen, archived: false});
+  const moved = judged(record, [], [openPull], {...archivedOpen, archived: false});
   assert.equal(moved.kind, 'advance');
   if (moved.kind === 'advance') {
     assert.equal(moved.to, 'specifying');
@@ -699,7 +736,7 @@ test('A proposed gate restores before it moves', () => {
 test('Checked tasks and an open pull request stay', () => {
   const record = issue(9, ['sdd:tasking'], {state: 'OPEN'});
   const active = change({...ready, openTasks: 0});
-  const decision = decide(record, [], [openPull], active);
+  const decision = judged(record, [], [openPull], active);
   assert.notEqual(decision.kind, 'done');
   if (decision.kind === 'done') {
     assert.notEqual(decision.reason, 'finished cycle');
@@ -714,10 +751,10 @@ test('Checked tasks and an open pull request stay', () => {
 
 test('An open pull request stays on the board when every task is checked', () => {
   const record = issue(9, ['sdd:tasking'], {state: 'OPEN'});
-  const decision = decide(record, [], [openPull], archivedOpen);
+  const decision = judged(record, [], [openPull], archivedOpen);
   assert.equal(decision.kind, 'unarchive');
   assert.notEqual(decision.kind, 'done');
-  const walked = settle(record, [], [openPull], archivedOpen);
+  const walked = settled(record, [], [openPull], archivedOpen);
   assert.notEqual(walked.decision.kind, 'done');
   if (walked.decision.kind === 'done') {
     assert.notEqual(walked.decision.reason, 'finished cycle');
@@ -727,49 +764,49 @@ test('An open pull request stays on the board when every task is checked', () =>
 spec('finished-cycle', () => {
   requirement('A finished cycle leaves the board', () => {
     scenario('The machine does not restore that change and does not start another step', () => {
-      const decision = decide(
+      const decision = judged(
         issue(9, ['sdd:tasking']),
         [],
         [mergedPull],
         finishedChange,
       );
       assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
-      const walked = settle(issue(9, ['sdd:tasking']), [], [mergedPull], finishedChange);
+      const walked = settled(issue(9, ['sdd:tasking']), [], [mergedPull], finishedChange);
       assert.equal(walked.decision.kind, 'done');
       assert.deepEqual(walked.transitions, []);
     });
     scenario('Implementing without tasks does not restore a finished cycle', () => {
       const archived = change({archived: true, tasks: false});
-      const decision = decide(issue(9, ['sdd:implementing']), [], [mergedPull], archived);
+      const decision = judged(issue(9, ['sdd:implementing']), [], [mergedPull], archived);
       assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
-      const walked = settle(issue(9, ['sdd:implementing']), [], [mergedPull], archived);
+      const walked = settled(issue(9, ['sdd:implementing']), [], [mergedPull], archived);
       assert.equal(walked.decision.kind, 'done');
       assert.ok(!walked.transitions.some(transition => transition.to === 'tasking'));
     });
     scenario('An open task on a finished cycle does not start', () => {
       const withOpen = change({...finishedChange, openTasks: 1});
-      const decision = decide(issue(9, ['sdd:implementing']), [], [mergedPull], withOpen);
+      const decision = judged(issue(9, ['sdd:implementing']), [], [mergedPull], withOpen);
       assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
-      const walked = settle(issue(9, ['sdd:implementing']), [], [mergedPull], withOpen);
+      const walked = settled(issue(9, ['sdd:implementing']), [], [mergedPull], withOpen);
       assert.equal(walked.decision.kind, 'done');
       assert.ok(walked.decision.kind !== 'agent');
     });
     scenario('Checked tasks on a finished cycle do not wait for an open pull request', () => {
-      const decision = decide(issue(9, ['sdd:implementing']), [], [mergedPull], finishedChange);
+      const decision = judged(issue(9, ['sdd:implementing']), [], [mergedPull], finishedChange);
       assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
-      const walked = settle(issue(9, ['sdd:implementing']), [], [mergedPull], finishedChange);
+      const walked = settled(issue(9, ['sdd:implementing']), [], [mergedPull], finishedChange);
       assert.equal(walked.decision.kind, 'done');
       assert.ok(!walked.transitions.some(transition => transition.to === 'verifying'));
     });
     scenario('A finished cycle on a proposed gate does not restore', () => {
-      const decision = decide(
+      const decision = judged(
         issue(9, ['sdd:proposed', 'sdd:proposing']),
         [],
         [mergedPull],
         finishedChange,
       );
       assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
-      const walked = settle(
+      const walked = settled(
         issue(9, ['sdd:proposed', 'sdd:proposing']),
         [],
         [mergedPull],
@@ -782,16 +819,16 @@ spec('finished-cycle', () => {
   requirement('An archived change through tasking is restored', () => {
     scenario('An open pull request on tasking is restored', () => {
       const record = issue(9, ['sdd:tasking']);
-      const decision = decide(record, [], [openPull], archivedOpen);
+      const decision = judged(record, [], [openPull], archivedOpen);
       assert.equal(decision.kind, 'unarchive');
       assert.notEqual(decision.kind, 'done');
     });
     scenario('A proposed gate restores before it moves', () => {
       const record = issue(9, ['sdd:proposed', 'sdd:proposing']);
-      const walked = settle(record, [], [openPull], archivedOpen);
+      const walked = settled(record, [], [openPull], archivedOpen);
       assert.deepEqual(walked.transitions, []);
       assert.equal(walked.decision.kind, 'unarchive');
-      const moved = decide(record, [], [openPull], {...archivedOpen, archived: false});
+      const moved = judged(record, [], [openPull], {...archivedOpen, archived: false});
       assert.equal(moved.kind, 'advance');
       if (moved.kind === 'advance') {
         assert.equal(moved.to, 'specifying');
@@ -801,7 +838,7 @@ spec('finished-cycle', () => {
   requirement('An open pull request keeps the card', () => {
     scenario('Checked tasks and an open pull request stay', async () => {
       const record = issue(9, ['sdd:tasking'], {state: 'OPEN'});
-      const decision = decide(record, [], [openPull], {...ready, openTasks: 0});
+      const decision = judged(record, [], [openPull], {...ready, openTasks: 0});
       assert.notEqual(decision.kind, 'done');
       assert.equal(record.state, 'OPEN');
       const {tracker, review} = memoryPorts({
@@ -824,13 +861,14 @@ spec('finished-cycle', () => {
         files: archivedIssue9Files(),
         queues: [{name: 'Sandcastle'}],
         change: archivedOpen,
+        tip: foldedTip('9'),
       });
       assert.equal((await tracker.issue('9')).state, 'OPEN');
       assert.ok((await tracker.listOpen()).some(item => item.key === '9'));
     });
     scenario('An open pull request stays on the board when every task is checked', async () => {
       const record = issue(9, ['sdd:tasking'], {state: 'OPEN'});
-      const decision = decide(record, [], [openPull], archivedOpen);
+      const decision = judged(record, [], [openPull], archivedOpen);
       assert.equal(decision.kind, 'unarchive');
       assert.notEqual(decision.kind, 'done');
       const {tracker, review} = memoryPorts({
@@ -853,6 +891,7 @@ spec('finished-cycle', () => {
         files: archivedIssue9Files(),
         queues: [{name: 'Sandcastle'}],
         change: archivedOpen,
+        tip: foldedTip('9'),
       });
       assert.equal((await tracker.issue('9')).state, 'OPEN');
       assert.ok((await tracker.listOpen()).some(item => item.key === '9'));
@@ -872,14 +911,14 @@ spec('finished-cycle', () => {
       const openPull = pull(37);
       const record = issue(1, labels);
 
-      const decision = decide(record, [], [openPull], everyTaskChecked);
+      const decision = judged(record, [], [openPull], everyTaskChecked);
       assert.deepEqual(decision, {kind: 'done', issue: '1', reason: 'cancelled'});
 
-      const mergedShape = decide(record, [], [mergedPull], finishedChange);
+      const mergedShape = judged(record, [], [mergedPull], finishedChange);
       assert.deepEqual(mergedShape, {kind: 'done', issue: '1', reason: 'cancelled'});
       assert.notEqual(mergedShape.reason, 'finished cycle');
 
-      const walked = settle(record, [], [openPull], everyTaskChecked);
+      const walked = settled(record, [], [openPull], everyTaskChecked);
       assert.deepEqual(walked.decision, {kind: 'done', issue: '1', reason: 'cancelled'});
       assert.deepEqual(walked.transitions, []);
       assert.ok(walked.decision.kind !== 'agent');
@@ -910,7 +949,7 @@ spec('artifact', () => {
       slicedScenarios: ['The remark stays'],
     };
     scenario('A differing card revision returns implementing to tasking', () => {
-      const decision = decide(
+      const decision = judged(
         issue(1, ['sdd:implementing']),
         [],
         [pull(9)],
@@ -923,7 +962,7 @@ spec('artifact', () => {
       assert.notEqual(decision.kind === 'agent' ? decision.action : decision.kind, 'implement-next-task');
     });
     scenario('A live scenario with no card returns implementing to tasking', () => {
-      const decision = decide(
+      const decision = judged(
         issue(1, ['sdd:implementing']),
         [],
         [pull(9)],
@@ -936,14 +975,14 @@ spec('artifact', () => {
       }
     });
     scenario('A matching card still runs the open task', () => {
-      const decision = decide(issue(1, ['sdd:implementing']), [], [pull(9)], change(named));
+      const decision = judged(issue(1, ['sdd:implementing']), [], [pull(9)], change(named));
       assert.equal(decision.kind, 'agent');
       if (decision.kind === 'agent') {
         assert.equal(decision.action, 'implement-next-task');
       }
     });
     scenario('A checked-off cut with an unsliced scenario returns to tasking', () => {
-      const decision = decide(
+      const decision = judged(
         issue(1, ['sdd:implementing']),
         [],
         [pull(9)],
@@ -955,7 +994,7 @@ spec('artifact', () => {
       }
     });
     scenario('Accepting waits while a delta scenario has no task', () => {
-      const decision = decide(
+      const decision = judged(
         issue(1, ['sdd:accepting']),
         [],
         [pull(9)],
@@ -967,7 +1006,7 @@ spec('artifact', () => {
       }
     });
     scenario('A checked task line lets accepting archive', () => {
-      const decision = decide(
+      const decision = judged(
         issue(1, ['sdd:accepting']),
         [],
         [pull(9)],

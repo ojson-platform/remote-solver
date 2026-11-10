@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import {HEADINGS, type BranchFacts} from '../machine/change.ts';
 import {isFocusRecord} from '../machine/marker.ts';
-import {GATE_CLOSES, GATE_PHASES, phaseOf, phaseRank, reachedRank, type Phase} from '../machine/phase.ts';
+import {GATE_CLOSES, GATE_PHASES, phaseOf, phaseRank, type Phase} from '../machine/phase.ts';
 
 import {changeFiles, changeRel, listedSpecs} from './change-files.ts';
 import {focusLayers, liveFocus} from './focus.ts';
@@ -149,14 +149,23 @@ function taskRow(files: FileSource, key: string): {done: number; open: number} |
   return {done, open};
 }
 
-/** Child cycles this issue still waits on at tasking: not yet `specified`. */
+/** A lone gate is not a rank. The plaque still treats specified and designed as reached. */
+function childSpecified(labels: readonly string[]): boolean {
+  if (labels.includes('sdd:specified') || labels.includes('sdd:designed')) {
+    return true;
+  }
+  const phase = phaseOf([...labels]);
+  return phase !== null && phaseRank(phase) >= phaseRank('designing');
+}
+
+/** Child cycles this plaque still names. A `specified` or `designed` gate counts. */
 function childWaits(parent: string, reading: readonly WindowTicket[]): string[] {
   const keys: string[] = [];
   for (const issue of reading) {
     if (issue.parent !== parent || !issue.labels.includes('sdd:cycle')) {
       continue;
     }
-    if (reachedRank(issue.labels) >= phaseRank('specified')) {
+    if (childSpecified(issue.labels)) {
       continue;
     }
     keys.push(issue.key);

@@ -10,9 +10,9 @@ import {memoryPorts} from '../adapters/github.ts';
 import {tryHoldIssue} from '../adapters/lock.ts';
 import {readChat, rememberChat} from '../adapters/session.ts';
 import {resolveCycle} from './flow.ts';
-import {change, files, issue} from './harness.ts';
+import {files} from './harness.ts';
 import type {Runtime, Vcs} from './port.ts';
-import {cycleRecord, decide, effectSignature, refusalBody, type Decision} from './policy.ts';
+import type {Decision} from './policy.ts';
 import {loadCycle} from './snapshot.ts';
 import {exited, tick, type State} from './scheduler.ts';
 import {driveIssue} from '../main.ts';
@@ -46,24 +46,59 @@ spec('idle', () => {
       await driveIssue(box, '8');
       assert.deepEqual(seen, ['implement-next-task']);
     });
-    scenario('A person comment starts the effect again', () => {
-      const row = issue(1, ['sdd:proposing']);
-      const signature = effectSignature({
-        phase: 'proposing',
-        action: 'create-proposal',
-        reason: 'write proposal.md and open the pull request',
+    scenario('A person comment starts the effect again', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-person-'));
+      const seen: string[] = [];
+      const runtime: Runtime = {
+        async run(skill) {
+          seen.push(skill.action);
+          return {commits: 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
+      };
+      const tasks = path.join('openspec', 'changes', 'issue-8', 'tasks.md');
+      const {tracker, review, person} = memoryPorts({
+        issues: [
+          {
+            key: '8',
+            title: '#8: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['remote-solver', 'sdd:cycle', 'sdd:implementing'],
+          },
+        ],
+        pulls: {8: [{id: '80', title: '#8: title', state: 'OPEN'}]},
       });
-      const refused = [{body: `🤖 ${refusalBody(signature)}`}];
-      const held = decide(row, [], [], change(), cycleRecord(row, '', refused));
-      assert.equal(held.kind, 'wait');
-      const cleared = decide(
-        row,
-        [],
-        [],
-        change(),
-        cycleRecord(row, '', [...refused, {body: 'go on', manager: true}]),
-      );
-      assert.equal(cleared.kind, 'agent');
+      const box = machine(root, {
+        config: {
+          queues: [{name: 'remote-solver'}],
+          base: 'master',
+          branchScope: 'sdd',
+          ignoreComments: [],
+        },
+        tracker,
+        review,
+        vcs: {
+          filesAt: () => ({
+            exists: rel => rel === tasks,
+            read: rel => (rel === tasks ? '- [ ] one\n' : ''),
+            list: () => [],
+          }),
+          compare: async () => null,
+          push: async () => {},
+          head: async () => 'abc',
+          published: async () => true,
+          dirty: async () => [],
+        },
+        runtime,
+      });
+      const first = await driveIssue(box, '8');
+      assert.equal(first.code, 0);
+      person('8', 'please continue');
+      await driveIssue(box, '8');
+      assert.deepEqual(seen, ['implement-next-task', 'implement-next-task']);
     });
     scenario('A different action starts', () => {
       const empty: State = {running: [], reported: {}};

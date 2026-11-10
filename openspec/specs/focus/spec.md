@@ -100,6 +100,11 @@ The skill of the phase SHALL write a focus comment when that phase's artifact is
 - **WHEN** the archive commit and this comment are already visible, together with `sdd:auto-merge` set as the limit that can replace writing this comment
 - **THEN** the archive writes this comment every time, including when `sdd:auto-merge` is set
 
+#### Scenario: The machine writes sdd:focus:accept after the archive commit
+
+- **WHEN** the archive commit succeeds
+- **THEN** the issue has a comment whose first line is `sdd:focus:accept`
+
 #### Scenario: sdd:auto-plan, sdd:auto-spec, and sdd:auto-design do not skip the comment, and the document was published
 
 - **WHEN** `sdd:auto-plan`, `sdd:auto-spec`, and `sdd:auto-design` are already set, and the document was published, together with a skipped focus comment as the limit that can replace that published document

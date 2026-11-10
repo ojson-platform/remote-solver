@@ -825,8 +825,11 @@ export function githubAdapters(options: GitHubAdapters = {}): {tracker: Tracker;
     async comments(key) {
       const raw = JSON.parse(
         await run(['api', `repos/${repoSlug()}/issues/${key}/comments?per_page=100`]),
-      ) as {body?: string}[];
-      return raw.map(comment => ({body: comment.body ?? ''}));
+      ) as {body?: string; user?: {login?: string}}[];
+      return raw.map(comment => {
+        const body = comment.body ?? '';
+        return {body, manager: !spokeByRobot(body, comment.user?.login ?? '', ignored)};
+      });
     },
     async close(key, comment) {
       await run(['issue', 'close', key, '--repo', repoSlug(), '--comment', markRobot(comment)]);
@@ -1218,7 +1221,13 @@ export type MemorySeed = {
   ranges?: Record<string, {head: string; base: string | null}>;
 };
 
-export type MemoryPorts = {tracker: Tracker; review: Review; calls: string[]};
+export type MemoryPorts = {
+  tracker: Tracker;
+  review: Review;
+  calls: string[];
+  /** A person comment. It clears `sdd:refused` and is not a robot note. */
+  person(key: string, body: string): void;
+};
 
 export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
   const issues = (seed.issues ?? []).map(issue => ({
@@ -1229,7 +1238,7 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
     blocks: issue.blocks ? [...issue.blocks] : undefined,
   }));
   const calls: string[] = [];
-  const issueComments = new Map<string, {body: string}[]>();
+  const issueComments = new Map<string, {body: string; manager?: boolean}[]>();
   const find = (key: string) => {
     const issue = issues.find(item => item.key === key);
     if (!issue) {
@@ -1291,12 +1300,15 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
       const posted = commentBody(body);
       calls.push(`body:${posted}`);
       const list = issueComments.get(key) ?? [];
-      list.push({body: posted});
+      list.push({body: posted, manager: false});
       issueComments.set(key, list);
     },
     async comments(key) {
       calls.push('comments');
-      return (issueComments.get(key) ?? []).map(item => ({...item}));
+      return (issueComments.get(key) ?? []).map(item => ({
+        body: item.body,
+        manager: item.manager === true,
+      }));
     },
     async close(key, comment) {
       calls.push(`close:${comment}`);
@@ -1415,5 +1427,10 @@ export function memoryPorts(seed: MemorySeed = {}): MemoryPorts {
       }
     },
   };
-  return {tracker, review, calls};
+  function person(key: string, body: string): void {
+    const list = issueComments.get(key) ?? [];
+    list.push({body, manager: true});
+    issueComments.set(key, list);
+  }
+  return {tracker, review, calls, person};
 }

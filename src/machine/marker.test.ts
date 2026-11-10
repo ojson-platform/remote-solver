@@ -5,7 +5,7 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {memoryPorts} from '../adapters/github.ts';
 import {fixThread} from '../sdd.ts';
-import {action, change, issue, pull, ready} from './harness.ts';
+import {action, asFolded, change, issue, pull, ready} from './harness.ts';
 import {
   focusMarkerLine,
   focusMirrorName,
@@ -48,6 +48,28 @@ spec('marker', () => {
     });
     scenario('A capitalised layer is no marker', () => {
       assert.equal(parseMarker('sdd:layer=Spec'), null);
+    });
+  });
+
+  requirement('The instruction is the first comment', () => {
+    scenario('The instruction is the first comment and the body stays the latest', () => {
+      const [line] = threadsReport(
+        [
+          {
+            id: 'T1',
+            comment: '22',
+            path: 'src/a.ts',
+            line: 4,
+            resolved: false,
+            body: '🤖 sdd:layer=spec → specifying',
+            comments: ['please quote the refusal', '🤖 sdd:layer=spec → specifying'],
+          },
+        ],
+        [],
+      ).threads;
+      assert.equal(line?.instruction, 'please quote the refusal');
+      assert.equal(line?.body, '🤖 sdd:layer=spec → specifying');
+      assert.equal(line?.marker, 'spec');
     });
   });
 
@@ -177,11 +199,13 @@ spec('marker', () => {
       });
     });
     scenario('A conversation code marker on accepting does not move to implementing', () => {
+      const row = issue(1, ['sdd:accepting']);
       const decision = decide(
-        issue(1, ['sdd:accepting']),
+        row,
         [],
         [pull(9, {checks: 'green', review: reviewOf([], codeTalk)})],
         change({archived: true}),
+        asFolded(row),
       );
       assert.deepEqual(decision, {
         kind: 'wait',
@@ -198,11 +222,13 @@ spec('marker', () => {
           {robot: true, body: '🤖 sdd:fixed abc'},
         ],
       );
+      const row = issue(1, ['sdd:accepting']);
       const decision = decide(
-        issue(1, ['sdd:accepting']),
+        row,
         [],
         [pull(9, {checks: 'green', review})],
         change({archived: true}),
+        asFolded(row),
       );
       assert.equal(review.conversation.layer, null);
       assert.equal(decision.kind, 'wait');

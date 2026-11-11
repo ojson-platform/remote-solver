@@ -10,7 +10,7 @@ import {
   spineOf,
   stationOf,
   writeChange,
-} from './page.harness.ts';
+} from './__tests__/page.harness.ts';
 
 function tasksSummary(html: string, key: string): string {
   const section = spineOf(html, key, 'Tasks');

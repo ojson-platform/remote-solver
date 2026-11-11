@@ -280,12 +280,12 @@ export function lineFieldClosesOnEscape(key: string, insideField: boolean): bool
   return key === 'Escape' && insideField;
 }
 
-/** A row-head click toggles the row when it misses the name and the gate or acceptance control. */
+/** A click on the phase name or its sentence toggles the row. A click on the gate or acceptance control does not. */
 export function headClickToggles(target: {closest: (selector: string) => unknown} | null): boolean {
   if (!target?.closest) {
     return false;
   }
-  return !target.closest('.acts') && !target.closest('label');
+  return !target.closest('.acts');
 }
 
 /** An empty spine row does not open. Any other row head does. */

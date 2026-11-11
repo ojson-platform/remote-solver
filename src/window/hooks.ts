@@ -1,5 +1,5 @@
-import {hookPoint} from '../machine/hook.ts';
-import {ACTION_SKILL} from '../machine/route.ts';
+import {ACTION_SKILL} from '../machine/decide/route.ts';
+import {hookPoint} from '../machine/skill/hook.ts';
 
 import {isDoc, type Doc, type ServiceHookChoice, type ServiceHookField} from './types.ts';
 

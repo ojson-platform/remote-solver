@@ -41,5 +41,5 @@ An open thread of layer `tasks`: steps 1–5 do not write the task files again. 
 
 ## Stop
 
-- Publish. The next machine run opens `implementing` once children are at least `specified`.
+- Publish. The next machine run opens `implementing` once children are `accepted`.
 - A Scenario that no caller path can verify: Hand-off to `spec` on that scenario.

@@ -34,7 +34,7 @@ import {
   ticket,
   writeQueues,
   yard,
-} from './page.harness.ts';
+} from './__tests__/page.harness.ts';
 
 test('the page shows the pool, the columns, and Take writes the assignee', async () => {
   const {dir, home, arcadia} = yard();
@@ -1584,9 +1584,17 @@ test('a missing service config asks for one queue name', async () => {
       const open = await pageHtml(page.url);
       const dialog = between(open, '<div class="popup repair"', '</div></div>');
       assert.match(dialog, /конфига сервиса нет/);
-      assert.match(dialog, /name="name"/);
-      assert.equal(dialog.includes('<select'), false);
-      assert.equal(dialog.includes('hooks'), false);
+      assert.equal(dialog.includes('name="name"'), false);
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+          .status,
+        200,
+      );
+      const side = bandOf(await pageHtml(page.url), '1');
+      assert.match(side, /конфига сервиса нет/);
+      assert.match(side, /name="name"/);
+      assert.equal(side.includes('<select'), false);
+      assert.equal(side.includes('hooks'), false);
       assert.equal(articleOf(open, '1').includes('name="name"'), false);
       assert.equal(
         (

@@ -308,7 +308,7 @@ The row order SHALL keep that occasion.
 
 ### Requirement: The icon reason is one line
 
-The icon reason SHALL be one line, the same line the sidebar shows in full.
+The icon reason SHALL be one line on the closed card.
 
 It SHALL start with at most one checkout break, in this order: `каталога нет`, otherwise `не назван сервис`, otherwise `конфига сервиса нет`, otherwise `очереди нет в конфиге сервиса`.
 
@@ -324,7 +324,7 @@ It SHALL NOT parse the issue body.
 
 When the only occasion is questions, or only decisions, and the phase row already shows that number, the card SHALL NOT show the reason line.
 
-The sidebar reason block SHALL remain.
+The open row SHALL NOT show that line.
 
 - **WHEN** the checkout catalog is missing and the service config file is also missing
 - **THEN** the reason starts with `каталога нет` and does not start with `конфига сервиса нет`
@@ -498,7 +498,7 @@ The action SHALL NOT replace a line that is already there and SHALL NOT be an oc
 #### Scenario: The closed plaque hides the tail of the ask
 
 - **WHEN** the ask text is longer than the closed plaque
-- **THEN** the closed plaque shows one line and the open row shows the whole ask
+- **THEN** the closed plaque shows one line and the open row does not show the ask
 
 #### Scenario: A running turn fills an empty plaque
 
@@ -596,7 +596,7 @@ Ask, a gate, the merge, children, and blockers SHALL NOT be a repair.
 
 A model or agent hole SHALL be a board row that names the slot.
 
-#### Scenario: An unnamed service is a field in the exclamation popup
+#### Scenario: An unnamed service is a field on the open page
 
 It SHALL NOT be a field on that row, SHALL NOT be a cycle popup, and SHALL NOT open the settings sheet.
 
@@ -618,7 +618,7 @@ The window SHALL show the path or the reason and SHALL NOT draw a field for: **�
 
 It SHALL NOT create a catalog, SHALL NOT append a queue, SHALL NOT write a broken edit, and SHALL NOT close a pull request.
 
-A checkout field SHALL live in the exclamation popup.
+A checkout field SHALL live on the open page.
 
 A healthy closed row SHALL NOT show that sign.
 

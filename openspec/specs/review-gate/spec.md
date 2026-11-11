@@ -68,15 +68,22 @@ On a ready artifact the machine SHALL move to the next phase, clear that phase's
 
 The same poll SHALL then read the issue and perform the next determined effect, including the next review ask.
 
-On a missing artifact or an open item the machine SHALL drop the gate label and SHALL keep or restore the writing phase.
+Once `wait-human` is cleared, an earlier review comment SHALL NOT hold the issue.
 
-#### Scenario: Proposed on a ready proposal moves to specifying
+#### Scenario: A past review ask does not hold the next phase
+
+On a missing artifact or an open item the machine SHALL drop the gate label and SHALL keep or restore the writing phase.
 
 It SHALL NOT comment that the phase moved.
 
 The next poll continues that writing phase.
 
 When the item is then closed, the machine SHALL post the review ask.
+
+- **WHEN** the phase is `tasking`, `design.md` is published, `tasks.md` is absent, one pull request is open, the issue has no `wait-human`, and an earlier comment asks to review the design
+- **THEN** the machine starts the tasks skill to write `tasks.md` and does not wait on that comment
+
+#### Scenario: Proposed on a ready proposal moves to specifying
 
 - **WHEN** a person adds `proposed` beside `proposing` and the proposal has nothing open
 - **THEN** the phase becomes `specifying`, the issue comment is `sdd:accept proposing → specifying`, and the same poll opens the spec review

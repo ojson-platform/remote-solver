@@ -4,11 +4,11 @@ import {tmpdir} from 'node:os';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {machine} from './adapters/compose.ts';
-import {memoryPorts} from './adapters/github.ts';
+import {memoryPorts} from './adapters/tracker/github.ts';
 import {runSpy} from './main.ts';
-import type {Decision} from './machine/policy.ts';
+import type {Decision} from './machine/decide/policy.ts';
 import type {Runtime, Vcs} from './machine/port.ts';
-import {tick, type State} from './machine/scheduler.ts';
+import {tick, type State} from './machine/spy/scheduler.ts';
 
 const MANAGER = 'ada';
 

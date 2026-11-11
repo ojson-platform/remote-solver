@@ -1,8 +1,10 @@
+import type {Dossier} from './dossier.ts';
+import type {Runtime} from '../machine/port.ts';
+
 import path from 'node:path';
 
 import {solverRoot} from '../adapters/compose.ts';
-import type {Runtime} from '../machine/port.ts';
-import type {Dossier} from './dossier.ts';
+
 import {parseVerdict, type Verdict} from './verdict.ts';
 
 function failureReason(error: unknown): string {

@@ -1,17 +1,17 @@
 import path from 'node:path';
 
 import {solverRoot, turn, type Machine} from './adapters/compose.ts';
-import {packageLinks} from './adapters/vcs.ts';
-import {ghErrorLine, githubPauseRemaining} from './adapters/github.ts';
-import {tryHoldIssue} from './adapters/lock.ts';
-import {claimChat, clearChat} from './adapters/session.ts';
-import {performCycle} from './machine/flow.ts';
-import {endStep, observedSignal, runMarks} from './machine/focus.ts';
-import {effectSignature, refusalBody, type Decision} from './machine/policy.ts';
-import {exited, tick, type State} from './machine/scheduler.ts';
-import {modeOfSkill} from './machine/skill.ts';
+import {tryHoldIssue} from './adapters/runtime/lock.ts';
+import {claimChat, clearChat} from './adapters/runtime/session.ts';
+import {githubPauseRemaining, reportGithubError} from './adapters/tracker/github.ts';
+import {packageLinks} from './adapters/vcs/vcs.ts';
+import {effectSignature, refusalBody, type Decision} from './machine/decide/policy.ts';
+import {performCycle} from './machine/flow/flow.ts';
+import {endStep, observedSignal, runMarks} from './machine/mark/focus.ts';
 import {contentFiles} from './machine/port.ts';
-import {loadCycle, type CycleSnapshot} from './machine/snapshot.ts';
+import {modeOfSkill} from './machine/skill/skill.ts';
+import {exited, tick, type State} from './machine/spy/scheduler.ts';
+import {loadCycle, type CycleSnapshot} from './machine/spy/snapshot.ts';
 
 // Spy: poll the tracker and run up to --parallel issues in this process. Each
 // issue's agent runs in the worktree sandcastle keeps for branch sdd/<key>.
@@ -196,6 +196,7 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
               }),
             readTip: key =>
               box.vcs.tipMessage ? box.vcs.tipMessage(key) : Promise.resolve(undefined),
+            openspec: box.openspec,
             root: box.root,
           },
           new Set(state.running),
@@ -237,14 +238,14 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
               finish(decision.issue, result.code);
             },
             error => {
-              console.error(ghErrorLine(error));
+              reportGithubError(error);
               finish(decision.issue, 1);
             },
           );
         }
         watch?.onCycle?.(snapshot);
       } catch (error) {
-        console.error(ghErrorLine(error));
+        reportGithubError(error);
       }
     }
 

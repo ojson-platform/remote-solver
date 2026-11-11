@@ -1,5 +1,6 @@
-import {changeText} from '../machine/change.ts';
 import type {FileSource} from '../machine/port.ts';
+
+import {changeText} from '../machine/change/change.ts';
 
 export type Dossier = {
   issue: string;

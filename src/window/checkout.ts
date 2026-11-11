@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import {parse} from 'yaml';
 
-import {queueOf} from '../machine/queues.ts';
+import {queueOf} from '../machine/spy/queues.ts';
 
 import {staysInside} from './inside.ts';
 import {
@@ -340,6 +340,9 @@ export function openCheckout(ports: {
       checkout = found;
     } else if (!existsSync(path.join(found, 'openspec', 'config.yaml'))) {
       reason = CONFIG_MISSING;
+      checkout = found;
+    } else if (readServiceFile(found).kind === 'broken') {
+      reason = CONFIG_UNREADABLE;
       checkout = found;
     } else if (!queueListed(item, found)) {
       reason = QUEUE_MISSING;

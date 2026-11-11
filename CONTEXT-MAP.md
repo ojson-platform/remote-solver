@@ -3,7 +3,7 @@
 ## Contexts
 
 - [SDLC machine](./CONTEXT.md): the shared language of one cycle
-- [Machine](./src/machine/CONTEXT.md): what the machine concludes about a cycle
+- [Machine](./src/machine/CONTEXT.md): what the machine concludes about a cycle. Its subjects are `decide`, `flow`, `change`, `phase`, `mark`, `spy`, and `skill`
 - [Reviewer](./src/reviewer/CONTEXT.md): the accepting pass that can stand in for a person
 - [Adapters](./src/adapters/CONTEXT.md): the outsides the machine talks to
 - [Window](./src/window/CONTEXT.md): the face the window draws. Look: [FACE.md](./src/window/FACE.md)
@@ -14,7 +14,7 @@
 
 - **SDLC machine → Machine, Reviewer, Adapters, Window**: cycle, phase, gate, change, layer, marker, thread, and signal keep their names from the root glossary. A module glossary adds only words that are its own.
 - **Window**: the face draws the board. It uses the phase and the gate the machine already named. The controls it draws are named in the window glossary.
-- **Machine → Adapters**: the machine reads and writes the tracker, the review, the repository, and the runtime through ports. Adapters implement those ports. Marker grammar stays in the machine.
+- **Machine → Adapters**: the machine reads and writes the tracker, the review, the repository, the runtime, and the OpenSpec binary through ports. Adapters implement those ports. Marker grammar stays in the machine.
 - **Reviewer → Machine**: the reviewer reads the change, the markers, and the review. The machine's phase policy does not know the reviewer.
 - **Reviewer → Adapters**: the reviewer uses the same ports. The judge is a runtime ask, not a skill action.
 - **Skill → Tracker**: a phase skill writes a focus through an sdd verb when a visit leaves something a person will read. The prose rules live in the shared Publish procedure. `sdd:auto-plan`, `sdd:auto-spec`, and `sdd:auto-design` do not skip it. The archive writes `sdd:focus:accept` every time, including when `sdd:auto-merge` is set. The machine does not append the layer ledger. Phase movement stays on layer threads.

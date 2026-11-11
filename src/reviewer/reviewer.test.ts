@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {machine} from '../adapters/compose.ts';
-import {memoryPorts} from '../adapters/github.ts';
-import {files} from '../machine/harness.ts';
+import {memoryPorts} from '../adapters/tracker/github.ts';
+import {files} from '../machine/__tests__/harness.ts';
 import type {FileSource} from '../machine/port.ts';
-import {archiveChangePath} from '../machine/naming.ts';
+import {archiveChangePath} from '../machine/change/naming.ts';
 import {applyReview, passReview} from './act.ts';
 import {assembleDossier} from './dossier.ts';
 import {placeOnDiff} from './place.ts';

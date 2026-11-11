@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import {mkdirSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
+import {emptyHold, holdGesture, paintFrame} from './client/frame.ts';
+import {renderWindow} from './client/render.ts';
 import {
   MANAGER,
   bandOf,
@@ -11,9 +13,18 @@ import {
   hosted,
   pageHtml,
   post,
+  readSnapshot,
   spineOf,
   writeChange,
-} from './page.harness.ts';
+} from './__tests__/page.harness.ts';
+
+function acceptControl(html: string, name: string): string {
+  const found = (html.match(/<button\b[^>]*>/g) ?? []).find(button =>
+    button.includes(`aria-label="Принять ${name}"`),
+  );
+  assert.ok(found, name);
+  return found;
+}
 
 spec('acceptance', () => {
   requirement('The current phase offers acceptance in place of its gate', () => {
@@ -182,6 +193,63 @@ spec('acceptance', () => {
       );
     });
   });
+  requirement('A settled decision that is not the review gate hides acceptance', () => {
+    scenario('The review gate still offers acceptance', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
+          decision: () => ({
+            kind: 'wait',
+            issue: '1',
+            reason: 'review the proposal',
+            gate: {artifact: 'proposal', from: 'proposing', to: 'proposed'},
+          }),
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const plan = spineOf(await pageHtml(page.url), '1', 'Plan');
+          assert.match(plan, /aria-label="Принять Plan"/);
+        },
+      );
+    });
+    scenario('An agent decision hides acceptance', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1})],
+          decision: () => ({
+            kind: 'agent',
+            issue: '1',
+            action: 'create-initial-specs',
+            skill: 'specify',
+            phase: 'specifying',
+            pr: '1',
+            reason: 'the proposal revision is not the stamp',
+          }),
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+          writeChange(paths.arcadia, '1', 'specs/section-text/spec.md', deltaRequirement());
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const specify = spineOf(await pageHtml(page.url), '1', 'Specify');
+          assert.equal(specify.includes('Принять Specify'), false);
+          assert.equal(specify.includes('data-gate="specifying"'), false);
+        },
+      );
+    });
+  });
   requirement('Accepting a writing phase adds its label', () => {
     scenario('Accepting the plan adds proposed', async () => {
       const tickets = [held('1', 'proposing', {openPullRequests: 1})];
@@ -331,6 +399,144 @@ spec('acceptance', () => {
           );
           assert.ok(tickets[0]?.labels.includes('sdd:designed'));
           assert.ok(tickets[0]?.labels.includes('sdd:designing'));
+        },
+      );
+    });
+    scenario('The click disables acceptance before the answer', async () => {
+      const tickets = [held('1', 'designing', {openPullRequests: 1})];
+      await hosted(
+        {login: () => MANAGER, tickets: () => tickets},
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'design.md',
+            '## Approach\n\nОдин модуль.\n\n## Open decisions\n',
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const before = await readSnapshot(page.url);
+          assert.equal(acceptControl(renderWindow(before), 'Design').includes('disabled'), false);
+          const heldFrame = paintFrame(
+            before,
+            holdGesture(
+              emptyHold(),
+              1,
+              'accept-review',
+              new URLSearchParams({act: 'accept-review', key: '1'}),
+              before,
+            ),
+          );
+          const html = renderWindow(heldFrame);
+          assert.match(
+            html,
+            /<button\b(?=[^>]*disabled)(?=[^>]*aria-label="Принять Design")[^>]*>Принять<\/button>/,
+          );
+          assert.equal(html.includes('Принято'), false);
+        },
+      );
+    });
+    scenario('A recorded consent ignores another acceptance', async () => {
+      const tickets = [held('1', 'designing', {openPullRequests: 1})];
+      let writes = 0;
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => tickets,
+          editLabels: (_key, add, remove) => {
+            writes += 1;
+            const item = tickets[0];
+            if (!item) {
+              return;
+            }
+            item.labels = item.labels.filter(label => !remove?.includes(label));
+            for (const label of add) {
+              if (!item.labels.includes(label)) {
+                item.labels = [...item.labels, label];
+              }
+            }
+          },
+        },
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'design.md',
+            '## Approach\n\nОдин модуль.\n\n## Open decisions\n',
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const accept = new URLSearchParams({act: 'accept-review', key: '1'}).toString();
+          assert.equal((await post(page.url, 'act', accept)).status, 200);
+          assert.equal(writes, 1);
+          const html = await pageHtml(page.url);
+          assert.match(
+            html,
+            /<button\b(?=[^>]*disabled)(?=[^>]*aria-label="Принять Design")[^>]*>Принять<\/button>/,
+          );
+          assert.equal(html.includes('Принято'), false);
+          assert.equal((await post(page.url, 'act', accept)).status, 200);
+          assert.equal(writes, 1);
+        },
+      );
+    });
+    scenario('A removed consent enables acceptance', async () => {
+      const tickets = [held('1', 'designing', {openPullRequests: 1})];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => tickets,
+          editLabels: (_key, add, remove) => {
+            const item = tickets[0];
+            if (!item) {
+              return;
+            }
+            item.labels = item.labels.filter(label => !remove?.includes(label));
+            for (const label of add) {
+              if (!item.labels.includes(label)) {
+                item.labels = [...item.labels, label];
+              }
+            }
+          },
+        },
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'design.md',
+            '## Approach\n\nОдин модуль.\n\n## Open decisions\n',
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                new URLSearchParams({act: 'accept-review', key: '1'}).toString(),
+              )
+            ).status,
+            200,
+          );
+          const item = tickets[0];
+          assert.ok(item);
+          item.labels = item.labels.filter(label => label !== 'sdd:designed');
+          assert.equal(
+            acceptControl(await pageHtml(page.url), 'Design').includes('disabled'),
+            false,
+          );
         },
       );
     });

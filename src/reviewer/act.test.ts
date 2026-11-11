@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
-import {memoryPorts, type MemorySeed} from '../adapters/github.ts';
+import {memoryPorts, type MemorySeed} from '../adapters/tracker/github.ts';
 import type {FileSource, Vcs} from '../machine/port.ts';
 import {applyReview, passReview, reviewStep} from './act.ts';
 import {assembleDossier} from './dossier.ts';

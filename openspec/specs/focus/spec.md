@@ -146,11 +146,6 @@ Verify, labeling threads, a rebase-only commit, and a publish that carries no ph
 - **WHEN** the archive commit and this comment are already visible, together with `sdd:auto-merge` set as the limit that can replace writing this comment
 - **THEN** the archive writes this comment every time, including when `sdd:auto-merge` is set
 
-#### Scenario: The machine writes sdd:focus:accept after the archive commit
-
-- **WHEN** the archive commit succeeds
-- **THEN** the issue has a comment whose first line is `sdd:focus:accept`
-
 #### Scenario: sdd:auto-plan, sdd:auto-spec, and sdd:auto-design do not skip the comment, and the document was published
 
 - **WHEN** `sdd:auto-plan`, `sdd:auto-spec`, and `sdd:auto-design` are already set, and the document was published, together with a skipped focus comment as the limit that can replace that published document
@@ -170,6 +165,15 @@ Verify, labeling threads, a rebase-only commit, and a publish that carries no ph
 
 - **WHEN** a separate review step is already visible, together with the skill of the phase writing this focus comment as the limit that can replace that review step
 - **THEN** a separate review step does not write the focus
+### Requirement: The archive focus is not a machine constant
+
+After the archive commit succeeds, the machine SHALL NOT post `sdd:focus:accept`. The skill writes that comment.
+
+#### Scenario: A successful archive posts no focus comment
+
+- **WHEN** the archive commit succeeds
+- **THEN** the issue has no comment whose first line is `sdd:focus:accept`
+
 ### Requirement: The sidebar focus block shows the latest focus prose
 
 The sidebar focus block SHALL show the latest focus comment, with that marker as a badge and the prose under it. The window SHALL NOT recompute the prose. The window SHALL NOT rewrite the prose. The spine row of that phase SHALL keep the first sentence of its own latest phase comment. A whole-pull-request comment SHALL belong to the focus block and to no single row. An ask, a role outcome, and a manager's comment SHALL NOT become the focus block.
@@ -253,7 +257,7 @@ A slice that waits on another SHALL be named.
 
 A code slice, or a code change that answers a review thread, SHALL say what became true after this commit, what the slice left untouched, and a check that does not prove it.
 
-The archive comment SHALL say what the person has now, what was left out on purpose, and how many capabilities and scenarios there are and whether tests cover them.
+The archive comment SHALL say what landed in the baseline specs and what was left out on purpose. It SHALL NOT count capabilities, scenarios, or tests.
 
 A visit that fixes review threads of its own phase SHALL keep the previous comment of that phase.
 
@@ -351,10 +355,10 @@ A last paragraph SHALL appear only when something remains to look at, and it SHA
 - **WHEN** what became true after this commit, what the slice left untouched, and a check that does not prove it are already visible, together with a check that proves it as the limit that can replace that check
 - **THEN** the comment says what became true after this commit, what the slice left untouched, and a check that does not prove it
 
-#### Scenario: The archive comment says what the person has now, what was left out on purpose, and how many capabilities and scenarios there are and whether tests cover them
+#### Scenario: The archive comment says what landed in the baselines and what was left out on purpose
 
-- **WHEN** what the person has now, what was left out on purpose, how many capabilities and scenarios there are, and whether tests cover them are already visible, together with a capability left unnamed as the limit that can replace that count
-- **THEN** the archive comment says what the person has now, what was left out on purpose, and how many capabilities and scenarios there are and whether tests cover them
+- **WHEN** the archive comment already says what landed in the baselines and what was left out on purpose, together with a count of capabilities and scenarios
+- **THEN** the archive comment says what landed and what was left out, and does not count capabilities, scenarios, or tests
 
 #### Scenario: A visit that fixes review threads of its own phase keeps the previous comment of that phase
 

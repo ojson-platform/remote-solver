@@ -1,4 +1,18 @@
 import type {Machine} from '../adapters/compose.ts';
+import type {Decision} from '../machine/decide/policy.ts';
+import type {CycleSnapshot} from '../machine/spy/snapshot.ts';
+
+import {existsSync, mkdirSync, readFileSync} from 'node:fs';
+import {homedir} from 'node:os';
+import path from 'node:path';
+
+import {parse} from 'yaml';
+
+import {githubPauseRemaining, reportGithubError} from '../adapters/tracker/github.ts';
+import {readBranch, type BranchFacts, type BranchText} from '../machine/change/change.ts';
+import {markerName, parseMarker} from '../machine/mark/marker.ts';
+import {setPhase} from '../machine/phase/labels.ts';
+import {phaseOf, removedPhaseLabels, type Phase} from '../machine/phase/phase.ts';
 import {
   diffEnd,
   type Conversation,
@@ -7,27 +21,13 @@ import {
   type ThreadRecord,
   type ThreadTarget,
 } from '../machine/port.ts';
-import type {CycleSnapshot} from '../machine/snapshot.ts';
-
-import {existsSync, mkdirSync, readFileSync} from 'node:fs';
-import {homedir} from 'node:os';
-import path from 'node:path';
-
-import {parse} from 'yaml';
-
-import {ghErrorLine, githubPauseRemaining} from '../adapters/github.ts';
-import {readBranch, type BranchFacts, type BranchText} from '../machine/change.ts';
-import {markerName, parseMarker} from '../machine/marker.ts';
-import {setPhase} from '../machine/labels.ts';
-import {phaseOf, removedPhaseLabels, type Phase} from '../machine/phase.ts';
-import {modelFor, type SkillMode} from '../machine/skill.ts';
-import type {Decision} from '../machine/policy.ts';
+import {modelFor, type SkillMode} from '../machine/skill/skill.ts';
 import {runSpy, type RunningTurn} from '../main.ts';
 
 import {changeFiles, contentChangeFiles} from './change-files.ts';
-import {createBoardStore, mergeReviewsPreservingLocal} from './store.ts';
 import {FACTORY_AGENTS, mergeFactory, readOverlayDoc} from './factory.ts';
 import {serveBoard} from './page.ts';
+import {createBoardStore, mergeReviewsPreservingLocal} from './store.ts';
 import {isDoc, type BoardTurn, type WindowReview, type WindowTicket} from './types.ts';
 import {openWindow} from './window.ts';
 
@@ -245,7 +245,7 @@ export type LiveBoardOptions = {
 };
 
 function logProblem(error: unknown): void {
-  console.error(ghErrorLine(error));
+  reportGithubError(error);
 }
 
 function forget(work: Promise<unknown>): void {
@@ -836,7 +836,11 @@ export async function serveLiveBoard(options: LiveBoardOptions): Promise<{
   note(): void;
 }> {
   const live = openLiveBoard(options);
-  await live.refresh();
+  try {
+    await live.refresh();
+  } catch (error) {
+    reportGithubError(error);
+  }
   const page = await serveBoard(live.window, options.port ?? 0);
   live.whenPainted(() => {
     page.note();

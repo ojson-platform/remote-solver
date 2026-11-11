@@ -1,16 +1,21 @@
-import type {Decision} from '../machine/policy.ts';
 
 import type {BoardTurn, WindowComment} from './types.ts';
-import {turnAction, turnPhase} from './types.ts';
-import {reviewGateForPhase} from './spine.ts';
+import type {Decision} from '../machine/decide/policy.ts';
 
-import {firstFocusSentence, FOCUS_LAYERS, latestFocusComment} from '../machine/focus.ts';
+
+import {NO_OPEN_PULL} from '../machine/decide/pulls.ts';
+import {firstFocusSentence, FOCUS_LAYERS, latestFocusComment} from '../machine/mark/focus.ts';
 import {
   focusMarkerLine,
   focusMirrorName,
   isFocusRecord,
+  unmarkedLine,
   type FocusMarkerLine,
-} from '../machine/marker.ts';
+} from '../machine/mark/marker.ts';
+
+import {pageSentence, workingSentence} from './phrase.ts';
+import {reviewGateForPhase} from './spine.ts';
+import {turnAction, turnPhase} from './types.ts';
 
 export type LiveFocus = {badge: string; text: string};
 
@@ -21,7 +26,63 @@ export type LiveFocusInput = {
   turn?: BoardTurn;
   decision?: Decision;
   checks?: 'green' | 'red' | 'pending' | 'none';
+  openCount?: number;
+  /** Issue comments, oldest first. Absent when the caller cannot see them. */
+  comments?: readonly {body: string}[];
+  /** The accept retelling is already written, so the merge sentence is a tail. */
+  hasAcceptFocus?: boolean;
 };
+
+export const WAIT_LABEL_PAGE = 'Метка sdd:wait-human стоит.';
+
+/** Prose of the latest comment whose first line is `sdd:wait-human`. */
+export function waitHumanPage(comments: readonly {body: string}[]): string {
+  for (let index = comments.length - 1; index >= 0; index -= 1) {
+    const body = comments[index]?.body ?? '';
+    if (unmarkedLine(body) !== 'sdd:wait-human') {
+      continue;
+    }
+    const prose = body.split('\n').slice(1).join('\n').trim();
+    if (prose !== '') {
+      return prose;
+    }
+  }
+  return WAIT_LABEL_PAGE;
+}
+
+function plainWaitHuman(decision: Decision | undefined): boolean {
+  return (
+    decision?.kind === 'wait' &&
+    decision.gate === undefined &&
+    decision.reason.startsWith('sdd:wait-human is set')
+  );
+}
+
+/** Accepting keeps the written focus except for the pages the plan names on their own. */
+function acceptingKeepsFocus(reason: string): boolean {
+  if (reason.startsWith('wait for merge of PR #')) {
+    return false;
+  }
+  if (reason.startsWith('sdd:wait-human is set')) {
+    return false;
+  }
+  if (reason.startsWith('wait for green checks before merge of PR #')) {
+    return false;
+  }
+  if (reason === NO_OPEN_PULL) {
+    return false;
+  }
+  if (reason.startsWith('refused ')) {
+    return false;
+  }
+  if (reason.startsWith('archive refused:')) {
+    return false;
+  }
+  if (reason.startsWith('the rebuilt spec would have no requirement')) {
+    return false;
+  }
+  return true;
+}
 
 /** True while a review gate should keep the written focus as the open page. */
 export function liveFocusReviewGate(input: LiveFocusInput): boolean {
@@ -30,7 +91,10 @@ export function liveFocusReviewGate(input: LiveFocusInput): boolean {
     return reviewGateForPhase(decision.gate.from) !== undefined;
   }
   if (input.phase === 'accepting' && decision?.kind === 'wait') {
-    return true;
+    if (decision.reason.startsWith('wait for merge of PR #')) {
+      return input.hasAcceptFocus === true;
+    }
+    return acceptingKeepsFocus(decision.reason);
   }
   return false;
 }
@@ -59,8 +123,33 @@ function waitLiveSentence(reason: string): string | undefined {
   return until === undefined ? named : `${named} until ${until}`;
 }
 
+const ARCHIVE_REFUSED = 'archive refused: ';
+const EMPTY_BASELINE = 'the rebuilt spec would have no requirement:';
+
+/** What a refused archive said. Accepting hides every other wait behind the written focus. */
+function archiveSentence(decision: LiveFocusInput['decision']): string | undefined {
+  if (decision?.kind !== 'wait') {
+    return undefined;
+  }
+  if (decision.reason.startsWith(ARCHIVE_REFUSED)) {
+    const text = decision.reason.slice(ARCHIVE_REFUSED.length).trim();
+    return text === '' ? undefined : text;
+  }
+  if (decision.reason.startsWith(EMPTY_BASELINE)) {
+    return decision.reason;
+  }
+  return undefined;
+}
+
 /** Chooses the live pager sentence from spy inputs. Review gate suppression is the caller's job. */
 export function liveFocus(input: LiveFocusInput): LiveFocus | undefined {
+  const archive = archiveSentence(input.decision);
+  if (archive !== undefined) {
+    return {badge: 'archive', text: archive};
+  }
+  if (input.decision?.kind === 'wait' && input.decision.reason.startsWith('refused ')) {
+    return {badge: 'waiting', text: input.decision.reason};
+  }
   if (liveFocusReviewGate(input)) {
     return undefined;
   }
@@ -68,7 +157,8 @@ export function liveFocus(input: LiveFocusInput): LiveFocus | undefined {
     const action = turnAction(input.turn);
     const phase = turnPhase(input.turn);
     if (action !== undefined && phase !== undefined) {
-      return {badge: 'working', text: `${phase} → ${action}`};
+      const reason = input.decision?.kind === 'agent' ? input.decision.reason : '';
+      return {badge: 'working', text: workingSentence(action, reason)};
     }
   }
   if (!input.running) {
@@ -79,6 +169,17 @@ export function liveFocus(input: LiveFocusInput): LiveFocus | undefined {
     }
   }
   const decision = input.decision;
+  if (plainWaitHuman(decision) && input.comments !== undefined) {
+    return {badge: 'waiting', text: waitHumanPage(input.comments)};
+  }
+  const spoken = decision ? pageSentence(decision, input.openCount ?? 0) : undefined;
+  if (spoken !== undefined && decision) {
+    const linked =
+      decision.kind === 'wait' &&
+      (decision.reason.startsWith('wait for children') || decision.reason.startsWith('wait for blockers'));
+    const working = decision.kind === 'agent' || decision.kind === 'archive';
+    return {badge: working ? 'working' : linked ? 'waiting on an issue' : 'waiting', text: spoken};
+  }
   if (decision?.kind === 'wait' && decision.gate === undefined) {
     const waitText = waitLiveSentence(decision.reason);
     if (waitText !== undefined) {

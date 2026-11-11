@@ -8,6 +8,8 @@ export type FrameHold = {
   open?: {seq: number; key: string | null};
   settings?: {seq: number; open: boolean};
   gates: {seq: number; key: string; station: string; off: boolean}[];
+  /** Acceptance clicks whose answer has not returned. */
+  accepts?: {seq: number; key: string}[];
 };
 
 const SETTINGS_ACTS = new Set<string>([
@@ -70,6 +72,7 @@ function copyHold(hold: FrameHold): FrameHold {
     ...(hold.open ? {open: {...hold.open}} : {}),
     ...(hold.settings ? {settings: {...hold.settings}} : {}),
     gates: hold.gates.map(gate => ({...gate})),
+    ...(hold.accepts ? {accepts: hold.accepts.map(item => ({...item}))} : {}),
   };
 }
 
@@ -142,15 +145,24 @@ export function holdGesture(
   if (act === 'gate') {
     return rememberGate(next, seq, params, shot);
   }
+  if (act === 'accept-review') {
+    const key = params.get('key');
+    if (typeof key === 'string' && key !== '' && shot.opened?.key === key) {
+      next.accepts = [...(next.accepts ?? []).filter(item => item.key !== key), {seq, key}];
+    }
+    return next;
+  }
   return next;
 }
 
 /** Drop what this seq wrote. The caller paints the honest snapshot next. */
 export function releaseHold(hold: FrameHold, seq: number): FrameHold {
+  const accepts = (hold.accepts ?? []).filter(item => item.seq !== seq);
   return {
     ...(hold.open && hold.open.seq !== seq ? {open: {...hold.open}} : {}),
     ...(hold.settings && hold.settings.seq !== seq ? {settings: {...hold.settings}} : {}),
     gates: hold.gates.filter(gate => gate.seq !== seq),
+    ...(accepts.length > 0 ? {accepts} : {}),
   };
 }
 
@@ -185,10 +197,7 @@ function shellAct(layer: SpineLayer): LayerAct {
   return 'none';
 }
 
-function shellBlocks(row: SnapshotRow): SidebarBlock[] {
-  if (row.reason !== undefined && row.reason !== '') {
-    return [{kind: 'reason', line: row.reason}];
-  }
+function shellBlocks(_row: SnapshotRow): SidebarBlock[] {
   return [];
 }
 
@@ -224,35 +233,49 @@ function shellDrawer(row: SnapshotRow): ShellDrawer {
   };
 }
 
-function paintRow(row: SnapshotRow, gates: readonly FrameHold['gates'][number][]): SnapshotRow {
-  if (gates.length === 0) {
+function paintRow(
+  row: SnapshotRow,
+  gates: readonly FrameHold['gates'][number][],
+  taken: boolean,
+): SnapshotRow {
+  if (gates.length === 0 && !taken) {
     return row;
   }
-  const gateOff: Partial<Record<GateStation, true>> = {...row.gateOff};
-  for (const gate of gates) {
-    if (!isGateStation(gate.station)) {
-      continue;
-    }
-    if (gate.off) {
-      gateOff[gate.station] = true;
-    } else {
-      delete gateOff[gate.station];
-    }
-  }
   const next: SnapshotRow = {...row};
-  if (Object.keys(gateOff).length === 0) {
-    delete next.gateOff;
-    return next;
+  if (gates.length > 0) {
+    const gateOff: Partial<Record<GateStation, true>> = {...row.gateOff};
+    for (const gate of gates) {
+      if (!isGateStation(gate.station)) {
+        continue;
+      }
+      if (gate.off) {
+        gateOff[gate.station] = true;
+      } else {
+        delete gateOff[gate.station];
+      }
+    }
+    if (Object.keys(gateOff).length === 0) {
+      delete next.gateOff;
+    } else {
+      next.gateOff = gateOff;
+    }
   }
-  next.gateOff = gateOff;
+  if (taken) {
+    next.reviewTaken = true;
+  }
   return next;
 }
 
-function paintRows(rows: readonly SnapshotRow[], gates: FrameHold['gates']): SnapshotRow[] {
+function paintRows(
+  rows: readonly SnapshotRow[],
+  gates: FrameHold['gates'],
+  accepts: readonly {key: string}[],
+): SnapshotRow[] {
   return rows.map(row =>
     paintRow(
       row,
       gates.filter(gate => gate.key === row.key),
+      accepts.some(item => item.key === row.key),
     ),
   );
 }
@@ -320,7 +343,10 @@ export function paintFrame(
   hold: FrameHold,
   kept?: WindowSnapshot['opened'],
 ): WindowSnapshot {
-  const next: WindowSnapshot = {...shot, rows: paintRows(shot.rows, hold.gates)};
+  const next: WindowSnapshot = {
+    ...shot,
+    rows: paintRows(shot.rows, hold.gates, hold.accepts ?? []),
+  };
   if (hold.settings) {
     next.settings = {...shot.settings, open: hold.settings.open};
   }

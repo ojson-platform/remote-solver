@@ -10,7 +10,7 @@ import {
   hosted,
   pageHtml,
   post,
-} from './page.harness.ts';
+} from './__tests__/page.harness.ts';
 
 spec('ticket-heading', () => {
   requirement('The ticket heading names the issue', () => {

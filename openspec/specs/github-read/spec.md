@@ -79,23 +79,69 @@ A repeated `gh api` GET SHALL send the previous `ETag` as `If-None-Match`. A `30
 
 ### Requirement: A spent rate limit pauses polling
 
-When GitHub answers that the rate limit is spent and the response names `x-ratelimit-reset`, polling SHALL NOT spawn `gh` again until that time. When that answer does not name the reset, one read of the rate-limit resource SHALL supply it. The first such failure MAY be logged once. While the pause holds, the board SHALL NOT read the tracker.
+When GitHub answers that the rate limit is spent and the response names `x-ratelimit-reset`, polling SHALL NOT spawn `gh` again until that time.
+
+When that answer does not name the reset, one read of the rate-limit resource SHALL supply it.
+
+While the pause holds, the board SHALL NOT read the tracker.
+
+When GitHub answers that the GraphQL rate limit is already exceeded, polling SHALL wait for that resource's graphql reset and SHALL NOT end the process.
 
 #### Scenario: A spent rate limit waits until the reset
 
+The first such failure MAY be logged once.
+
+When GitHub answers that a secondary rate limit is spent, polling SHALL NOT spawn `gh` again until the wait GitHub names, or for one minute when it names none.
+
+That pause SHALL NOT use the primary `x-ratelimit-reset`.
+
+The log SHALL name the secondary limit once.
+
+A 403 that is not a rate limit SHALL NOT pause polling.
+
 - **WHEN** GitHub answers that the rate limit is spent and names the reset
 - **THEN** the board does not read the tracker again until that reset
+
+#### Scenario: A GraphQL rate limit waits until the graphql reset
+
+- **WHEN** GitHub answers that the GraphQL rate limit is already exceeded and the rate-limit resource names the graphql reset
+- **THEN** polling does not spawn `gh` again until that reset and the board stays up
 
 #### Scenario: A nameless rate limit reads the reset resource
 
 - **WHEN** the failing answer does not name the reset and the rate-limit resource does
 - **THEN** the pause uses that reset
 
+#### Scenario: A secondary rate limit waits a minute
+
+- **WHEN** GitHub answers that a secondary rate limit is spent and names no wait
+- **THEN** polling does not spawn `gh` again for one minute and the log names that limit once
+
+#### Scenario: A secondary rate limit uses the named wait
+
+- **WHEN** GitHub answers that a secondary rate limit is spent and names a wait
+- **THEN** polling does not spawn `gh` again until that wait
+
+#### Scenario: A forbidden answer that is not a rate limit does not pause
+
+- **WHEN** GitHub answers 403 and the body is not a rate limit
+- **THEN** polling is not paused
+
 ### Requirement: A gateway answer is tried again
 
-When `gh` fails because the answer is HTML, plain text, HTTP 502, HTTP 503, or HTTP 504, or because the network cannot be reached, the call SHALL be tried up to three times. Each retry SHALL be logged as one line that names the answer. That line SHALL NOT include `invalid character`. After the tries are spent, the call SHALL fail with that same reason. An answer that names an unknown field SHALL NOT be tried again.
+When `gh` fails because the answer is HTML, plain text, HTTP 502, HTTP 503, or HTTP 504, or because the network cannot be reached, the call SHALL be tried up to three times.
+
+Each retry SHALL be logged as one line that names the answer.
+
+That line SHALL NOT include `invalid character`.
+
+After the tries are spent, the call SHALL fail with that same reason.
+
+An answer that names an unknown field SHALL NOT be tried again.
 
 #### Scenario: Plain text is tried again
+
+Any other failure SHALL be logged as the text `gh` wrote, and that line SHALL NOT be only `gh exited 1` when `gh` wrote a line.
 
 - **WHEN** the first answer is plain text a JSON decoder cannot read
 - **THEN** the call is made again and the log names that text
@@ -108,7 +154,7 @@ When `gh` fails because the answer is HTML, plain text, HTTP 502, HTTP 503, or H
 #### Scenario: An unknown field is not tried again
 
 - **WHEN** gh rejects an unknown field
-- **THEN** the call is made once
+- **THEN** the call is made once and the log names that field
 
 #### Scenario: HTTP 503 is tried again
 

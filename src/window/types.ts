@@ -1,4 +1,4 @@
-import type {BranchFacts, BranchText} from '../machine/change.ts';
+import type {BranchFacts, BranchText} from '../machine/change/change.ts';
 
 export type Doc = Record<string, unknown>;
 
@@ -119,7 +119,7 @@ export type WindowOutside = {
   /** Action token, or phase and action, while the spy leads or holds this key. */
   turn?: (key: string) => BoardTurn | undefined;
   /** Settled decision the spy published for this key. */
-  decision?: (key: string) => import('../machine/policy.ts').Decision | undefined;
+  decision?: (key: string) => import('../machine/decide/policy.ts').Decision | undefined;
   /** Write `sddService`. The next read sees it. */
   writeService?: (key: string, service: string) => void;
   /**
@@ -338,6 +338,8 @@ export type PoolCard = {
   doors?: Partial<Record<ColumnName, StationDoor>>;
   /** Future gates whose auto label is already set. Absent when every gate is on. */
   gateOff?: Partial<Record<GateStation, true>>;
+  /** The writing phase already carries its consent label. */
+  reviewTaken?: true;
   /** Gathered checkout copied from the checkout card. */
   checkout?: string;
   /** Tracker port field, or the GitHub label `queueOf` found. */
@@ -425,6 +427,8 @@ export type CycleCard = {
   doors?: Partial<Record<ColumnName, StationDoor>>;
   /** Future gates whose auto label is already set. Absent when every gate is on. */
   gateOff?: Partial<Record<GateStation, true>>;
+  /** The writing phase already carries its consent label. */
+  reviewTaken?: true;
   /** Present when the ticket names `owner/repo`. */
   repo?: string;
   /** Copied from `sddService`, including `''`. Absent when the field is unnamed. */

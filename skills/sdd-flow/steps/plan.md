@@ -19,8 +19,7 @@ An open thread of layer `proposal`: steps 1–3 do not write `proposal.md` again
 2. § Upstream. Leave `proposal.md` only when every caller-visible sentence of the issue text is already in it.
 3. A question below the context zoom stays out of the proposal.
 4. `improve-proposal`: Fix thread (`CONTEXT.md`), layer `proposal`. A thread on an open question records the answer and checks that item in the same commit, before a hand-off or `thread fix`. The hand-off is a new thread on the other layer's file.
-5. Publish (`CONTEXT.md`). When `proposal.md` is in the commit, focus with marker `sdd:focus:plan`. Mirror: `Change` and `Plan`. Open questions do not delay the pull request.
-6. Open questions remain: Wait (`CONTEXT.md`) with the questions.
+5. Publish (`CONTEXT.md`). When `proposal.md` is in the commit, focus with marker `sdd:focus:plan`. Mirror: `Change` and `Plan`. Open questions do not delay the pull request. The focus does not count them and does not call Wait for them. The phase paints the count.
 
 ## Check
 
@@ -33,5 +32,4 @@ An open thread of layer `proposal`: steps 1–3 do not write `proposal.md` again
 
 ## Stop
 
-- Publish. The machine opens the review gate. Leave `sdd:proposed` unset.
-- Open questions at the context zoom: Publish, then Wait with the questions. Leave the phase open.
+- Publish. The machine opens the review gate. Leave `sdd:proposed` unset. Open questions stay in the file. This step does not Wait for them.

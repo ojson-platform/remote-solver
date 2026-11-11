@@ -8,19 +8,17 @@ Each writing phase owns one change file. The cycle returns to the phase that sti
 
 ### Requirement: A writing phase publishes its own file
 
-`proposing` owns the proposal, `specifying` the delta, `designing` the design, and `tasking` the tasks.
+`proposing` owns the proposal. `specifying`, `designing`, and `tasking` own the delta, the design, and the tasks.
 
-While that file is missing, or no pull request is open, the machine SHALL run the skill that writes and publishes it, and SHALL NOT open the review gate.
+A missing file with an open pull request SHALL run that skill and SHALL NOT open the review gate.
 
-For specifying, the delta is present when a delta file exists, or when the proposal names no capability.
+No open pull request on those three phases SHALL wait and SHALL NOT start the skill. `proposing` SHALL still publish with none open.
 
-A capability is a line under `### Added` or `### Modified` in `## Capabilities`.
+The delta is present when a delta file exists, or when the proposal names no capability. A capability is a line under `### Added` or `### Modified`.
 
 #### Scenario: Proposing without a proposal writes one
 
 A baseline spec under `openspec/specs/` does not make the delta present.
-
-When the delta is present that way and no pull request is open, the machine SHALL run the specify skill to publish the change, and the reason SHALL be `publish the change to the pull request`.
 
 - **WHEN** the phase is `proposing` and the change has no proposal
 - **THEN** the machine runs the plan skill and does not set `wait-human`
@@ -40,10 +38,10 @@ When the delta is present that way and no pull request is open, the machine SHAL
 - **WHEN** the phase is `specifying`, the proposal names no capability, the change has no delta file, and one pull request is open
 - **THEN** the machine opens the spec review gate
 
-#### Scenario: Specifying with no named capability and no pull request publishes
+#### Scenario: Specifying with no named capability and no pull request waits
 
 - **WHEN** the phase is `specifying`, the proposal names no capability, and no pull request is open
-- **THEN** the machine runs the specify skill with the reason `publish the change to the pull request` and does not open the review gate
+- **THEN** the machine waits and does not run the specify skill
 
 ### Requirement: A missing earlier file returns one phase
 
@@ -229,6 +227,8 @@ On `accepting`, that missing line SHALL make the machine wait and SHALL NOT arch
 
 A checked line SHALL count as the scenario's task.
 
+A title on that line counts whole, including when the title itself contains «».
+
 Zero open lines SHALL NOT by itself make the cut complete.
 
 - **WHEN** `implementing` has an open task and the card revision is not the live delta
@@ -258,6 +258,11 @@ Zero open lines SHALL NOT by itself make the cut complete.
 
 - **WHEN** a card lists a scenario title and `sdd-delta`, and `tasks.md` checks that title
 - **THEN** the machine reads that title, that revision, and that checked line
+
+#### Scenario: A checked line keeps a scenario title that contains «»
+
+- **WHEN** `tasks.md` checks a line that names `A refused send from «Записать» does not post a conversation comment` after a semicolon
+- **THEN** the machine counts that whole title as the scenario's task
 
 #### Scenario: A checked task line lets accepting archive
 

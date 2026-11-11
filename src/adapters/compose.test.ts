@@ -5,8 +5,8 @@ import path from 'node:path';
 import {test} from 'vitest';
 
 import {machine, solverRoot} from './compose.ts';
-import {memoryPorts} from './github.ts';
-import type {Runtime} from '../machine/port.ts';
+import {memoryPorts} from './tracker/github.ts';
+import type {Runtime} from '../machine.ts';
 
 test('a caller can replace the tracker and the review without touching the composition', async () => {
   const {tracker, review} = memoryPorts({
@@ -25,6 +25,15 @@ test('a caller can replace the tracker and the review without touching the compo
   assert.equal(box.review, review);
   assert.equal((await box.tracker.issue('LAVKA-1')).key, 'LAVKA-1');
   assert.equal(box.runtime, undefined);
+  assert.match(box.openspec(), /openspec$/);
+});
+
+test('a caller can replace the OpenSpec binary', () => {
+  const box = machine(mkdtempSync(path.join(tmpdir(), 'sdd-compose-')), {
+    config: {queues: [{name: 'Sandcastle'}]},
+    openspec: () => '/arcadia/openspec',
+  });
+  assert.equal(box.openspec(), '/arcadia/openspec');
 });
 
 test('the machine takes a runtime only from the caller', () => {

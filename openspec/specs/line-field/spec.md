@@ -77,9 +77,14 @@ The send mark SHALL sit inside the field.
 
 ### Requirement: A document remark is a review comment
 
-A Plan, Specify, or Design row with one open pull request SHALL offer a comment when that document is present, or when that row is the one the plaque can still accept. That comment SHALL be a review comment of the text the manager wrote.
+A Plan, Specify, or Design row with one open pull request SHALL offer a comment when that document is present, or when that row is the one the plaque can still accept. An Accept row with one open pull request SHALL offer that same comment. That comment SHALL be a review comment of the text the manager wrote.
 
 #### Scenario: A remark on the plan is a review comment
 
 - **WHEN** the manager writes a comment on the Plan row and one pull request is open
 - **THEN** the review comment is that text
+
+#### Scenario: A remark on accepting is a review comment
+
+- **WHEN** the manager writes a comment on the Accept row and one pull request is open
+- **THEN** the Accept row offers the comment, and the review comment is that text

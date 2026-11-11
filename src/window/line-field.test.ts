@@ -9,8 +9,9 @@ import {
   hosted,
   pageHtml,
   post,
+  spineOf,
   writeChange,
-} from './page.harness.ts';
+} from './__tests__/page.harness.ts';
 
 spec('line-field', () => {
   requirement('A line field opens on a document line', () => {
@@ -122,6 +123,44 @@ spec('line-field', () => {
             200,
           );
           assert.deepEqual(comments, ['Сначала сократить Outcome.']);
+        },
+      );
+    });
+    scenario('A remark on accepting is a review comment', async () => {
+      const comments: string[] = [];
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'accepting', {openPullRequests: 1})],
+          commentPull: (_key, body) => {
+            comments.push(body);
+          },
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const accept = spineOf(await pageHtml(page.url), '1', 'Accept');
+          assert.match(accept, /<label class="draft">Комментарий/);
+          assert.match(accept, /placeholder="Замечание ко всему документу"/);
+          assert.equal(
+            (
+              await post(
+                page.url,
+                'act',
+                new URLSearchParams({
+                  act: 'answer',
+                  key: '1',
+                  reply: 'Спеки вне этой задачи слишком длинные.',
+                }).toString(),
+              )
+            ).status,
+            200,
+          );
+          assert.deepEqual(comments, ['Спеки вне этой задачи слишком длинные.']);
         },
       );
     });

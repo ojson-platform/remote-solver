@@ -1,4 +1,7 @@
-import {activeChangePath, archiveChangePath} from '../machine/naming.ts';
+import type {Remark, Verdict} from './verdict.ts';
+
+import {activeChangePath, archiveChangePath} from '../machine/change/naming.ts';
+import {readReview} from '../machine/mark/review.ts';
 import {
   contentFiles,
   diffEnd,
@@ -8,10 +11,9 @@ import {
   type Thread,
   type Vcs,
 } from '../machine/port.ts';
-import {readReview} from '../machine/review.ts';
-import {placeOnDiff} from './place.ts';
+
 import {assembleDossier, type Dossier} from './dossier.ts';
-import type {Remark, Verdict} from './verdict.ts';
+import {placeOnDiff} from './place.ts';
 
 export type Judge = (dossier: Dossier) => Promise<Verdict> | Verdict;
 

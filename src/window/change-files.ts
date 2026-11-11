@@ -3,8 +3,8 @@ import type {FileSource} from '../machine/port.ts';
 import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 
-import {issueTree} from '../adapters/vcs.ts';
-import {changeDir} from '../machine/naming.ts';
+import {issueTree} from '../adapters/vcs/vcs.ts';
+import {changeDir} from '../machine/change/naming.ts';
 
 const empty: FileSource = {
   exists: () => false,

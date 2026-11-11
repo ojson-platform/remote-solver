@@ -8,7 +8,7 @@ import {
   pageHtml,
   post,
   stationOf,
-} from './page.harness.ts';
+} from './__tests__/page.harness.ts';
 
 spec('drawer', () => {
   requirement('The drawer holds one open cycle', () => {

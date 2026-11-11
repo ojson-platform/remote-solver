@@ -20,33 +20,6 @@ function Repair({snapshot}: {snapshot: WindowSnapshot}): ReactNode {
   if (row?.alarm !== true) {
     return null;
   }
-  const service = snapshot.service[row.key];
-  let field: ReactNode = null;
-  if (row.reason === 'не назван сервис' && row.choices.length >= 2) {
-    field = (
-      <ActForm act="choose-service" className="choice">
-        <Hidden name="key" value={row.key} />
-        <label>сервис</label>
-        <select name="service" defaultValue={service ?? ''}>
-          <option disabled>—</option>
-          {row.choices.map(choice => (
-            <option key={choice === '' ? 'root' : choice} value={choice}>
-              {choice}
-            </option>
-          ))}
-        </select>
-      </ActForm>
-    );
-  } else if (row.reason === 'конфига сервиса нет') {
-    field = (
-      <ActForm act="plant-queue">
-        <Hidden name="key" value={row.key} />
-        <label>очередь</label>
-        <input name="name" />
-        <Pill label="Создать" />
-      </ActForm>
-    );
-  }
   return (
     <div className="veil popup-veil">
       <div className="popup repair" role="dialog" aria-label="Поломка">
@@ -58,7 +31,6 @@ function Repair({snapshot}: {snapshot: WindowSnapshot}): ReactNode {
             </button>
           </ActForm>
         </header>
-        {field}
       </div>
     </div>
   );
@@ -119,7 +91,7 @@ export function App({
   snapshot,
   layer,
   drafts = [],
-  remark = {Plan: '', Specify: '', Design: ''},
+  remark = {Plan: '', Specify: '', Design: '', Accept: ''},
   gaps = [],
   openCaps = [],
   specOpen = [],

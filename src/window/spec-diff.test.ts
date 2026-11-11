@@ -8,12 +8,12 @@ import path from 'node:path';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
 
-import {gitFiles} from '../adapters/vcs.ts';
+import {gitFiles} from '../adapters/vcs/vcs.ts';
 import {specDiff, unchangedLabel} from './spec-diff.ts';
 import {buildSpine} from './spine.ts';
-import {arcanumOpenThread} from '../adapters/arcanum.ts';
-import {activeDiff, changelist, fakeHttp, specPath} from '../adapters/arcanum.harness.ts';
-import {githubAdapters} from '../adapters/github.ts';
+import {arcanumOpenThread} from '../adapters/tracker/arcanum.ts';
+import {activeDiff, changelist, fakeHttp, specPath} from '../adapters/tracker/__tests__/arcanum.harness.ts';
+import {githubAdapters} from '../adapters/tracker/github.ts';
 import {capIsOpen, foldsAfterSpec, revealFold, scenarioTarget} from './client/gesture.ts';
 import {renderWindow} from './client/render.ts';
 import {
@@ -26,7 +26,7 @@ import {
   spineOf,
   statusOf,
   writeChange,
-} from './page.harness.ts';
+} from './__tests__/page.harness.ts';
 import type {WindowSnapshot} from './snapshot.ts';
 import {openWindow} from './window.ts';
 

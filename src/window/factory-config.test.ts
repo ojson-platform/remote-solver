@@ -19,7 +19,7 @@ import {
   writeOverlay,
   writeServiceConfig,
   yard,
-} from './window.harness.ts';
+} from './__tests__/window.harness.ts';
 
 function proveChoosingCodexWritesItsPairAndEffortAndOmitsSpeed3(): void {
   const {dir, home} = scratch();

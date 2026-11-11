@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
-import {memoryPorts} from './adapters/github.ts';
+import {memoryPorts} from './adapters/tracker/github.ts';
 import {fixArgs, fixThread, publish, threadsArgs} from './sdd.ts';
 
 test('threads takes a pull and optional marker filters', () => {

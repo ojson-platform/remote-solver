@@ -11,10 +11,13 @@ import {
   focusIndexAfterSnapshot,
 } from './client/sidebar.tsx';
 import {renderWindow} from './client/render.ts';
-import type {Decision} from '../machine/policy.ts';
+import type {Decision} from '../machine/decide/policy.ts';
 
 import {focusBlockProse, liveFocus} from './focus.ts';
-import {bandOf, held, hosted, MANAGER, post} from './page.harness.ts';
+import {NO_OPEN_PULL} from '../machine/decide/pulls.ts';
+import {pageSentence, paintedTail} from './phrase.ts';
+import {offerContinue} from './snapshot.ts';
+import {bandOf, held, hosted, MANAGER, pageHtml, post, writeChange as writeServiceChange} from './__tests__/page.harness.ts';
 import {blocksFor} from './sidebar.ts';
 import type {WindowSnapshot} from './snapshot.ts';
 import type {BoardTurn, SidebarBlock, WindowTicket} from './types.ts';
@@ -28,7 +31,7 @@ import {
   proveTheSidebarFocusPlaqueDoesNotIncludeTheMarkerLine121,
   writeChange,
   yard,
-} from './window.harness.ts';
+} from './__tests__/window.harness.ts';
 
 function focusPagerHtml(snapshot: WindowSnapshot, pageIndex: number): string {
   const opened = snapshot.opened;
@@ -51,7 +54,7 @@ function focusBlock(marker: string, body: string) {
     kind: 'focus' as const,
     marker,
     body,
-    display: focusBlockProse(marker as import('../machine/marker.ts').FocusMarkerLine, body),
+    display: focusBlockProse(marker as import('../machine/mark/marker.ts').FocusMarkerLine, body),
   };
 }
 
@@ -81,6 +84,7 @@ function sidebarBlocks(
     running?: boolean;
     turn?: BoardTurn;
     decision?: Decision;
+    facts?: {questions: number; decisions: number};
   } = {},
 ): SidebarBlock[] {
   return blocksFor(item, {
@@ -91,6 +95,7 @@ function sidebarBlocks(
     gathered: () => undefined,
     serviceBroken: () => false,
     cardOf: () => ({checkout: '', reason: ''}),
+    branchFacts: () => over.facts,
     running: () => over.running ?? false,
     turn: () => over.turn,
     settledDecision: () => over.decision,
@@ -99,6 +104,15 @@ function sidebarBlocks(
 
 function openLivePage(blocks: readonly SidebarBlock[], pageIndex = 0): string {
   return renderToStaticMarkup(createElement(FocusBlocks, {blocks, pageIndex}));
+}
+
+function paintPage(
+  blocks: readonly SidebarBlock[],
+  pageIndex = 0,
+  tail?: string,
+  exclusive = false,
+): string {
+  return renderToStaticMarkup(createElement(FocusBlocks, {blocks, pageIndex, tail, exclusive}));
 }
 
 async function sidebarHtml(url: string): Promise<string> {
@@ -141,10 +155,8 @@ function proveACardWithNoIconHasNoSidebarReasonBlock115(): void {
   assert.equal(card?.reason, 'Ask');
   window.openCard('1');
   const blocks = window.sidebar();
-  assert.deepEqual(blocks, [
-    {kind: 'reason', line: 'Ask'},
-    {kind: 'ask', body: 'please decide'},
-  ]);
+  assert.equal(kinds(blocks).includes('reason'), false);
+  assert.equal(kinds(blocks).includes('ask'), false);
   rmSync(dir, {recursive: true, force: true});
 }
 
@@ -158,7 +170,8 @@ function proveAQuestionOnlyCardHidesTheLineAndTheSidebarStillShowsIt116(): void 
   assert.equal(card?.icon, true);
   assert.equal(card?.reason, undefined);
   window.openCard('b');
-  assert.deepEqual(window.sidebar(), [{kind: 'reason', line: 'вопросы 2'}]);
+  assert.equal(kinds(window.sidebar()).includes('reason'), false);
+  assert.equal(card?.reason, undefined);
   rmSync(dir, {recursive: true, force: true});
 }
 
@@ -176,8 +189,7 @@ function proveTheSidebarAskIsTheLatestCommentThatDoesNotStartWithSddFocus118(): 
     }),
   ]);
   window.openCard('1');
-  const ask = window.sidebar().find(block => block.kind === 'ask');
-  assert.deepEqual(ask, {kind: 'ask', body: 'please decide\nthe rest'});
+  assert.equal(kinds(window.sidebar()).includes('ask'), false);
   rmSync(dir, {recursive: true, force: true});
 }
 
@@ -188,7 +200,7 @@ function proveRemovingSddWaitHumanRemovesTheSidebarAskWhileTheCommentsRemain119(
   const comments = [{body: 'please decide'}, {body: 'sdd:focus\nPlan gap\n'}];
   const window = openSide(home, [cycle('1', 'implementing', {labels, comments})]);
   window.openCard('1');
-  assert.equal(kinds(window.sidebar()).includes('ask'), true);
+  assert.equal(kinds(window.sidebar()).includes('ask'), false);
   labels.splice(labels.indexOf('sdd:wait-human'), 1);
   const blocks = window.sidebar();
   assert.equal(kinds(blocks).includes('ask'), false);
@@ -746,22 +758,22 @@ spec('sidebar', () => {
       proveAnOpenCycleWhoseOnlySidebarBlockIsFocusShowsThatBlock113();
     });
   });
-  requirement("The icon reason block is the card's line", () => {
-    scenario('The open row shows the hidden tail', () => {
+  requirement('The open row does not show the icon reason', () => {
+    scenario('The open row does not repeat the card line', () => {
       proveAQuestionOnlyCardHidesTheLineAndTheSidebarStillShowsIt116();
     });
     scenario('No icon means no reason block', () => {
       proveASpecifyingCycleWithNoOccasionHasNoReasonBlock();
     });
   });
-  requirement('Ask shows the latest comment that is not focus', () => {
-    scenario('Wait shows the ask', () => {
+  requirement('The open row has no ask block', () => {
+    scenario('A waiting issue has no ask block', () => {
       proveACardWithNoIconHasNoSidebarReasonBlock115();
     });
-    scenario('A focus comment is skipped', () => {
+    scenario('A focus comment leaves no ask block', () => {
       proveTheSidebarAskIsTheLatestCommentThatDoesNotStartWithSddFocus118();
     });
-    scenario('Clearing the label removes the ask', () => {
+    scenario('Clearing the label leaves no ask block', () => {
       proveRemovingSddWaitHumanRemovesTheSidebarAskWhileTheCommentsRemain119();
     });
   });
@@ -1152,7 +1164,7 @@ spec('live-focus-page', () => {
       assert.deepEqual(live[0], {
         kind: 'live',
         badge: 'working',
-        text: 'specifying → create-initial-specs',
+        text: 'Пишу спеки.',
       });
       const gone = sidebarBlocks(item, {});
       assert.equal(gone.some(block => block.kind === 'live'), false);
@@ -1174,8 +1186,7 @@ spec('live-focus-page', () => {
         running: true,
         turn: {phase: 'specifying', action: 'create-initial-specs'},
       });
-      assert.match(live?.text, /specifying/);
-      assert.match(live?.text, /create-initial-specs/);
+      assert.equal(live?.text, 'Пишу спеки.');
     });
     scenario('A full cap shows the next action', () => {
       const live = liveFocus({running: false, turn: {action: 'create-design'}});
@@ -1189,8 +1200,7 @@ spec('live-focus-page', () => {
           reason: 'wait for children to reach specified: #12',
         },
       });
-      assert.match(live?.text, /12/);
-      assert.match(live?.text, /specified/);
+      assert.equal(live?.text, 'Жду, пока #12 будет принята.');
     });
     scenario('An implementing child is named until accepted', () => {
       const live = liveFocus({
@@ -1200,8 +1210,7 @@ spec('live-focus-page', () => {
           reason: 'wait for children to be accepted: #12',
         },
       });
-      assert.match(live?.text, /12/);
-      assert.match(live?.text, /accepted/);
+      assert.equal(live?.text, 'Жду, пока #12 будет принята.');
     });
     scenario('A child and a blocker are named the way the decision names them', () => {
       const live = liveFocus({
@@ -1222,8 +1231,7 @@ spec('live-focus-page', () => {
           reason: 'wait for blockers: #12, wait for children to be accepted: #12',
         },
       });
-      assert.equal(live?.text.match(/12/g)?.length, 1);
-      assert.match(live?.text, /accepted/);
+      assert.equal(live?.text, 'Жду блокер #12.');
     });
     scenario('Checks still running', () => {
       const live = liveFocus({checks: 'pending'});
@@ -1247,8 +1255,7 @@ spec('live-focus-page', () => {
         },
         checks: 'pending',
       });
-      assert.match(live?.text, /specifying/);
-      assert.match(live?.text, /create-initial-specs/);
+      assert.equal(live?.text, 'Пишу спеки.');
       const item = cycle('1', 'implementing', {comments, checks: 'pending'});
       const html = openLivePage(
         sidebarBlocks(item, {
@@ -1262,7 +1269,7 @@ spec('live-focus-page', () => {
         }),
       );
       assert.match(html, /working/);
-      assert.match(html, /create-initial-specs/);
+      assert.match(html, /Пишу спеки/);
     });
     scenario('A ready action that the cap held back is the open page', () => {
       const live = liveFocus({
@@ -1298,8 +1305,7 @@ spec('live-focus-page', () => {
           reason: 'wait for children to reach specified: #12',
         },
       });
-      assert.match(live?.text, /12/);
-      assert.match(live?.text, /specified/);
+      assert.equal(live?.text, 'Жду, пока #12 будет принята.');
     });
     scenario('Checks are the open page', () => {
       const live = liveFocus({checks: 'pending'});
@@ -1352,12 +1358,73 @@ spec('live-focus-page', () => {
       );
       assert.match(html, />waiting on an issue</);
     });
+    scenario('The badge is archive', () => {
+      const html = openLivePage(
+        sidebarBlocks(cycle('1', 'accepting', {
+          comments: [{body: 'sdd:focus:accept\nAccepting written focus.\n'}],
+        }), {
+          decision: {
+            kind: 'wait',
+            issue: '1',
+            reason: 'archive refused: openspec validate --all --strict refused spec/board: Requirement text is very long (>500 characters)',
+          },
+        }),
+      );
+      assert.match(html, />archive</);
+      assert.equal(html.includes('sdd:focus:accept'), false);
+    });
     scenario('The badge is checks', () => {
       const html = openLivePage(
         sidebarBlocks(cycle('1', 'implementing', {comments, checks: 'pending'}), {}),
       );
       assert.match(html, />checks</);
       assert.equal(html.includes('sdd:focus:spec'), false);
+    });
+  });
+
+  requirement('A refused archive is the open page', () => {
+    const said =
+      'openspec validate --all --strict refused spec/board: Requirement text is very long (>500 characters)';
+    scenario('A refused archive on accepting is the open page and the text is what the command said', () => {
+      const item = cycle('1', 'accepting', {
+        comments: [{body: 'sdd:focus:accept\nAccepting written focus.\n'}],
+      });
+      const blocks = sidebarBlocks(item, {
+        running: true,
+        turn: {phase: 'implementing', action: 'implement-next-task'},
+        decision: {kind: 'wait', issue: '1', reason: `archive refused: ${said}`},
+      });
+      assert.equal(blocks[0]?.kind, 'live');
+      const html = openLivePage(blocks);
+      assert.match(html, />archive</);
+      assert.match(html, /spec\/board/);
+      assert.match(html, /Requirement text is very long \(&gt;500 characters\)/);
+      assert.equal(html.includes('implement-next-task'), false);
+    });
+    scenario('A baseline with no requirement is that same page', () => {
+      const item = cycle('1', 'accepting', {
+        comments: [{body: 'sdd:focus:accept\nAccepting written focus.\n'}],
+      });
+      const blocks = sidebarBlocks(item, {
+        decision: {
+          kind: 'wait',
+          issue: '1',
+          reason: 'the rebuilt spec would have no requirement: openspec/specs/section/spec.md',
+        },
+      });
+      const html = openLivePage(blocks);
+      assert.match(html, />archive</);
+      assert.match(html, /openspec\/specs\/section\/spec\.md/);
+    });
+    scenario('Another accepting wait keeps the written focus', () => {
+      const item = cycle('1', 'accepting', {
+        comments: [{body: 'sdd:focus:accept\nAccepting written focus.\n'}],
+      });
+      const blocks = sidebarBlocks(item, {
+        decision: {kind: 'wait', issue: '1', reason: 'wait for a person'},
+      });
+      assertWrittenFocusIsOpen(blocks);
+      assert.match(openLivePage(blocks), />sdd:focus:accept</);
     });
   });
 
@@ -1452,7 +1519,7 @@ spec('live-focus-page', () => {
       assert.match(openLivePage(blocks), />sdd:focus:design</);
       assert.equal(openLivePage(blocks).includes('create-design'), false);
     });
-    scenario('The ask block stays its own block and is not copied into the live page', () => {
+    scenario('The open row has no ask block on a live page', () => {
       const item = cycle('1', 'implementing', {
         comments: [comments[0]!, {body: 'please decide'}],
         labels: ['sdd:cycle', 'sdd:implementing', 'sdd:wait-human'],
@@ -1464,16 +1531,13 @@ spec('live-focus-page', () => {
       });
       assert.equal(blocks[0]?.kind, 'live');
       assert.equal(blocks.some(block => block.kind === 'focus'), true);
-      assert.deepEqual(blocks.find(block => block.kind === 'ask'), {
-        kind: 'ask',
-        body: 'please decide',
-      });
+      assert.equal(blocks.some(block => block.kind === 'ask'), false);
       const html = openLivePage(blocks);
       assert.equal(html.includes('please decide'), false);
-      assert.match(html, /implement-next-task/);
+      assert.match(html, /Делаю следующую задачу/);
       assert.equal(html.includes('checks are still running'), false);
     });
-    scenario('The live sentence does not replace an ask', () => {
+    scenario('A live page does not show the ask comment', () => {
       const item = cycle('1', 'implementing', {
         comments: [comments[0]!, {body: 'please decide'}],
         labels: ['sdd:cycle', 'sdd:implementing', 'sdd:wait-human'],
@@ -1483,7 +1547,7 @@ spec('live-focus-page', () => {
         turn: {phase: 'implementing', action: 'implement-next-task'},
       });
       assert.equal(blocks[0]?.kind, 'live');
-      assert.equal(blocks.some(block => block.kind === 'ask'), true);
+      assert.equal(blocks.some(block => block.kind === 'ask'), false);
       assert.equal(blocks.some(block => block.kind === 'focus'), true);
     });
   });
@@ -1498,7 +1562,7 @@ spec('live-focus-page', () => {
       assert.equal(blocks.filter(block => block.kind === 'live').length, 1);
       const html = openLivePage(blocks, 0);
       assert.match(html, />working</);
-      assert.match(html, /create-initial-specs/);
+      assert.match(html, /Пишу спеки/);
       assert.equal(html.includes('focus-pager'), false);
       assert.equal(html.includes('data-focus="back"'), false);
     });
@@ -1524,7 +1588,7 @@ spec('live-focus-page', () => {
       assert.equal(index, 0);
       const html = openLivePage(blocks, index);
       assert.match(html, />working</);
-      assert.match(html, /implement-next-task/);
+      assert.match(html, /Делаю следующую задачу/);
       assert.equal(html.includes('Older plan note'), false);
     });
     scenario('A worker starting returns the block to now', () => {
@@ -1547,8 +1611,7 @@ spec('live-focus-page', () => {
       });
       assert.equal(index, 0);
       const html = openLivePage(blocks, index);
-      assert.match(html, /specifying/);
-      assert.match(html, /create-initial-specs/);
+      assert.match(html, /Пишу спеки/);
     });
     scenario('A new written comment returns the block to now', () => {
       const blocks = sidebarBlocks(
@@ -1574,9 +1637,189 @@ spec('live-focus-page', () => {
       assert.equal(index, 0);
       const html = openLivePage(blocks, index);
       assert.match(html, />working</);
-      assert.match(html, /implement-next-task/);
+      assert.match(html, /Делаю следующую задачу/);
       const older = openLivePage(blocks, 1);
       assert.match(older, /Fresh written page\./);
+    });
+  });
+
+  requirement('The phase paints a tail on the open page', () => {
+    scenario('The proposal gate appends the confirm tail', () => {
+      const item = cycle('1', 'proposing', {comments: [{body: 'sdd:focus:plan\nSaved prose.\n'}]});
+      const decision = reviewGateWait('proposing');
+      const blocks = sidebarBlocks(item, {decision});
+      const stored = blocks.find(block => block.kind === 'focus');
+      assert.equal(stored?.kind === 'focus' ? stored.body.includes('Проверь') : true, false);
+      const tail = paintedTail(blocks, decision, 0, 0);
+      assert.equal(tail, 'Проверь и подтверди.');
+      const html = paintPage(blocks, 0, tail);
+      assert.match(html, /Saved prose/);
+      assert.match(html, /Проверь и подтверди\./);
+    });
+    scenario('An older page keeps the saved prose', () => {
+      const blocks = [
+        focusBlock('sdd:focus:plan', 'Saved prose.\n'),
+        focusBlock('sdd:focus', 'Older prose.\n'),
+      ];
+      const older = paintPage(blocks, 1, 'Проверь и подтверди.');
+      assert.match(older, /Older prose/);
+      assert.equal(older.includes('Проверь и подтверди'), false);
+    });
+    scenario('Open questions append the count', () => {
+      const item = cycle('1', 'proposing', {comments: [{body: 'sdd:focus:plan\nSaved prose.\n'}]});
+      const decision: Decision = {
+        kind: 'wait',
+        issue: '1',
+        reason: 'still has open items under ## Open questions',
+      };
+      const blocks = sidebarBlocks(item, {decision});
+      const tail = paintedTail(blocks, decision, 1, 0);
+      assert.equal(tail, 'Есть 1 открытый вопрос. Ответь на него.');
+      const stored = blocks.find(block => block.kind === 'focus');
+      assert.equal(stored?.kind === 'focus' ? stored.body.includes('открытый вопрос') : true, false);
+      assert.match(paintPage(blocks, 0, tail), /Есть 1 открытый вопрос\. Ответь на него\./);
+    });
+    scenario('Accepting does not append the confirm tail', () => {
+      const decision: Decision = {kind: 'wait', issue: '1', reason: 'wait for merge of PR #9'};
+      const blocks = [focusBlock('sdd:focus:accept', 'Archive note.\n')];
+      assert.equal(paintedTail(blocks, decision, 0, 0), 'Архив записан локально. Отправь его и смержи #9.');
+      const html = paintPage(blocks, 0, paintedTail(blocks, decision, 0, 0));
+      assert.equal(html.includes('Проверь и подтверди'), false);
+      assert.match(html, /Архив записан локально\. Отправь его и смержи #9\./);
+      assert.equal(blocks[0]?.kind === 'focus' ? blocks[0].body.includes('смержи') : true, false);
+    });
+  });
+
+  requirement('Several keys use a comma and и before the last', () => {
+    scenario('Three children are listed with a comma', () => {
+      assert.equal(
+        pageSentence({
+          kind: 'wait',
+          issue: '1',
+          reason: 'wait for children to be accepted: #1, #2, #3',
+        }),
+        'Жду, пока #1, #2 и #3 будут приняты.',
+      );
+    });
+    scenario('Two blockers are joined by и', () => {
+      assert.equal(
+        pageSentence({kind: 'wait', issue: '1', reason: 'wait for blockers: #4, #5'}),
+        'Жду блокеры #4 и #5.',
+      );
+    });
+    scenario('Three open pull requests are listed with a comma', () => {
+      assert.equal(
+        pageSentence({
+          kind: 'wait',
+          issue: '1',
+          reason: 'cycle stopped until one open PR remains: 8, 9, 10',
+        }),
+        'Открыты #8, #9 и #10. Оставь один.',
+      );
+    });
+  });
+
+  requirement('A plain wait is the ask', () => {
+    const decision: Decision = {
+      kind: 'wait',
+      issue: '1',
+      reason: 'sdd:wait-human is set on implementing. Do the ask on the issue.',
+    };
+    scenario('The latest ask is the open page', () => {
+      const item = cycle('1', 'implementing', {
+        comments: [{body: 'sdd:wait-human\nСначала почини спеки.\n'}],
+      });
+      const html = openLivePage(sidebarBlocks(item, {decision}));
+      assert.match(html, /Сначала почини спеки\./);
+      assert.equal(html.includes('sdd:wait-human is set'), false);
+    });
+    scenario('A later comment does not replace the ask', () => {
+      const item = cycle('1', 'implementing', {
+        comments: [
+          {body: 'sdd:wait-human\nСначала почини спеки.\n'},
+          {body: 'Обычный комментарий без метки.\n'},
+        ],
+      });
+      const html = openLivePage(sidebarBlocks(item, {decision}));
+      assert.match(html, /Сначала почини спеки\./);
+      assert.equal(html.includes('Обычный комментарий'), false);
+    });
+    scenario('No ask comment says the label is on', () => {
+      const item = cycle('1', 'implementing');
+      const html = openLivePage(sidebarBlocks(item, {decision}));
+      assert.match(html, /Метка sdd:wait-human стоит\./);
+    });
+    scenario('A robot prefix still marks the ask', () => {
+      const item = cycle('1', 'implementing', {
+        comments: [{body: '🤖 sdd:wait-human\nСначала почини спеки.\n'}],
+      });
+      const html = openLivePage(sidebarBlocks(item, {decision}));
+      assert.match(html, /Сначала почини спеки\./);
+    });
+  });
+
+  requirement('A repeated refusal is the open page', () => {
+    scenario('A repeated refusal stays while a worker turn is set', () => {
+      const reason = 'refused implement-next-task: next open task';
+      const item = cycle('1', 'implementing', {
+        comments: [{body: 'sdd:focus:code\nСрез записан.\n'}],
+      });
+      const blocks = sidebarBlocks(item, {
+        running: true,
+        turn: {phase: 'implementing', action: 'implement-next-task'},
+        decision: {kind: 'wait', issue: '1', reason},
+      });
+      assert.equal(blocks[0]?.kind, 'live');
+      const html = openLivePage(blocks);
+      assert.match(html, /refused implement-next-task: next open task/);
+      assert.equal(html.includes('Делаю следующую задачу'), false);
+    });
+  });
+
+  requirement('Open questions without a retelling are the page', () => {
+    scenario('Open questions without a plan focus are the page', () => {
+      const item = cycle('1', 'proposing');
+      const blocks = sidebarBlocks(item, {
+        decision: {
+          kind: 'wait',
+          issue: '1',
+          reason: 'still has open items under ## Open questions',
+        },
+        facts: {questions: 1, decisions: 0},
+      });
+      assert.equal(blocks[0]?.kind, 'live');
+      assert.match(openLivePage(blocks), /Есть 1 открытый вопрос\. Ответь на него\./);
+    });
+  });
+
+  requirement('Checks before merge are the open page', () => {
+    scenario('Accepting names the pull request whose checks are not green', () => {
+      const item = cycle('1', 'accepting', {
+        comments: [{body: 'sdd:focus:accept\nАрхив лежит в базовых спеках.\n'}],
+      });
+      const blocks = sidebarBlocks(item, {
+        decision: {kind: 'wait', issue: '1', reason: 'wait for green checks before merge of PR #9'},
+      });
+      assert.equal(blocks[0]?.kind, 'live');
+      assert.match(openLivePage(blocks), /Перед мержем #9 проверки ещё не зелёные\./);
+    });
+  });
+
+  requirement('A missing pull request is the only page', () => {
+    scenario('Specifying with no open pull request shows only that sentence', () => {
+      const decision: Decision = {kind: 'wait', issue: '1', reason: NO_OPEN_PULL};
+      const blocks: SidebarBlock[] = [
+        {kind: 'live', badge: 'waiting', text: 'На этой фазе нет открытого пул-реквеста.'},
+        focusBlock('sdd:focus:spec', 'Old spec.\n'),
+      ];
+      const html = paintPage(blocks, 0, undefined, true);
+      assert.match(html, /На этой фазе нет открытого пул-реквеста\./);
+      assert.equal(html.includes('focus-pager'), false);
+      assert.equal(html.includes('Old spec'), false);
+      assert.equal(
+        offerContinue({waiting: true, repair: false, decision, accept: false}),
+        false,
+      );
     });
   });
 });
@@ -1600,6 +1843,78 @@ spec('issue-description', () => {
     });
     scenario('The block goes when the cycle leaves the pool', () => {
       proveTheBlockGoesWhenTheCycleLeavesThePool();
+    });
+  });
+});
+
+spec('wait', () => {
+  requirement('Continue clears only the label', () => {
+    scenario('Continue removes the label', async () => {
+      const ticket = held('1', 'implementing', {
+        labels: ['sdd:cycle', 'sdd:implementing', 'sdd:wait-human'],
+      });
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [ticket],
+          editLabels: (_key, add, remove) => {
+            ticket.labels = ticket.labels.filter(label => !remove?.includes(label));
+            for (const label of add) {
+              if (!ticket.labels.includes(label)) {
+                ticket.labels = [...ticket.labels, label];
+              }
+            }
+          },
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          assert.match(bandOf(await pageHtml(page.url), '1'), /Продолжить/);
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'continue', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          assert.equal(ticket.labels.includes('sdd:wait-human'), false);
+          assert.equal(ticket.labels.includes('sdd:implementing'), true);
+          assert.equal(bandOf(await pageHtml(page.url), '1').includes('Продолжить'), false);
+        },
+      );
+    });
+    scenario('Continue is absent beside acceptance', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'proposing', {
+              openPullRequests: 1,
+              labels: ['sdd:cycle', 'sdd:proposing', 'sdd:wait-human'],
+            }),
+          ],
+          decision: () => ({
+            kind: 'wait',
+            issue: '1',
+            reason: 'review the proposal',
+            gate: {artifact: 'proposal', from: 'proposing', to: 'proposed'},
+          }),
+        },
+        async (page, window, paths) => {
+          writeServiceChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const side = bandOf(await pageHtml(page.url), '1');
+          assert.match(side, /Принять Plan/);
+          assert.equal(side.includes('Продолжить'), false);
+        },
+      );
     });
   });
 });

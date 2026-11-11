@@ -1,18 +1,20 @@
-import {createHash} from 'node:crypto';
-
-import type {FileSource} from '../machine/port.ts';
 import type {SpecBadge, SpecEntry} from './spec-diff.ts';
 import type {GateStation} from './types.ts';
+import type {WindowComment} from './types.ts';
+import type {FileSource} from '../machine/port.ts';
 
-import {missingBaselineIds, namedCapabilities, readBranch, type BranchText} from '../machine/change.ts';
-import {changeDir} from '../machine/naming.ts';
+import {createHash} from 'node:crypto';
+
+
+import {missingBaselineIds, namedCapabilities, readBranch, type BranchText} from '../machine/change/change.ts';
+import {changeDir} from '../machine/change/naming.ts';
+import {firstFocusSentence} from '../machine/mark/focus.ts';
+import {focusMarkerLine, isFocusRecord} from '../machine/mark/marker.ts';
 
 import {strictChangeFiles, strictContentChangeFiles} from './change-files.ts';
 import {scanFocusComments} from './focus.ts';
-import {firstFocusSentence} from '../machine/focus.ts';
-import {focusMarkerLine, isFocusRecord} from '../machine/marker.ts';
 import {specDiff} from './spec-diff.ts';
-import type {WindowComment} from './types.ts';
+
 
 export const SPINE_LAYERS = [
   'Change',

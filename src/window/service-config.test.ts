@@ -15,7 +15,7 @@ import {
   writeLaunch,
   writeServiceYaml,
   yard,
-} from './window.harness.ts';
+} from './__tests__/window.harness.ts';
 
 function proveTheServiceConfigGroupOmitsADefaultBaseAndWritesMainBesideSchemaContextAndRules98(): void {
   const {dir, home, arcadia} = yard();
@@ -409,8 +409,8 @@ spec('service-config', () => {
       proveTheServiceConfigGroupCanOnlyRemoveANonStringIgnoreCommentsValue105();
     });
   });
-  requirement('A service config that does not parse hides that checkout', () => {
-    scenario('One broken file hides only its cards', () => {
+  requirement('A service config that does not parse names itself', () => {
+    scenario('One broken file keeps its card', () => {
       proveTheServiceConfigGroupHasNoFieldsWhenTheFileDoesNotParseAndOnlyThatCheckoutLosesItsCards106();
     });
     scenario('The group does not rewrite a file that does not parse', () => {

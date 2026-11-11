@@ -1,3 +1,19 @@
+
+import type {Decision} from '../machine/decide/policy.ts';
+
+import {specsReady} from '../machine/change/change.ts';
+
+import {plaqueLines} from './board.ts';
+import {exclusivePage, paintedTail} from './phrase.ts';
+import {
+  buildSpine,
+  layerForStation,
+  reviewGateForLayer,
+  reviewGateForPhase,
+  SPINE_LAYERS,
+  type Spine,
+  type SpineLayer,
+} from './spine.ts';
 import {
   turnAction,
   type BoardState,
@@ -13,19 +29,6 @@ import {
   type SidebarBlock,
   type StationDoor,
 } from './types.ts';
-
-import {specsReady} from '../machine/change.ts';
-import type {Decision} from '../machine/policy.ts';
-
-import {plaqueLines} from './board.ts';
-import {
-  buildSpine,
-  layerForStation,
-  reviewGateForLayer,
-  SPINE_LAYERS,
-  type Spine,
-  type SpineLayer,
-} from './spine.ts';
 import {COLUMN_NAMES} from './types.ts';
 
 /** A spine row offers acceptance, keeps its gate, or leaves that place empty. */
@@ -61,6 +64,8 @@ export type SnapshotRow = {
   occasion?: true;
   doors?: Partial<Record<ColumnName, SnapshotDoor>>;
   gateOff?: Partial<Record<GateStation, true>>;
+  /** The writing phase already carries its consent label. */
+  reviewTaken?: true;
   marks?: readonly LinkMark[];
 };
 
@@ -103,6 +108,12 @@ export type WindowSnapshot = {
     spine: Spine;
     layers: {layer: SpineLayer; act: LayerAct}[];
     blocks: SidebarBlock[];
+    /** «Продолжить» removes only `sdd:wait-human`. */
+    continue?: boolean;
+    /** Display-only sentence after the open written page. */
+    tail?: string;
+    /** The live sentence is the only page. */
+    exclusive?: boolean;
   };
 };
 
@@ -117,6 +128,7 @@ type SnapshotSurface = {
   turn(key: string): BoardTurn | undefined;
   running(key: string): boolean;
   decision?(key: string): Decision | undefined;
+  waiting?(key: string): boolean;
   cycleLabel?(key: string): string | null;
   checks?(key: string): 'green' | 'red' | 'pending' | 'none' | undefined;
   sidebar(): SidebarBlock[];
@@ -151,6 +163,7 @@ type Fact = {
   ask?: string;
   unanswered?: string;
   gateOff?: Partial<Record<GateStation, true>>;
+  reviewTaken?: true;
   occasion?: true;
   doors?: Partial<Record<ColumnName, StationDoor>>;
   takeDisabled?: true;
@@ -222,9 +235,24 @@ export function reviewReady(
   });
 }
 
-function layerAct(layer: SpineLayer, model: Spine, action?: string): LayerAct {
+function layerAct(
+  layer: SpineLayer,
+  model: Spine,
+  action: string | undefined,
+  decision: Decision | undefined,
+): LayerAct {
   const review = reviewGateForLayer(layer);
   const here = model.station !== undefined && layerForStation(model.station) === layer;
+  if (here && review !== undefined && decision !== undefined) {
+    const gate =
+      decision.kind === 'wait' &&
+      decision.gate !== undefined &&
+      reviewGateForPhase(decision.gate.from) === review;
+    if (gate && model.pull && model.reviewGate === review && reviewReady(model, review, action)) {
+      return 'accept';
+    }
+    return 'none';
+  }
   if (here && review !== undefined) {
     if (model.pull && model.reviewGate === review && reviewReady(model, review, action)) {
       return 'accept';
@@ -251,6 +279,7 @@ function facts(board: BoardState): Fact[] {
       ask: card.ask,
       unanswered: card.unanswered,
       gateOff: card.gateOff,
+      reviewTaken: card.reviewTaken,
       occasion: card.occasion,
       doors: card.doors,
       choices: [],
@@ -278,6 +307,7 @@ function facts(board: BoardState): Fact[] {
     ask: card.ask,
     unanswered: card.unanswered,
     gateOff: card.gateOff,
+    reviewTaken: card.reviewTaken,
     doors: card.doors,
     takeDisabled: card.takeDisabled,
     alarm: card.alarm,
@@ -339,6 +369,7 @@ function publish(
     ...(row.alarm === true ? {alarm: true} : {}),
     ...(row.occasion === true ? {occasion: true} : {}),
     ...(row.gateOff !== undefined ? {gateOff: row.gateOff} : {}),
+    ...(row.reviewTaken === true ? {reviewTaken: true} : {}),
     ...(row.doors !== undefined ? {doors: publishedDoors(row.doors, place)} : {}),
     ...(row.marks !== undefined && row.marks.length > 0 ? {marks: row.marks} : {}),
     plaque: plaqueLines({
@@ -415,15 +446,58 @@ function openCycle(
     spineReady = true;
   }
   const action = turnAction(surface.turn(row.key));
+  const decision = surface.decision?.(row.key);
+  const blocks = surface.sidebar();
+  const questions = model.proposal.questions.filter(item => item.open).length;
+  const decisionSection = model.design.sections.find(section => section.heading === 'Open decisions');
+  const decisions =
+    decisionSection?.lines.filter(line => line.text.trimStart().startsWith('- [ ]')).length ?? 0;
+  const tail = paintedTail(blocks, decision, questions, decisions);
+  const alone = exclusivePage(decision);
+  const layers = SPINE_LAYERS.map(layer => ({layer, act: layerAct(layer, model, action, decision)}));
+  const proceed = offerContinue({
+    waiting: surface.waiting?.(row.key) === true,
+    repair: view.repair === row.key,
+    decision,
+    accept: layers.some(item => item.act === 'accept'),
+  });
   return {
     key: row.key,
     title: row.title,
     spineReady,
     ...(revision !== undefined ? {revision} : {}),
     spine: model,
-    layers: SPINE_LAYERS.map(layer => ({layer, act: layerAct(layer, model, action)})),
-    blocks: surface.sidebar(),
+    layers,
+    blocks,
+    ...(proceed ? {continue: true} : {}),
+    ...(tail !== undefined ? {tail} : {}),
+    ...(alone ? {exclusive: true} : {}),
   };
+}
+
+/** «Продолжить» only clears `sdd:wait-human`. It stays off beside «Принять» and while an agent holds the page. */
+export function offerContinue(input: {
+  waiting: boolean;
+  repair: boolean;
+  decision?: Decision;
+  accept: boolean;
+}): boolean {
+  if (!input.waiting || input.repair || input.accept || exclusivePage(input.decision)) {
+    return false;
+  }
+  const decision = input.decision;
+  if (
+    decision?.kind === 'agent' ||
+    decision?.kind === 'archive' ||
+    decision?.kind === 'unarchive' ||
+    decision?.kind === 'merge'
+  ) {
+    return false;
+  }
+  if (decision?.kind === 'wait' && decision.gate !== undefined) {
+    return false;
+  }
+  return true;
 }
 
 /** Drop the spine when the caller already holds this revision. JSON omits the undefined spine. */

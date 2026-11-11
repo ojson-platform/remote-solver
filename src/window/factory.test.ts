@@ -6,7 +6,7 @@ import path from 'node:path';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {serveBoard} from './page.ts';
-import {formsOf, git, pageHtml, post} from './page.harness.ts';
+import {formsOf, git, pageHtml, post} from './__tests__/page.harness.ts';
 import {FACTORY_AGENTS} from './types.ts';
 import {openWindow} from './window.ts';
 import {
@@ -17,7 +17,7 @@ import {
   writeOverlay,
   writeServiceConfig,
   yard,
-} from './window.harness.ts';
+} from './__tests__/window.harness.ts';
 
 function overlayPath(checkout: string): string {
   return path.join(checkout, '.aifactory', 'config.yaml');

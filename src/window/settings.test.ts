@@ -20,8 +20,8 @@ import {
   writeServiceConfig,
   writeServiceYaml,
   yard,
-} from './window.harness.ts';
-import {bare, hosted, pageHtml, post} from './page.harness.ts';
+} from './__tests__/window.harness.ts';
+import {bare, hosted, pageHtml, post} from './__tests__/page.harness.ts';
 
 function proveAnEmptyAgentListWritesNoHomeFile9(): void {
   const {dir, home} = scratch();

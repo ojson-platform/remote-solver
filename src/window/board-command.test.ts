@@ -9,11 +9,11 @@ import {vi} from 'vitest';
 
 import {machine} from '../adapters/compose.ts';
 import {route} from '../cli.ts';
-import {memoryPorts} from '../adapters/github.ts';
+import {memoryPorts} from '../adapters/tracker/github.ts';
 import type {RunningTurn} from '../main.ts';
 import type {IssueRecord, Review, Runtime, Vcs} from '../machine/port.ts';
-import {pullSnapshots} from '../machine/snapshot.ts';
-import {modelFor} from '../machine/skill.ts';
+import {pullSnapshots} from '../machine/spy/snapshot.ts';
+import {modelFor} from '../machine/skill/skill.ts';
 import {
   applyTurn,
   boardModel,
@@ -29,7 +29,7 @@ import {
 import {renderWindow} from './client/render.ts';
 import type {WindowSnapshot} from './snapshot.ts';
 import {openWindow, type WindowTicket} from './window.ts';
-import {laterTurn, post, readSnapshot, yard} from './live.harness.ts';
+import {laterTurn, post, readSnapshot, yard} from './__tests__/live.harness.ts';
 import {
   deltaRequirement,
   held,
@@ -38,7 +38,7 @@ import {
   post as pagePost,
   readSnapshot as pageSnapshot,
   writeChange,
-} from './page.harness.ts';
+} from './__tests__/page.harness.ts';
 
 async function pageHtml(url: string): Promise<string> {
   const response = await fetch(new URL('/snapshot', url));

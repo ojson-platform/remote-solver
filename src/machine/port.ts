@@ -4,8 +4,8 @@
  * Marker grammar stays above these seams.
  */
 
-import type {Phase} from './phase.ts';
-import type {SkillMode} from './skill.ts';
+import type {Phase} from './phase/phase.ts';
+import type {SkillMode} from './skill/skill.ts';
 
 export type IssueKey = string;
 
@@ -257,3 +257,6 @@ export type Runtime = {
   run(skill: SkillRun): Promise<SkillOutcome>;
   ask(request: RuntimeAsk): Promise<AgentResult>;
 };
+
+/** Path of the `openspec` binary the fold runs. Arcadia may supply another one. */
+export type Openspec = () => string;

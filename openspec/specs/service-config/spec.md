@@ -103,25 +103,11 @@ When `ignore-comments` is a number, a map, or a list that is not all strings, th
 - **WHEN** `ignore-comments` is a number and the manager closes settings without saving
 - **THEN** the file still has that number
 
-### Requirement: A service config that does not parse hides that checkout
+### Requirement: A service config that does not parse names itself
 
-When the YAML of one checkout does not parse, the group SHALL say the file does not read, SHALL show no fields, SHALL offer no save, and SHALL NOT rewrite the file.
+When the YAML of one checkout does not parse, the group SHALL say the file does not read, SHALL show no fields, SHALL offer no save, and SHALL NOT rewrite the file. The card SHALL stay, and its reason SHALL be `конфиг сервиса не читается`. The open page SHALL be that sentence and SHALL NOT offer a field. The board row SHALL name the path. Other checkouts SHALL remain. «Взять» SHALL NOT act. The spy SHALL NOT move that checkout.
 
-Cards of that checkout only SHALL disappear.
-
-The board row `конфиг сервиса не читается` SHALL name the path.
-
-Other checkouts SHALL remain.
-
-A board with nothing to show SHALL remain.
-
-There SHALL be no `sddService` choice on a vanished card.
-
-«Взять» SHALL NOT act, because the card is gone.
-
-The window's spy SHALL NOT move that checkout.
-
-#### Scenario: One broken file hides only its cards
+#### Scenario: One broken file keeps its card
 
 The broken file SHALL NOT open settings.
 
@@ -134,7 +120,7 @@ The next step on that checkout SHALL NOT start until the file reads.
 When the file reads again, that checkout's cards SHALL return.
 
 - **WHEN** one checkout's `openspec/config.yaml` does not parse and another checkout's file reads
-- **THEN** the broken checkout's cards disappear, the row names that path, and the other checkout's cards remain
+- **THEN** the broken checkout's card stays with reason `конфиг сервиса не читается`, the row names that path, and the other checkout's card remains
 
 #### Scenario: The group does not rewrite a file that does not parse
 

@@ -6,13 +6,13 @@ import path from 'node:path';
 import {test, vi} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
-import type {AgentRun} from './adapters/agent.ts';
+import type {AgentRun} from './adapters/runtime/agent.ts';
 import {launcherRuntime, route} from './cli.ts';
 import type {Vcs} from './machine/port.ts';
 
 const runAgent = vi.hoisted(() => vi.fn(async (_run: AgentRun) => ({text: ''})));
 
-vi.mock('./adapters/agent.ts', () => ({runAgent}));
+vi.mock('./adapters/runtime/agent.ts', () => ({runAgent}));
 
 test('route sends spy, review, issue, and board to the launcher', () => {
   assert.deepEqual(route([]), {kind: 'help'});

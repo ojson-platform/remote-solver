@@ -1,4 +1,3 @@
-import {contentFiles, type IssueLinkKind, type Review, type Tracker, type Vcs} from './machine/port.ts';
 
 import {spawnSync} from 'node:child_process';
 import {mkdirSync, writeFileSync} from 'node:fs';
@@ -6,22 +5,23 @@ import path from 'node:path';
 
 import {solverRoot, turn, type Machine} from './adapters/compose.ts';
 import {openMachine} from './adapters/load.ts';
-import {packageLinks} from './adapters/vcs.ts';
+import {packageLinks} from './adapters/vcs/vcs.ts';
+import {readChange} from './machine/change/change.ts';
+import {changeDir} from './machine/change/naming.ts';
+import {accept as acceptGate, cycleRecord, publishChoice, type Decision} from './machine/decide/policy.ts';
+import {applyLabels, pick, resolveCycle, serviceWait} from './machine/flow/flow.ts';
+import {postFocusComment, validateFocusBody} from './machine/mark/focus.ts';
+import {focusMarkerLine} from './machine/mark/marker.ts';
+import {parseMarker} from './machine/mark/marker.ts';
+import {updateMirror} from './machine/mark/mirror.ts';
+import {openItemLayer, threadsReport, type OpenItemFile} from './machine/mark/review.ts';
+import {askComment, openWait, setPhase, setWait} from './machine/phase/labels.ts';
+import {GATE_EVENTS, labelsAfterAdvance, PHASES, type Phase} from './machine/phase/phase.ts';
+import {contentFiles, type IssueLinkKind, type Review, type Tracker, type Vcs} from './machine/port.ts';
+import {queueOf} from './machine/spy/queues.ts';
+import {resolveServiceRoot} from './machine/spy/service-config.ts';
+import {loadCycle} from './machine/spy/snapshot.ts';
 import {workingTree} from './window/change-files.ts';
-import {readChange} from './machine/change.ts';
-import {postFocusComment, validateFocusBody} from './machine/focus.ts';
-import {focusMarkerLine} from './machine/marker.ts';
-import {applyLabels, pick, resolveCycle, serviceWait} from './machine/flow.ts';
-import {openWait, setPhase, setWait} from './machine/labels.ts';
-import {parseMarker} from './machine/marker.ts';
-import {updateMirror} from './machine/mirror.ts';
-import {changeDir} from './machine/naming.ts';
-import {GATE_EVENTS, labelsAfterAdvance, PHASES, type Phase} from './machine/phase.ts';
-import {accept as acceptGate, cycleRecord, publishChoice, type Decision} from './machine/policy.ts';
-import {queueOf} from './machine/queues.ts';
-import {openItemLayer, threadsReport, type OpenItemFile} from './machine/review.ts';
-import {resolveServiceRoot} from './machine/service-config.ts';
-import {loadCycle} from './machine/snapshot.ts';
 
 // Verbs the skills call. The GitHub and git adapters sit behind them.
 //   sdd plan
@@ -369,7 +369,7 @@ async function wait(box: Machine, rest: string[]): Promise<void> {
   if (!reason) {
     fail(usage);
   }
-  await openWait(key, reason, box.tracker);
+  await openWait(key, askComment(reason), box.tracker);
 }
 
 async function unwait(box: Machine, rest: string[]): Promise<void> {

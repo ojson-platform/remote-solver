@@ -1,14 +1,14 @@
+import type {Decision} from '../machine/decide/policy.ts';
 import type {FileSource} from '../machine/port.ts';
 
 import path from 'node:path';
 
-import {documentDir, HEADINGS, type BranchFacts} from '../machine/change.ts';
-import {isFocusRecord} from '../machine/marker.ts';
-import {GATE_CLOSES, GATE_PHASES, phaseOf, phaseRank, type Phase} from '../machine/phase.ts';
+import {documentDir, HEADINGS, type BranchFacts} from '../machine/change/change.ts';
+import {isFocusRecord} from '../machine/mark/marker.ts';
+import {GATE_CLOSES, GATE_PHASES, phaseOf, phaseRank, type Phase} from '../machine/phase/phase.ts';
 
 import {changeFiles, changeRel, listedSpecs} from './change-files.ts';
 import {focusLayers, liveFocus} from './focus.ts';
-import type {Decision} from '../machine/policy.ts';
 import {
   COLUMN_NAMES,
   GATE_LABEL,
@@ -450,10 +450,25 @@ function gateOffOf(labels: readonly string[]): CycleCard['gateOff'] {
   return Object.keys(off).length > 0 ? off : undefined;
 }
 
+function reviewTakenOf(labels: readonly string[]): true | undefined {
+  const phase = phaseOf([...labels]);
+  if (
+    (phase === 'proposing' && labels.includes('sdd:proposed')) ||
+    (phase === 'specifying' && labels.includes('sdd:specified')) ||
+    (phase === 'designing' && labels.includes('sdd:designed'))
+  ) {
+    return true;
+  }
+  return undefined;
+}
+
 function withGates(card: PoolCard, labels: readonly string[]): PoolCard {
   const off = gateOffOf(labels);
   if (off) {
     card.gateOff = off;
+  }
+  if (reviewTakenOf(labels)) {
+    card.reviewTaken = true;
   }
   return card;
 }
@@ -617,6 +632,9 @@ function buildCycle(
   if (gateOff) {
     card.gateOff = gateOff;
   }
+  if (reviewTakenOf(item.labels)) {
+    card.reviewTaken = true;
+  }
   if (item.repo) {
     card.repo = item.repo;
   }
@@ -775,10 +793,7 @@ export function lay(input: {
       continue;
     }
     const home = input.gathered(item);
-    if (home && input.serviceBroken(home)) {
-      taken.add(item.key);
-      continue;
-    }
+    const broken = home !== undefined && input.serviceBroken(home);
     const phase = phaseOf([...item.labels]);
     const where = slotOf(item, phase, manager);
     if (where === 'cards') {
@@ -789,6 +804,10 @@ export function lay(input: {
       continue;
     }
     const checkout = input.cardOf(item);
+    if (broken) {
+      checkout.reason = 'конфиг сервиса не читается';
+      checkout.takeDisabled = true;
+    }
     const hideIcon = input.leading(item.key) || item.checks === 'pending';
     const review = input.review?.(item.key);
     const known = input.facts?.(item.key);

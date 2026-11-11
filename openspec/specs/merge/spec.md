@@ -78,6 +78,11 @@ The `accepted` label SHALL NOT merge and SHALL NOT archive. `auto-merge` on `acc
 - **WHEN** the phase is `accepted`, the change is archived, and the pull request is merged
 - **THEN** the machine closes the issue in place
 
+#### Scenario: A merged pull request beside an open one stays open
+
+- **WHEN** `accepting` has an archived change, one merged pull request, and one open pull request
+- **THEN** the machine does not close the issue and does not merge
+
 #### Scenario: Accepted waits while the pull request is open
 
 - **WHEN** the phase is `accepted`, the change is archived, and the pull request is still open

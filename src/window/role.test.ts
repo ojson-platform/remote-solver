@@ -20,8 +20,8 @@ import {
   scratch,
   ticket,
   yard,
-} from './window.harness.ts';
-import {articleOf, bandOf, held, hosted, pageHtml, post} from './page.harness.ts';
+} from './__tests__/window.harness.ts';
+import {articleOf, bandOf, held, hosted, pageHtml, post} from './__tests__/page.harness.ts';
 
 function proveTheShelfShowsTheOutcomeBeforeTheDrag(): void {
   const {dir, home, arcadia} = yard();

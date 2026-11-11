@@ -1,7 +1,7 @@
-import type {FileSource} from '../machine/port.ts';
-import type {BranchFacts, BranchText} from '../machine/change.ts';
 import type {Spine} from './spine.ts';
 import type {WindowReview, WindowTicket} from './types.ts';
+import type {BranchFacts, BranchText} from '../machine/change/change.ts';
+import type {FileSource} from '../machine/port.ts';
 
 import path from 'node:path';
 

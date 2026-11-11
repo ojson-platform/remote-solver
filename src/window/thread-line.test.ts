@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
-import {changeDir} from '../machine/naming.ts';
+import {changeDir} from '../machine/change/naming.ts';
 
 import {
   bandOf,
@@ -12,7 +12,7 @@ import {
   post,
   spineOf,
   writeChange,
-} from './page.harness.ts';
+} from './__tests__/page.harness.ts';
 
 const KEY = '49';
 
@@ -68,7 +68,7 @@ spec('thread-line', () => {
           const anchor = plan.indexOf(`data-at="${at}"`);
           const after = plan.slice(anchor, anchor + 800);
           assert.match(after, /комментарий, который был скрыт/);
-          assert.equal(bandOf(html, KEY).includes('ревью'), true);
+          assert.equal(bandOf(html, KEY).includes('ревью'), false);
         },
       );
     });
@@ -119,11 +119,9 @@ spec('thread-line', () => {
           const phaseAt = foot.indexOf('замечание на фазу');
           assert.ok(remarkAt >= 0 && phaseAt >= 0 && phaseAt < remarkAt);
           const band = bandOf(html, KEY);
-          const reviewBlock =
-            band.match(/<section class="block"[\s\S]*?<h3>ревью<\/h3>[\s\S]*?<\/section>/)?.[0] ??
-            '';
-          assert.equal(reviewBlock.includes('замечание на фазу'), true);
-          assert.equal(reviewBlock.includes('строка вне документа'), true);
+          assert.equal(band.includes('<h3>ревью</h3>'), false);
+          assert.match(plan, /замечание на фазу/);
+          assert.match(plan, /строка вне документа/);
         },
       );
     });
@@ -190,7 +188,7 @@ spec('thread-line', () => {
           const onLine = lineSlice.slice(firstAt, secondAt + 'второй тред'.length + 80);
           assert.equal(onLine.match(/class="posted-comment"/g)?.length, 3);
           assert.match(tasks, /замечание к slice tasks/);
-          assert.equal(bandOf(html, KEY).includes('ревью'), true);
+          assert.equal(bandOf(html, KEY).includes('ревью'), false);
         },
       );
     });

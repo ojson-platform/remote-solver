@@ -8,7 +8,7 @@ import {
   hosted,
   pageHtml,
   post,
-} from '../page.harness.ts';
+} from '../__tests__/page.harness.ts';
 
 function homeBeforeRoles(html: string): string {
   const start = html.indexOf('<h3>Дом</h3>');

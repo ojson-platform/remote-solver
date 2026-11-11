@@ -108,22 +108,22 @@ When the issue has no focus comment, the block SHALL be absent.
 - **THEN** the focus block's badge is `sdd:focus:code` and the prose is that comment in full
 ### Requirement: The focus block sits in the scrolling body
 
-The title and the chips SHALL sit in the sidebar header. The focus block SHALL sit in the scrolling body, directly under the title and above the reason and the ask. The chips SHALL stay in the header and SHALL NOT scroll with the block. The reason, the ask, an unmarked review, and a hook SHALL stay their own blocks under the pager.
+The title and the chips SHALL sit in the sidebar header. The focus block SHALL sit in the scrolling body, directly under the title. The chips SHALL stay in the header and SHALL NOT scroll with the block. The open row SHALL NOT show a reason block, an ask block, or a review title. A hook SHALL stay its own block under the pager.
 
-#### Scenario: The focus block sits directly under the title, above the reason and the ask
+#### Scenario: The focus block sits directly under the title
 
-- **WHEN** the focus block, the title, the reason, and the ask are already visible, and the focus block already sits directly under the title, above the reason and the ask, together with the focus block below the reason and the ask as the limit that can replace that place
-- **THEN** the focus block sits directly under the title, above the reason and the ask
+- **WHEN** the focus block and the title are already visible, and the focus block already sits directly under the title, together with a reason block or an ask block above it as the limit that can replace that place
+- **THEN** the focus block sits directly under the title and the open row has no reason block and no ask block
 
 #### Scenario: Chips stay in the header and do not scroll with the block
 
 - **WHEN** the chips, the header, and the block are already visible, and the chips already stay in the header and do not scroll with the block, together with the chips scrolling with the block as the limit that can replace that
 - **THEN** chips stay in the header and do not scroll with the block
 
-#### Scenario: The reason, the ask, an unmarked review, and a hook stay their own blocks under the pager
+#### Scenario: A hook stays under the pager and the reason, the ask, and a review title do not
 
-- **WHEN** the reason, the ask, an unmarked review, a hook, and the pager are already visible, and those four already stay their own blocks under the pager, together with those blocks inside the pager as the limit that can replace that
-- **THEN** the reason, the ask, an unmarked review, and a hook stay their own blocks under the pager
+- **WHEN** a hook and the pager are already visible, and a reason, an ask, and an unmarked review are not titled blocks under the pager
+- **THEN** the hook stays its own block under the pager, and the open row has no reason title, no ask title, and no review title
 ### Requirement: Each spine row keeps the first sentence of the latest written focus of that phase
 
 Each spine row SHALL keep the first sentence of the latest written focus of that phase.

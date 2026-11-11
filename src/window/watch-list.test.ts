@@ -17,7 +17,7 @@ import {
   writeOverlay,
   writeServiceConfig,
   yard,
-} from './window.harness.ts';
+} from './__tests__/window.harness.ts';
 
 function proveAnEmptyRootLeavesArcadiaOrGithub21(): void {
   const {dir, home, github} = yard();

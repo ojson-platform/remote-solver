@@ -41,7 +41,9 @@ A fold is present for Plan or Design when a section has text or the review remar
 
 A second click on an open row SHALL close it, and every row MAY then be closed.
 
-A click on the head of a row that has a fold, outside its gate or acceptance control, SHALL toggle that row, including the space the control opens above and below the name.
+A click on the head of a row that has a fold, outside its gate or acceptance control, SHALL toggle that row.
+
+A click on the phase name or its sentence SHALL toggle that row, including the space the control opens above and below the name.
 
 The open row's head SHALL stick to the top of the sidebar scroll.
 
@@ -51,7 +53,7 @@ The open row's head SHALL stick to the top of the sidebar scroll.
 #### Scenario: The row head toggles outside its control
 
 - **WHEN** a cycle is open and a row that has a fold shows a control taller than its name
-- **THEN** a click on that head outside the control toggles the row, a click on the control does not, and that head, including the space around the name, uses a pointer
+- **THEN** a click on the phase name toggles the row, a click on that head outside the control toggles the row, a click on the control does not, and that head, including the space around the name, uses a pointer
 
 #### Scenario: The open row head sticks
 

@@ -9,7 +9,7 @@ import {
   settingsAct,
   type FrameHold,
 } from './frame.ts';
-import {openedShot, shot, withGate} from './frame.fixture.ts';
+import {openedShot, shot, withGate} from './__tests__/frame.fixture.ts';
 
 const SETTINGS_ACTS = [
   'open-settings',
@@ -126,5 +126,12 @@ test('a later gate click replaces the earlier flip of that station', () => {
   assert.equal(second.gates[0]?.off, false);
   assert.equal(paintFrame(flipped, second).rows[0]?.gateOff?.proposing, true);
   assert.equal(paintFrame(flipped, second).rows[0]?.gateOff?.specifying, undefined);
+});
+
+test('an acceptance click marks the open row until its answer returns', () => {
+  const base = openedShot();
+  const held = holdGesture(emptyHold(), 4, 'accept-review', new URLSearchParams('key=7'), base);
+  assert.equal(paintFrame(base, held).rows[0]?.reviewTaken, true);
+  assert.equal(paintFrame(base, releaseHold(held, 4)).rows[0]?.reviewTaken, undefined);
 });
 

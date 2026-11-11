@@ -5,7 +5,7 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import type {IssueRecord} from '../machine/port.ts';
 import {openLiveBoard} from './live.ts';
-import {yard} from './live.harness.ts';
+import {yard} from './__tests__/live.harness.ts';
 import {
   MANAGER,
   bare,
@@ -18,7 +18,7 @@ import {
   post,
   stationOf,
   writeChange,
-} from './page.harness.ts';
+} from './__tests__/page.harness.ts';
 
 function copyIssue(issue: IssueRecord): IssueRecord {
   return {

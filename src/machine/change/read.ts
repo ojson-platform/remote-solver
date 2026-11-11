@@ -1,0 +1,274 @@
+import type {FileSource} from '../port.ts';
+import type {BranchFacts, BranchSpecText, BranchText, ChangeView} from './types.ts';
+
+import {createHash} from 'node:crypto';
+import path from 'node:path';
+
+import {archiveChangePath, archiveDir, changeDir} from './naming.ts';
+import {absorbedStamp, contentRevision, drifted, sharedStamp} from './stamp.ts';
+import {
+  cardScenarioNames,
+  deltaScenarioNames,
+  HEADINGS,
+  missingBaselineIds,
+  namedCapabilities,
+  sharedDelta,
+  slicedScenarioNames,
+  unchecked,
+  unjudgedAddedIds,
+} from './text.ts';
+
+const CHANGE_FILES = ['proposal.md', 'design.md', 'tasks.md'];
+
+/** Change documents in one directory, in dossier order. */
+function changeDocuments(dir: string, files: FileSource): string[] {
+  const named = CHANGE_FILES.map(name => path.join(dir, name)).filter(rel => files.exists(rel));
+  const specs = files.list(path.join(dir, 'specs')).filter(rel => rel.endsWith('spec.md'));
+  return [...named, ...specs];
+}
+
+function readableDocuments(dir: string, files: FileSource): string[] {
+  return changeDocuments(dir, files).filter(rel => files.read(rel).trim() !== '');
+}
+
+function changeBody(dir: string, files: FileSource): string[] {
+  return readableDocuments(dir, files).map(rel => `# ${rel}\n${files.read(rel).trim()}`);
+}
+
+/** Active change text, or the archive copy once accepting has folded it. */
+export function changeText(key: string, files: FileSource): string | null {
+  const active = changeBody(changeDir(key), files);
+  const text = active.length > 0 ? active : changeBody(archiveDir(key), files);
+  return text.length > 0 ? text.join('\n\n') : null;
+}
+
+export function readChange(key: string, files: FileSource): ChangeView {
+  const dir = changeDir(key);
+  const proposalPath = path.join(dir, 'proposal.md');
+  const designPath = path.join(dir, 'design.md');
+  const tasksPath = path.join(dir, 'tasks.md');
+  const docs = new Set(changeDocuments(dir, files));
+  const proposal = files.read(proposalPath);
+  const designText = files.read(designPath);
+  const tasksText = files.read(tasksPath);
+  const specRels = files
+    .list(path.join(dir, 'specs'))
+    .filter(rel => rel.endsWith('spec.md'))
+    .sort();
+  const specChunks = specRels.map(rel => ({path: rel, text: files.read(rel)}));
+  const cardRels = files
+    .list(path.join(dir, 'tasks'))
+    .filter(rel => rel.endsWith('.md') && path.basename(rel) !== 'tasks.md')
+    .sort();
+  const cardTexts = cardRels.map(rel => files.read(rel));
+  const missing = missingBaselineIds(proposal, rel => files.exists(rel));
+  return {
+    proposal: docs.has(proposalPath),
+    delta: [...docs].some(rel => rel.endsWith('spec.md')),
+    design: docs.has(designPath),
+    tasks: docs.has(tasksPath),
+    archived: files.exists(archiveDir(key)) || files.list(archiveDir(key)).length > 0,
+    openQuestions: unchecked(proposal, HEADINGS.openQuestions),
+    openDecisions: unchecked(files.read(designPath), HEADINGS.openDecisions),
+    openTasks: files
+      .read(tasksPath)
+      .split('\n')
+      .filter(line => line.trimStart().startsWith('- [ ]')).length,
+    capabilities: namedCapabilities(proposal),
+    missingBaseline: missing,
+    unjudged: unjudgedAddedIds(proposal),
+    proposalRevision: contentRevision([{path: proposalPath, text: proposal}]),
+    specsRevision: contentRevision(specChunks),
+    tasksInputRevision: contentRevision([...specChunks, {path: designPath, text: designText}]),
+    specStamp: sharedStamp(specChunks.map(chunk => chunk.text)),
+    designStamp: absorbedStamp(designText),
+    tasksStamp: absorbedStamp(tasksText),
+    specDrift: drifted(files, specRels),
+    designDrift: drifted(files, docs.has(designPath) ? [designPath] : []),
+    tasksDrift: drifted(files, docs.has(tasksPath) ? [tasksPath] : []),
+    deltaScenarios: specChunks.flatMap(chunk => deltaScenarioNames(chunk.text)),
+    cardScenarios: cardTexts.flatMap(cardScenarioNames),
+    cardRevision: sharedDelta(cardTexts),
+    slicedScenarios: slicedScenarioNames(tasksText),
+  };
+}
+
+function slash(rel: string): string {
+  return rel.split(path.sep).join('/');
+}
+
+function taskCounts(text: string, present: boolean): {done: number; open: number} | undefined {
+  if (!present) {
+    return undefined;
+  }
+  let done = 0;
+  let open = 0;
+  for (const line of text.split('\n')) {
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith('- [x]')) {
+      done += 1;
+    } else if (trimmed.startsWith('- [ ]')) {
+      open += 1;
+    }
+  }
+  return {done, open};
+}
+
+/**
+ * Where the documents sit.
+ * The active directory when a file there has text. The archive when it is the only text.
+ * An empty active file does not hide the archive. `readChange` still looks at the active directory.
+ */
+export function documentDir(key: string, files: FileSource): string {
+  const active = changeDir(key);
+  if (readableDocuments(active, files).length > 0) {
+    return active;
+  }
+  const archived = archiveDir(key);
+  if (readableDocuments(archived, files).length > 0) {
+    return archived;
+  }
+  return active;
+}
+
+function specEntries(files: FileSource, dir: string): {id: string; file: string}[] {
+  const specs = slash(path.join(dir, 'specs'));
+  const prefix = `${specs}/`;
+  const found: {id: string; file: string}[] = [];
+  for (const raw of files.list(specs)) {
+    const rel = slash(raw);
+    if (!rel.startsWith(prefix) || !rel.endsWith('/spec.md')) {
+      continue;
+    }
+    const id = rel.slice(prefix.length, -'/spec.md'.length);
+    if (id === '' || id === '.') {
+      continue;
+    }
+    found.push({id, file: rel});
+  }
+  found.sort((left, right) => left.id.localeCompare(right.id));
+  return found;
+}
+
+function markOf(pairs: readonly [string, string][]): string {
+  const hash = createHash('sha256');
+  for (const [rel, text] of [...pairs].sort((left, right) => left[0].localeCompare(right[0]))) {
+    hash.update(rel);
+    hash.update('\0');
+    hash.update(text);
+    hash.update('\0');
+  }
+  return hash.digest('hex');
+}
+
+function baselineRel(id: string): string {
+  return `openspec/specs/${id}/spec.md`;
+}
+
+/** True when `content` is the parent of an archive tip and `tip` is that archive. */
+function readsParent(key: string, tip: FileSource, content: FileSource): boolean {
+  if (tip === content) {
+    return false;
+  }
+  return (
+    changeDocuments(changeDir(key), tip).length === 0 &&
+    changeDocuments(archiveDir(key), tip).length > 0 &&
+    changeDocuments(changeDir(key), content).length > 0
+  );
+}
+
+/**
+ * The change view, the plaque summary, and the bytes both projections share.
+ * `files` is the tip. `content` is the parent when the tip is this issue's archive commit.
+ */
+export function readBranch(
+  key: string,
+  files: FileSource,
+  content: FileSource = files,
+): {change: ChangeView; facts: BranchFacts; text: BranchText} {
+  const change = readChange(key, files);
+  const dir = documentDir(key, content);
+  const proposalPath = path.join(dir, 'proposal.md');
+  const designPath = path.join(dir, 'design.md');
+  const tasksPath = path.join(dir, 'tasks.md');
+  const proposal = content.exists(proposalPath) ? slash(proposalPath) : undefined;
+  const design = content.exists(designPath) ? slash(designPath) : undefined;
+  const tasksFile = content.exists(tasksPath) ? slash(tasksPath) : undefined;
+  const specs = specEntries(content, dir);
+  const pairs: [string, string][] = [];
+  const body = new Map<string, string>();
+  const take = (rel: string | undefined) => {
+    if (!rel || body.has(rel)) {
+      return;
+    }
+    const text = content.read(rel);
+    body.set(rel, text);
+    pairs.push([rel, text]);
+  };
+  take(proposal);
+  take(design);
+  take(tasksFile);
+  const specText: BranchSpecText[] = [];
+  for (const spec of specs) {
+    take(spec.file);
+    const baseline = baselineRel(spec.id);
+    if (content.exists(baseline)) {
+      take(baseline);
+    }
+    specText.push({
+      id: spec.id,
+      rel: spec.file,
+      delta: body.get(spec.file) ?? '',
+      baseline: body.get(baseline) ?? '',
+    });
+  }
+  const proposalText = proposal ? (body.get(proposal) ?? '') : '';
+  const tasksText = tasksFile ? (body.get(tasksFile) ?? '') : '';
+  const taskFiles: {id: string; body: string}[] = [];
+  for (const line of tasksText.split('\n')) {
+    const id = /^- \[[ x]\] `([^`]+)`/.exec(line.trim())?.[1];
+    if (!id || /[/\\]|\.\./.test(id)) {
+      continue;
+    }
+    const rel = slash(path.join(dir, 'tasks', `${id}.md`));
+    if (!content.exists(rel)) {
+      continue;
+    }
+    take(rel);
+    taskFiles.push({id, body: body.get(rel) ?? ''});
+  }
+  const baselines: string[] = [];
+  for (const id of [...namedCapabilities(proposalText), ...specText.map(spec => spec.id)]) {
+    if (content.exists(baselineRel(id)) && !baselines.includes(id)) {
+      baselines.push(id);
+    }
+  }
+  const fromParent = readsParent(key, files, content);
+  const place = (rel: string): string => (fromParent ? archiveChangePath(key, rel) : rel);
+  const shownProposal = proposal ? place(proposal) : undefined;
+  const shownDesign = design ? place(design) : undefined;
+  const shownTasks = tasksFile ? place(tasksFile) : undefined;
+  const shownSpecs = specs.map(spec => ({...spec, file: place(spec.file)}));
+  return {
+    change,
+    text: {
+      proposal: proposalText,
+      design: design ? (body.get(design) ?? '') : '',
+      tasks: tasksText,
+      taskFiles,
+      specs: specText.map(spec => ({...spec, rel: place(spec.rel)})),
+      baselines,
+      root: place(slash(dir)),
+    },
+    facts: {
+      fingerprint: markOf(pairs.map(([rel, text]) => [place(rel), text])),
+      questions: change.openQuestions,
+      decisions: change.openDecisions,
+      ...(shownTasks ? {tasks: taskCounts(body.get(tasksFile ?? '') ?? '', true)} : {}),
+      ...(shownProposal ? {proposal: shownProposal} : {}),
+      ...(shownDesign ? {design: shownDesign} : {}),
+      ...(shownTasks ? {tasksFile: shownTasks} : {}),
+      specs: shownSpecs,
+    },
+  };
+}

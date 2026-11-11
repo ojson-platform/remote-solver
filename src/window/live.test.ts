@@ -7,7 +7,7 @@ import {test} from 'vitest';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {machine} from '../adapters/compose.ts';
-import {clearGithubPause, memoryPorts} from '../adapters/github.ts';
+import {clearGithubPause, memoryPorts} from '../adapters/tracker/github.ts';
 import type {Runtime, Vcs} from '../machine/port.ts';
 import type {ThreadTarget} from '../machine/port.ts';
 import {
@@ -17,7 +17,7 @@ import {
   watchSpy,
   type LiveReview,
 } from './live.ts';
-import {readSnapshot, yard} from './live.harness.ts';
+import {readSnapshot, yard} from './__tests__/live.harness.ts';
 
 const MANAGER = 'ada';
 

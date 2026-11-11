@@ -1,12 +1,15 @@
+import type {Openspec, QueueConfig, Review, Runtime, Tracker, Vcs} from '../machine.ts';
+
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-import {performIssue} from '../machine/flow.ts';
-import type {Review, Runtime, Tracker, Vcs} from '../machine/port.ts';
-import type {QueueConfig} from '../machine/service-config.ts';
-import {githubAdapters} from './github.ts';
-import {gitVcs, packageLinks} from './vcs.ts';
+import {performIssue} from '../machine/flow/flow.ts';
+import {adapterMachine} from '../machine.ts';
+
+import {openspecExecutable} from './openspec/openspec.ts';
+import {githubAdapters} from './tracker/github.ts';
+import {gitVcs, packageLinks} from './vcs/vcs.ts';
 
 export type MachineConfig = {
   queues: QueueConfig[];
@@ -22,15 +25,17 @@ export type Machine = {
   review: Review;
   vcs: Vcs;
   runtime?: Runtime;
+  openspec: Openspec;
 };
 
-/** Anything omitted is the adapter this repository ships: GitHub, git, sandcastle. */
+/** Anything omitted is the adapter this repository ships: GitHub, git, sandcastle, the OpenSpec binary. */
 export type MachineOptions = {
   config?: Partial<MachineConfig>;
   tracker?: Tracker;
   review?: Review;
   vcs?: Vcs;
   runtime?: Runtime;
+  openspec?: Openspec;
 };
 
 /** This package, not the service the machine is pointed at. */
@@ -67,7 +72,7 @@ export function machine(root = process.cwd(), options: MachineOptions = {}): Mac
   const github =
     options.tracker && options.review
       ? undefined
-      : githubAdapters({prBase: config.base, ignoreComments: config.ignoreComments});
+      : githubAdapters({prBase: config.base, ignoreComments: config.ignoreComments}, adapterMachine);
   return {
     root,
     config,
@@ -75,8 +80,9 @@ export function machine(root = process.cwd(), options: MachineOptions = {}): Mac
     review: options.review ?? github!.review,
     vcs:
       options.vcs ??
-      gitVcs(root, {branchPrefix: config.branchScope, defaultBranch: `origin/${config.base}`}),
+      gitVcs(root, {branchPrefix: config.branchScope, defaultBranch: `origin/${config.base}`}, adapterMachine),
     runtime: options.runtime,
+    openspec: options.openspec ?? openspecExecutable,
   };
 }
 
@@ -95,6 +101,7 @@ export function turn(box: Machine, key: string): ReturnType<typeof performIssue>
       checkout: () =>
         box.vcs.prepare(key, {worktreesDir: '.worktrees', links: packageLinks(solverRoot())}),
       readTip: () => (box.vcs.tipMessage ? box.vcs.tipMessage(key) : Promise.resolve(undefined)),
+      openspec: box.openspec,
     }),
   );
 }

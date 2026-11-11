@@ -14,15 +14,15 @@ import {stringify} from 'yaml';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
-import {memoryPorts} from '../adapters/github.ts';
-import {change} from '../machine/harness.ts';
-import {resolveIssue} from '../machine/flow.ts';
-import {changeDir} from '../machine/naming.ts';
+import {memoryPorts} from '../adapters/tracker/github.ts';
+import {change} from '../machine/__tests__/harness.ts';
+import {resolveIssue} from '../machine/flow/flow.ts';
+import {changeDir} from '../machine/change/naming.ts';
 import type {FileSource} from '../machine/port.ts';
 
 import {gesture} from './client/gesture.ts';
 import {openLiveBoard} from './live.ts';
-import {yard as liveYard} from './live.harness.ts';
+import {yard as liveYard} from './__tests__/live.harness.ts';
 import {serveBoard} from './page.ts';
 import {
   articleOf,
@@ -40,7 +40,7 @@ import {
   stationOf,
   writeChange as pageWrite,
   writeQueues,
-} from './page.harness.ts';
+} from './__tests__/page.harness.ts';
 import {
   COLUMN_NAMES,
   MANAGER,
@@ -60,13 +60,13 @@ import {
   writeServiceYaml,
   visibleKeys,
   yard,
-} from './window.harness.ts';
+} from './__tests__/window.harness.ts';
 import {plaqueLines} from './board.ts';
 import {liveFocus} from './focus.ts';
 import {openWindow} from './window.ts';
 import type {BoardTurn} from './types.ts';
 import type {WindowTicket} from './types.ts';
-import type {Decision} from '../machine/policy.ts';
+import type {Decision} from '../machine/decide/policy.ts';
 
 const finishedCycleChange = change({
   proposal: true,
@@ -1209,12 +1209,21 @@ async function proveAnUnnamedServiceIsAField(): Promise<void> {
       const popup = await pageHtml(page.url);
       const dialog = between(popup, '<div class="popup repair"', '</div></div>');
       assert.match(dialog, /aria-label="Поломка"/);
+      assert.equal(dialog.includes('<select'), false);
       assert.equal(popup.includes('role="dialog" aria-label="Настройки"'), false);
-      assert.match(dialog, /<option disabled(?:="")?>—<\/option>/);
-      assert.equal(/<option disabled(?:="")? value=/.test(dialog), false);
-      assert.match(dialog, /<option value="" selected="">/);
-      assert.match(dialog, /<option value="services\/api">/);
-      assert.equal(articleOf(popup, '2').includes('<select'), false);
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '2'}).toString()))
+          .status,
+        200,
+      );
+      const opened = await pageHtml(page.url);
+      const side = bandOf(opened, '2');
+      assert.match(side, /не назван сервис/);
+      assert.match(side, /<option disabled(?:="")?>—<\/option>/);
+      assert.equal(/<option disabled(?:="")? value=/.test(side), false);
+      assert.match(side, /<option value="" selected="">/);
+      assert.match(side, /<option value="services\/api">/);
+      assert.equal(articleOf(opened, '2').includes('<select'), false);
       const missing = await post(
         page.url,
         'act',
@@ -1722,8 +1731,8 @@ spec('board', () => {
           assert.equal(opened.status, 200);
           const html = await pageHtml(page.url);
           const side = bandOf(html, '1');
-          assert.match(side, /Review the proposal\. To accept it, replace the label sdd:proposing/);
-          assert.match(side, /run sdd accept 5\./);
+          assert.equal(side.includes('Review the proposal'), false);
+          assert.equal(side.includes('<h3>ask</h3>'), false);
         },
       );
     });
@@ -1779,7 +1788,7 @@ spec('board', () => {
     });
   });
   requirement('A break opens one repair field', () => {
-    scenario('An unnamed service is a field in the exclamation popup', () =>
+    scenario('An unnamed service is a field on the open page', () =>
       proveAnUnnamedServiceIsAField(),
     );
     scenario('A missing catalog shows the reason and no field', async () => {
@@ -2696,6 +2705,19 @@ spec('live-focus-page', () => {
       assert.equal(plaque.bottom?.includes('checks'), false);
     });
   });
+  requirement('A refused archive is the open page', () => {
+    scenario('The plaque shows the same refused archive', () => {
+      const said =
+        'openspec validate --all --strict refused spec/board: Requirement text is very long (>500 characters)';
+      const {live, plaque} = plaqueLiveInput({
+        phase: 'accepting',
+        decision: {kind: 'wait', issue: '1', reason: `archive refused: ${said}`},
+        phaseRow: {done: 1, open: 3},
+      });
+      assert.equal(live?.text, said);
+      assert.equal(plaque.bottom, said);
+    });
+  });
   requirement('A review gate keeps the written focus and the ask', () => {
     scenario('On a review gate the plaque does not take the live sentence', () => {
       const {live, plaque} = plaqueLiveInput({
@@ -3238,10 +3260,15 @@ spec('link-mark', () => {
             new URLSearchParams({act: 'open', key: '1'}).toString(),
           );
           assert.equal(opened.status, 200);
-          const line = reasonParagraphOf(bandOf(await pageHtml(page.url), '1'));
-          assert.ok(line !== undefined);
-          assert.equal(line.includes('дети'), false);
-          assert.equal(line.includes('блокеры'), false);
+          const html = await pageHtml(page.url);
+          const card = [
+            ...window.board().columns.flatMap(column => column.cards),
+            ...window.board().pool,
+          ].find(item => item.key === '1');
+          assert.ok(card?.reason);
+          assert.equal(card.reason.includes('дети'), false);
+          assert.equal(card.reason.includes('блокеры'), false);
+          assert.equal(bandOf(html, '1').includes('<h3>повод</h3>'), false);
         },
       );
     });
@@ -3277,11 +3304,16 @@ spec('link-mark', () => {
             new URLSearchParams({act: 'open', key: '1'}).toString(),
           );
           assert.equal(opened.status, 200);
-          const line = reasonParagraphOf(bandOf(await pageHtml(page.url), '1'));
-          assert.ok(line !== undefined);
-          assert.match(line, /Ask/);
-          assert.match(line, /вопросы 1/);
-          assert.match(line, /мерж/);
+          const html = await pageHtml(page.url);
+          const card = [
+            ...window.board().columns.flatMap(column => column.cards),
+            ...window.board().pool,
+          ].find(item => item.key === '1');
+          assert.ok(card?.reason);
+          assert.match(card.reason, /Ask/);
+          assert.match(card.reason, /вопросы 1/);
+          assert.match(card.reason, /мерж/);
+          assert.equal(bandOf(html, '1').includes('<h3>повод</h3>'), false);
         },
       );
     });
@@ -3598,7 +3630,7 @@ spec('written-focus-page', () => {
   });
 
   requirement('The focus block sits in the scrolling body', () => {
-    scenario('The focus block sits directly under the title, above the reason and the ask', async () => {
+    scenario('The focus block sits directly under the title', async () => {
       await hosted(
         {
           login: () => MANAGER,
@@ -3622,9 +3654,9 @@ spec('written-focus-page', () => {
           const side = bandOf(await pageHtml(page.url), '1');
           const scroll = sideScrollHtml(side);
           const focusAt = blockIndex(scroll, 'focus-block');
-          const reasonAt = blockIndex(scroll, '<h3>повод</h3>');
-          const askAt = blockIndex(scroll, '<h3>ask</h3>');
-          assert.ok(focusAt < reasonAt && reasonAt < askAt);
+          assert.ok(focusAt >= 0);
+          assert.equal(scroll.includes('<h3>повод</h3>'), false);
+          assert.equal(scroll.includes('<h3>ask</h3>'), false);
         },
       );
     });
@@ -3651,7 +3683,7 @@ spec('written-focus-page', () => {
     });
 
     scenario(
-      'The reason, the ask, an unmarked review, and a hook stay their own blocks under the pager',
+      'A hook stays under the pager and the reason, the ask, and a review title do not',
       async () => {
         await hosted(
           {
@@ -3678,13 +3710,13 @@ spec('written-focus-page', () => {
             const side = bandOf(await pageHtml(page.url), '1');
             const scroll = sideScrollHtml(side);
             const focusAt = blockIndex(scroll, 'focus-block');
-            const reasonAt = blockIndex(scroll, '<h3>повод</h3>');
-            const askAt = blockIndex(scroll, '<h3>ask</h3>');
-            const reviewAt = blockIndex(scroll, '<h3>ревью</h3>');
             const hookAt = blockIndex(scroll, '<h3>хук</h3>');
-            assert.ok(focusAt < reasonAt && reasonAt < askAt && askAt < reviewAt && reviewAt < hookAt);
+            assert.ok(focusAt >= 0 && hookAt > focusAt);
+            assert.equal(scroll.includes('<h3>повод</h3>'), false);
+            assert.equal(scroll.includes('<h3>ask</h3>'), false);
+            assert.equal(scroll.includes('<h3>ревью</h3>'), false);
+            assert.match(scroll, /please review this/);
             const spine = side.slice(side.indexOf('<div class="spine">'));
-            assert.equal(spine.includes('<h3>ревью</h3>'), false);
             assert.equal(spine.includes('<h3>хук</h3>'), false);
           },
         );

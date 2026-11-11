@@ -2,39 +2,39 @@
 
 ## Purpose
 
-The sidebar is the open cycle beside the board. It shows the icon reason, the ask, focus, unanswered review, and the hook. A cycle in the pool and a cycle in a column are read the same way.
+The sidebar is the open cycle beside the board. It shows focus, phase lines, and the hook. It does not show the icon reason, the ask, or a review title. A cycle in the pool and a cycle in a column are read the same way.
 
 ## Requirements
 
-### Requirement: The icon reason block is the card's line
+### Requirement: The open row does not show the icon reason
 
-The icon reason block SHALL show the row's reason line in full. When the plaque moves a question or decision count onto the phase row and drops that line, the open row SHALL still show the count. When the row has no reason, the block SHALL be absent.
+The open row SHALL NOT show the icon reason. The closed card SHALL keep its reason line. When the row has no reason, the open row SHALL still have no reason block.
 
-#### Scenario: The open row shows the hidden tail
+#### Scenario: The open row does not repeat the card line
 
 - **WHEN** the closed plaque's reason line is longer than the plaque shows
-- **THEN** the open row shows the whole line
+- **THEN** the open row has no reason block and the card keeps its line
 
 #### Scenario: No icon means no reason block
 
 - **WHEN** the row has no reason
 - **THEN** the open row has no icon reason block
 
-### Requirement: Ask shows the latest comment that is not focus
+### Requirement: The open row has no ask block
 
-The ask block SHALL be present while the issue carries `sdd:wait-human`, and it SHALL show the latest issue comment whose first line is not `sdd:focus`. The open row SHALL show that text in full. When the label is removed, the block SHALL go, even if comments remain. A later focus comment SHALL NOT take the ask's place.
+The open row SHALL NOT show an ask block, including while the issue carries `sdd:wait-human`.
 
-#### Scenario: Wait shows the ask
+#### Scenario: A waiting issue has no ask block
 
 - **WHEN** the issue carries `sdd:wait-human` and the latest issue comment does not start with `sdd:focus`
-- **THEN** the ask block shows that comment
+- **THEN** the open row has no ask block
 
-#### Scenario: A focus comment is skipped
+#### Scenario: A focus comment leaves no ask block
 
 - **WHEN** the issue carries `sdd:wait-human` and the latest comment starts with `sdd:focus`, and an older comment does not
-- **THEN** the ask block shows the latest comment that does not start with `sdd:focus`
+- **THEN** the open row has no ask block
 
-#### Scenario: Clearing the label removes the ask
+#### Scenario: Clearing the label leaves no ask block
 
 - **WHEN** `sdd:wait-human` is removed and the comments remain
 - **THEN** the open row has no ask block
@@ -55,7 +55,7 @@ The focus block SHALL show the body after the first line `sdd:focus` of the late
 
 ### Requirement: Unanswered review shows threads the port already gives
 
-The unanswered block SHALL be present when a thread has no marker, or the conversation's last comment has no marker. It SHALL show the thread lines and the last conversation comment the review port already gives. When there is no such thread and no such conversation, the block SHALL be absent.
+The unanswered block SHALL be present when a thread has no marker, or the conversation's last comment has no marker. It SHALL show the thread lines and the last conversation comment the review port already gives, and SHALL NOT title them `ревью`. When there is no such thread and no such conversation, the block SHALL be absent.
 
 #### Scenario: An unmarked thread is shown
 
@@ -107,7 +107,7 @@ The window SHALL NOT write `sddHooks`.
 
 ### Requirement: The open row shows only the blocks that exist
 
-The open row SHALL show only the blocks that exist, top to bottom: the icon reason, the ask, the verbs, and the spine. An absent block SHALL leave no empty place.
+The open row SHALL show only the blocks that exist: focus, phase lines, and the hook. It SHALL NOT show the icon reason or the ask. An absent block SHALL leave no empty place.
 
 #### Scenario: A cycle with only focus shows focus
 

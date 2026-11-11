@@ -1,9 +1,9 @@
 import type {Vcs} from './machine/port.ts';
 
 import {solverRoot, type Machine} from './adapters/compose.ts';
-import {repo} from './adapters/github.ts';
+import {repo} from './adapters/tracker/github.ts';
 import {openMachine} from './adapters/load.ts';
-import {agentRuntime, type AgentRuntimeConfig} from './adapters/runtime.ts';
+import {agentRuntime, type AgentRuntimeConfig} from './adapters/runtime/runtime.ts';
 import {runIssue, runSpy} from './main.ts';
 import {runReview} from './reviewer/run.ts';
 import {

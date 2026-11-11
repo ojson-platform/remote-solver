@@ -14,7 +14,7 @@ import {createHash} from 'node:crypto';
 import {existsSync, mkdirSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 
-import {phaseOf} from '../machine/phase.ts';
+import {phaseOf} from '../machine/phase/phase.ts';
 
 import {lay, slotOf} from './board.ts';
 import {openCheckout, unreadableRow} from './checkout.ts';
@@ -37,8 +37,8 @@ import {openRoleEditor, runRole, shelfOf} from './role.ts';
 import {openServiceGroup} from './service-group.ts';
 import {blocksFor} from './sidebar.ts';
 import {buildSpine, projectSpine, reviewGateForPhase, type Spine} from './spine.ts';
-import {createBoardStore, type BoardStore} from './store.ts';
 import {runSpy} from './spy.ts';
+import {createBoardStore, type BoardStore} from './store.ts';
 import {COLUMN_NAMES, GATE_LABEL, GATE_STATIONS, isGateStation} from './types.ts';
 
 export type {
@@ -357,6 +357,10 @@ export function openWindow(
     turn: (key: string) => outside.turn?.(key),
     running: (key: string) => outside.leading?.(key) === true,
     decision: (key: string) => outside.decision?.(key),
+    waiting(key: string) {
+      const item = checkout.sorted().find(ticket => ticket.key === key);
+      return item?.labels.includes('sdd:wait-human') === true;
+    },
     cycleLabel(key: string) {
       const item = checkout.sorted().find(ticket => ticket.key === key);
       return item ? phaseOf([...item.labels]) : null;
@@ -543,10 +547,32 @@ export function openWindow(
       const item = checkout.sorted().find(ticket => ticket.key === key);
       const phase = item ? phaseOf([...item.labels]) : null;
       const gate = reviewGateForPhase(phase);
+      const decision = outside.decision?.(key);
+      if (decision !== undefined) {
+        const gated =
+          decision.kind === 'wait' &&
+          decision.gate !== undefined &&
+          reviewGateForPhase(decision.gate.from) === gate;
+        if (!gated) {
+          return 'Принять не удалось.';
+        }
+      }
       if (!item || !gate || (item.openPullRequests ?? 0) !== 1 || !outside.editLabels) {
         return 'Принять не удалось.';
       }
-      outside.editLabels(key, [`sdd:${gate}`]);
+      const label = `sdd:${gate}`;
+      if (item.labels.includes(label)) {
+        return undefined;
+      }
+      outside.editLabels(key, [label]);
+      return undefined;
+    },
+    continueWait(key: string) {
+      const item = checkout.sorted().find(ticket => ticket.key === key);
+      if (!item?.labels.includes('sdd:wait-human') || !outside.editLabels) {
+        return 'Продолжить не удалось.';
+      }
+      outside.editLabels(key, [], ['sdd:wait-human']);
       return undefined;
     },
     openSettings() {

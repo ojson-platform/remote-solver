@@ -14,6 +14,7 @@ import {
   cycle,
   homeRoles,
   hookQueues,
+  kinds,
   openCycles,
   openHookGroup,
   openSide,
@@ -28,7 +29,7 @@ import {
   writeServiceConfig,
   writeServiceYaml,
   yard,
-} from './window.harness.ts';
+} from './__tests__/window.harness.ts';
 
 test('choosing an agent does not read a live catalog', () => {
   const {dir, home} = scratch();
@@ -649,7 +650,7 @@ test('the sidebar reason is the card full line', () => {
   const line = 'proposed · Ask · вопросы 1 · мерж';
   assert.equal(card?.reason, line);
   window.openCard('p');
-  assert.deepEqual(window.sidebar()[0], {kind: 'reason', line});
+  assert.equal(kinds(window.sidebar()).includes('reason'), false);
   rmSync(dir, {recursive: true, force: true});
 });
 
@@ -663,7 +664,7 @@ test('a decision-only card hides the line and the sidebar still shows it', () =>
   assert.equal(card?.icon, true);
   assert.equal(card?.reason, undefined);
   window.openCard('1');
-  assert.deepEqual(window.sidebar(), [{kind: 'reason', line: 'решения 1'}]);
+  assert.equal(kinds(window.sidebar()).includes('reason'), false);
   rmSync(dir, {recursive: true, force: true});
 });
 
@@ -803,8 +804,6 @@ test('the sidebar lists the blocks that exist from reason through hook', () => {
       body: 'Plan gap\n',
       display: focusBlockProse('sdd:focus', 'Plan gap\n'),
     },
-    {kind: 'reason', line: 'proposed · Ask'},
-    {kind: 'ask', body: 'please decide'},
     {kind: 'unanswered', threads: [{lines: ['please look']}]},
     {kind: 'hook', points: [{action: 'archive', point: 'before', paragraph: 'keep'}]},
   ]);

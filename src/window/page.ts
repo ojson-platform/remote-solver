@@ -53,6 +53,7 @@ type Surface = {
     hold?: string,
   ) => string | undefined | Promise<string | undefined>;
   acceptReview: (key: string) => string | undefined;
+  continueWait: (key: string) => string | undefined;
   shelf: () => {name: string; outcome: RoleOutcome}[];
   settings: () => SettingsState;
   overlay: () => OverlayGroup;
@@ -78,7 +79,7 @@ type Surface = {
   spyNote: () => string;
   turn: (key: string) => BoardTurn | undefined;
   running: (key: string) => boolean;
-  decision?: (key: string) => import('../machine/policy.ts').Decision | undefined;
+  decision?: (key: string) => import('../machine/decide/policy.ts').Decision | undefined;
   cycleLabel?: (key: string) => string | null;
   checks?: (key: string) => 'green' | 'red' | 'pending' | 'none' | undefined;
   openReviewPlace: (file: string, line: number) => string | undefined;
@@ -453,6 +454,17 @@ async function apply(
         view.status = status;
       }
       updatePhaseDraftAfterAnswer(view, key, layer, reply, status);
+    }
+    return finish(surface, params, act, view);
+  }
+  if (act === 'continue') {
+    const key = params.get('key') ?? '';
+    if (key) {
+      view.show = key;
+      const status = surface.continueWait(key);
+      if (status !== undefined) {
+        view.status = status;
+      }
     }
     return finish(surface, params, act, view);
   }

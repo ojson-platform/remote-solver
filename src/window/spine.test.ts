@@ -12,8 +12,8 @@ import {test} from 'vitest';
 import {FocusBlocks} from './client/sidebar.tsx';
 import type {WindowSnapshot} from './snapshot.ts';
 
-import {readBranch} from '../machine/change.ts';
-import {changeDir} from '../machine/naming.ts';
+import {readBranch} from '../machine/change/change.ts';
+import {changeDir} from '../machine/change/naming.ts';
 import {changeFiles} from './change-files.ts';
 import {headClickToggles, keptSpineLayer, rowHeadOpens, toggledSpineLayer} from './client/gesture.ts';
 import {
@@ -36,8 +36,8 @@ import {
   spineOf,
   statusOf,
   writeChange,
-} from './page.harness.ts';
-import {proveAnOpenCycleWhoseOnlySidebarBlockIsFocusShowsThatBlock113} from './window.harness.ts';
+} from './__tests__/page.harness.ts';
+import {proveAnOpenCycleWhoseOnlySidebarBlockIsFocusShowsThatBlock113} from './__tests__/window.harness.ts';
 
 function hasPhrase(entries: readonly SpecEntry[] | undefined, phrase: string): boolean {
   if (!entries) {
@@ -319,7 +319,7 @@ spec('spine', () => {
     scenario('The row head toggles outside its control', async () => {
       const label = {closest: (selector: string) => (selector === 'label' ? label : null)};
       const acts = {closest: (selector: string) => (selector === '.acts' ? acts : null)};
-      assert.equal(headClickToggles(label), false);
+      assert.equal(headClickToggles(label), true);
       assert.equal(headClickToggles(acts), false);
       assert.equal(headClickToggles({closest: () => null}), true);
       assert.equal(headClickToggles(null), false);

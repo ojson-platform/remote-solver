@@ -95,7 +95,7 @@ In the sidebar the chips SHALL sit under the title and SHALL stay in place while
 
 ### Requirement: The reason block no longer names children or blockers
 
-The reason block SHALL no longer name children or blockers. Open questions, Ask, and the merge SHALL stay in that block.
+The closed card's reason line SHALL no longer name children or blockers. Open questions, Ask, and the merge SHALL stay on that line. The open row SHALL NOT show that line.
 
 #### Scenario: The reason block no longer names children or blockers
 

@@ -14,7 +14,7 @@ import {Gate, LinkMarks} from './board.tsx';
 import {BusyEdge} from './busy.tsx';
 import {ActForm, Hidden} from './forms.tsx';
 import {capIsOpen, layerHasFold, linkFocusProseParts, type FocusProsePart} from './gesture.ts';
-import {Cross, SendMark} from './marks.tsx';
+import {Cross, Pill, SendMark} from './marks.tsx';
 
 function codeLine(line: string, places: Record<string, string>): ReactNode {
   const matched = /^(\s*)Code(\s+)(\S.*)$/.exec(line);
@@ -868,12 +868,18 @@ export function FocusBlocks({
   blocks,
   pageIndex = 0,
   capabilities = [],
+  tail,
+  exclusive = false,
 }: {
   blocks: readonly SidebarBlock[];
   pageIndex?: number;
   capabilities?: readonly {id: string; rows: readonly SpecEntry[]}[];
+  tail?: string;
+  exclusive?: boolean;
 }): ReactNode {
-  const pages = focusPages(blocks);
+  const pages = exclusive
+    ? focusPages(blocks).filter(page => page.kind === 'live').slice(0, 1)
+    : focusPages(blocks);
   if (pages.length === 0) {
     return null;
   }
@@ -882,7 +888,8 @@ export function FocusBlocks({
   const pageCount = pages.length;
   const currentPage = pageCount - index;
   const badge = page.kind === 'live' ? page.badge : page.marker;
-  const prose = page.kind === 'live' ? page.text : page.display;
+  const stored = page.kind === 'live' ? page.text : page.display;
+  const prose = index === 0 && page.kind === 'focus' && tail ? `${stored.replace(/\s*$/, '')}\n${tail}` : stored;
   return (
     <section className="block focus-block">
       {pageCount > 1 ? (
@@ -958,7 +965,6 @@ function codeExtra(blocks: readonly SidebarBlock[], places: Record<string, strin
       if (block.kind === 'unanswered') {
         return (
           <section className="block" key={index}>
-            <h3>ревью</h3>
             {(block.threads ?? []).map((thread, threadIndex) => (
               <pre key={threadIndex}>{thread.lines.join('\n')}</pre>
             ))}
@@ -1191,13 +1197,63 @@ export type DocumentRemark = {
   Plan: string;
   Specify: string;
   Design: string;
+  Accept: string;
 };
+
+const CHECKOUT_BREAKS = [
+  'не назван сервис',
+  'конфига сервиса нет',
+  'каталога нет',
+  'очереди нет в конфиге сервиса',
+  'конфиг сервиса не читается',
+];
+
+function checkoutBreak(reason: string | undefined): string | undefined {
+  if (reason === undefined || reason === '') {
+    return undefined;
+  }
+  return CHECKOUT_BREAKS.find(item => reason === item || reason.startsWith(`${item} ·`));
+}
+
+function repairField(
+  row: {key: string; reason?: string; choices: readonly string[]},
+  service: string | undefined,
+): ReactNode {
+  const name = checkoutBreak(row.reason);
+  if (name === 'не назван сервис' && row.choices.length >= 2) {
+    return (
+      <ActForm act="choose-service" className="choice">
+        <Hidden name="key" value={row.key} />
+        <label>сервис</label>
+        <select name="service" defaultValue={service ?? ''}>
+          <option disabled>—</option>
+          {row.choices.map(choice => (
+            <option key={choice === '' ? 'root' : choice} value={choice}>
+              {choice}
+            </option>
+          ))}
+        </select>
+      </ActForm>
+    );
+  }
+  if (name === 'конфига сервиса нет') {
+    return (
+      <ActForm act="plant-queue">
+        <Hidden name="key" value={row.key} />
+        <label>очередь</label>
+        <input name="name" />
+        <Pill label="Создать" />
+      </ActForm>
+    );
+  }
+  return null;
+}
 
 export function Sidebar({
   snapshot,
   layer,
   drafts = [],
-  remark = {Plan: '', Specify: '', Design: ''},
+  remark = {Plan: '', Specify: '', Design: '', Accept: ''},
   gaps = [],
   openCaps = [],
   specOpen = [],
@@ -1222,6 +1278,7 @@ export function Sidebar({
   if (!row) {
     return null;
   }
+  const breakName = checkoutBreak(row.reason);
   const model = opened.spine;
   const places = snapshot.reviewPlaces;
   const open = layer ?? model.open;
@@ -1238,7 +1295,12 @@ export function Sidebar({
       return (
         <ActForm act="accept-review" className="accept">
           <Hidden name="key" value={row.key} />
-          <button className="cmd" type="submit" aria-label={`Принять ${name}`}>
+          <button
+            className="cmd"
+            type="submit"
+            disabled={row.reviewTaken === true}
+            aria-label={`Принять ${name}`}
+          >
             Принять
           </button>
         </ActForm>
@@ -1297,11 +1359,28 @@ export function Sidebar({
         </ActForm>
       </header>
       <div className="side-scroll">
+        {breakName ? (
+          <section className="block">
+            <p>{breakName}</p>
+            {repairField(row, snapshot.service[row.key])}
+          </section>
+        ) : (
+          <>
         <FocusBlocks
           blocks={opened.blocks}
           pageIndex={focusPageIndex}
           capabilities={model.capabilities}
+          tail={opened.tail}
+          exclusive={opened.exclusive === true}
         />
+        {opened.continue ? (
+          <ActForm act="continue">
+            <Hidden name="key" value={row.key} />
+            <button className="cmd" type="submit">
+              Продолжить
+            </button>
+          </ActForm>
+        ) : null}
         {opened.blocks
           .filter(block => block.kind === 'description')
           .map((block, index) =>
@@ -1496,8 +1575,15 @@ export function Sidebar({
             control={hereControl('Accept', 'accepting', acceptAct)}
           >
             {acceptAutoMergeCaption ? <p>{acceptNote}</p> : null}
+            {model.pull ? (
+              <div className="plan-foot">
+                <Remark keyName={row.key} text={remark.Accept} />
+              </div>
+            ) : null}
           </SpineRow>
         </div>
+          </>
+        )}
       </div>
     </aside>
   );

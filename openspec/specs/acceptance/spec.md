@@ -65,11 +65,27 @@ When the row does not offer acceptance, that place SHALL be empty.
 - **WHEN** the plaque is `specifying`, the proposal names a Modified capability whose baseline is absent, the change delta has a requirement, one pull request is open, and the cycle is open
 - **THEN** the Specify row shows neither acceptance nor the specifying gate
 
+### Requirement: A settled decision that is not the review gate hides acceptance
+
+While a settled decision is present and is not this phase's review gate, that row SHALL NOT offer acceptance. A settled review gate SHALL still offer acceptance.
+
+#### Scenario: The review gate still offers acceptance
+
+- **WHEN** the plaque is `proposing`, the proposal has no open question, one pull request is open, and the settled decision is the proposal review gate
+- **THEN** the Plan row shows acceptance
+
+#### Scenario: An agent decision hides acceptance
+
+- **WHEN** the plaque is `specifying`, the change has a delta requirement, one pull request is open, and the settled decision is an agent
+- **THEN** the Specify row shows neither acceptance nor the specifying gate
+
 ### Requirement: Accepting a writing phase adds its label
 
 Accepting the plan SHALL add `sdd:proposed` and SHALL leave `sdd:proposing`. Accepting the design SHALL add `sdd:designed` and SHALL leave `sdd:designing`. Accepting the spec SHALL add `sdd:specified` and SHALL leave `sdd:specifying`. Acceptance SHALL NOT write the next phase.
 
 #### Scenario: Accepting the plan adds proposed
+
+The acceptance control SHALL be disabled as soon as the click is taken, and it SHALL keep the label `Принять`. It SHALL stay disabled while that consent label remains and the phase has not moved. Another click SHALL NOT write the label again. Removing the consent label SHALL enable the control. The page SHALL NOT show `Принято`.
 
 - **WHEN** the plaque is `proposing`, the proposal has no open question, one pull request is open, and the manager accepts the plan
 - **THEN** the issue gains `sdd:proposed`, keeps `sdd:proposing`, and the window does not write the next phase. The page does not show `Принято` between the header and the board
@@ -83,3 +99,18 @@ Accepting the plan SHALL add `sdd:proposed` and SHALL leave `sdd:proposing`. Acc
 
 - **WHEN** the plaque is `designing`, the design has no open decision, one pull request is open, and the manager accepts the design
 - **THEN** the issue gains `sdd:designed` and keeps `sdd:designing`
+
+#### Scenario: The click disables acceptance before the answer
+
+- **WHEN** the plaque is `designing`, the design has no open decision, one pull request is open, and the manager accepts the design
+- **THEN** the Design acceptance control is disabled before the answer returns, it still says `Принять`, and the page does not show `Принято`
+
+#### Scenario: A recorded consent ignores another acceptance
+
+- **WHEN** the design was accepted, `sdd:designed` is on, and the phase is still `designing`
+- **THEN** the Design acceptance control is disabled, a second acceptance does not write the label again, and the page does not show `Принято`
+
+#### Scenario: A removed consent enables acceptance
+
+- **WHEN** `sdd:designed` is removed while the phase is still `designing`
+- **THEN** the Design acceptance control is enabled again

@@ -25,7 +25,7 @@ An open thread of layer `design`: steps 1–4 do not write `design.md` again. St
 4. No decision yet: an open decision item. Leave it open.
 5. `improve-design`: Fix thread (`CONTEXT.md`), layer `design`. A thread on an open decision records the choice and checks that item in the same commit, before a hand-off or `thread fix`. The hand-off is a new thread on the other layer's file.
 6. Publish (`CONTEXT.md`). When `design.md` is in the commit, focus with marker `sdd:focus:design`. Mirror: `Design`. Open decisions do not delay the push.
-7. An open decision remains: Wait (`CONTEXT.md`) with the open decision.
+7. An open decision remains in `design.md`. Do not Wait for it. The phase paints the count.
 
 ## Check
 
@@ -36,8 +36,7 @@ An open thread of layer `design`: steps 1–4 do not write `design.md` again. St
 
 ## Stop
 
-- Publish. The machine opens the review gate.
-- An open decision: Publish, then Wait with the open decision.
+- Publish. The machine opens the review gate. An open decision stays in the file. This step does not Wait for it. The phase paints the count.
 - `Open questions:` in the init block: Wait with those questions.
 - No one-file command and no layer command in the repository: Wait. The person runs `/sdd-init`.
 - The spec does not give a capability enough behavior to name its boundary: Hand-off to `spec` on that requirement.

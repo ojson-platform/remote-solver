@@ -115,11 +115,11 @@ function lineDrafts(): LineDraft[] {
 }
 
 function blankRemark(): DocumentRemark {
-  return {Plan: '', Specify: '', Design: ''};
+  return {Plan: '', Specify: '', Design: '', Accept: ''};
 }
 
 function copyRemark(remark: DocumentRemark): DocumentRemark {
-  return {Plan: remark.Plan, Specify: remark.Specify, Design: remark.Design};
+  return {Plan: remark.Plan, Specify: remark.Specify, Design: remark.Design, Accept: remark.Accept};
 }
 
 function clearDraftsForSent(memory: Memory, batch: readonly URLSearchParams[]): void {
@@ -212,7 +212,7 @@ function documentRemark(): DocumentRemark {
     const section = field.closest('.spine > section');
     const pick = section?.querySelector(':scope > .spine-pick');
     const layer = pick?.getAttribute('value') ?? '';
-    if (layer === 'Plan' || layer === 'Specify' || layer === 'Design') {
+    if (layer === 'Plan' || layer === 'Specify' || layer === 'Design' || layer === 'Accept') {
       remark[layer] = field.value;
     }
   }
@@ -448,7 +448,8 @@ function holdsSeq(hold: FrameHold, mine: number): boolean {
   return (
     hold.open?.seq === mine ||
     hold.settings?.seq === mine ||
-    hold.gates.some(gate => gate.seq === mine)
+    hold.gates.some(gate => gate.seq === mine) ||
+    (hold.accepts ?? []).some(item => item.seq === mine)
   );
 }
 
@@ -572,6 +573,14 @@ function boot(): void {
     const tracked = base !== undefined;
     let mine = 0;
     let drawerBefore: Memory | undefined;
+    if (
+      act === 'accept-review' &&
+      base !== undefined &&
+      paintFrame(base, hold).rows.find(item => item.key === (params.get('key') ?? ''))?.reviewTaken ===
+        true
+    ) {
+      return;
+    }
     if (base !== undefined) {
       mine = ++seq;
       if (
@@ -579,7 +588,8 @@ function boot(): void {
         act === 'close-card' ||
         act === 'open-settings' ||
         act === 'close-settings' ||
-        act === 'gate'
+        act === 'gate' ||
+        act === 'accept-review'
       ) {
         hold = holdGesture(hold, mine, act, params, paintFrame(base, hold));
       }

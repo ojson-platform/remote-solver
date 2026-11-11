@@ -7,9 +7,9 @@ import path from 'node:path';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import type {IssueRecord} from '../machine/port.ts';
-import {changeDir} from '../machine/naming.ts';
-import {git, held, hosted, MANAGER, post, writeChange} from './page.harness.ts';
-import {post as livePost, readSnapshot, yard} from './live.harness.ts';
+import {changeDir} from '../machine/change/naming.ts';
+import {git, held, hosted, MANAGER, post, writeChange} from './__tests__/page.harness.ts';
+import {post as livePost, readSnapshot, yard} from './__tests__/live.harness.ts';
 import {serveLiveBoard} from './live.ts';
 import type {WindowSnapshot} from './snapshot.ts';
 import {projectSpine} from './spine.ts';
@@ -26,7 +26,7 @@ import {
   wantsSnapshot,
   type ReadSlot,
 } from './client/frame.ts';
-import {openedShot, rowOf, shot, spineReady, withGate} from './client/frame.fixture.ts';
+import {openedShot, rowOf, shot, spineReady, withGate} from './client/__tests__/frame.fixture.ts';
 
 const SPEC_ID = 'case-read';
 
@@ -736,7 +736,7 @@ spec('live-frame', () => {
       assert.ok(opened);
       assert.equal(opened.key, '7');
       assert.equal(opened.title, 'Заголовок');
-      assert.deepEqual(opened.blocks, [{kind: 'reason', line: 'вопросы 2'}]);
+      assert.deepEqual(opened.blocks, []);
       assert.equal(spineReady(opened), false);
       assert.equal(opened.spine.open, 'Specify');
       assert.equal(opened.spine.accept, 'На приёмке мерж ждёт человека.');

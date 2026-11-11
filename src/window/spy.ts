@@ -1,8 +1,9 @@
-import {phaseOf} from '../machine/phase.ts';
-
-import {slotOf} from './board.ts';
 import type {Factory} from './factory.ts';
 import type {CardState, WindowTicket} from './types.ts';
+
+import {phaseOf} from '../machine/phase/phase.ts';
+
+import {slotOf} from './board.ts';
 
 /** Starts a step for a checkout that can move, then writes `proposing` for this manager's phaseless ticket. */
 export function runSpy(input: {

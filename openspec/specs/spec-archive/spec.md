@@ -121,7 +121,7 @@ A new spec SHALL NOT keep the Purpose the command writes (`TBD - created by arch
 
 ### Requirement: A refusal does not publish
 
-When the command refuses, the step SHALL NOT publish. A refusal because a baseline would have no requirement SHALL be a Wait that names that baseline, and the machine SHALL NOT post `sdd:refused` for that refusal.
+When the command refuses, the step SHALL NOT publish. A refusal because a baseline would have no requirement SHALL be a Wait that names that baseline, and the machine SHALL NOT post `sdd:refused` for that refusal. Any other refusal SHALL be a Wait that names what the command said. The machine SHALL post `sdd:refused` with the phase, the action `archive`, and the reason `archive the change`, and SHALL put what the command said on the following lines. The next poll SHALL NOT run the archive.
 
 #### Scenario: When the command refuses, the step does not publish
 
@@ -137,3 +137,13 @@ When the command refuses, the step SHALL NOT publish. A refusal because a baseli
 
 - **WHEN** the fold reports that the rebuilt spec would have no requirement
 - **THEN** the machine waits, names `openspec/specs/<capability>/spec.md`, and does not post `sdd:refused`
+
+#### Scenario: A refused validate names the specs and the rule
+
+- **WHEN** validate refuses because `spec/board` has a requirement longer than 500 characters
+- **THEN** the machine waits, names `spec/board` and that rule, and does not publish
+
+#### Scenario: The next poll does not archive again
+
+- **WHEN** that refusal is the latest machine comment
+- **THEN** the next poll does not run the archive

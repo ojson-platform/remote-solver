@@ -1,15 +1,19 @@
+import type {Openspec, Review, Runtime, Tracker, Vcs} from '../machine.ts';
+
 import {pathToFileURL} from 'node:url';
 
-import type {Review, Runtime, Tracker, Vcs} from '../machine/port.ts';
-import {loadServiceConfig} from '../machine/service-config.ts';
-import {adapterFile} from './locate.ts';
+import {loadServiceConfig} from '../machine/spy/service-config.ts';
+import {adapterMachine} from '../machine.ts';
+
 import {machine, type Machine, type MachineConfig} from './compose.ts';
+import {adapterFile} from './locate.ts';
 
 type AdapterModule = {
   createAdapters(
     root: string,
     config: MachineConfig,
-  ): {config?: Partial<MachineConfig>; tracker: Tracker; review: Review; vcs: Vcs};
+    machine: typeof adapterMachine,
+  ): {config?: Partial<MachineConfig>; tracker: Tracker; review: Review; vcs: Vcs; openspec?: Openspec};
 };
 
 /** GitHub ports, unless the Arcadia adapter file is on disk. Runtime only when the caller builds one. */
@@ -22,8 +26,14 @@ export async function openMachine(
   let built = machine(root, {config});
   if (file) {
     const loaded = (await import(pathToFileURL(file).href)) as AdapterModule;
-    const made = loaded.createAdapters(root, built.config);
-    built = machine(root, {config, tracker: made.tracker, review: made.review, vcs: made.vcs});
+    const made = loaded.createAdapters(root, built.config, adapterMachine);
+    built = machine(root, {
+      config,
+      tracker: made.tracker,
+      review: made.review,
+      vcs: made.vcs,
+      openspec: made.openspec,
+    });
   }
   return {...built, runtime: options.runtime?.(built)};
 }

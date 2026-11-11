@@ -1,5 +1,6 @@
-import {mentionsGrammar} from '../machine/marker.ts';
 import type {ReviewNote} from '../machine/port.ts';
+
+import {mentionsGrammar} from '../machine/mark/marker.ts';
 
 export type Remark = ReviewNote;
 

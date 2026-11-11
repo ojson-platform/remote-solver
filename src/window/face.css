@@ -129,6 +129,9 @@
     padding: 4px 10px;
     font-size: 12px;
   }
+  .spine form.accept .cmd:disabled {
+    opacity: 0.45;
+  }
   .cmd:hover:not(:disabled) {
     background: #f0cb86;
     transform: scale(1.06);

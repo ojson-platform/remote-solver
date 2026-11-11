@@ -1,6 +1,8 @@
-import {annotate} from '../adapters/actions.ts';
 import type {Machine} from '../adapters/compose.ts';
 import type {Review} from '../machine/port.ts';
+
+import {annotate} from '../adapters/review/actions.ts';
+
 import {passReview, type Judge} from './act.ts';
 import {sandcastleJudge} from './judge.ts';
 import {describe, describeQueue, reviewQueue} from './plan.ts';

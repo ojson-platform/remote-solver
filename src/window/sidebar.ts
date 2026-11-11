@@ -1,11 +1,10 @@
-import {hookPoint} from '../machine/hook.ts';
-import {isFocusRecord, parseMarker} from '../machine/marker.ts';
-import {phaseOf} from '../machine/phase.ts';
+import type {Decision} from '../machine/decide/policy.ts';
 
-import {decisionCount, questionCount, reasonParts, slotOf} from './board.ts';
+import {parseMarker} from '../machine/mark/marker.ts';
+import {phaseOf} from '../machine/phase/phase.ts';
+import {hookPoint} from '../machine/skill/hook.ts';
+
 import {focusBlockProse, liveFocus, writtenFocusPages} from './focus.ts';
-import type {Decision} from '../machine/policy.ts';
-
 import {
   isDoc,
   type BoardTurn,
@@ -16,19 +15,6 @@ import {
   type WindowReview,
   type WindowTicket,
 } from './types.ts';
-
-/** Latest issue comment whose first line is not `sdd:focus`. */
-function askBody(comments: readonly WindowComment[] | undefined): string | undefined {
-  const list = comments ?? [];
-  for (let index = list.length - 1; index >= 0; index -= 1) {
-    const comment = list[index];
-    if (!comment || isFocusRecord(comment.body)) {
-      continue;
-    }
-    return comment.body;
-  }
-  return undefined;
-}
 
 const HOOK_UNREADABLE = 'поле хука не читается';
 
@@ -230,49 +216,6 @@ function unansweredBlock(reading: WindowReview | undefined): SidebarBlock | unde
   return {kind: 'unanswered', comment};
 }
 
-function reasonLine(
-  item: WindowTicket,
-  ctx: {
-    manager: () => string | undefined;
-    reading: () => readonly WindowTicket[];
-    gathered: (item: WindowTicket) => string | undefined;
-    serviceBroken: (checkout: string) => boolean;
-    cardOf: (item: WindowTicket) => CardState;
-    branchFacts?: (key: string) => {questions: number; decisions: number} | undefined;
-  },
-): string | undefined {
-  const phase = phaseOf([...item.labels]);
-  const where = slotOf(item, phase, ctx.manager());
-  if (where === 'hide' || where === 'cards') {
-    return undefined;
-  }
-  const located = ctx.gathered(item);
-  if (located && ctx.serviceBroken(located)) {
-    return undefined;
-  }
-  const checkout = ctx.cardOf(item);
-  const several = (item.openPullRequests ?? 0) > 1;
-  const broken = checkout.reason !== '';
-  if (where === 'pool' && !broken && !several) {
-    return undefined;
-  }
-  const known = ctx.branchFacts?.(item.key);
-  const questions = known ? known.questions : questionCount(checkout.checkout, item.key);
-  const decisions = known ? known.decisions : decisionCount(checkout.checkout, item.key);
-  const parts = reasonParts(
-    item,
-    phase ?? 'implementing',
-    checkout.reason,
-    ctx.reading(),
-    questions,
-    decisions,
-  );
-  if (parts.length === 0) {
-    return undefined;
-  }
-  return parts.join(' · ');
-}
-
 function writtenFocusBlocks(comments: readonly WindowComment[] | undefined): SidebarBlock[] {
   return writtenFocusPages(comments).map(page => ({
     kind: 'focus' as const,
@@ -280,6 +223,26 @@ function writtenFocusBlocks(comments: readonly WindowComment[] | undefined): Sid
     body: page.body,
     display: focusBlockProse(page.marker, page.body),
   }));
+}
+
+/** The count is the whole page only when this phase has not published its retelling. */
+function liveOpenCount(
+  decision: Decision | undefined,
+  written: readonly SidebarBlock[],
+  facts: {questions: number; decisions: number} | undefined,
+): number {
+  if (decision?.kind !== 'wait' || facts === undefined) {
+    return 0;
+  }
+  const newest = written.find(block => block.kind === 'focus');
+  const marker = newest?.kind === 'focus' ? newest.marker : undefined;
+  if (decision.reason.includes('Open questions') && marker !== 'sdd:focus:plan') {
+    return facts.questions;
+  }
+  if (decision.reason.includes('open decision') && marker !== 'sdd:focus:design') {
+    return facts.decisions;
+  }
+  return 0;
 }
 
 export function blocksFor(
@@ -300,32 +263,27 @@ export function blocksFor(
 ): SidebarBlock[] {
   const blocks: SidebarBlock[] = [];
   const phase = phaseOf([...item.labels]);
+  const written = writtenFocusBlocks(item.comments);
+  const decision = ctx.settledDecision?.();
   const live = liveFocus({
     phase,
     ask: item.labels.includes('sdd:wait-human'),
     running: ctx.running?.() ?? false,
     turn: ctx.turn?.(),
-    decision: ctx.settledDecision?.(),
+    decision,
     checks: item.checks,
+    openCount: liveOpenCount(decision, written, ctx.branchFacts?.(item.key)),
+    comments: item.comments ?? [],
+    hasAcceptFocus: written.some(block => block.kind === 'focus' && block.marker === 'sdd:focus:accept'),
   });
   if (live !== undefined) {
     blocks.push({kind: 'live', badge: live.badge, text: live.text});
   }
-  blocks.push(...writtenFocusBlocks(item.comments));
+  blocks.push(...written);
   if (ctx.inPool) {
     const text = authorText(item.body);
     if (text !== undefined) {
       blocks.push({kind: 'description', text});
-    }
-  }
-  const line = reasonLine(item, ctx);
-  if (line !== undefined) {
-    blocks.push({kind: 'reason', line});
-  }
-  if (item.labels.includes('sdd:wait-human')) {
-    const body = askBody(item.comments);
-    if (body !== undefined) {
-      blocks.push({kind: 'ask', body});
     }
   }
   const reading = ctx.review();

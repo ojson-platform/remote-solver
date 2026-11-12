@@ -417,6 +417,12 @@ export function openWindow(
     },
     overlay: () => overlaySession.view(home.doc()),
     sidebar,
+    review() {
+      if (openKey === '') {
+        return undefined;
+      }
+      return outside.review?.(openKey);
+    },
     openTicket() {
       if (openKey === '') {
         return undefined;

@@ -1282,17 +1282,18 @@ export function Sidebar({
   const hereControl = (
     name: SpineLayer,
     station: GateStation,
-    act: 'accept' | 'gate' | 'none',
+    act: 'accept' | 'held' | 'gate' | 'none',
   ): ReactNode => {
-    if (act === 'accept') {
+    if (act === 'accept' || act === 'held') {
       return (
         <ActForm act="accept-review" className="accept">
           <Hidden name="key" value={row.key} />
           <button
             className="cmd"
             type="submit"
-            disabled={row.reviewTaken === true}
+            disabled={row.reviewTaken === true || act === 'held'}
             aria-label={`Принять ${name}`}
+            {...(act === 'held' ? {title: `${name}: нить этой фазы ещё открыта`} : {})}
           >
             Принять
           </button>

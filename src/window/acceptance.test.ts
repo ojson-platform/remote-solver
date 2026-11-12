@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {mkdirSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
+import {changeDir} from '../machine/naming.ts';
 import {emptyHold, holdGesture, paintFrame} from './client/frame.ts';
 import {renderWindow} from './client/render.ts';
 import {
@@ -17,6 +18,7 @@ import {
   spineOf,
   writeChange,
 } from './__tests__/page.harness.ts';
+import type {WindowReview} from './types.ts';
 
 function acceptControl(html: string, name: string): string {
   const found = (html.match(/<button\b[^>]*>/g) ?? []).find(button =>
@@ -537,6 +539,130 @@ spec('acceptance', () => {
             acceptControl(await pageHtml(page.url), 'Design').includes('disabled'),
             false,
           );
+        },
+      );
+    });
+  });
+});
+
+spec('phase-thread-accept', () => {
+  requirement('Acceptance stays inactive while a thread of this phase is open', () => {
+    function phaseThread(file: string, marker: string | null): WindowReview {
+      return {
+        threads: [
+          {
+            marker,
+            file,
+            line: null,
+            lines: ['open thread'],
+            comments: ['open thread'],
+          },
+        ],
+      };
+    }
+
+    scenario('On Plan, Specify, and Design, «Принять» stays in the gate\'s place', async () => {
+      const proposalFile = `services/billing/${changeDir('1')}/proposal.md`;
+      const specFile = `services/billing/${changeDir('1')}/specs/section-text/spec.md`;
+      const designFile = `services/billing/${changeDir('1')}/design.md`;
+      const cases = [
+        {
+          phase: 'proposing',
+          layer: 'Plan',
+          review: phaseThread(proposalFile, 'proposal'),
+          write: (paths: {arcadia: string}) => {
+            writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+          },
+        },
+        {
+          phase: 'specifying',
+          layer: 'Specify',
+          review: phaseThread(specFile, 'spec'),
+          write: (paths: {arcadia: string}) => {
+            writeChange(paths.arcadia, '1', 'specs/section-text/spec.md', deltaRequirement());
+          },
+        },
+        {
+          phase: 'designing',
+          layer: 'Design',
+          review: phaseThread(designFile, 'design'),
+          write: (paths: {arcadia: string}) => {
+            writeChange(
+              paths.arcadia,
+              '1',
+              'design.md',
+              '## Approach\n\nОдин модуль.\n\n## Open decisions\n',
+            );
+          },
+        },
+      ] as const;
+      for (const item of cases) {
+        let reading = item.review;
+        await hosted(
+          {
+            login: () => MANAGER,
+            tickets: () => [held('1', item.phase, {openPullRequests: 1})],
+            review: () => reading,
+          },
+          async (page, window, paths) => {
+            item.write(paths);
+            window.chooseAgent('cursor');
+            assert.equal(
+              (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+                .status,
+              200,
+            );
+            const row = spineOf(await pageHtml(page.url), '1', item.layer);
+            assert.match(row, /aria-label="Принять /);
+            assert.match(row, /class="accept"/);
+            assert.equal(row.includes(`data-gate="`), false, item.layer);
+          },
+        );
+      }
+    });
+
+    scenario('The control is inactive while this phase has an unclosed review thread', async () => {
+      const proposalFile = `services/billing/${changeDir('1')}/proposal.md`;
+      const reading = phaseThread(proposalFile, 'proposal');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
+          review: () => reading,
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const plan = spineOf(await pageHtml(page.url), '1', 'Plan');
+          assert.match(plan, /<button[^>]*disabled[^>]*>[\s\S]*?Принять/);
+        },
+      );
+    });
+
+    scenario('Hovering it names the phase and says a thread on that phase is still open', async () => {
+      const proposalFile = `services/billing/${changeDir('1')}/proposal.md`;
+      const reading = phaseThread(proposalFile, 'proposal');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
+          review: () => reading,
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const plan = spineOf(await pageHtml(page.url), '1', 'Plan');
+          assert.match(plan, /title="Plan: нить этой фазы ещё открыта"/);
         },
       );
     });

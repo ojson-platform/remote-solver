@@ -28,11 +28,39 @@ import {
   type LinkMark,
   type SidebarBlock,
   type StationDoor,
+  type WindowReview,
 } from './types.ts';
 import {COLUMN_NAMES} from './types.ts';
 
-/** A spine row offers acceptance, keeps its gate, or leaves that place empty. */
-export type LayerAct = 'accept' | 'gate' | 'none';
+/** A spine row offers acceptance, holds it inactive, keeps its gate, or leaves that place empty. */
+export type LayerAct = 'accept' | 'held' | 'gate' | 'none';
+
+const PHASE_LAYER_MARKERS: Partial<Record<SpineLayer, string>> = {
+  Plan: 'proposal',
+  Specify: 'spec',
+  Design: 'design',
+};
+
+/** An open review thread counts for this writing phase on its marker. */
+export function openPhaseThread(layer: SpineLayer, reading: WindowReview | undefined): boolean {
+  const want = PHASE_LAYER_MARKERS[layer];
+  if (want === undefined || reading === undefined) {
+    return false;
+  }
+  for (const thread of reading.threads ?? []) {
+    const marker = thread.marker;
+    if (marker === 'fixed' || marker === 'note' || marker === 'out' || marker === 'begin') {
+      continue;
+    }
+    if (marker === null || marker === undefined || marker === '') {
+      return true;
+    }
+    if (marker === want) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export type SnapshotDoor = {
   kind: StationDoor['kind'];
@@ -133,6 +161,7 @@ type SnapshotSurface = {
   cycleLabel?(key: string): string | null;
   checks?(key: string): 'green' | 'red' | 'pending' | 'none' | undefined;
   sidebar(): SidebarBlock[];
+  review?: () => WindowReview | undefined;
   openTicket?: () => {comments?: readonly {body: string; manager?: boolean}[]; body?: string} | undefined;
   spine(): Spine | undefined;
   heldSpine?: () => {spine?: Spine; ready: boolean; revision?: string};
@@ -242,6 +271,7 @@ function layerAct(
   model: Spine,
   action: string | undefined,
   decision: Decision | undefined,
+  reading: WindowReview | undefined,
 ): LayerAct {
   const review = reviewGateForLayer(layer);
   const here = model.station !== undefined && layerForStation(model.station) === layer;
@@ -257,7 +287,7 @@ function layerAct(
   }
   if (here && review !== undefined) {
     if (model.pull && model.reviewGate === review && reviewReady(model, review, action)) {
-      return 'accept';
+      return openPhaseThread(layer, reading) ? 'held' : 'accept';
     }
     return 'none';
   }
@@ -452,6 +482,7 @@ function openCycle(
   }
   const action = turnAction(surface.turn(row.key));
   const decision = surface.decision?.(row.key);
+  const reading = surface.review?.();
   const blocks = surface.sidebar();
   const questions = model.proposal.questions.filter(item => item.open).length;
   const decisionSection = model.design.sections.find(section => section.heading === 'Open decisions');
@@ -459,7 +490,10 @@ function openCycle(
     decisionSection?.lines.filter(line => line.text.trimStart().startsWith('- [ ]')).length ?? 0;
   const tail = paintedTail(blocks, decision, questions, decisions);
   const alone = exclusivePage(decision);
-  const layers = SPINE_LAYERS.map(layer => ({layer, act: layerAct(layer, model, action, decision)}));
+  const layers = SPINE_LAYERS.map(layer => ({
+    layer,
+    act: layerAct(layer, model, action, decision, reading),
+  }));
   const proceed = offerContinue({
     waiting: surface.waiting?.(row.key) === true,
     refused: surface.refused?.(row.key) === true,

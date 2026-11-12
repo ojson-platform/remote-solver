@@ -383,6 +383,7 @@
     box-shadow: inset 0 0 0 1px rgba(244, 240, 230, 0.16);
   }
   .round.off:hover { box-shadow: inset 0 0 0 1px rgba(244, 240, 230, 0.16); }
+  .round.play { color: var(--brass); }
   .round svg { width: 14px; height: 14px; display: block; }
   .station { display: flex; align-items: center; justify-content: center; min-height: 36px; }
   .dot {

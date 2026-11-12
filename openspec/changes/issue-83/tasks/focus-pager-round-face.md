@@ -6,7 +6,7 @@
 - The count runs from the oldest page, so the latest page reads `12/12`
 - The badge and the prose stay as they are
 
-sdd-delta: ce50ed28804c49ad
+sdd-delta: e51e36369ca7899f
 
 ## Source
 

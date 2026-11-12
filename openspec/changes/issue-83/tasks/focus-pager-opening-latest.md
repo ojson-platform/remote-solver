@@ -1,6 +1,6 @@
 - Opening still lands on the latest page
 
-sdd-delta: ce50ed28804c49ad
+sdd-delta: e51e36369ca7899f
 
 ## Source
 

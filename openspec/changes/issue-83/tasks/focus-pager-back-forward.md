@@ -1,7 +1,7 @@
 - Back still walks older written comments, newest first
 - Forward still returns toward now
 
-sdd-delta: ce50ed28804c49ad
+sdd-delta: e51e36369ca7899f
 
 ## Source
 

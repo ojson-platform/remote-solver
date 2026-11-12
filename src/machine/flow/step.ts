@@ -5,6 +5,7 @@ import type {QueueConfig} from '../spy/service-config.ts';
 
 import {readChange} from '../change/change.ts';
 import {addedDiffLine, changedInDiff, foldChange, restoreChange} from '../change/fold.ts';
+import {acceptGateWithheld} from '../decide/ahead.ts';
 import {cycleRecord, decide, effectSignature, postRefusal, refusalBody} from '../decide/policy.ts';
 import {gateAsk, openWait} from '../phase/labels.ts';
 import {labelsAfterAdvance} from '../phase/phase.ts';
@@ -329,14 +330,9 @@ async function stepIssue(key: string, options: IssueRead, cache: WalkCache): Pro
   const loaded =
     cache.pulls ?? (options.review ? await pullSnapshots(options.review, key, options.files) : []);
   const notes = await options.tracker.comments(key);
+  const cycle = cycleRecord(record, cache.tip ?? '', notes);
   const others = (options.issues ?? open).map(issue => (issue.key === key ? record : issue));
-  const decision = decide(
-    record,
-    others,
-    loaded,
-    view,
-    cycleRecord(record, cache.tip ?? '', notes),
-  );
+  const decision = decide(record, others, loaded, view, cycle);
   await applyLabels(options.tracker, key, record.labels, nextLabels(record.labels, decision));
   if (decision.kind === 'advance' || decision.kind === 'done') {
     const closed = await writeAdvance(key, options, decision);
@@ -349,7 +345,10 @@ async function stepIssue(key: string, options: IssueRead, cache: WalkCache): Pro
     return {again: cache};
   }
   if (decision.kind === 'wait' && decision.gate && !record.labels.includes('sdd:wait-human')) {
-    await openWait(key, gateAsk(key, decision.gate, options.tracker), options.tracker);
+    const openPull = loaded.find(item => item.state === 'OPEN');
+    if (!cycle.phase || !acceptGateWithheld(cycle.phase, key, view, openPull)) {
+      await openWait(key, gateAsk(key, decision.gate, options.tracker), options.tracker);
+    }
     return {stop: decision};
   }
   if (!options.perform) {

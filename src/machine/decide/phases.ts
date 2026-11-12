@@ -5,7 +5,8 @@ import type {Decision, PullSnapshot} from './types.ts';
 
 import {cardGap, specsReady, unslicedScenario, type ChangeView} from '../change/change.ts';
 
-import {agent, reviewGate} from './agent.ts';
+import {acceptReviewGate} from './ahead.ts';
+import {agent} from './agent.ts';
 import {gateBlocker, stampBehind} from './gates.ts';
 import {linkWait} from './links.ts';
 import {mergeOrWait, NO_OPEN_PULL} from './pulls.ts';
@@ -66,7 +67,7 @@ function propose(read: PhaseRead): Decision {
       reason: gateBlocker(issue.key, phase, change) ?? 'open questions in proposal.md',
     });
   }
-  return hand(reviewGate(issue.key, 'proposal', 'proposing', 'proposed'));
+  return hand(acceptReviewGate(issue.key, 'proposal', 'proposing', 'proposed', change, pr));
 }
 
 function specify(read: PhaseRead): Decision {
@@ -97,7 +98,7 @@ function specify(read: PhaseRead): Decision {
   if (stamp) {
     return hand(agent(issue.key, 'create-initial-specs', phase, String(pr.id), stamp));
   }
-  return hand(reviewGate(issue.key, 'spec', 'specifying', 'specified'));
+  return hand(acceptReviewGate(issue.key, 'spec', 'specifying', 'specified', change, pr));
 }
 
 function design(read: PhaseRead): Decision {
@@ -135,7 +136,7 @@ function design(read: PhaseRead): Decision {
   if (stamp) {
     return hand(agent(issue.key, 'create-design', phase, String(pr.id), stamp));
   }
-  return hand(reviewGate(issue.key, 'design', 'designing', 'designed'));
+  return hand(acceptReviewGate(issue.key, 'design', 'designing', 'designed', change, pr));
 }
 
 function task(read: PhaseRead): Decision {

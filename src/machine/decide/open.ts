@@ -47,7 +47,7 @@ function decideOpen(
   if (isAdvance(consent)) {
     return consent;
   }
-  const held = heldReview(issue, change, record, consent);
+  const held = heldReview(issue, change, record, consent, open[0]);
   if (held) {
     return held;
   }

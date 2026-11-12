@@ -77,6 +77,49 @@ export function layerOfPhase(phase: Phase): string | null {
   return Object.entries(LAYER_PHASE).find(([, value]) => value === phase)?.[0] ?? null;
 }
 
+const ACCEPT_LAYER: Partial<Record<Phase, string>> = {
+  proposing: 'proposal',
+  specifying: 'spec',
+  designing: 'design',
+};
+
+/**
+ * An open review thread counts for withholding the accept ask on this phase.
+ * Unmarked and this-phase markers count; notes, fixed, out, begin, and other
+ * layers do not. Threads pinned on an open question or open decision do not count.
+ */
+export function phaseThreadCountsForAccept(
+  phase: Phase,
+  threads: readonly ReadThread[],
+  fileAt?: OpenItemFile,
+): boolean {
+  const want = ACCEPT_LAYER[phase];
+  if (!want) {
+    return false;
+  }
+  for (const thread of threads) {
+    if (thread.resolved) {
+      continue;
+    }
+    const path = thread.path ?? '';
+    const pinned = openItemLayer(path, thread.line ?? null, fileAt?.(path));
+    if (pinned) {
+      continue;
+    }
+    const marker = markerOf(thread.body);
+    if (marker === 'fixed' || marker === 'note' || marker === 'out' || marker === 'begin') {
+      continue;
+    }
+    if (marker === null) {
+      return true;
+    }
+    if (marker === want) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Reads one change file. Absent when the path is not in this checkout. */
 export type OpenItemFile = (rel: string) => string | undefined;
 

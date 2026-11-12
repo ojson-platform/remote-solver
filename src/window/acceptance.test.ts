@@ -666,5 +666,31 @@ spec('phase-thread-accept', () => {
         },
       );
     });
+
+    scenario('A thread with no marker counts as this phase', async () => {
+      const proposalFile = `services/billing/${changeDir('1')}/proposal.md`;
+      const reading = phaseThread(proposalFile, null);
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
+          review: () => reading,
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const plan = spineOf(await pageHtml(page.url), '1', 'Plan');
+          assert.match(plan, /<button[^>]*disabled[^>]*>[\s\S]*?Принять/);
+          assert.match(plan, /title="Plan: нить этой фазы ещё открыта"/);
+          assert.match(plan, /aria-label="Принять /);
+          assert.equal(plan.includes('data-gate="'), false);
+        },
+      );
+    });
   });
 });

@@ -770,5 +770,35 @@ spec('phase-thread-accept', () => {
         },
       );
     });
+
+    scenario('An open question still leaves that place empty, as it does now', async () => {
+      const proposalFile = `services/billing/${changeDir('1')}/proposal.md`;
+      const reading = phaseThread(proposalFile, 'proposal');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
+          review: () => reading,
+        },
+        async (page, window, paths) => {
+          writeChange(
+            paths.arcadia,
+            '1',
+            'proposal.md',
+            '## Open questions\n\n- [ ] Писать ли имя проверки?\n',
+          );
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const plan = spineOf(await pageHtml(page.url), '1', 'Plan');
+          assert.equal(plan.includes('Принять Plan'), false);
+          assert.equal(plan.includes('нить этой фазы ещё открыта'), false);
+          assert.equal(plan.includes('data-gate="proposing"'), false);
+        },
+      );
+    });
   });
 });

@@ -198,7 +198,7 @@ function Remark({
 }: {
   keyName: string;
   text: string;
-  layer: 'Plan' | 'Specify' | 'Design';
+  layer: 'Plan' | 'Specify' | 'Design' | 'Accept';
 }): ReactNode {
   return (
     <ActForm act="answer" className="note">
@@ -1574,7 +1574,7 @@ export function Sidebar({
             {acceptAutoMergeCaption ? <p>{acceptNote}</p> : null}
             {model.pull ? (
               <div className="plan-foot">
-                <Remark keyName={row.key} text={remark.Accept} />
+                <Remark keyName={row.key} text={remark.Accept} layer="Accept" />
               </div>
             ) : null}
           </SpineRow>

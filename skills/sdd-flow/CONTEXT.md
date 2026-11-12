@@ -56,7 +56,9 @@ An id names one rule the caller relies on, in kebab-case domain language:
 `model-identity`, `preset`, `cache-first`. The id is the rule, whatever file
 or helper implements it. Cut: when the rule changes, exactly one spec
 changes. A rule observed through several helpers is one id. Several rules
-inside one helper are several ids.
+inside one helper are several ids. A change that leaves every such rule as it
+is names no id. `### Added` and `### Modified` stay empty. Do not invent an id
+so the change has a spec.
 
 `### Added`: this checkout does not show the rule today. `### Modified`: this
 checkout shows the rule, and the baseline restores today's behavior before the
@@ -91,7 +93,7 @@ The other files of `openspec/changes/issue-<issue>/`, with these headings exactl
 - `## Outcome`: what the caller sees once the change lands.
 - `## Scope`, `## Out of scope`: what this change touches, and what it leaves to another id.
 - `## Constraints`: limits the solution keeps. A limit that names what the caller sees is a Scenario of this capability. Its WHEN shows each of those things already visible, and its THEN states those same values.
-- `## Capabilities`: `### Added` and `### Modified`, lines `- <id> <gist>`, ids by § Capability. The machine reads both lists as the named capabilities, and requires a baseline for each `### Modified` id.
+- `## Capabilities`: `### Added` and `### Modified`, lines `- <id> <gist>`, ids by § Capability. Both lists empty means the change names no rule and needs no delta. A line under either list is a named capability. The machine requires a baseline for each `### Modified` id.
 - `## Open questions`: `- [ ]` items. The machine counts them.
 
 `design.md`, every section filled or `none`:

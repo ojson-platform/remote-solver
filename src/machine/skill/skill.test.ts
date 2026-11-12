@@ -153,6 +153,10 @@ test('baseline moves an unshown rule to Added and does not wait on the shelf', (
   assert.match(context, /issue text does not choose the shelf/);
   assert.match(plan, /That shelf is a first cut/);
   assert.match(plan, /does not Wait on the shelf/);
+  assert.match(plan, /leave `### Added` and `### Modified` empty and do not invent an id/);
+  assert.match(plan, /Both lists empty is a finished cut when no rule changes/);
+  assert.match(context, /names no id/);
+  assert.match(context, /needs no delta/);
 });
 
 test('an existing artifact stays only when the upstream block says nothing changed', () => {

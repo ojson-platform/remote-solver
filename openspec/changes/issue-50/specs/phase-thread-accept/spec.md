@@ -63,11 +63,6 @@ A thread marked for this phase counts. The machine does not set `sdd:wait-human`
 
 A thread marked only for a later phase does not count. A note does not count. The machine then sets `sdd:wait-human`, when that label is absent, and asks to accept the phase. This does not hold for a thread that sits on an open question or an open decision, and it does not hold when the phase would pass without a person or when the phase is sent back to write its document.
 
-#### Scenario: A later-phase thread still opens the ask
-
-- **WHEN** the phase is proposing, the proposal is present, no question is open, one pull request is open, `sdd:auto-plan` is absent, `sdd:wait-human` is absent, the only open review thread is marked for a later phase and does not sit on an open question, and the pull request conversation does not end in an unmarked person comment
-- **THEN** the machine sets `sdd:wait-human` and asks to accept the plan
-
 #### Scenario: A note still opens the ask
 
 - **WHEN** the phase is designing, the specs are ready, the design is present, no decision is open, the design is not behind the specs, one pull request is open, `sdd:auto-design` is absent, `sdd:wait-human` is absent, the only open review thread is a note and does not sit on an open decision, and the pull request conversation does not end in an unmarked person comment

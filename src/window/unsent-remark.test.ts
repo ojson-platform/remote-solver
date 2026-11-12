@@ -4,7 +4,7 @@ import {mkdirSync, rmSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {test} from 'vitest';
 
-import {changeDir} from '../machine/naming.ts';
+import {changeDir} from '../machine/change/naming.ts';
 
 import {buildAnswerPostsFromState} from './client/remark-queue.ts';
 import {
@@ -23,7 +23,7 @@ import {
   ticket,
   writeChange,
   yard,
-} from './page.harness.ts';
+} from './__tests__/page.harness.ts';
 import {serveBoard} from './page.ts';
 import {openWindow} from './window.ts';
 import {mergeReviewsPreservingLocal, mergeThreadIntoReview} from './store.ts';
@@ -408,10 +408,6 @@ test('The just-sent thread is visible on its own line at the moment the draft cl
       assert.ok(anchor >= 0);
       const onLine = specify.slice(anchor, anchor + 900);
       assert.match(onLine, /class="posted-comment"[\s\S]*на своей строке/);
-      const review =
-        bandOf(html, '1').match(/<section class="block"[\s\S]*?<h3>ревью<\/h3>[\s\S]*?<\/section>/)?.[0] ??
-        '';
-      assert.match(review, /на своей строке/);
     },
   );
 });

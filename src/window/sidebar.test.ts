@@ -9,6 +9,7 @@ import {
   clampFocusPageIndex,
   FocusBlocks,
   focusIndexAfterSnapshot,
+  focusPagerPageCount,
 } from './client/sidebar.tsx';
 import {renderWindow} from './client/render.ts';
 import type {Decision} from '../machine/decide/policy.ts';
@@ -41,6 +42,22 @@ function focusPagerHtml(snapshot: WindowSnapshot, pageIndex: number): string {
   return renderToStaticMarkup(
     createElement(FocusBlocks, {blocks: opened.blocks, pageIndex}),
   );
+}
+
+/** Client memory after Back: same rule as `src/window/client/main.tsx`. */
+function focusPageAfterBack(index: number, pageCount: number): number {
+  if (pageCount > 1 && index < pageCount - 1) {
+    return index + 1;
+  }
+  return index;
+}
+
+/** Client memory after Forward: same rule as `src/window/client/main.tsx`. */
+function focusPageAfterForward(index: number): number {
+  if (index > 0) {
+    return index - 1;
+  }
+  return index;
 }
 
 function manyWrittenFocusPages(count: number) {
@@ -1154,13 +1171,17 @@ spec('focus-pager', () => {
           const snapshot = (await (
             await fetch(new URL('/snapshot', page.url))
           ).json()) as WindowSnapshot;
-          const now = focusPagerHtml(snapshot, 0);
+          const pageCount = focusPagerPageCount(snapshot.opened!.blocks);
+          let index = 0;
+          const now = focusPagerHtml(snapshot, index);
           assert.match(now, />3\/3</);
           assert.match(now, />sdd:focus:code</);
-          const older = focusPagerHtml(snapshot, 1);
+          index = focusPageAfterBack(index, pageCount);
+          const older = focusPagerHtml(snapshot, index);
           assert.match(older, />2\/3</);
           assert.match(older, />sdd:focus:spec</);
-          const oldest = focusPagerHtml(snapshot, 2);
+          index = focusPageAfterBack(index, pageCount);
+          const oldest = focusPagerHtml(snapshot, index);
           assert.match(oldest, />1\/3</);
           assert.match(oldest, />sdd:focus:plan</);
           assert.match(oldest, /data-focus="back" disabled/);
@@ -1190,11 +1211,13 @@ spec('focus-pager', () => {
           const snapshot = (await (
             await fetch(new URL('/snapshot', page.url))
           ).json()) as WindowSnapshot;
-          const onOlder = focusPagerHtml(snapshot, 1);
+          let index = focusPageAfterBack(0, focusPagerPageCount(snapshot.opened!.blocks));
+          const onOlder = focusPagerHtml(snapshot, index);
           assert.match(onOlder, />1\/2</);
           assert.match(onOlder, /data-focus="forward"/);
           assert.equal(onOlder.includes('data-focus="forward" disabled'), false);
-          const towardNow = focusPagerHtml(snapshot, 0);
+          index = focusPageAfterForward(index);
+          const towardNow = focusPagerHtml(snapshot, index);
           assert.match(towardNow, />2\/2</);
           assert.match(towardNow, />sdd:focus:code</);
           assert.match(towardNow, /data-focus="forward" disabled/);

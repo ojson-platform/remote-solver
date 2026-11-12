@@ -453,6 +453,20 @@ function holdsSeq(hold: FrameHold, mine: number): boolean {
   );
 }
 
+export function focusPageAfterBack(index: number, pageCount: number): number {
+  if (pageCount > 1 && index < pageCount - 1) {
+    return index + 1;
+  }
+  return index;
+}
+
+export function focusPageAfterForward(index: number): number {
+  if (index > 0) {
+    return index - 1;
+  }
+  return index;
+}
+
 function boot(): void {
   const root = document.getElementById('root');
   if (!root) {
@@ -841,8 +855,9 @@ function boot(): void {
     if (focusBack instanceof HTMLButtonElement && !focusBack.disabled) {
       event.preventDefault();
       const pageCount = shot?.opened ? focusPagerPageCount(shot.opened.blocks) : 0;
-      if (pageCount > 1 && memory.focusPageIndex < pageCount - 1) {
-        memory.focusPageIndex += 1;
+      const next = focusPageAfterBack(memory.focusPageIndex, pageCount);
+      if (next !== memory.focusPageIndex) {
+        memory.focusPageIndex = next;
         draw();
       }
       return;
@@ -850,8 +865,9 @@ function boot(): void {
     const focusForward = target?.closest('[data-focus="forward"]');
     if (focusForward instanceof HTMLButtonElement && !focusForward.disabled) {
       event.preventDefault();
-      if (memory.focusPageIndex > 0) {
-        memory.focusPageIndex -= 1;
+      const next = focusPageAfterForward(memory.focusPageIndex);
+      if (next !== memory.focusPageIndex) {
+        memory.focusPageIndex = next;
         draw();
       }
       return;
@@ -976,4 +992,6 @@ function boot(): void {
   void readSnapshot(undefined).then(take);
 }
 
-boot();
+if (typeof document !== 'undefined') {
+  boot();
+}

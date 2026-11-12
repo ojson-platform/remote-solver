@@ -19,6 +19,7 @@ import {
   post,
   prepare,
   readSnapshot,
+  spineOf,
   ticket,
   writeChange,
   yard,
@@ -215,6 +216,7 @@ spec('unsent-remark', () => {
       'Immediately after a successful send the thread is visible in the sidebar and the draft is cleared together with that',
       () => {},
     );
+    scenario('The just-sent thread is visible on its own line at the moment the draft clears', () => {});
     scenario('When the pull request has that thread, the draft disappears', () => {});
   });
 
@@ -351,6 +353,65 @@ test('Immediately after a successful send the thread is visible in the sidebar a
       const foot = html.slice(html.indexOf('class="plan-foot"'), html.indexOf('id="spine-Specify"'));
       assert.match(foot, /class="posted-comment"[\s\S]*sidebar together/);
       assert.match(foot, /<textarea[^>]*name="reply"[^>]*><\/textarea>/);
+    },
+  );
+});
+
+test('The just-sent thread is visible on its own line at the moment the draft clears', async () => {
+  const body = 'на своей строке';
+  let heldReview: WindowReview | undefined;
+  await hosted(
+    {
+      login: () => MANAGER,
+      tickets: () => [held('1', 'specifying', {openPullRequests: 1})],
+      review: () => heldReview,
+      mergeHeldThread: (_key, thread) => {
+        heldReview = mergeThreadIntoReview(heldReview, thread);
+      },
+      threadPull: async (_key, posted, place) => {
+        heldReview = mergeThreadIntoReview(heldReview, {
+          file: place.path,
+          line: place.line,
+          comments: [posted],
+        });
+      },
+    },
+    async (page, window, paths) => {
+      writeBaselineSpec(paths.arcadia, SPEC_ID);
+      writeChange(paths.arcadia, '1', `specs/${SPEC_ID}/spec.md`, deltaRequirement());
+      window.chooseAgent('cursor');
+      assert.equal(
+        (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString())).status,
+        200,
+      );
+      const shot = await readSnapshot(page.url);
+      const params = lineAnswerParams(shot, SPEC_LINE_TEXT, body);
+      const answer = await post(page.url, 'act', params.toString());
+      assert.equal(answer.status, 200);
+      const sent = JSON.parse(answer.body) as WindowSnapshot;
+      assert.equal(sent.status, undefined);
+      const path = params.get('path') ?? '';
+      const at = Number(params.get('at'));
+      const blocks = sent.opened?.blocks ?? [];
+      assert.ok(
+        blocks.some(
+          block =>
+            block.kind === 'line-thread' &&
+            block.file.replace(/\\/g, '/') === path.replace(/\\/g, '/') &&
+            block.line === at &&
+            block.comments.some(comment => comment.trim() === body),
+        ),
+      );
+      const html = await pageHtml(page.url);
+      const specify = spineOf(html, '1', 'Specify');
+      const anchor = specify.indexOf(`data-at="${at}"`);
+      assert.ok(anchor >= 0);
+      const onLine = specify.slice(anchor, anchor + 900);
+      assert.match(onLine, /class="posted-comment"[\s\S]*на своей строке/);
+      const review =
+        bandOf(html, '1').match(/<section class="block"[\s\S]*?<h3>ревью<\/h3>[\s\S]*?<\/section>/)?.[0] ??
+        '';
+      assert.match(review, /на своей строке/);
     },
   );
 });

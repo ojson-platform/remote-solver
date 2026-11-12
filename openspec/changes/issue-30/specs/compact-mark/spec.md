@@ -1,3 +1,7 @@
+<!--
+sdd-absorbed: a2e2bc91981681c6
+-->
+
 # compact-mark
 
 ## Purpose

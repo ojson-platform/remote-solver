@@ -5,7 +5,7 @@
  */
 
 import type {Phase} from './phase/phase.ts';
-import type {SkillMode} from './skill/skill.ts';
+import type {SkillMode} from './skill/mode.ts';
 
 export type IssueKey = string;
 

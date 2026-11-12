@@ -1,24 +1,9 @@
-import {readFileSync} from 'node:fs';
-import path from 'node:path';
-
 import {cursor, type AgentProvider} from '@ai-hero/sandcastle';
 
-export type SkillMode = 'mechanical' | 'judgment';
+import {modelFor, modeOfSkill, skillMode, type SkillMode} from './mode.ts';
 
-/** The skill declares its mode. The runtime maps that onto a model. */
-export function skillMode(text: string): SkillMode {
-  const front = /^---\n([\s\S]*?)\n---/.exec(text);
-  const mode = front?.[1].match(/^mode:\s*(\S+)/m)?.[1] ?? text.match(/^mode:\s*(\S+)/m)?.[1];
-  return mode === 'mechanical' ? 'mechanical' : 'judgment';
-}
-
-export function modeOfSkill(stepsDir: string, skill: string): SkillMode {
-  return skillMode(readFileSync(path.join(stepsDir, `${skill}.md`), 'utf8'));
-}
-
-export function modelFor(mode: SkillMode): string {
-  return mode === 'mechanical' ? 'composer-2.5-fast' : 'grok-4.7-high-fast';
-}
+export type {SkillMode} from './mode.ts';
+export {modeOfSkill, modelFor, skillMode};
 
 /** Cursor on this host. The CLI already keeps the chat; capturing `store.db` would copy it out of a sandbox that is not there. */
 export function cursorFor(model: string): AgentProvider {

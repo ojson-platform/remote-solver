@@ -15,10 +15,10 @@ import {isFocusRecord, markRobot} from './machine/mark/marker.ts';
 import {readComment, spokeByRobot} from './machine/mark/review.ts';
 import {foldedFromTip} from './machine/phase/phase.ts';
 import {serviceHookDoc, stepPrompt} from './machine/skill/hook.ts';
-import {modelFor, type SkillMode} from './machine/skill/skill.ts';
+import {modelFor, type SkillMode} from './machine/skill/mode.ts';
 
 export type {QueueConfig} from './machine/spy/service-config.ts';
-export type {SkillMode} from './machine/skill/skill.ts';
+export type {SkillMode} from './machine/skill/mode.ts';
 
 export type {
   AgentResult,

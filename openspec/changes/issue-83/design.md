@@ -1,4 +1,4 @@
-sdd-absorbed: ce50ed28804c49ad
+sdd-absorbed: e51e36369ca7899f
 
 ## Verification boundary
 

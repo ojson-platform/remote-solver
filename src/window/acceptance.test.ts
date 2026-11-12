@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {mkdirSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
-import {changeDir} from '../machine/naming.ts';
+import {changeDir} from '../machine/change/naming.ts';
 import {emptyHold, holdGesture, paintFrame} from './client/frame.ts';
 import {renderWindow} from './client/render.ts';
 import {

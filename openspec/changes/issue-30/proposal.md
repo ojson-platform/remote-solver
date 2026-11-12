@@ -37,3 +37,6 @@ A done task keeps `готово`. An open task that is not the current one keeps
 ## Open questions
 
 ## Shelf
+
+- compact-mark
+- task-chip

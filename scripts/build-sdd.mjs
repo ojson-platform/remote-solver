@@ -29,7 +29,7 @@ await esbuild.build({
   ...common,
   entryPoints: ['src/sdd.ts'],
   outfile: target('skills/sdd-flow/scripts/sdd.mjs', 'sdd.mjs'),
-  external: ['@ai-hero/sandcastle'],
+  external: ['@ai-hero/sandcastle', 'esbuild'],
 });
 const bin = target('bin/remote-solver.mjs', 'remote-solver.mjs');
 const beside = path.dirname(bin);

@@ -1031,46 +1031,6 @@ spec('focus-pager', () => {
         assert.ok(badgeAt >= 0 && pagerAt > badgeAt);
       },
     );
-    scenario("The focus pager's back and forward controls are rounds", () => {
-      const html = renderToStaticMarkup(
-        createElement(FocusBlocks, {blocks: manyWrittenFocusPages(3), pageIndex: 1}),
-      );
-      assert.doesNotMatch(html, /<button[^>]*data-focus="back"[^>]*class="[^"]*quiet/);
-      assert.doesNotMatch(html, /<button[^>]*data-focus="forward"[^>]*class="[^"]*quiet/);
-      assert.doesNotMatch(html, /<button[^>]*data-focus="back"[^>]*class="[^"]*play/);
-      assert.doesNotMatch(html, /<button[^>]*data-focus="forward"[^>]*class="[^"]*play/);
-      assert.match(html, /<button[^>]*class="round[^"]*"[^>]*data-focus="back"/);
-      assert.match(html, /<button[^>]*class="round[^"]*"[^>]*data-focus="forward"/);
-    });
-    scenario('Each round holds a chevron icon', () => {
-      const html = renderToStaticMarkup(
-        createElement(FocusBlocks, {blocks: manyWrittenFocusPages(3), pageIndex: 1}),
-      );
-      const back = html.match(/<button[^>]*data-focus="back"[^>]*>([\s\S]*?)<\/button>/)?.[1];
-      const forward = html.match(/<button[^>]*data-focus="forward"[^>]*>([\s\S]*?)<\/button>/)?.[1];
-      assert.match(back ?? '', /<svg[^>]*aria-hidden="true"/);
-      assert.match(forward ?? '', /<svg[^>]*aria-hidden="true"/);
-      assert.equal((back ?? '').includes('&lt;'), false);
-      assert.equal((forward ?? '').includes('&gt;'), false);
-    });
-    scenario('The characters `<` and `>` are not the mark', () => {
-      const html = renderToStaticMarkup(
-        createElement(FocusBlocks, {blocks: manyWrittenFocusPages(3), pageIndex: 1}),
-      );
-      assert.equal(html.includes('>&lt;</button>'), false);
-      assert.equal(html.includes('>&gt;</button>'), false);
-      assert.match(html, /data-focus="back"[^>]*>[\s\S]*<svg/);
-      assert.match(html, /data-focus="forward"[^>]*>[\s\S]*<svg/);
-    });
-    scenario('The count stays between the two rounds', () => {
-      const html = renderToStaticMarkup(
-        createElement(FocusBlocks, {blocks: manyWrittenFocusPages(3), pageIndex: 1}),
-      );
-      const backAt = html.indexOf('data-focus="back"');
-      const countAt = html.indexOf('class="focus-pager-count"');
-      const forwardAt = html.indexOf('data-focus="forward"');
-      assert.ok(backAt >= 0 && countAt > backAt && forwardAt > countAt);
-    });
     scenario('The count runs from the oldest page, so the latest page reads `12/12`', () => {
       const blocks = manyWrittenFocusPages(12);
       const latest = renderToStaticMarkup(
@@ -1100,21 +1060,6 @@ spec('focus-pager', () => {
         assert.match(oldest, /<button[^>]*class="round"[^>]*data-focus="forward"/);
       },
     );
-    scenario('A round that cannot move stays in place and goes quiet', () => {
-      const blocks = manyWrittenFocusPages(3);
-      const latest = renderToStaticMarkup(
-        createElement(FocusBlocks, {blocks, pageIndex: 0}),
-      );
-      assert.match(latest, /<button[^>]*class="round"[^>]*data-focus="back"/);
-      assert.match(latest, /<button[^>]*class="round off"[^>]*data-focus="forward"[^>]*disabled/);
-      assert.match(latest, /class="focus-pager-count"[^>]*>3\/3</);
-      const oldest = renderToStaticMarkup(
-        createElement(FocusBlocks, {blocks, pageIndex: 2}),
-      );
-      assert.match(oldest, /<button[^>]*class="round off"[^>]*data-focus="back"[^>]*disabled/);
-      assert.match(oldest, /<button[^>]*class="round"[^>]*data-focus="forward"/);
-      assert.match(oldest, /class="focus-pager-count"[^>]*>1\/3</);
-    });
     scenario('A single written focus leaves the control out', () => {
       const html = renderToStaticMarkup(
         createElement(FocusBlocks, {
@@ -1123,18 +1068,6 @@ spec('focus-pager', () => {
         }),
       );
       assert.equal(html.includes('focus-pager'), false);
-    });
-    scenario('One written focus still leaves the pager out', () => {
-      const html = renderToStaticMarkup(
-        createElement(FocusBlocks, {
-          blocks: [focusBlock('sdd:focus:spec', 'Only focus.\n')],
-          pageIndex: 0,
-        }),
-      );
-      assert.equal(html.includes('focus-pager'), false);
-      assert.equal(html.includes('focus-pager-count'), false);
-      assert.equal(html.includes('data-focus="back"'), false);
-      assert.equal(html.includes('data-focus="forward"'), false);
     });
     scenario('The row is the badge and the prose', () => {
       const html = renderToStaticMarkup(
@@ -1232,6 +1165,85 @@ spec('focus-pager', () => {
       const html = renderToStaticMarkup(createElement(FocusBlocks, {blocks, pageIndex: 0}));
       assert.match(html, />sdd:focus:spec</);
       assert.match(html, /Prose stays verbatim\./);
+    });
+  });
+  requirement("The focus pager's back and forward controls are rounds", () => {
+    scenario("The focus pager's back and forward controls are rounds", () => {
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {blocks: manyWrittenFocusPages(3), pageIndex: 1}),
+      );
+      assert.doesNotMatch(html, /<button[^>]*data-focus="back"[^>]*class="[^"]*quiet/);
+      assert.doesNotMatch(html, /<button[^>]*data-focus="forward"[^>]*class="[^"]*quiet/);
+      assert.doesNotMatch(html, /<button[^>]*data-focus="back"[^>]*class="[^"]*play/);
+      assert.doesNotMatch(html, /<button[^>]*data-focus="forward"[^>]*class="[^"]*play/);
+      assert.match(html, /<button[^>]*class="round[^"]*"[^>]*data-focus="back"/);
+      assert.match(html, /<button[^>]*class="round[^"]*"[^>]*data-focus="forward"/);
+    });
+  });
+  requirement('Each round holds a chevron icon', () => {
+    scenario('Each round holds a chevron icon', () => {
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {blocks: manyWrittenFocusPages(3), pageIndex: 1}),
+      );
+      const back = html.match(/<button[^>]*data-focus="back"[^>]*>([\s\S]*?)<\/button>/)?.[1];
+      const forward = html.match(/<button[^>]*data-focus="forward"[^>]*>([\s\S]*?)<\/button>/)?.[1];
+      assert.match(back ?? '', /<svg[^>]*aria-hidden="true"/);
+      assert.match(forward ?? '', /<svg[^>]*aria-hidden="true"/);
+      assert.equal((back ?? '').includes('&lt;'), false);
+      assert.equal((forward ?? '').includes('&gt;'), false);
+    });
+  });
+  requirement('The characters `<` and `>` are not the mark', () => {
+    scenario('The characters `<` and `>` are not the mark', () => {
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {blocks: manyWrittenFocusPages(3), pageIndex: 1}),
+      );
+      assert.equal(html.includes('>&lt;</button>'), false);
+      assert.equal(html.includes('>&gt;</button>'), false);
+      assert.match(html, /data-focus="back"[^>]*>[\s\S]*<svg/);
+      assert.match(html, /data-focus="forward"[^>]*>[\s\S]*<svg/);
+    });
+  });
+  requirement('The count stays between the two rounds', () => {
+    scenario('The count stays between the two rounds', () => {
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {blocks: manyWrittenFocusPages(3), pageIndex: 1}),
+      );
+      const backAt = html.indexOf('data-focus="back"');
+      const countAt = html.indexOf('class="focus-pager-count"');
+      const forwardAt = html.indexOf('data-focus="forward"');
+      assert.ok(backAt >= 0 && countAt > backAt && forwardAt > countAt);
+    });
+  });
+  requirement('A round that cannot move stays in place and goes quiet', () => {
+    scenario('A round that cannot move stays in place and goes quiet', () => {
+      const blocks = manyWrittenFocusPages(3);
+      const latest = renderToStaticMarkup(
+        createElement(FocusBlocks, {blocks, pageIndex: 0}),
+      );
+      assert.match(latest, /<button[^>]*class="round"[^>]*data-focus="back"/);
+      assert.match(latest, /<button[^>]*class="round off"[^>]*data-focus="forward"[^>]*disabled/);
+      assert.match(latest, /class="focus-pager-count"[^>]*>3\/3</);
+      const oldest = renderToStaticMarkup(
+        createElement(FocusBlocks, {blocks, pageIndex: 2}),
+      );
+      assert.match(oldest, /<button[^>]*class="round off"[^>]*data-focus="back"[^>]*disabled/);
+      assert.match(oldest, /<button[^>]*class="round"[^>]*data-focus="forward"/);
+      assert.match(oldest, /class="focus-pager-count"[^>]*>1\/3</);
+    });
+  });
+  requirement('One written focus still leaves the pager out', () => {
+    scenario('One written focus still leaves the pager out', () => {
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:spec', 'Only focus.\n')],
+          pageIndex: 0,
+        }),
+      );
+      assert.equal(html.includes('focus-pager'), false);
+      assert.equal(html.includes('focus-pager-count'), false);
+      assert.equal(html.includes('data-focus="back"'), false);
+      assert.equal(html.includes('data-focus="forward"'), false);
     });
   });
 });

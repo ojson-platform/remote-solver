@@ -24,9 +24,9 @@ The characters `<` and `>` are not the mark. A round that cannot move stays in p
 
 ### Added
 
-- `round-chevron` the focus pager's back and forward controls are rounds, the same face as play on the card, and each round holds a chevron icon
-
 ### Modified
+
+- `focus-pager` the focus pager's back and forward controls are rounds, the same face as play on the card, and each round holds a chevron icon. The characters `<` and `>` are not the mark
 
 ## Open questions
 
@@ -34,4 +34,4 @@ none
 
 ## Shelf
 
-- round-chevron
+- focus-pager

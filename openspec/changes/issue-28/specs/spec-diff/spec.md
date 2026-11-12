@@ -1,3 +1,7 @@
+<!--
+sdd-absorbed: 15ab6940499fd542
+-->
+
 ## MODIFIED Requirements
 
 ### Requirement: A line comment uses a thread when the line has an anchor

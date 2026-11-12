@@ -10,11 +10,11 @@ sdd-absorbed: 3f092f8d92ae1270
 
 The focus pager SHALL be one control on the focus row, opposite the badge.
 
-Its back and forward controls SHALL be rounds, the same face as play on the card. Each round SHALL hold a chevron icon. `<` and `>` SHALL NOT be the mark.
+Its back and forward controls SHALL be rounds. Each round SHALL hold a chevron icon. `<` and `>` SHALL NOT be the mark.
 
 The count SHALL stay between the two rounds.
 
-A round that cannot move SHALL stay in place and go quiet, the way a disabled play does, so the number SHALL NOT jump.
+A round that cannot move SHALL stay in place and go quiet, so the number SHALL NOT jump.
 
 One written focus SHALL still leave the pager out.
 
@@ -34,13 +34,13 @@ The badge and the prose SHALL stay as they are.
 
 #### Scenario: One control on the focus row, opposite the badge, shows a back chevron, the current page and the count, and a forward chevron, in the form `< 11/12 >`
 
-- **WHEN** one control, the focus row, the badge, a back chevron, the current page, the count, and a forward chevron are already visible, and that control is already opposite the badge, each chevron already held in a round the same face as play on the card, the count already between those rounds, and the characters `<` and `>` are already not the mark, together with those characters as the mark and the words «назад» and «вперёд» as the limit that can replace that control
-- **THEN** one control on the focus row, opposite the badge, shows a back chevron and a forward chevron, each in a round the same face as play on the card, with the current page and the count between those rounds, and the characters `<` and `>` are not the mark
+- **WHEN** one control, the focus row, the badge, a back chevron, the current page, the count, and a forward chevron are already visible, and that control is already opposite the badge, each chevron already held in a round, the count already between those rounds, and the characters `<` and `>` are already not the mark, together with those characters as the mark and the words «назад» and «вперёд» as the limit that can replace that control
+- **THEN** one control on the focus row, opposite the badge, shows a back chevron and a forward chevron, each in a round, with the current page and the count between those rounds, and the characters `<` and `>` are not the mark
 
-#### Scenario: The focus pager's back and forward controls are rounds, the same face as play on the card
+#### Scenario: The focus pager's back and forward controls are rounds
 
-- **WHEN** the focus pager's back control, its forward control, and play on the card are already visible, and those controls are already rounds, the same face as play on the card, together with a new circle as the limit that can replace that face
-- **THEN** the focus pager's back and forward controls are rounds, the same face as play on the card
+- **WHEN** the focus pager's back control and its forward control are already visible, and those controls are already rounds, together with a new circle as the limit that can replace that face
+- **THEN** the focus pager's back and forward controls are rounds
 
 #### Scenario: Each round holds a chevron icon
 
@@ -64,13 +64,13 @@ The badge and the prose SHALL stay as they are.
 
 #### Scenario: A chevron that cannot move stays in place and goes quiet, so the number does not jump
 
-- **WHEN** a chevron that cannot move, the round that holds it, a disabled play, and the number are already visible, and that round already stays in place and goes quiet the way a disabled play does, together with that chevron disappearing as the limit that can replace it and make the number jump
-- **THEN** a chevron that cannot move stays in place and goes quiet, so the number does not jump, and the round that holds it stays in place and goes quiet the way a disabled play does
+- **WHEN** a chevron that cannot move, the round that holds it, and the number are already visible, and that round already stays in place and goes quiet, together with that chevron disappearing as the limit that can replace it and make the number jump
+- **THEN** a chevron that cannot move stays in place and goes quiet, so the number does not jump, and the round that holds it stays in place and goes quiet
 
-#### Scenario: A round that cannot move stays in place and goes quiet, the way a disabled play does
+#### Scenario: A round that cannot move stays in place and goes quiet
 
-- **WHEN** a round that cannot move and a disabled play are already visible, and that round already stays in place and goes quiet the way a disabled play does, together with that round disappearing as the limit that can replace staying in place and going quiet the way a disabled play does
-- **THEN** a round that cannot move stays in place and goes quiet, the way a disabled play does
+- **WHEN** a round that cannot move is already visible, and that round already stays in place and goes quiet, together with that round disappearing as the limit that can replace staying in place and going quiet
+- **THEN** a round that cannot move stays in place and goes quiet
 
 #### Scenario: A single written focus leaves the control out
 

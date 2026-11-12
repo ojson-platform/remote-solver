@@ -1131,6 +1131,7 @@ function proveHealthyPoolCardsAreOrderedByKeyAndHaveNoIcon97(): void {
       station: 'proposing',
       phaseRow: 0,
       reason: 'proposed',
+      reviewTaken: true,
       ...place,
     },
     {key: 'c', title: 'Third', take: true, ...place},

@@ -498,6 +498,12 @@ test('A failed send leaves the draft', async () => {
       );
       assert.equal(failed.status, 200);
       assert.equal((JSON.parse(failed.body) as WindowSnapshot).status, 'комментарий не записан');
+      const html = bandOf(await pageHtml(page.url), '1');
+      const foot = html.slice(html.indexOf('class="plan-foot"'), html.indexOf('id="spine-Specify"'));
+      assert.match(
+        foot,
+        new RegExp(`name="reply"[^>]*>${draft.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
+      );
     },
   );
 });
@@ -642,6 +648,12 @@ test('The draft remains only when that thread is not on the pull request', async
       );
       assert.equal(failed.status, 200);
       assert.equal((JSON.parse(failed.body) as WindowSnapshot).status, 'комментарий не записан');
+      const html = bandOf(await pageHtml(page.url), '1');
+      const foot = html.slice(html.indexOf('class="plan-foot"'), html.indexOf('id="spine-Specify"'));
+      assert.match(
+        foot,
+        new RegExp(`name="reply"[^>]*>${draft.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
+      );
     },
   );
 });

@@ -175,7 +175,7 @@ spec('artifact', () => {
         assert.deepEqual(decision.gate, {artifact: 'spec', from: 'specifying', to: 'specified'});
       }
     });
-    scenario('A phase file edited without moving the stamp restarts the skill', () => {
+    scenario('A phase file edited without moving the stamp stays on the gate', () => {
       const decision = decide(
         issue(1, ['sdd:designing']),
         [],
@@ -189,7 +189,48 @@ spec('artifact', () => {
           designDrift: true,
         }),
       );
-      assert.equal(action(decision), 'create-design');
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.deepEqual(decision.gate, {artifact: 'design', from: 'designing', to: 'designed'});
+      }
+    });
+    scenario('A spec edited without moving the stamp stays on the gate', () => {
+      const decision = decide(
+        issue(1, ['sdd:specifying']),
+        [],
+        [pull(9)],
+        change({
+          proposal: true,
+          delta: true,
+          proposalRevision: 'aaa',
+          specStamp: 'aaa',
+          specDrift: true,
+        }),
+      );
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.deepEqual(decision.gate, {artifact: 'spec', from: 'specifying', to: 'specified'});
+      }
+    });
+    scenario('A tasks file edited without moving the stamp still advances', () => {
+      const decision = decide(
+        issue(1, ['sdd:tasking']),
+        [],
+        [pull(9)],
+        change({
+          proposal: true,
+          delta: true,
+          design: true,
+          tasks: true,
+          tasksInputRevision: 'eee',
+          tasksStamp: 'eee',
+          tasksDrift: true,
+        }),
+      );
+      assert.equal(decision.kind, 'advance');
+      if (decision.kind === 'advance') {
+        assert.equal(decision.to, 'implementing');
+      }
     });
     scenario('A stale design stamp restarts design before the auto advance', () => {
       const decision = decide(

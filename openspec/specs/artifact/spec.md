@@ -174,9 +174,7 @@ When `design.md` exists, no decision is open, and its stamp is not the spec revi
 
 On `tasking`, when `tasks.md` exists and its stamp is not the revision of the specs and the design, the machine SHALL run the tasks skill before it leaves for implementing.
 
-A commit of a phase file that leaves `sdd-absorbed` unchanged SHALL restart that skill even when the stamp equals the input revision.
-
-A matching stamp on an unchanged file SHALL leave the gate or the advance in place.
+A matching stamp SHALL leave the gate or the advance in place, including when the latest commit edited that phase file and left `sdd-absorbed` unchanged.
 
 `sdd accept` SHALL refuse while the stamp of that phase is behind.
 
@@ -188,10 +186,20 @@ A matching stamp on an unchanged file SHALL leave the gate or the advance in pla
 - **WHEN** the phase is `specifying` and the delta stamp equals the proposal revision
 - **THEN** the machine opens the review gate
 
-#### Scenario: A phase file edited without moving the stamp restarts the skill
+#### Scenario: A phase file edited without moving the stamp stays on the gate
 
-- **WHEN** `design.md` differs from its parent commit, its `sdd-absorbed` line is unchanged, and that stamp equals the spec revision
-- **THEN** the machine runs the design skill
+- **WHEN** the phase is `designing`, `design.md` differs from its parent commit, its `sdd-absorbed` line is unchanged, and that stamp equals the spec revision
+- **THEN** the machine opens the review gate and does not run the design skill
+
+#### Scenario: A spec edited without moving the stamp stays on the gate
+
+- **WHEN** the phase is `specifying`, the delta differs from its parent commit, its `sdd-absorbed` line is unchanged, and that stamp equals the proposal revision
+- **THEN** the machine opens the review gate and does not run the spec skill
+
+#### Scenario: A tasks file edited without moving the stamp still advances
+
+- **WHEN** the phase is `tasking`, `tasks.md` differs from its parent commit, its `sdd-absorbed` line is unchanged, and that stamp equals the revision of the specs and the design
+- **THEN** the machine advances to implementing and does not run the tasks skill
 
 #### Scenario: A stale design stamp restarts design before the auto advance
 

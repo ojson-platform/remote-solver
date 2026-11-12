@@ -19,29 +19,29 @@ export function writingGate(phase: Phase, change: ChangeView): {artifact: boolea
   return {artifact: true, open: 0};
 }
 
-/** The phase file's stamp is behind its input. Empty revisions are the test harness, not a checkout. */
+/** The phase file's stamp is behind its input. Empty revisions are the test harness, not a checkout. A file edited while the stamp already equals that input is not behind. */
 export function stampBehind(phase: Phase, change: ChangeView): string | null {
   if (
     phase === 'specifying' &&
     change.delta &&
-    (change.specDrift ||
-      (change.proposalRevision !== '' && change.specStamp !== change.proposalRevision))
+    change.proposalRevision !== '' &&
+    change.specStamp !== change.proposalRevision
   ) {
     return 'the proposal revision is not the stamp';
   }
   if (
     phase === 'designing' &&
     change.design &&
-    (change.designDrift ||
-      (change.specsRevision !== '' && change.designStamp !== change.specsRevision))
+    change.specsRevision !== '' &&
+    change.designStamp !== change.specsRevision
   ) {
     return 'the spec revision is not the stamp';
   }
   if (
     phase === 'tasking' &&
     change.tasks &&
-    (change.tasksDrift ||
-      (change.tasksInputRevision !== '' && change.tasksStamp !== change.tasksInputRevision))
+    change.tasksInputRevision !== '' &&
+    change.tasksStamp !== change.tasksInputRevision
   ) {
     return 'the design revision is not the stamp';
   }

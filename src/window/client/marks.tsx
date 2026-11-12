@@ -3,6 +3,36 @@ import type {DoorKind} from '../types.ts';
 
 import {FACTORY_PATH} from '../mark.ts';
 
+export function ChevronBack(): ReactNode {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M10 3.8 5.8 8 10 12.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function ChevronForward(): ReactNode {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M6 3.8 10.2 8 6 12.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function Cross(): ReactNode {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true">

@@ -29,7 +29,7 @@ A named action, a word on a capsule. A block has one brass pill. A hairline pill
 _Avoid_: Button, link, an icon on a pill
 
 **Round**:
-The small brass circle with one icon and no word. Play, the breakdown, and the field's close circle are rounds. A round that cannot act stays put and goes quiet.
+The small brass circle with one icon and no word. Play, the breakdown, the field's close circle, and the focus pager's back and forward are rounds. A round that cannot act stays put and goes quiet.
 _Avoid_: Circle, icon button, a word or a character inside it
 
 **Door**:

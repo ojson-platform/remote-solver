@@ -879,7 +879,7 @@
   .block { margin-top: 16px; }
   .focus-block .focus-row {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     gap: 12px;
     margin-bottom: 8px;
@@ -895,7 +895,6 @@
     color: var(--muted);
     flex-shrink: 0;
   }
-  .focus-block .focus-pager .quiet[disabled] { opacity: 0.35; cursor: default; }
   .block h3, .group h3, .roles h3 { margin: 0 0 8px; font-size: 13px; }
   .block pre, .popup pre {
     margin: 0;

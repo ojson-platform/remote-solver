@@ -1,4 +1,4 @@
-sdd-absorbed: ab49d6f2d3c54c6f
+sdd-absorbed: 329ce44946cf4bfb
 
 - [ ] `depends-49-markers`
 - [ ] `held-accept-in-gate` On Plan, Specify, and Design, «Принять» stays in the gate's place; The control is inactive while this phase has an unclosed review thread; Hovering it names the phase and says a thread on that phase is still open

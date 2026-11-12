@@ -1072,16 +1072,32 @@ spec('focus-pager', () => {
         const latest = renderToStaticMarkup(
           createElement(FocusBlocks, {blocks, pageIndex: 0}),
         );
-        assert.match(latest, /data-focus="forward" disabled/);
+        assert.match(latest, /<button[^>]*class="round off"[^>]*data-focus="forward"[^>]*disabled/);
+        assert.match(latest, /<button[^>]*class="round"[^>]*data-focus="back"/);
         assert.match(latest, />3\/3</);
         const oldest = renderToStaticMarkup(
           createElement(FocusBlocks, {blocks, pageIndex: 2}),
         );
-        assert.match(oldest, /data-focus="back" disabled/);
+        assert.match(oldest, /<button[^>]*class="round off"[^>]*data-focus="back"[^>]*disabled/);
         assert.match(oldest, />1\/3</);
-        assert.match(oldest, /data-focus="forward"/);
+        assert.match(oldest, /<button[^>]*class="round"[^>]*data-focus="forward"/);
       },
     );
+    scenario('A round that cannot move stays in place and goes quiet', () => {
+      const blocks = manyWrittenFocusPages(3);
+      const latest = renderToStaticMarkup(
+        createElement(FocusBlocks, {blocks, pageIndex: 0}),
+      );
+      assert.match(latest, /<button[^>]*class="round"[^>]*data-focus="back"/);
+      assert.match(latest, /<button[^>]*class="round off"[^>]*data-focus="forward"[^>]*disabled/);
+      assert.match(latest, /class="focus-pager-count"[^>]*>3\/3</);
+      const oldest = renderToStaticMarkup(
+        createElement(FocusBlocks, {blocks, pageIndex: 2}),
+      );
+      assert.match(oldest, /<button[^>]*class="round off"[^>]*data-focus="back"[^>]*disabled/);
+      assert.match(oldest, /<button[^>]*class="round"[^>]*data-focus="forward"/);
+      assert.match(oldest, /class="focus-pager-count"[^>]*>1\/3</);
+    });
     scenario('A single written focus leaves the control out', () => {
       const html = renderToStaticMarkup(
         createElement(FocusBlocks, {

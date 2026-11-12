@@ -377,6 +377,9 @@
       inset 0 0 10px rgba(230, 179, 90, 0.45);
     transform: scale(1.06);
   }
+  .round.play {
+    cursor: pointer;
+  }
   .round.off {
     background: transparent;
     color: var(--muted);

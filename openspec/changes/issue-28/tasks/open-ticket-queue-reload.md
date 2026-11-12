@@ -1,7 +1,7 @@
 - The window holds the queue for the open ticket
 - A reload drops unsent remarks
 
-sdd-delta: 6bfb0d887ae27abd
+sdd-delta: eda70bbe7417d517
 
 ## Source
 

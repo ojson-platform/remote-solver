@@ -1051,12 +1051,12 @@ spec('focus-pager', () => {
         );
         assert.match(latest, /<button[^>]*class="round off"[^>]*data-focus="forward"[^>]*disabled/);
         assert.match(latest, /<button[^>]*class="round"[^>]*data-focus="back"/);
-        assert.match(latest, />3\/3</);
+        assert.match(latest, /class="focus-pager-count"[^>]*>3\/3</);
         const oldest = renderToStaticMarkup(
           createElement(FocusBlocks, {blocks, pageIndex: 2}),
         );
         assert.match(oldest, /<button[^>]*class="round off"[^>]*data-focus="back"[^>]*disabled/);
-        assert.match(oldest, />1\/3</);
+        assert.match(oldest, /class="focus-pager-count"[^>]*>1\/3</);
         assert.match(oldest, /<button[^>]*class="round"[^>]*data-focus="forward"/);
       },
     );

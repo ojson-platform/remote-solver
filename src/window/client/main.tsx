@@ -596,6 +596,9 @@ function boot(): void {
       if (act === 'open' || act === 'close-card') {
         memory.drafts = lineDrafts();
         memory.remark = documentRemark();
+        if (act === 'open') {
+          memory.focusPageIndex = 0;
+        }
         drawerBefore = copyMemory(memory);
       }
       gestures += 1;

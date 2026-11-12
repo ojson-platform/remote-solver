@@ -4,4 +4,4 @@ sdd-absorbed: f04bf06265783597
 - [x] `focus-pager-quiet-boundary` A chevron that cannot move stays in place and goes quiet, so the number does not jump; A round that cannot move stays in place and goes quiet
 - [x] `focus-pager-single-focus` A single written focus leaves the control out; One written focus still leaves the pager out; The row is the badge and the prose
 - [x] `focus-pager-back-forward` Back still walks older written comments, newest first; Forward still returns toward now
-- [ ] `focus-pager-opening-latest` Opening still lands on the latest page
+- [x] `focus-pager-opening-latest` Opening still lands on the latest page

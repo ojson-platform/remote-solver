@@ -59,14 +59,9 @@ On proposing, specifying, and designing, when one pull request is open, an open 
 
 A thread with no marker counts as this phase, except a thread that sits on an open question or an open decision. The machine does not set `sdd:wait-human` and does not ask to accept the phase.
 
-A thread marked for this phase counts. The machine continues that phase and does not ask, when the pull request conversation does not end in an unmarked person comment. An unmarked person comment on the conversation is classified first.
+A thread marked for this phase counts. The machine does not set `sdd:wait-human` and does not ask to accept the phase, when the pull request conversation does not end in an unmarked person comment. An unmarked person comment on the conversation is classified first.
 
 A thread marked only for a later phase does not count. A note does not count. The machine then sets `sdd:wait-human`, when that label is absent, and asks to accept the phase. This does not hold for a thread that sits on an open question or an open decision, and it does not hold when the phase would pass without a person or when the phase is sent back to write its document.
-
-#### Scenario: A thread of this phase continues the phase instead of the ask
-
-- **WHEN** the phase is proposing, specifying, or designing, one pull request is open, `sdd:wait-human` is absent, an open review thread is marked for that phase, and the pull request conversation does not end in an unmarked person comment
-- **THEN** the machine continues that phase, does not set `sdd:wait-human`, and does not ask to accept it
 
 #### Scenario: A later-phase thread still opens the ask
 

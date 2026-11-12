@@ -1,3 +1,7 @@
+<!--
+sdd-absorbed: 3f092f8d92ae1270
+-->
+
 # Spec Delta
 
 ## MODIFIED Requirements
@@ -14,7 +18,19 @@ A round that cannot move SHALL stay in place and go quiet, the way a disabled pl
 
 One written focus SHALL still leave the pager out.
 
+The count SHALL run from the oldest page, so the latest page SHALL read `12/12`.
+
+A single written focus SHALL leave the control out.
+
 The row SHALL then be the badge and the prose.
+
+Back SHALL still walk older written comments, newest first.
+
+Forward SHALL still return toward now.
+
+Opening SHALL still land on the latest page.
+
+The badge and the prose SHALL stay as they are.
 
 #### Scenario: One control on the focus row, opposite the badge, shows a back chevron, the current page and the count, and a forward chevron, in the form `< 11/12 >`
 
@@ -41,8 +57,6 @@ The row SHALL then be the badge and the prose.
 - **WHEN** the count and the two rounds are already visible, and the count already stays between the two rounds, together with the count outside the two rounds as the limit that can replace that place
 - **THEN** the count stays between the two rounds
 
-The count SHALL run from the oldest page, so the latest page SHALL read `12/12`.
-
 #### Scenario: The count runs from the oldest page, so the latest page reads `12/12`
 
 - **WHEN** the count, the oldest page, and the latest page are already visible, and the latest page already reads `12/12`, together with a count from the newest page so the latest page reads `1/12` as the limit that can replace that reading
@@ -55,7 +69,7 @@ The count SHALL run from the oldest page, so the latest page SHALL read `12/12`.
 
 #### Scenario: A round that cannot move stays in place and goes quiet, the way a disabled play does
 
-- **WHEN** a round that cannot move and a disabled play are already visible, and that round already stays in place and goes quiet the way a disabled play does, together with that round disappearing as the limit that can replace it and make the number jump
+- **WHEN** a round that cannot move and a disabled play are already visible, and that round already stays in place and goes quiet the way a disabled play does, together with that round disappearing as the limit that can replace staying in place and going quiet the way a disabled play does
 - **THEN** a round that cannot move stays in place and goes quiet, the way a disabled play does
 
 #### Scenario: A single written focus leaves the control out
@@ -72,14 +86,6 @@ The count SHALL run from the oldest page, so the latest page SHALL read `12/12`.
 
 - **WHEN** a single written focus, the row, the badge, and the prose are already visible, and the row is already the badge and the prose, together with the control on that row as the limit that can replace that
 - **THEN** the row is the badge and the prose
-
-Back SHALL still walk older written comments, newest first.
-
-Forward SHALL still return toward now.
-
-Opening SHALL still land on the latest page.
-
-The badge and the prose SHALL stay as they are.
 
 #### Scenario: Back still walks older written comments, newest first
 

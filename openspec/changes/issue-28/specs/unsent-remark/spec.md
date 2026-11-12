@@ -1,8 +1,12 @@
+<!--
+sdd-absorbed: 15ab6940499fd542
+-->
+
 # unsent-remark
 
 ## Purpose
 
-A new remark stays in the window until send. The send control posts each as its own review thread, «Принять» stays on the phase row, and the draft disappears when the thread is already on the pull request. A refused send from «Записать» returns «комментарий не записан» and does not post a conversation comment.
+A new remark stays in the window until send. The send control posts each as its own review thread, «Принять» stays on the phase row, and the draft disappears when the thread is already on the pull request. The just-sent thread is visible on its own line at the moment the draft clears, otherwise an empty field is indistinguishable from a failure and the person sends the same text again. A refused send from «Записать» returns «комментарий не записан» and does not post a conversation comment.
 
 ## ADDED Requirements
 
@@ -40,12 +44,17 @@ The send control on the remark field SHALL post every unsent remark as its own r
 
 ### Requirement: A successful send shows the thread and clears the draft
 
-Immediately after a successful send, the thread SHALL be visible in the sidebar, and the draft SHALL be cleared together with that. When the pull request has that thread, the draft SHALL disappear.
+Immediately after a successful send, the thread SHALL be visible in the sidebar, and the draft SHALL be cleared together with that. The just-sent thread SHALL be visible on its own line at the moment the draft clears, otherwise an empty field is indistinguishable from a failure and the person sends the same text again. When the pull request has that thread, the draft SHALL disappear.
 
 #### Scenario: Immediately after a successful send the thread is visible in the sidebar and the draft is cleared together with that
 
 - **WHEN** a successful send, the thread, the sidebar, and the draft are already visible, together with a field that keeps the same text and a thread that is not in the sidebar as the limit that can replace this clearing
 - **THEN** immediately after a successful send the thread is visible in the sidebar and the draft is cleared together with that
+
+#### Scenario: The just-sent thread is visible on its own line at the moment the draft clears
+
+- **WHEN** the just-sent thread, its own line, and the moment the draft clears are already visible, together with an empty field that is indistinguishable from a failure and the person sending the same text again as the limit that can replace this visibility
+- **THEN** the just-sent thread is visible on its own line at the moment the draft clears, otherwise an empty field is indistinguishable from a failure and the person sends the same text again
 
 #### Scenario: When the pull request has that thread, the draft disappears
 

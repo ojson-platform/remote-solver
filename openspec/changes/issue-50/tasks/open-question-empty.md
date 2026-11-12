@@ -1,6 +1,6 @@
 - An open question still leaves that place empty, as it does now
 
-sdd-delta: ab49d6f2d3c54c6f
+sdd-delta: 1c5da6b86c1e0662
 
 ## Source
 

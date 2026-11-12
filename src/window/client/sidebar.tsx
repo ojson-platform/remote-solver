@@ -14,7 +14,7 @@ import {Gate, LinkMarks} from './board.tsx';
 import {BusyEdge} from './busy.tsx';
 import {ActForm, Hidden} from './forms.tsx';
 import {capIsOpen, layerHasFold, linkFocusProseParts, type FocusProsePart} from './gesture.ts';
-import {Cross, Pill, SendMark} from './marks.tsx';
+import {ChevronBack, ChevronForward, Cross, Pill, SendMark} from './marks.tsx';
 
 function codeLine(line: string, places: Record<string, string>): ReactNode {
   const matched = /^(\s*)Code(\s+)(\S.*)$/.exec(line);
@@ -897,23 +897,23 @@ export function FocusBlocks({
           <span className="badge">{badge}</span>
           <div className="focus-pager">
             <button
-              className="quiet"
+              className={index >= pageCount - 1 ? 'round off' : 'round'}
               type="button"
               data-focus="back"
               disabled={index >= pageCount - 1}
             >
-              {'<'}
+              <ChevronBack />
             </button>
             <span className="focus-pager-count">
               {currentPage}/{pageCount}
             </span>
             <button
-              className="quiet"
+              className={index <= 0 ? 'round off' : 'round'}
               type="button"
               data-focus="forward"
               disabled={index <= 0}
             >
-              {'>'}
+              <ChevronForward />
             </button>
           </div>
         </div>

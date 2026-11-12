@@ -1001,6 +1001,11 @@ spec('focus-pager', () => {
         assert.match(html, /class="focus-pager"/);
         assert.match(html, /data-focus="back"/);
         assert.match(html, /data-focus="forward"/);
+        assert.match(html, /<button[^>]*class="round[^"]*"[^>]*data-focus="back"/);
+        assert.match(html, /<button[^>]*class="round[^"]*"[^>]*data-focus="forward"/);
+        assert.match(html, /class="focus-pager"[^>]*>[\s\S]*<svg[^>]*aria-hidden="true"/);
+        assert.equal(html.includes('>&lt;</button>'), false);
+        assert.equal(html.includes('>&gt;</button>'), false);
         assert.match(html, />11\/12</);
         assert.equal(html.includes('назад'), false);
         assert.equal(html.includes('вперёд'), false);
@@ -1009,6 +1014,46 @@ spec('focus-pager', () => {
         assert.ok(badgeAt >= 0 && pagerAt > badgeAt);
       },
     );
+    scenario("The focus pager's back and forward controls are rounds", () => {
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {blocks: manyWrittenFocusPages(3), pageIndex: 1}),
+      );
+      assert.doesNotMatch(html, /<button[^>]*data-focus="back"[^>]*class="[^"]*quiet/);
+      assert.doesNotMatch(html, /<button[^>]*data-focus="forward"[^>]*class="[^"]*quiet/);
+      assert.doesNotMatch(html, /<button[^>]*data-focus="back"[^>]*class="[^"]*play/);
+      assert.doesNotMatch(html, /<button[^>]*data-focus="forward"[^>]*class="[^"]*play/);
+      assert.match(html, /<button[^>]*class="round[^"]*"[^>]*data-focus="back"/);
+      assert.match(html, /<button[^>]*class="round[^"]*"[^>]*data-focus="forward"/);
+    });
+    scenario('Each round holds a chevron icon', () => {
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {blocks: manyWrittenFocusPages(3), pageIndex: 1}),
+      );
+      const back = html.match(/<button[^>]*data-focus="back"[^>]*>([\s\S]*?)<\/button>/)?.[1];
+      const forward = html.match(/<button[^>]*data-focus="forward"[^>]*>([\s\S]*?)<\/button>/)?.[1];
+      assert.match(back ?? '', /<svg[^>]*aria-hidden="true"/);
+      assert.match(forward ?? '', /<svg[^>]*aria-hidden="true"/);
+      assert.equal((back ?? '').includes('&lt;'), false);
+      assert.equal((forward ?? '').includes('&gt;'), false);
+    });
+    scenario('The characters `<` and `>` are not the mark', () => {
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {blocks: manyWrittenFocusPages(3), pageIndex: 1}),
+      );
+      assert.equal(html.includes('>&lt;</button>'), false);
+      assert.equal(html.includes('>&gt;</button>'), false);
+      assert.match(html, /data-focus="back"[^>]*>[\s\S]*<svg/);
+      assert.match(html, /data-focus="forward"[^>]*>[\s\S]*<svg/);
+    });
+    scenario('The count stays between the two rounds', () => {
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {blocks: manyWrittenFocusPages(3), pageIndex: 1}),
+      );
+      const backAt = html.indexOf('data-focus="back"');
+      const countAt = html.indexOf('class="focus-pager-count"');
+      const forwardAt = html.indexOf('data-focus="forward"');
+      assert.ok(backAt >= 0 && countAt > backAt && forwardAt > countAt);
+    });
     scenario('The count runs from the oldest page, so the latest page reads `12/12`', () => {
       const blocks = manyWrittenFocusPages(12);
       const latest = renderToStaticMarkup(

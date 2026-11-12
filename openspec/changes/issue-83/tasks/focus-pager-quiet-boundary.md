@@ -1,7 +1,7 @@
 - A chevron that cannot move stays in place and goes quiet, so the number does not jump
 - A round that cannot move stays in place and goes quiet
 
-sdd-delta: ce50ed28804c49ad
+sdd-delta: e51e36369ca7899f
 
 ## Source
 

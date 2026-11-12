@@ -24,10 +24,14 @@ The characters `<` and `>` are not the mark. A round that cannot move stays in p
 
 ### Added
 
-### Modified
-
 - `round-chevron` the focus pager's back and forward controls are rounds, the same face as play on the card, and each round holds a chevron icon
+
+### Modified
 
 ## Open questions
 
 none
+
+## Shelf
+
+- round-chevron

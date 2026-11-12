@@ -692,5 +692,83 @@ spec('phase-thread-accept', () => {
         },
       );
     });
+
+    scenario('A phase thread leaves acceptance active', async () => {
+      const specFile = `services/billing/${changeDir('1')}/specs/section-text/spec.md`;
+      const reading = phaseThread(specFile, 'proposal');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1})],
+          review: () => reading,
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'specs/section-text/spec.md', deltaRequirement());
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const specify = spineOf(await pageHtml(page.url), '1', 'Specify');
+          assert.match(specify, /aria-label="Принять Specify"/);
+          assert.equal(specify.includes('disabled'), false);
+          assert.equal(specify.includes('нить этой фазы ещё открыта'), false);
+          assert.equal(specify.includes('data-gate="'), false);
+        },
+      );
+    });
+
+    scenario('A thread marked for a later phase does not', async () => {
+      const proposalFile = `services/billing/${changeDir('1')}/proposal.md`;
+      const reading = phaseThread(proposalFile, 'code');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
+          review: () => reading,
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const plan = spineOf(await pageHtml(page.url), '1', 'Plan');
+          assert.match(plan, /aria-label="Принять Plan"/);
+          assert.equal(plan.includes('disabled'), false);
+          assert.equal(plan.includes('нить этой фазы ещё открыта'), false);
+          assert.equal(plan.includes('data-gate="'), false);
+        },
+      );
+    });
+
+    scenario('A note does not', async () => {
+      const proposalFile = `services/billing/${changeDir('1')}/proposal.md`;
+      const reading = phaseThread(proposalFile, 'note');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'proposing', {openPullRequests: 1})],
+          review: () => reading,
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'proposal.md', '## Outcome\n\nГодность.\n');
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const plan = spineOf(await pageHtml(page.url), '1', 'Plan');
+          assert.match(plan, /aria-label="Принять Plan"/);
+          assert.equal(plan.includes('disabled'), false);
+          assert.equal(plan.includes('нить этой фазы ещё открыта'), false);
+          assert.equal(plan.includes('data-gate="'), false);
+        },
+      );
+    });
   });
 });

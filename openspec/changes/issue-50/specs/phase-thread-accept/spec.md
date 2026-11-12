@@ -53,17 +53,17 @@ On Plan, Specify, and Design, when that row would show acceptance if no review t
 - **WHEN** an open question, that place, and an unclosed review thread of this phase are already visible, and that place is already empty, together with «Принять» in that place as the limit that can replace this emptiness
 - **THEN** an open question still leaves that place empty, as it does now
 
+## ADDED Requirements
+
+### Requirement: The machine does not ask to accept while a thread of this phase is open
+
+While a thread that counts as this phase is open, the machine SHALL NOT set `sdd:wait-human` and SHALL NOT ask to accept the phase. A `sdd:wait-human` label that is already present SHALL stay, and the machine SHALL NOT ask again. This does not hold for a thread on an open question or an open decision, when the phase would pass without a person, or when the phase is sent back to write its document.
+
+#### Scenario: While such a thread is open, the machine does not set sdd:wait-human and does not ask to accept the phase
+
+- **WHEN** such a thread, the machine, `sdd:wait-human`, and the phase are already visible, such a thread is open, the row would show acceptance if no review thread were open, and «Принять» is already inactive in the gate's place, together with the machine setting `sdd:wait-human` and asking to accept the phase as the limit that can replace this withhold
+- **THEN** while such a thread is open, the machine does not set `sdd:wait-human` and does not ask to accept the phase, and a `sdd:wait-human` label that is already present stays
+
+## REMOVED Requirements
+
 ### Requirement: A thread of this phase withholds the accept ask
-
-On proposing, specifying, and designing, when one pull request is open, an open review thread that counts as this phase SHALL keep the machine from setting `sdd:wait-human` and from asking to accept the phase. A `sdd:wait-human` label that is already present SHALL stay, and the machine SHALL NOT ask again.
-
-A thread with no marker counts as this phase, except a thread that sits on an open question or an open decision. The machine does not set `sdd:wait-human` and does not ask to accept the phase.
-
-A thread marked for this phase counts. The machine does not set `sdd:wait-human` and does not ask to accept the phase, when the pull request conversation does not end in an unmarked person comment. An unmarked person comment on the conversation is classified first.
-
-A thread marked only for a later phase does not count. A note does not count. The machine then sets `sdd:wait-human`, when that label is absent, and asks to accept the phase. This does not hold for a thread that sits on an open question or an open decision, and it does not hold when the phase would pass without a person or when the phase is sent back to write its document.
-
-#### Scenario: A note still opens the ask
-
-- **WHEN** the phase is designing, the specs are ready, the design is present, no decision is open, the design is not behind the specs, one pull request is open, `sdd:auto-design` is absent, `sdd:wait-human` is absent, the only open review thread is a note and does not sit on an open decision, and the pull request conversation does not end in an unmarked person comment
-- **THEN** the machine sets `sdd:wait-human` and asks to accept the design

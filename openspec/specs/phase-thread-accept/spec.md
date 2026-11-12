@@ -19,13 +19,7 @@ The machine, for a thread that counts as this phase, does not ask to accept. The
 
 ### Requirement: A thread of this phase withholds the accept ask
 
-On proposing, specifying, and designing, when one pull request is open, an open review thread that counts as this phase SHALL keep the machine from setting `sdd:wait-human` and from asking to accept the phase. A `sdd:wait-human` label that is already present SHALL stay, and the machine SHALL NOT ask again.
-
-A thread with no marker counts as this phase, except a thread that sits on an open question or an open decision. The machine classifies that thread and does not ask.
-
-A thread marked for this phase counts. The machine continues that phase and does not ask, when the pull request conversation does not end in an unmarked person comment. An unmarked person comment on the conversation is classified first.
-
-A thread marked only for a later phase does not count. A note does not count. The machine then sets `sdd:wait-human`, when that label is absent, and asks to accept the phase. This does not hold for a thread that sits on an open question or an open decision, and it does not hold when the phase would pass without a person or when the phase is sent back to write its document.
+On proposing, specifying, and designing, when one pull request is open, a review thread that counts as this phase SHALL keep the machine from setting `sdd:wait-human` and from asking to accept the phase. A `sdd:wait-human` label that is already present SHALL stay, and the machine SHALL NOT ask again. This does not hold for a thread on an open question or an open decision, when the phase would pass without a person, or when the phase is sent back to write its document.
 
 #### Scenario: An unmarked thread is classified instead of the ask
 

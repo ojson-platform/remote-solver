@@ -175,7 +175,9 @@ export function WindowView({
   layer?: SpineLayer | '';
 }): ReactNode {
   const opened = snapshot.opened?.key;
-  const remark = opened !== undefined ? snapshot.phaseDrafts?.[opened] : undefined;
+  const phaseDrafts = opened !== undefined ? snapshot.phaseDrafts?.[opened] : undefined;
+  const remark =
+    phaseDrafts !== undefined ? {...phaseDrafts, Accept: ''} : undefined;
   return (
     <html lang="ru">
       <head>

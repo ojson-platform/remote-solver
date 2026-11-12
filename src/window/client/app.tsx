@@ -176,7 +176,7 @@ export function WindowView({
 }): ReactNode {
   const opened = snapshot.opened?.key;
   const phaseDrafts = opened !== undefined ? snapshot.phaseDrafts?.[opened] : undefined;
-  const remark =
+  const remark: DocumentRemark | undefined =
     phaseDrafts !== undefined ? {...phaseDrafts, Accept: ''} : undefined;
   return (
     <html lang="ru">

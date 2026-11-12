@@ -794,6 +794,7 @@ spec('phase-thread-accept', () => {
             200,
           );
           const plan = spineOf(await pageHtml(page.url), '1', 'Plan');
+          assert.equal(plan.includes('accept-review'), false);
           assert.equal(plan.includes('Принять Plan'), false);
           assert.equal(plan.includes('нить этой фазы ещё открыта'), false);
           assert.equal(plan.includes('data-gate="proposing"'), false);

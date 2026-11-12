@@ -1107,6 +1107,18 @@ spec('focus-pager', () => {
       );
       assert.equal(html.includes('focus-pager'), false);
     });
+    scenario('One written focus still leaves the pager out', () => {
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:spec', 'Only focus.\n')],
+          pageIndex: 0,
+        }),
+      );
+      assert.equal(html.includes('focus-pager'), false);
+      assert.equal(html.includes('focus-pager-count'), false);
+      assert.equal(html.includes('data-focus="back"'), false);
+      assert.equal(html.includes('data-focus="forward"'), false);
+    });
     scenario('The row is the badge and the prose', () => {
       const html = renderToStaticMarkup(
         createElement(FocusBlocks, {

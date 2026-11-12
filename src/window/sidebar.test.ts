@@ -5,6 +5,7 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 
+import {focusPageAfterBack, focusPageAfterForward} from './client/main.tsx';
 import {
   clampFocusPageIndex,
   FocusBlocks,
@@ -42,22 +43,6 @@ function focusPagerHtml(snapshot: WindowSnapshot, pageIndex: number): string {
   return renderToStaticMarkup(
     createElement(FocusBlocks, {blocks: opened.blocks, pageIndex}),
   );
-}
-
-/** Client memory after Back: same rule as `src/window/client/main.tsx`. */
-function focusPageAfterBack(index: number, pageCount: number): number {
-  if (pageCount > 1 && index < pageCount - 1) {
-    return index + 1;
-  }
-  return index;
-}
-
-/** Client memory after Forward: same rule as `src/window/client/main.tsx`. */
-function focusPageAfterForward(index: number): number {
-  if (index > 0) {
-    return index - 1;
-  }
-  return index;
 }
 
 function manyWrittenFocusPages(count: number) {

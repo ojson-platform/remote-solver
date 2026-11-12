@@ -3882,7 +3882,8 @@ spec('focus-pager', () => {
             200,
           );
           const focus = focusBlockHtml(bandOf(await pageHtml(page.url), '1'));
-          assert.match(focus, />3\/3</);
+          assert.match(focus, /class="focus-pager-count">\s*3\/3\s*</);
+          assert.match(focus, /<button[^>]*data-focus="forward"[^>]*disabled/);
           assert.match(focus, />sdd:focus:code</);
           assert.match(focus, /Newest code focus\./);
           assert.equal(focus.includes('Older plan note'), false);

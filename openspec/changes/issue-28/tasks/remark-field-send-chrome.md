@@ -3,7 +3,7 @@
 - «Принять» stays on the phase row
 - The send control does not take its place
 
-sdd-delta: 6bfb0d887ae27abd
+sdd-delta: eda70bbe7417d517
 
 ## Source
 

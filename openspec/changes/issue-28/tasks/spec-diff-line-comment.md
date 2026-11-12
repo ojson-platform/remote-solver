@@ -1,6 +1,7 @@
 - A line copied from the delta opens a thread
 - A baseline line quotes the pull request
 - A refused thread is quoted
+- A refused send from «Записать» does not post a conversation comment
 - Both writes failing leave the comment unrecorded
 - A plan line opens a thread on proposal.md
 - A design line opens a thread on design.md
@@ -11,7 +12,7 @@
 - A design checkbox outside Open questions opens a thread
 - A repeated design checkbox outside Open questions opens a thread
 
-sdd-delta: 6bfb0d887ae27abd
+sdd-delta: eda70bbe7417d517
 
 ## Source
 
@@ -19,11 +20,11 @@ sdd-delta: 6bfb0d887ae27abd
 
 Seams (no child issues): anchor vs speak fallback; plan/design file paths vs delta path; open question vs checkbox thread; hold=`1` refusal handled in the unsent-remark slice.
 
-This slice assumes **`failure-retry-draft-dedupe`** for the refused «Записать» send wording shared with `unsent-remark`.
+Refused «Записать» sends that return `комментарий не записан` are asserted in **`failure-retry-draft-dedupe`**; this slice covers the `spec-diff` promise that no conversation comment is posted.
 
 ## Proof
 
-`src/window/spec-diff.test.ts` observes line comments on delta and baseline rows, plan and design anchors, open-question conversation replies, design checkboxes, refused-thread quoting, and both writes failing.
+`src/window/spec-diff.test.ts` observes line comments on delta and baseline rows, plan and design anchors, open-question conversation replies, design checkboxes, refused-thread quoting, a refused send from «Записать» without a conversation comment, and both writes failing.
 
 - **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --reporter=default src/window/spec-diff.test.ts`
 - **Once** after that command exits 0: `pnpm test`; then `pnpm run test:types`

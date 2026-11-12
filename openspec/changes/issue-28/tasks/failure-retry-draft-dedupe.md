@@ -3,11 +3,10 @@
 - The draft remains only when that thread is not on the pull request
 - The draft remains only when the thread is not on the pull request
 - A refused send from «Записать» returns «комментарий не записан» and does not post a conversation comment
-- A refused send from «Записать» does not post a conversation comment
 - When the pull request already has that thread, including after the window reported an error, a retry does not post a second thread with the same text on the same line
 - If the window replied with an error after the write, including stale, a retry does not create a second thread with the same text on the same line
 
-sdd-delta: 6bfb0d887ae27abd
+sdd-delta: eda70bbe7417d517
 
 ## Source
 

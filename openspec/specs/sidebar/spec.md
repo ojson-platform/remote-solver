@@ -53,18 +53,18 @@ The focus block SHALL show the body after the first line `sdd:focus` of the late
 - **WHEN** the cycle has no comment that starts with `sdd:focus`
 - **THEN** the open row has no focus block
 
-### Requirement: Unanswered review shows threads the port already gives
+### Requirement: The open row does not show the unanswered review
 
-The unanswered block SHALL be present when a thread has no marker, or the conversation's last comment has no marker. It SHALL show the thread lines and the last conversation comment the review port already gives, and SHALL NOT title them `ревью`. When there is no such thread and no such conversation, the block SHALL be absent.
+The open row SHALL NOT show an unanswered block. An unmarked thread and the conversation's last comment SHALL stay off the focus. A thread that names a file SHALL stay on its phase row.
 
-#### Scenario: An unmarked thread is shown
+#### Scenario: An unmarked thread stays off the focus
 
-- **WHEN** the pull request has a thread whose latest marker is absent
-- **THEN** the unanswered block shows that thread
+- **WHEN** the pull request has a thread whose latest marker is absent and the thread names no file
+- **THEN** the open row has no unanswered block
 
-#### Scenario: A marked thread is omitted
+#### Scenario: A conversation comment stays off the focus
 
-- **WHEN** every open thread has a marker and the conversation's last comment has a marker
+- **WHEN** the conversation's last comment has no marker
 - **THEN** the open row has no unanswered block
 
 ### Requirement: The hook block shows sddHooks in field order

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The pager's open page is a live page in four cases, and the closed plaque shows that same sentence until the reason passes.
+The pager's open page is a live page in four cases. The closed plaque shows the shorter work lines.
 
 ## Requirements
 
@@ -262,7 +262,7 @@ When accepting waits because checks are not green before merge, the open page SH
 
 ### Requirement: A refused archive is the open page
 
-When the accept step's command refuses, the open page SHALL be the live page, including on accepting and including while a worker is on this issue. The text SHALL be what the command said. The plaque SHALL show that same text. Another wait on accepting SHALL keep the written focus.
+When the accept step's command refuses, the open page SHALL be the live page, including on accepting and including while a worker is on this issue. The text SHALL be what the command said. The plaque SHALL show `Архив отказал`. Another wait on accepting SHALL keep the written focus.
 
 #### Scenario: A refused archive on accepting is the open page and the text is what the command said
 
@@ -279,34 +279,34 @@ When the accept step's command refuses, the open page SHALL be the live page, in
 - **WHEN** accepting already waits for a person and the written focus of that stop is already the open page, together with the live page of a refused archive as the limit that can replace that written focus
 - **THEN** the open page stays that written focus
 
-#### Scenario: The plaque shows the same refused archive
+#### Scenario: The plaque shows the short archive refusal
 
 - **WHEN** the plaque and the open page already see the refused archive, together with the plaque keeping `Done <done>/<done+open>` as the limit that can replace that text
-- **THEN** the plaque shows that same text
+- **THEN** the open page keeps the command text and the plaque says `Архив отказал`
 
-### Requirement: The closed plaque shows the live sentence until the reason passes
+### Requirement: The closed plaque shows the work, not the open-page sentence
 
-In the four cases, when a review gate is not on, the plaque SHALL show the same live sentence as the open page. That sentence SHALL leave when the reason passes. When no live reason applies, the plaque SHALL keep `Done <done>/<done+open>` from tasks.md. The narrow `Waits for` line SHALL be only the child wait at tasking, the keys of child cycles that are not yet specified, once tasks.md exists. That line SHALL NOT name a blocker, the phase the wait runs until, a worker, a full cap, or checks.
+The plaque SHALL show `Done <done>/<done+open>` and the open task id for the next code task, and SHALL NOT show that step's open-page sentence. When the step is over, the count SHALL stay. A child not yet specified SHALL be `Жду #<key>` only while tasks are not being written. A child not yet accepted SHALL be `Жду принятия #<key>`. That line SHALL NOT name a blocker, a worker, a cap, or checks.
 
-#### Scenario: The plaque shows the same live sentence as the open page
+#### Scenario: The plaque shows the count and the task
 
-- **WHEN** one of the four cases already holds, a review gate is not on, and the plaque already shows the same live sentence as the open page, together with `Done <done>/<done+open>` as the limit that can replace that sentence
-- **THEN** the plaque shows the same live sentence as the open page
+- **WHEN** `implement-next-task` is running, tasks are `Done 1/4`, and the open task id is `success-send`
+- **THEN** the plaque shows `Done 1/4` and `success-send`, and does not show the open-page sentence
 
 #### Scenario: That sentence leaves when the reason passes
 
-- **WHEN** the reason has already passed and the live sentence has already left the plaque and the open page, together with that sentence staying as the limit that can replace that leaving
-- **THEN** that sentence leaves when the reason passes
+- **WHEN** the step is over and tasks are `Done 0/2`
+- **THEN** the plaque shows `Done 0/2` and does not show the action token
 
 #### Scenario: The Done count stays when no live reason applies
 
-- **WHEN** no live reason applies, the phase is `implementing`, tasks.md already has one done item and three open items, and the plaque already shows `Done 1/4`, together with a live sentence as the limit that can replace that count
+- **WHEN** no live reason applies, the phase is `implementing`, and tasks are one done and three open
 - **THEN** the plaque shows `Done 1/4`
 
-#### Scenario: The narrow Waits for line is only the child wait at tasking
+#### Scenario: The child wait is only the unspecified child
 
-- **WHEN** the phase is `tasking`, tasks.md already exists, child `12` is not yet specified, and the plaque already shows `Waits for 12`, together with blocker `7`, the phase the wait runs until, a worker, a full cap, and checks as the limit that can replace that line
-- **THEN** the narrow `Waits for` line is `Waits for 12` and does not name `7`, the phase the wait runs until, a worker, a full cap, or checks
+- **WHEN** the phase is `tasking` and the phase row waits on child `12`
+- **THEN** the plaque says `Жду #12` and does not name `7`, a worker, a cap, or checks
 
 ### Requirement: No written page leaves the live page as the only page
 

@@ -261,7 +261,7 @@ The archive comment SHALL say what landed in the baseline specs and what was lef
 
 A visit that fixes review threads of its own phase SHALL keep the previous comment of that phase.
 
-The first paragraph SHALL be the updated answer to the phase question.
+On a remark visit of plan, spec, design, or tasks, the first paragraph SHALL say what this commit changed. It SHALL name a refusal, a new or changed promise, a rejected alternative, or a waiting slice only when this commit added or changed that.
 
 The next paragraph SHALL name the remarks in their own words and what changed because of them, including scenario names when scenarios appeared.
 
@@ -365,10 +365,10 @@ A last paragraph SHALL appear only when something remains to look at, and it SHA
 - **WHEN** a visit that fixes review threads of its own phase and the previous comment of that phase are already visible, together with a new focus comment of that phase as the limit that can replace the previous comment
 - **THEN** the visit keeps the previous comment of that phase, and the previous comment of that phase stays
 
-#### Scenario: The first paragraph is the updated answer to the phase question
+#### Scenario: A remark visit says what this commit changed
 
-- **WHEN** the first paragraph and the updated answer to the phase question are already visible, together with the previous answer as the limit that can replace that updated answer
-- **THEN** the first paragraph is the updated answer to the phase question
+- **WHEN** a remark visit shortens a requirement and adds no promise, together with a first paragraph that names a new promise
+- **THEN** the first paragraph says what this commit changed and does not name a new promise
 
 #### Scenario: The next paragraph names the remarks in their own words and what changed because of them, including scenario names when scenarios appeared
 

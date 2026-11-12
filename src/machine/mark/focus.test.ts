@@ -480,6 +480,12 @@ spec('focus', () => {
         assert.match(prose, /после коммита/i);
         assert.match(prose, /не трог/i);
         assert.match(prose, /не доказ/i);
+        assert.equal(
+          validateFocusBody(
+            'sdd:focus:code\nПосле коммита проверка короче.\n\nЗамечание про длину — сократили проверку.\n',
+          ),
+          'thread-fix first paragraph answers the phase question',
+        );
       },
     );
 
@@ -510,17 +516,34 @@ spec('focus', () => {
       assert.equal(focusMarkerLine(posted[0] ?? ''), 'sdd:focus:spec');
     });
 
-    scenario('The first paragraph is the updated answer to the phase question', async () => {
-      const {posted} = await runPostFocus(FOCUS_BODIES.specThreadFix, {files: [file('specs/focus/spec.md')]});
-      const first = focusProseParagraphs(focusProse(posted[0] ?? '') ?? '')[0] ?? '';
-      assert.match(first, /нов|измен|сценар/i);
+    scenario('A remark visit says what this commit changed', () => {
+      const shortened =
+        'sdd:focus:spec\nТребование про нить на строке сократили: краевые случаи перенесли в уже названные сценарии.\n\nЗамечание ревью: Requirement text is very long, примеры нужно перенести в сценарии. Требование сократили до якоря.\n';
+      assert.equal(validateFocusBody(shortened), undefined);
+      const first = focusProseParagraphs(focusProse(shortened) ?? '')[0] ?? '';
+      assert.equal(/новое обещание/i.test(first), false);
       assert.equal(
-        firstFocusSentence(posted[0] ?? ''),
-        'Новое обещание — проза на issue; изменено обещание о форме комментария.',
+        validateFocusBody(
+          'sdd:focus:plan\nДля читателя тикета убрали ledger из прозы плана.\n\nЗамечание про ledger — убрали из прозы.\n',
+        ),
+        undefined,
       );
-      const weakThreadFix =
-        'sdd:focus:plan\nотказ\n\nЗамечание про ledger — убрали из прозы.\n';
-      assert.equal(validateFocusBody(weakThreadFix), 'thread-fix first paragraph answers the phase question');
+      assert.equal(
+        validateFocusBody(
+          'sdd:focus:design\nПоведение по-прежнему живёт в focus.ts; поправили имя наблюдаемого файла.\n\nЗамечание про имя файла — поправили путь.\n',
+        ),
+        undefined,
+      );
+      assert.equal(
+        validateFocusBody(
+          'sdd:focus:tasks\nСлайсы остались в прежнем порядке; у слайса маркеров поправили заголовок.\n\nЗамечание про заголовок — переименовали слайс.\n',
+        ),
+        undefined,
+      );
+      assert.equal(
+        validateFocusBody('sdd:focus:plan\nотказ\n\nЗамечание про ledger — убрали из прозы.\n'),
+        'thread-fix first paragraph says what this commit changed',
+      );
     });
 
     scenario(

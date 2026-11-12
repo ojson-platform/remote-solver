@@ -121,7 +121,7 @@ A new spec SHALL NOT keep the Purpose the command writes (`TBD - created by arch
 
 ### Requirement: A refusal does not publish
 
-When the command refuses, the step SHALL NOT publish. A refusal because a baseline would have no requirement SHALL be a Wait that names that baseline, and the machine SHALL NOT post `sdd:refused` for that refusal. Any other refusal SHALL be a Wait that names what the command said. The machine SHALL post `sdd:refused` with the phase, the action `archive`, and the reason `archive the change`, and SHALL put what the command said on the following lines. The next poll SHALL NOT run the archive.
+When the command refuses, the step SHALL NOT publish. A baseline that would have no requirement SHALL be a Wait naming that baseline, without `sdd:refused`. A spec the pull request does not change SHALL be a Wait naming what the command said. The machine SHALL post `sdd:refused` with the phase, action `archive`, and reason `archive the change`, then what the command said, and SHALL set the label `sdd:refused`. While that label is on, the next poll SHALL NOT run the archive.
 
 #### Scenario: When the command refuses, the step does not publish
 
@@ -147,3 +147,31 @@ When the command refuses, the step SHALL NOT publish. A refusal because a baseli
 
 - **WHEN** that refusal is the latest machine comment
 - **THEN** the next poll does not run the archive
+
+### Requirement: A refused spec this change owns returns to specifying
+
+When validate refuses `spec/<capability>` and the pull request changes that delta spec, the machine SHALL return the checkout to the tip from before the fold and SHALL NOT commit. It SHALL NOT post `sdd:refused`. It SHALL open one thread on `openspec/changes/issue-<key>/specs/<capability>/spec.md`. The first line SHALL be `sdd:layer=spec → specifying` and the next line SHALL be what the command said. The next poll SHALL move the issue to `specifying`. The proposal list is not the check.
+
+#### Scenario: A refused spec this change owns opens a spec thread
+
+- **WHEN** the change names `board` and validate refuses `spec/board` because a requirement is longer than 500 characters
+- **THEN** the checkout is still the tip from before the fold, no `sdd:refused` comment is posted, and one thread on `openspec/changes/issue-<key>/specs/board/spec.md` starts with `sdd:layer=spec → specifying` followed by what the command said
+
+#### Scenario: A delta the proposal does not name still opens a spec thread
+
+- **WHEN** the proposal does not name `board`, the pull request changes `openspec/changes/issue-<key>/specs/board/spec.md`, and validate refuses `spec/board` because a requirement is longer than 500 characters
+- **THEN** no `sdd:refused` comment is posted, and one thread on `openspec/changes/issue-<key>/specs/board/spec.md` starts with `sdd:layer=spec → specifying` followed by what the command said
+
+#### Scenario: The next poll moves that issue to specifying
+
+- **WHEN** that thread is open and the phase is `accepting`
+- **THEN** the machine moves the issue to `specifying`
+
+### Requirement: The same archive refusal does not open another thread
+
+When a thread already carries that same command text, validate refusing with it again SHALL be a Wait that names what the command said. The machine SHALL post `sdd:refused`, set the label `sdd:refused`, and SHALL NOT open another thread.
+
+#### Scenario: A repeated validate refusal waits
+
+- **WHEN** a resolved thread already carries that command text and validate refuses with it again
+- **THEN** the machine waits with what the command said, posts `sdd:refused`, and does not open a thread

@@ -44,6 +44,7 @@ spec('idle', () => {
       const notes = await box.tracker.comments('8');
       const refusal = notes.find(note => note.body.includes('sdd:refused'));
       assert.ok(refusal);
+      assert.ok((await box.tracker.labels('8')).includes('sdd:refused'));
       assert.equal(refusal.body.includes('\0'), false);
       assert.match(refusal.body, /implementing/);
       assert.match(refusal.body, /implement-next-task/);
@@ -51,7 +52,7 @@ spec('idle', () => {
       await driveIssue(box, '8');
       assert.deepEqual(seen, ['implement-next-task']);
     });
-    scenario('A person comment starts the effect again', async () => {
+    scenario('A person comment leaves the refusal', async () => {
       const root = mkdtempSync(path.join(tmpdir(), 'sdd-person-'));
       const seen: string[] = [];
       const runtime: Runtime = {
@@ -102,6 +103,60 @@ spec('idle', () => {
       const first = await driveIssue(box, '8');
       assert.equal(first.code, 0);
       person('8', 'please continue');
+      await driveIssue(box, '8');
+      assert.deepEqual(seen, ['implement-next-task']);
+    });
+    scenario('Removing the label starts the effect again', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-clear-'));
+      const seen: string[] = [];
+      const runtime: Runtime = {
+        async run(skill) {
+          seen.push(skill.action);
+          return {commits: 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
+      };
+      const tasks = path.join('openspec', 'changes', 'issue-8', 'tasks.md');
+      const {tracker, review} = memoryPorts({
+        issues: [
+          {
+            key: '8',
+            title: '#8: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['remote-solver', 'sdd:cycle', 'sdd:implementing'],
+          },
+        ],
+        pulls: {8: [{id: '80', title: '#8: title', state: 'OPEN'}]},
+      });
+      const box = machine(root, {
+        config: {
+          queues: [{name: 'remote-solver'}],
+          base: 'master',
+          branchScope: 'sdd',
+          ignoreComments: [],
+        },
+        tracker,
+        review,
+        vcs: {
+          filesAt: () => ({
+            exists: rel => rel === tasks,
+            read: rel => (rel === tasks ? '- [ ] one\n' : ''),
+            list: () => [],
+          }),
+          compare: async () => null,
+          push: async () => {},
+          head: async () => 'abc',
+          published: async () => true,
+          dirty: async () => [],
+        },
+        runtime,
+      });
+      const first = await driveIssue(box, '8');
+      assert.equal(first.code, 0);
+      await tracker.editLabels('8', [], ['sdd:refused']);
       await driveIssue(box, '8');
       assert.deepEqual(seen, ['implement-next-task', 'implement-next-task']);
     });

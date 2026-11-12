@@ -668,7 +668,7 @@ test('a decision-only card hides the line and the sidebar still shows it', () =>
   rmSync(dir, {recursive: true, force: true});
 });
 
-test('a conversation last comment with no marker is in the sidebar unanswered block', () => {
+test('a conversation last comment with no marker stays off the sidebar', () => {
   const {dir, home, arcadia} = yard();
   prepare(arcadia, home);
   const window = openSide(home, [cycle('1', 'implementing')], {
@@ -679,7 +679,7 @@ test('a conversation last comment with no marker is in the sidebar unanswered bl
   });
   window.openCard('1');
   const blocks = window.sidebar();
-  assert.deepEqual(blocks, [{kind: 'unanswered', comment: 'please reply'}]);
+  assert.equal(JSON.stringify(blocks).includes('please reply'), false);
   assert.equal(JSON.stringify(blocks).includes('kept out'), false);
   rmSync(dir, {recursive: true, force: true});
 });
@@ -804,9 +804,9 @@ test('the sidebar lists the blocks that exist from reason through hook', () => {
       body: 'Plan gap\n',
       display: focusBlockProse('sdd:focus', 'Plan gap\n'),
     },
-    {kind: 'unanswered', threads: [{lines: ['please look']}]},
     {kind: 'hook', points: [{action: 'archive', point: 'before', paragraph: 'keep'}]},
   ]);
+  assert.equal(JSON.stringify(window.sidebar()).includes('please look'), false);
   rmSync(dir, {recursive: true, force: true});
 });
 

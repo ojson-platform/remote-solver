@@ -98,10 +98,6 @@ function hookBlock(value: unknown): SidebarBlock | undefined {
   return {kind: 'hook', points};
 }
 
-function hasMarker(marker: string | null | undefined): boolean {
-  return typeof marker === 'string' && marker !== '';
-}
-
 function humanComments(thread: {comments?: readonly string[]; lines: readonly string[]}): string[] {
   const bodies = thread.comments ?? [...thread.lines];
   return bodies.filter(body => parseMarker(body) === null);
@@ -195,27 +191,6 @@ function lineThreadBlocks(reading: WindowReview | undefined): SidebarBlock[] {
   return out;
 }
 
-function unansweredBlock(reading: WindowReview | undefined): SidebarBlock | undefined {
-  if (!reading) {
-    return undefined;
-  }
-  const threads = (reading.threads ?? [])
-    .filter(thread => !hasMarker(thread.marker))
-    .map(thread => ({lines: thread.lines}));
-  const last = reading.conversation?.last;
-  const comment = last && !hasMarker(last.marker) ? last.body : undefined;
-  if (threads.length === 0 && comment === undefined) {
-    return undefined;
-  }
-  if (threads.length > 0 && comment !== undefined) {
-    return {kind: 'unanswered', threads, comment};
-  }
-  if (threads.length > 0) {
-    return {kind: 'unanswered', threads};
-  }
-  return {kind: 'unanswered', comment};
-}
-
 function writtenFocusBlocks(comments: readonly WindowComment[] | undefined): SidebarBlock[] {
   return writtenFocusPages(comments).map(page => ({
     kind: 'focus' as const,
@@ -289,10 +264,6 @@ export function blocksFor(
   const reading = ctx.review();
   blocks.push(...lineThreadBlocks(reading));
   blocks.push(...phaseThreadBlocks(reading));
-  const unanswered = unansweredBlock(reading);
-  if (unanswered) {
-    blocks.push(unanswered);
-  }
   const hook = hookBlock(item.sddHooks);
   if (hook) {
     blocks.push(hook);

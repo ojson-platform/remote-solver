@@ -37,7 +37,7 @@ A row with no fold SHALL stay closed, and a click on its head SHALL NOT open it.
 
 #### Scenario: An empty row stays closed
 
-A fold is present for Plan or Design when a section has text or the review remark is shown, for Specify when a capability or the review remark is shown, for Tasks when a task is listed, for Code when a check line, a diff line, a focus remainder, an open pull request, an unanswered review, or a hook is shown, and for Accept always.
+A fold is present for Plan or Design when a section has text or the review remark is shown, for Specify when a capability or the review remark is shown, for Tasks when a task is listed, for Code when a check line, a diff line, a focus remainder, an open pull request, a thread on Code, or a hook is shown, and for Accept always.
 
 A second click on an open row SHALL close it, and every row MAY then be closed.
 
@@ -113,7 +113,7 @@ A check state `none` SHALL be named there.
 
 When a diff is present, Code SHALL say that a diff is present and SHALL NOT list the changed files or show the patch.
 
-When they exist, Code SHALL show the unanswered review and the hook.
+When it exists, Code SHALL show the hook.
 
 - **WHEN** `proposal.md` has an Outcome section, the cycle is open, and the issue branch does not exist
 - **THEN** the sidebar shows that Outcome from the checkout on the Plan row

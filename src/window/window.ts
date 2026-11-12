@@ -36,6 +36,7 @@ import {focusNamesPlace} from './focus.ts';
 import {openRoleEditor, runRole, shelfOf} from './role.ts';
 import {openServiceGroup} from './service-group.ts';
 import {blocksFor} from './sidebar.ts';
+import {refusalHold} from './snapshot.ts';
 import {buildSpine, projectSpine, reviewGateForPhase, type Spine} from './spine.ts';
 import {runSpy} from './spy.ts';
 import {createBoardStore, type BoardStore} from './store.ts';
@@ -361,6 +362,10 @@ export function openWindow(
       const item = checkout.sorted().find(ticket => ticket.key === key);
       return item?.labels.includes('sdd:wait-human') === true;
     },
+    refused(key: string) {
+      const item = checkout.sorted().find(ticket => ticket.key === key);
+      return item?.labels.includes('sdd:refused') === true;
+    },
     cycleLabel(key: string) {
       const item = checkout.sorted().find(ticket => ticket.key === key);
       return item ? phaseOf([...item.labels]) : null;
@@ -569,7 +574,15 @@ export function openWindow(
     },
     continueWait(key: string) {
       const item = checkout.sorted().find(ticket => ticket.key === key);
-      if (!item?.labels.includes('sdd:wait-human') || !outside.editLabels) {
+      if (!item || !outside.editLabels) {
+        return 'Продолжить не удалось.';
+      }
+      const decision = outside.decision?.(key);
+      if (item.labels.includes('sdd:refused') && refusalHold(decision)) {
+        outside.editLabels(key, [], ['sdd:refused']);
+        return undefined;
+      }
+      if (!item.labels.includes('sdd:wait-human')) {
         return 'Продолжить не удалось.';
       }
       outside.editLabels(key, [], ['sdd:wait-human']);

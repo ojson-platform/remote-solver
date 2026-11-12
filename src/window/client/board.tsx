@@ -1,24 +1,11 @@
 import type {ReactNode} from 'react';
 
-import type {ColumnName, GateStation, LinkMark, PhaseRow} from '../types.ts';
+import type {ColumnName, GateStation, LinkMark} from '../types.ts';
 import {COLUMN_NAMES, isGateStation} from '../types.ts';
 import type {SnapshotRow} from '../snapshot.ts';
 
 import {ActForm, Hidden} from './forms.tsx';
 import {Glyph, HammerMark, Wizard} from './marks.tsx';
-
-function phaseStat(row: PhaseRow): ReactNode {
-  if (typeof row === 'number') {
-    return <div className="stat">{row}</div>;
-  }
-  if (typeof row === 'string') {
-    return <div className={`stat ${row}`}>{row}</div>;
-  }
-  if ('waits' in row) {
-    return <div className="stat">{`Waits for ${row.waits.join(', ')}`}</div>;
-  }
-  return <div className="stat">{`Done ${row.done}/${row.done + row.open}`}</div>;
-}
 
 function linkMarkTitle(rows: readonly SnapshotRow[], key: string): string | undefined {
   return rows.find(row => row.key === key)?.title;
@@ -53,35 +40,14 @@ export function LinkMarks({
   );
 }
 
-function phaseText(row: PhaseRow): string {
-  if (typeof row === 'number' || typeof row === 'string') {
-    return String(row);
-  }
-  if ('waits' in row) {
-    return `Waits for ${row.waits.join(', ')}`;
-  }
-  return `Done ${row.done}/${row.done + row.open}`;
-}
-
 function Plaque({row}: {row: SnapshotRow}): ReactNode {
-  const lines = row.plaque;
-  const top =
-    lines.top === undefined ? null : (
-      <span className={lines.top === 'red' ? 'kicker red' : 'kicker'}>{lines.top}</span>
-    );
-  const bottomIsPhase =
-    lines.bottom !== undefined && row.phaseRow !== undefined && lines.bottom === phaseText(row.phaseRow);
-  let bottom: ReactNode = null;
-  if (lines.bottom !== undefined) {
-    bottom = bottomIsPhase ? phaseStat(row.phaseRow as PhaseRow) : <span className="reason">{lines.bottom}</span>;
-  }
-  const body = top === null && bottom === null ? <span className="reason">&nbsp;</span> : <>{top}{bottom}</>;
+  const text = row.plaque.lines.join('\n');
   return (
     <ActForm act="open" className="open">
       <Hidden name="key" value={row.key} />
       <button className="plaque" type="submit">
         {row.running === true ? <HammerMark /> : null}
-        {body}
+        <span className="copy">{text === '' ? '\u00a0' : text}</span>
       </button>
     </ActForm>
   );

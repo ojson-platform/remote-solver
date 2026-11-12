@@ -1017,7 +1017,7 @@ test('an open card is marked, the face holds the phase, and close clears the row
     const faceStart = article.indexOf('<button class="face"');
     const faceEnd = article.indexOf('</button>', faceStart);
     const face = article.slice(faceStart, faceEnd);
-    assert.match(plaque, /class="stat"/);
+    assert.match(plaque, /class="copy"/);
     assert.match(plaque, /Done 12\/14/);
     assert.equal(plaque.includes('мерж'), false);
     assert.equal(face.includes('Done 12'), false);

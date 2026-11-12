@@ -34,6 +34,15 @@
 - **WHEN** `unwait` runs on an issue that has no `wait-human`
 - **THEN** the labels stay as they were
 
+### Requirement: Continue clears a refusal
+
+When the label `sdd:refused` is on and the open page is that refusal, Continue SHALL remove `sdd:refused`. It SHALL leave `sdd:wait-human` as it was.
+
+#### Scenario: Continue removes the refusal label
+
+- **WHEN** the issue carries `sdd:refused` and the decision is `refused implement-next-task: next open task`
+- **THEN** the page offers `Продолжить`, and the click removes `sdd:refused`
+
 ### Requirement: Continue clears only the label
 
 Continue SHALL remove `wait-human` and SHALL NOT check that the ask was fulfilled. The control SHALL be absent while acceptance is offered, while the settled decision is an agent, and while the checkout repair is open.

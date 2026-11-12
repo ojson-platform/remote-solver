@@ -203,7 +203,7 @@ A child is a cycle issue whose parent is this issue.
 
 A child with no phase, or a cancelled child, is not `specified`.
 
-The plaque SHALL then show `Waits for` those keys in key order, separated by `, `.
+The plaque SHALL then show `Жду #` those keys. A child that is not yet accepted SHALL be `Жду принятия #` instead.
 
 The reason block SHALL NOT name them.
 
@@ -232,17 +232,22 @@ The window SHALL NOT show a coverage count, and SHALL NOT show children, blocker
 #### Scenario: Tasking names a child that is not specified
 
 - **WHEN** the phase is `tasking`, `tasks.md` exists, and a child cycle has no phase
-- **THEN** the plaque shows `Waits for` that child's key, and the reason block does not name the child
+- **THEN** the plaque shows `Жду #` and that child's key, and the reason block does not name the child
+
+#### Scenario: A child that is not accepted is a different wait
+
+- **WHEN** the decision waits until child `12` is accepted
+- **THEN** the plaque says `Жду принятия #12`
 
 #### Scenario: A specified child leaves the tasking plaque without that wait
 
 - **WHEN** the phase is `tasking`, `tasks.md` exists, and every child cycle is at least `specified`
-- **THEN** the plaque does not show `Waits for`
+- **THEN** the plaque does not show `Жду`
 
 #### Scenario: Tasking without tasks.md keeps the worker action
 
 - **WHEN** the phase is `tasking`, `tasks.md` is absent, a child cycle is not `specified`, and the worker's action is `create-tasks`
-- **THEN** the plaque shows `create-tasks` and does not show `Waits for`
+- **THEN** the plaque shows `Пишу задачи` and does not show `Жду`
 
 #### Scenario: Implementing shows done over the total
 
@@ -435,80 +440,84 @@ It SHALL NOT be a tracker page and SHALL NOT be the agent chat, and a running st
 - **WHEN** the pool has no cycle
 - **THEN** the key column remains and the pool draws no tile
 
-### Requirement: A plaque shows the top and the bottom in order
+### Requirement: A plaque shows the current work
 
-The tile SHALL show the full key and the title. The plaque SHALL be a button on the station of the cycle's phase. A click SHALL open the row and SHALL NOT write a phase. The top and the bottom SHALL be the first match, in the order below. The window SHALL NOT compose that text.
+The plaque SHALL be a button on the station of the cycle's phase. A click SHALL open the row and SHALL NOT write a phase. The plaque SHALL show at most four wrapped lines and SHALL NOT show a kicker. A focus gap and an unanswered thread SHALL stay off the plaque. An authored line SHALL NOT end with a period.
 
-The top, in order:
-
-1. `ask`, while the cycle has `sdd:wait-human`.
-
-2. The layer names the latest `sdd:focus` did not mark `solid`, in focus order, joined by `·`.
-
-#### Scenario: Ask is the top while the cycle waits
-
-3. `ревью`, when unanswered text is present and the top is not `ask`.
-
-4. `red`, `green`, or `pending`, when the station is `verifying` or `accepting` and that state is present.
-
-5. Otherwise there is no top, and the plaque is one bottom line.
-
-The bottom is the first line below that is present and does not repeat the top:
-
-1. The ask text, when the top is `ask`. On the closed plaque the tail SHALL be hidden.
-
-2. The phase row, when the phase has one.
-
-3. The reason line, when it does not repeat the top. Children and blockers stay words on that line.
-
-4. The unanswered text, when the top is `ревью`.
-
-5. The worker's action, when the top and the other bottom lines are empty.
-
-The action SHALL NOT replace a line that is already there and SHALL NOT be an occasion mark. While an agent leads a step, or the cycle waits on checks, the plaque SHALL keep its text and SHALL NOT add an occasion mark. The row order SHALL keep that occasion.
+#### Scenario: A wait shows the ask prose
 
 - **WHEN** a cycle has `sdd:wait-human` and the latest issue comment that is not `sdd:focus` is the ask
-- **THEN** the plaque top is `ask` and the bottom is that ask text, and the phase row is not repeated on the plaque
+- **THEN** the plaque shows that ask text without a trailing period, and does not show the word ask
 
-#### Scenario: A focus gap is the top when there is no ask
+#### Scenario: A focus gap stays off the plaque
 
 - **WHEN** the latest `sdd:focus` marks Plan `solid` and lists a gap on Specify, and the cycle has no `sdd:wait-human`
-- **THEN** the plaque top shows Specify and does not show Plan
+- **THEN** the plaque does not show Specify and does not show Plan
 
 #### Scenario: A solid focus adds no gap line
 
 - **WHEN** the latest `sdd:focus` marks every recorded layer `solid` and the cycle has no `sdd:wait-human`
-- **THEN** the plaque top is not a gap line
+- **THEN** the plaque does not show a gap name
 
-#### Scenario: Review is the top when text is unanswered
+#### Scenario: Unanswered review stays off the plaque
 
-- **WHEN** a thread has no marker, the cycle has no `sdd:wait-human`, and the top is not a focus gap
-- **THEN** the plaque top is `ревью` and the bottom is that unanswered text
+- **WHEN** a thread has no marker and the cycle has no `sdd:wait-human`
+- **THEN** the plaque does not show `ревью` and does not show that thread text
 
-#### Scenario: The check state is the top on verifying
+#### Scenario: A red check names the checks
 
-- **WHEN** a cycle stands on `verifying` and the open pull request state is `red`
-- **THEN** the plaque top is `red` and does not show check names
+- **WHEN** a cycle stands on `verifying`, a pull request is open, and its state is `red`
+- **THEN** the plaque names the checks in words and does not show the word `red` or a check name
+
+#### Scenario: Red checks nobody is reading yet
+
+- **WHEN** checks are `red` and the decision is not an agent
+- **THEN** the plaque says `Красные без разбора`
+
+#### Scenario: A repeated refusal that is not the archive
+
+- **WHEN** the decision reason is `refused implement-next-task: next open task`
+- **THEN** the plaque says `Отказ задачи` and does not say `Архив отказал`
 
 #### Scenario: A click opens the row and does not write a phase
 
 - **WHEN** the manager clicks the plaque
 - **THEN** the row opens and the phase was not written by that click
 
-#### Scenario: The closed plaque hides the tail of the ask
+#### Scenario: The closed plaque clips after four lines
 
-- **WHEN** the ask text is longer than the closed plaque
-- **THEN** the closed plaque shows one line and the open row does not show the ask
+- **WHEN** the ask text is longer than four lines
+- **THEN** the closed plaque clips at four lines and the open row does not show the ask
 
-#### Scenario: A running turn fills an empty plaque
+#### Scenario: A running turn names the work
 
 - **WHEN** a specifying cycle and a tasking cycle have no ask, no phase row, and no reason, and workers are on `restore-baseline` and `create-tasks`
-- **THEN** each plaque bottom is that action and neither plaque shows an occasion mark
+- **THEN** the plaques say `Восстанавливаю базовую спеку` and `Пишу задачи`, and neither shows an occasion mark
 
-#### Scenario: A running turn does not replace plaque text
+#### Scenario: A running turn does not replace the ask
 
 - **WHEN** a specifying cycle has an ask and a worker is on `restore-baseline`
-- **THEN** the plaque top is `ask`, the bottom is the ask text, and the action is not on the plaque
+- **THEN** the plaque shows the ask and does not show the restore phrase
+
+#### Scenario: Comment marks are not only on verifying
+
+- **WHEN** the decision action is `classify-comments` and the station is `implementing`
+- **THEN** the plaque says `Размечаю комментарии`
+
+#### Scenario: Unarchive is not only on accepting
+
+- **WHEN** the decision kind is `unarchive` and the station is `specifying`
+- **THEN** the plaque says `Возвращаю дельту из архива`
+
+#### Scenario: A return names the destination
+
+- **WHEN** the decision moves to `tasking` because `tasks.md is missing`
+- **THEN** the plaque says `Нет задач` and `Назад на Tasks`
+
+#### Scenario: Several pull requests stay under the code pair
+
+- **WHEN** code is on `implement-next-task`, tasks are `Done 2/6`, the open task id is `remark-field`, and the card reason says several pull requests
+- **THEN** the plaque shows `Done 2/6`, `remark-field`, and `Оставь один`
 
 ### Requirement: A station door opens the port and does not write a phase
 

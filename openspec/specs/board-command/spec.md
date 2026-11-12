@@ -76,7 +76,7 @@ An open client SHALL receive a new generation without reloading the page.
 
 The snapshot's spy line SHALL be the current turn line, and that cycle's row SHALL carry the turn's action.
 
-When a plaque has no top line and no other bottom line, the snapshot's bottom line SHALL be the worker's action.
+When a plaque has no ask and no phase row, its lines SHALL be the work phrase for the worker's action.
 
 When the open cycle is specifying and one pull request is open, the snapshot's Specify layer SHALL offer acceptance when `openspec/specs/acceptance/spec.md` offers it, and SHALL offer neither acceptance nor the specifying gate when it does not.
 
@@ -183,7 +183,7 @@ An error the page would show between the header and the board SHALL be in the sn
 #### Scenario: The snapshot shows the action on an empty plaque
 
 - **WHEN** specifying has no ask, phase row, or reason and the worker's action is `restore-baseline`, and tasking likewise has `create-tasks`
-- **THEN** each snapshot plaque has no top line and its bottom line is that action
+- **THEN** the specifying plaque says `Восстанавливаю базовую спеку` and the tasking plaque says `Пишу задачи`
 
 #### Scenario: The snapshot offers Specify acceptance for an empty delta
 

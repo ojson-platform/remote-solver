@@ -1,4 +1,3 @@
-import type {Decision} from '../machine/decide/policy.ts';
 import type {FileSource} from '../machine/port.ts';
 
 import path from 'node:path';
@@ -8,7 +7,9 @@ import {isFocusRecord} from '../machine/mark/marker.ts';
 import {GATE_CLOSES, GATE_PHASES, phaseOf, phaseRank, type Phase} from '../machine/phase/phase.ts';
 
 import {changeFiles, changeRel, listedSpecs} from './change-files.ts';
-import {focusLayers, liveFocus} from './focus.ts';
+import {focusLayers} from './focus.ts';
+
+export {plaqueLines} from './plaque.ts';
 import {
   COLUMN_NAMES,
   GATE_LABEL,
@@ -131,14 +132,21 @@ export function decisionCount(checkout: string | undefined, key: string): number
   return openCount(checkout, key, 'design.md', HEADINGS.openDecisions);
 }
 
-function taskRow(files: FileSource, key: string): {done: number; open: number} | undefined {
+function taskText(files: FileSource, key: string): string | undefined {
   const rel = changeRel(key, 'tasks.md');
   if (!files.exists(rel)) {
     return undefined;
   }
+  return files.read(rel);
+}
+
+function taskRow(text: string | undefined): {done: number; open: number} | undefined {
+  if (text === undefined) {
+    return undefined;
+  }
   let done = 0;
   let open = 0;
-  for (const line of files.read(rel).split('\n')) {
+  for (const line of text.split('\n')) {
     const trimmed = line.trimStart();
     if (trimmed.startsWith('- [x]')) {
       done += 1;
@@ -147,6 +155,25 @@ function taskRow(files: FileSource, key: string): {done: number; open: number} |
     }
   }
   return {done, open};
+}
+
+/** The id on the first open checkbox. A backtick token wins over a bare word. */
+export function openTaskId(text: string | undefined): string | undefined {
+  if (text === undefined) {
+    return undefined;
+  }
+  for (const line of text.split('\n')) {
+    const trimmed = line.trimStart();
+    const boxed = /^- \[ \] `([^`]+)`/.exec(trimmed);
+    if (boxed?.[1]) {
+      return boxed[1];
+    }
+    const bare = /^- \[ \] (\S+)/.exec(trimmed);
+    if (bare?.[1]) {
+      return bare[1];
+    }
+  }
+  return undefined;
 }
 
 /** A lone gate is not a rank. The plaque still treats specified and designed as reached. */
@@ -503,77 +530,6 @@ function unansweredText(review: WindowReview | undefined): string | undefined {
   return undefined;
 }
 
-function phaseText(row: PhaseRow): string {
-  if (typeof row === 'number') {
-    return String(row);
-  }
-  if (typeof row === 'string') {
-    return row;
-  }
-  if ('waits' in row) {
-    return `Waits for ${row.waits.join(', ')}`;
-  }
-  return `Done ${row.done}/${row.done + row.open}`;
-}
-
-/** Top and bottom of a plaque. The window reads these lines; it does not write them. */
-export function plaqueLines(input: {
-  ask?: string;
-  gaps?: string;
-  unanswered?: string;
-  station?: ColumnName;
-  phaseRow?: PhaseRow;
-  reason?: string;
-  /** Action of the worker on this cycle. Used only when the plaque would otherwise be empty. */
-  action?: string;
-  /** Ticket phase label for the live sentence. */
-  phase?: string | null;
-  running?: boolean;
-  turn?: BoardTurn;
-  decision?: Decision;
-  checks?: 'green' | 'red' | 'pending' | 'none';
-}): {top?: string; bottom?: string} {
-  const phase = input.phaseRow === undefined ? undefined : phaseText(input.phaseRow);
-  const liveSentence =
-    input.ask === undefined
-      ? liveFocus({
-          phase: input.phase ?? null,
-          ask: false,
-          running: input.running === true,
-          turn: input.turn ?? input.action,
-          decision: input.decision,
-          checks: input.checks,
-        })?.text
-      : undefined;
-  const check =
-    (input.station === 'verifying' || input.station === 'accepting') &&
-    (input.phaseRow === 'red' || input.phaseRow === 'green' || input.phaseRow === 'pending')
-      ? input.phaseRow
-      : undefined;
-  let top: string | undefined;
-  if (input.ask !== undefined) {
-    top = 'ask';
-  } else if (input.gaps) {
-    top = input.gaps;
-  } else if (input.unanswered) {
-    top = 'ревью';
-  } else if (check) {
-    top = check;
-  }
-  const candidates = [
-    top === 'ask' ? input.ask : undefined,
-    liveSentence ?? phase,
-    input.reason,
-    top === 'ревью' ? input.unanswered : undefined,
-  ];
-  const found = candidates.find(line => line !== undefined && line !== '' && line !== top);
-  const bottom =
-    found === undefined && top === undefined && input.action !== undefined && input.action !== ''
-      ? input.action
-      : found;
-  return {top, bottom};
-}
-
 function buildCycle(
   item: WindowTicket,
   phase: Phase,
@@ -592,7 +548,8 @@ function buildCycle(
   const decisions = known
     ? known.decisions
     : unchecked(files!.read(changeRel(item.key, 'design.md')), HEADINGS.openDecisions);
-  const tasks = known ? known.tasks : taskRow(files!, item.key);
+  const tasksBody = known?.tasksFile ?? (files ? taskText(files, item.key) : undefined);
+  const tasks = known?.tasks ?? taskRow(tasksBody);
   const phaseRow = phaseRowOf(column, item, questions, decisions, tasks, reading);
   const parts = reasonParts(item, phase, breakReason, reading, questions, decisions);
   const occasion = parts.length > 0;
@@ -608,6 +565,10 @@ function buildCycle(
   }
   if (phaseRow !== undefined) {
     card.phaseRow = phaseRow;
+  }
+  const nextTask = openTaskId(tasksBody);
+  if (nextTask !== undefined) {
+    card.task = nextTask;
   }
   const layers = focusLayers(item.comments);
   if (layers) {
@@ -707,6 +668,9 @@ function poolCard(
     if (station && placed.card.phaseRow !== undefined) {
       card.phaseRow = placed.card.phaseRow;
     }
+    if (placed.card.task !== undefined) {
+      card.task = placed.card.task;
+    }
     if (station && placed.card.layers) {
       card.layers = placed.card.layers;
     }
@@ -738,6 +702,9 @@ function poolCard(
     );
     if (placed.card.phaseRow !== undefined) {
       card.phaseRow = placed.card.phaseRow;
+    }
+    if (placed.card.task !== undefined) {
+      card.task = placed.card.task;
     }
     if (placed.card.reason !== undefined) {
       card.reason = placed.card.reason;

@@ -17,13 +17,7 @@ GitHub reads for the board and the spy stay inside the rate limit. A gateway or 
 
 ### Requirement: One pull view carries checks and commits
 
-An open pull request's checks, whether it conflicts with its base, and its head and base commits SHALL come from one `pr view`.
-
-A range read after that view SHALL NOT ask GitHub again when the view included both commits.
-
-When the view omits the commits, the range SHALL fall back to one REST read of the pull request.
-
-When the client rejects the base commit field, the pull request SHALL still be read from a view without that field, and the base commit SHALL come from one REST read.
+An open pull request's checks, conflict, and head and base commits SHALL come from one `pr view`. A later range SHALL NOT ask again when both commits were present. When they were omitted, the range SHALL use one REST read. When the client rejects the base field, one view without it SHALL still be read and the base SHALL come from one REST read. The same pull request SHALL NOT be viewed again while the repository list is fresh.
 
 #### Scenario: Checks and the two commits come from one view
 
@@ -44,9 +38,14 @@ Any other mergeability, including a view that omits it, SHALL NOT.
 - **WHEN** the view that asks for the base commit is rejected as an unknown field
 - **THEN** the open pull request is still returned and one REST read supplies the base commit
 
+#### Scenario: A fresh view is not requested again
+
+- **WHEN** the review reads the same open pull request twice while the list is fresh
+- **THEN** one view is requested
+
 ### Requirement: Open pull requests are one repository list
 
-A reading of pull requests SHALL request the repository's open pull requests once and SHALL request its merged pull requests once. An issue SHALL receive a pull request when the title starts with `#<key>:` or `#<key> `. The review SHALL NOT search once per issue. A reading after that list is no longer fresh SHALL request the open list again. Creating a pull request SHALL make the next reading request the open list again.
+A reading of pull requests SHALL request the repository's open pull requests once and SHALL request its merged pull requests once. An issue SHALL receive a pull request when the title starts with `#<key>:` or `#<key> `. The review SHALL NOT search once per issue. The list SHALL stay fresh for one minute. A reading after that list is no longer fresh SHALL request the open list again. Creating a pull request SHALL make the next reading request the open list again.
 
 #### Scenario: Two issues share one open list
 
@@ -129,15 +128,7 @@ A 403 that is not a rate limit SHALL NOT pause polling.
 
 ### Requirement: A gateway answer is tried again
 
-When `gh` fails because the answer is HTML, plain text, HTTP 502, HTTP 503, or HTTP 504, or because the network cannot be reached, the call SHALL be tried up to three times.
-
-Each retry SHALL be logged as one line that names the answer.
-
-That line SHALL NOT include `invalid character`.
-
-After the tries are spent, the call SHALL fail with that same reason.
-
-An answer that names an unknown field SHALL NOT be tried again.
+When `gh` fails on HTML, plain text, HTTP 502, HTTP 503, HTTP 504, or an unreachable network, the call SHALL be tried once more. The retry log SHALL name that answer and SHALL NOT include `invalid character`. After that try the call SHALL fail with the same reason. When this burst has already spent the unreachable retry, a later unreachable call SHALL NOT be tried again. An unknown field SHALL NOT be tried again.
 
 #### Scenario: Plain text is tried again
 
@@ -165,3 +156,31 @@ Any other failure SHALL be logged as the text `gh` wrote, and that line SHALL NO
 
 - **WHEN** the call fails because the network cannot be reached
 - **THEN** the call is made again and the log names that the network cannot be reached
+
+#### Scenario: A later unreachable call is not tried again
+
+- **WHEN** one unreachable call has already used its retry and the next call cannot reach the network
+- **THEN** that later call is made once
+
+### Requirement: Open issue links are one query
+
+`listOpen` SHALL read parent, blocked-by, and blocks for the open issues in one GraphQL query. It SHALL NOT send one query per issue.
+
+#### Scenario: Two open issues share one link query
+
+- **WHEN** the open list has two issues
+- **THEN** one GraphQL query reads the links
+
+### Requirement: Threads are read with the first and last comment
+
+A thread read SHALL request the first comment and the last comment on each thread. It SHALL NOT request every comment. When the repository pull list is still fresh, the threads of its open pull requests SHALL be read in one query.
+
+#### Scenario: A thread read asks for the first and the last comment
+
+- **WHEN** the review reads threads for one pull request
+- **THEN** the query asks for the first comment and the last comment and does not ask for the first 100 comments
+
+#### Scenario: Two open pull requests share one thread query
+
+- **WHEN** the pull list is fresh and the review reads threads for two of its open pull requests
+- **THEN** one query reads both

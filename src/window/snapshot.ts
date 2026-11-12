@@ -55,7 +55,7 @@ export type SnapshotRow = {
   action?: string;
   /** True while the spy's running set contains this issue. */
   running?: true;
-  plaque: {top?: string; bottom?: string};
+  plaque: {lines: string[]};
   phaseRow?: PhaseRow;
   reason?: string;
   takeDisabled?: true;
@@ -129,6 +129,7 @@ type SnapshotSurface = {
   running(key: string): boolean;
   decision?(key: string): Decision | undefined;
   waiting?(key: string): boolean;
+  refused?(key: string): boolean;
   cycleLabel?(key: string): string | null;
   checks?(key: string): 'green' | 'red' | 'pending' | 'none' | undefined;
   sidebar(): SidebarBlock[];
@@ -158,6 +159,7 @@ type Fact = {
   pool: boolean;
   station?: ColumnName;
   phaseRow?: PhaseRow;
+  task?: string;
   reason?: string;
   layers?: string;
   ask?: string;
@@ -274,6 +276,7 @@ function facts(board: BoardState): Fact[] {
       pool: false,
       station: column.name,
       phaseRow: card.phaseRow,
+      task: card.task,
       reason: card.reason,
       layers: card.layers,
       ask: card.ask,
@@ -302,6 +305,7 @@ function facts(board: BoardState): Fact[] {
     pool: true,
     station: card.station,
     phaseRow: card.phaseRow,
+    task: card.task,
     reason: card.reason,
     layers: card.layers,
     ask: card.ask,
@@ -378,6 +382,7 @@ function publish(
       unanswered: row.unanswered,
       station: row.station,
       phaseRow: row.phaseRow,
+      task: row.task,
       reason: row.reason,
       phase: surface.cycleLabel?.(row.key) ?? null,
       running: inRunning,
@@ -457,6 +462,7 @@ function openCycle(
   const layers = SPINE_LAYERS.map(layer => ({layer, act: layerAct(layer, model, action, decision)}));
   const proceed = offerContinue({
     waiting: surface.waiting?.(row.key) === true,
+    refused: surface.refused?.(row.key) === true,
     repair: view.repair === row.key,
     decision,
     accept: layers.some(item => item.act === 'accept'),
@@ -475,14 +481,29 @@ function openCycle(
   };
 }
 
-/** «Продолжить» only clears `sdd:wait-human`. It stays off beside «Принять» and while an agent holds the page. */
+/** The open page is a refusal the label `sdd:refused` is holding. */
+export function refusalHold(decision: Decision | undefined): boolean {
+  return (
+    decision?.kind === 'wait' &&
+    (decision.reason.startsWith('refused ') || decision.reason.startsWith('archive refused:'))
+  );
+}
+
+/** «Продолжить» clears `sdd:wait-human`, or `sdd:refused` when that label holds the page. */
 export function offerContinue(input: {
   waiting: boolean;
+  refused?: boolean;
   repair: boolean;
   decision?: Decision;
   accept: boolean;
 }): boolean {
-  if (!input.waiting || input.repair || input.accept || exclusivePage(input.decision)) {
+  if (input.repair) {
+    return false;
+  }
+  if (input.refused && refusalHold(input.decision)) {
+    return true;
+  }
+  if (!input.waiting || input.accept || exclusivePage(input.decision)) {
     return false;
   }
   const decision = input.decision;

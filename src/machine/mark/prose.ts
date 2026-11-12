@@ -65,6 +65,12 @@ const MARKER_SHAPE: Record<FocusMarkerLine, {need: RegExp[]; maxParas: number}> 
   },
 };
 
+const REMARK_VISIT_MARKERS = new Set<FocusMarkerLine>([
+  'sdd:focus:plan',
+  'sdd:focus:spec',
+  'sdd:focus:design',
+  'sdd:focus:tasks',
+]);
 const THREAD_FIX_REMARK = /замечан|remark|ревью/i;
 const FURTHER_PARA = /отказ|refused|слаб|weak|слабое место|открыт|open questions/i;
 const LOOK_AT = /смотреть|look at/i;
@@ -91,6 +97,13 @@ function isCleanPhaseVisit(
 function markerContentOk(marker: FocusMarkerLine, prose: string): boolean {
   const shape = MARKER_SHAPE[marker];
   return shape.need.every(re => re.test(prose));
+}
+
+/** A remark visit names the commit. A token is not that sentence. */
+function saysWhatThisCommitChanged(paragraph: string): boolean {
+  const text = paragraph.trim();
+  const words = text.split(/\s+/).filter(Boolean);
+  return words.length >= 6 && /[.!?]/.test(text);
 }
 
 /** Thread-fix visits name remarks in the second paragraph or add a third look-at paragraph. */
@@ -140,7 +153,12 @@ export function validateFocusBody(body: string): string | undefined {
     return 'prose missing required shape for marker';
   }
   if (threadFix) {
-    if (!markerContentOk(marker, paras[0] ?? '')) {
+    const first = paras[0] ?? '';
+    if (REMARK_VISIT_MARKERS.has(marker)) {
+      if (!saysWhatThisCommitChanged(first)) {
+        return 'thread-fix first paragraph says what this commit changed';
+      }
+    } else if (!markerContentOk(marker, first)) {
       return 'thread-fix first paragraph answers the phase question';
     }
     if (paras.length >= 2 && !THREAD_FIX_REMARK.test(paras[1] ?? '')) {

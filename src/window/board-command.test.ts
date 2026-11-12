@@ -1035,10 +1035,8 @@ spec('board-command', () => {
           const tasking = shot.rows.find(item => item.key === '2');
           assert.ok(specifying);
           assert.ok(tasking);
-          assert.equal(specifying.plaque.top, undefined);
-          assert.equal(specifying.plaque.bottom, 'restore-baseline');
-          assert.equal(tasking.plaque.top, undefined);
-          assert.equal(tasking.plaque.bottom, 'create-tasks');
+          assert.deepEqual(specifying.plaque.lines, ['Восстанавливаю базовую спеку']);
+          assert.deepEqual(tasking.plaque.lines, ['Пишу задачи']);
         },
       );
     });

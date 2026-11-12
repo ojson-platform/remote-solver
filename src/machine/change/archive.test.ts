@@ -19,6 +19,8 @@ import {vi} from 'vitest';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
+import {foldChange} from './fold.ts';
+
 vi.setConfig({testTimeout: 20_000});
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -39,6 +41,8 @@ const REMOVAL_MARKER = 'REMOVAL-PROSE-SHOULD-NOT-COPY-TO-BASELINE';
 
 const EMPTY_BASELINE_FIXTURE_KEY = '90';
 const EMPTY_BASELINE_CAPABILITY = 'archive-refusal-cap';
+const LONG_REQUIREMENT_KEY = '91';
+const LONG_REQUIREMENT_CAPABILITY = 'board';
 
 const NEW_CAP_FIXTURE_KEY = '89';
 const NEW_CAP_CAPABILITY = 'archive-purpose-new';
@@ -375,6 +379,69 @@ function emptyBaselineFixture(): string {
   return root;
 }
 
+function longRequirementFixture(): string {
+  const root = mkdtempSync(path.join(tmpdir(), 'sandcastle-archive-long-'));
+  git(root, ['init', '-b', 'master']);
+  git(root, ['config', 'user.email', 'archive@test.example']);
+  git(root, ['config', 'user.name', 'Archive Test']);
+  mkdirSync(path.join(root, 'openspec', 'specs', LONG_REQUIREMENT_CAPABILITY), {recursive: true});
+  mkdirSync(
+    path.join(root, 'openspec', 'changes', `issue-${LONG_REQUIREMENT_KEY}`, 'specs', LONG_REQUIREMENT_CAPABILITY),
+    {recursive: true},
+  );
+  copyFileSync(openspecConfig, path.join(root, 'openspec/config.yaml'));
+  writeFileSync(
+    path.join(root, 'openspec/specs', LONG_REQUIREMENT_CAPABILITY, 'spec.md'),
+    [
+      `# ${LONG_REQUIREMENT_CAPABILITY}`,
+      '',
+      '## Purpose',
+      '',
+      'Baseline purpose long enough that openspec validation accepts this fixture spec file.',
+      '',
+      '## Requirements',
+      '',
+      '### Requirement: Kept',
+      '',
+      'The system SHALL keep the short baseline until the delta replaces it.',
+      '',
+      '#### Scenario: Short',
+      '',
+      '- **WHEN** short',
+      '- **THEN** short',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
+    path.join(
+      root,
+      'openspec',
+      'changes',
+      `issue-${LONG_REQUIREMENT_KEY}`,
+      'specs',
+      LONG_REQUIREMENT_CAPABILITY,
+      'spec.md',
+    ),
+    [
+      '## MODIFIED Requirements',
+      '',
+      '### Requirement: Kept',
+      '',
+      `The system SHALL ${'keep one extra rule. '.repeat(40)}`,
+      '',
+      '#### Scenario: Short',
+      '',
+      '- **WHEN** short',
+      '- **THEN** short',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(path.join(root, 'README.md'), 'fixture\n');
+  git(root, ['add', '-A']);
+  git(root, ['commit', '-m', 'init']);
+  return root;
+}
+
 spec('spec-archive', () => {
   requirement('The accept step folds a delta with the archive command', () => {
     scenario(
@@ -646,6 +713,31 @@ spec('spec-archive', () => {
       try {
         const {output} = runArchiveMaybeRefused(root, EMPTY_BASELINE_FIXTURE_KEY);
         assert.match(output, /at least one requirement/i);
+      } finally {
+        rmSync(root, {recursive: true, force: true});
+      }
+    });
+  });
+
+  requirement('A refused spec this change owns returns to specifying', () => {
+    scenario('A refused spec this change owns opens a spec thread', () => {
+      const root = longRequirementFixture();
+      try {
+        const before = git(root, ['rev-parse', 'HEAD']).trim();
+        const delta = path.join(
+          root,
+          'openspec',
+          'changes',
+          `issue-${LONG_REQUIREMENT_KEY}`,
+          'specs',
+          LONG_REQUIREMENT_CAPABILITY,
+          'spec.md',
+        );
+        const deltaBefore = readFileSync(delta, 'utf8');
+        assert.throws(() => foldChange(root, LONG_REQUIREMENT_KEY, openspecBin()), /very long/);
+        assert.equal(git(root, ['rev-parse', 'HEAD']).trim(), before);
+        assert.equal(git(root, ['status', '--porcelain']).trim(), '');
+        assert.equal(readFileSync(delta, 'utf8'), deltaBefore);
       } finally {
         rmSync(root, {recursive: true, force: true});
       }

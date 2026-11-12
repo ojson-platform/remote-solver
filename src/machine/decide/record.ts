@@ -17,13 +17,10 @@ export function refusalBody(signature: string): string {
 
 type Refusal = {phase: string; action: string; reason: string; note: string};
 
-/** The latest `sdd:refused`. A later person comment clears it. The reason is one line; the note is the rest. */
+/** The latest `sdd:refused`. A person comment does not clear it. The reason is one line; the note is the rest. */
 function refusalFrom(notes: readonly IssueNote[]): Refusal | null {
   for (let index = notes.length - 1; index >= 0; index -= 1) {
     const note = notes[index];
-    if (note.manager) {
-      return null;
-    }
     const lines = note.body
       .split('\n')
       .map(line => line.trim())
@@ -43,7 +40,7 @@ function refusalFrom(notes: readonly IssueNote[]): Refusal | null {
   return null;
 }
 
-/** The refusal still in force. A later person comment clears every older one. */
+/** The refusal the label `sdd:refused` is holding. */
 export function refusalOf(notes: readonly IssueNote[]): string | null {
   const found = refusalFrom(notes);
   if (!found) {
@@ -123,7 +120,24 @@ export function cycleRecord(
     autoDesign: names.includes('sdd:auto-design'),
     autoMerge: names.includes('sdd:auto-merge'),
     accept,
-    refused: refusalOf(notes),
-    refusalNote: refusalNote(notes),
+    refused: names.includes('sdd:refused') ? refusalOf(notes) : null,
+    refusalNote: names.includes('sdd:refused') ? refusalNote(notes) : null,
   };
+}
+
+/** The comment that names the effect, and the label that holds it. */
+export async function postRefusal(
+  tracker: {
+    comment(key: string, body: string): Promise<void>;
+    labels(key: string): Promise<string[]>;
+    editLabels(key: string, add: string[], remove: string[]): Promise<void>;
+  },
+  key: string,
+  body: string,
+): Promise<void> {
+  await tracker.comment(key, body);
+  const names = await tracker.labels(key);
+  if (!names.includes('sdd:refused')) {
+    await tracker.editLabels(key, ['sdd:refused'], []);
+  }
 }

@@ -237,10 +237,9 @@ function proveAThreadWithNoMarkerIsInTheSidebarUnansweredBlock122(): void {
   window.openCard('1');
   const blocks = window.sidebar();
   assert.equal(asked, '1');
-  assert.deepEqual(blocks, [
-    {kind: 'unanswered', threads: [{lines: ['please look', 'at the diff']}]},
-  ]);
+  assert.equal(kinds(blocks).includes('unanswered'), false);
   const text = JSON.stringify(blocks);
+  assert.equal(text.includes('please look'), false);
   assert.equal(text.includes('already marked'), false);
   assert.equal(text.includes('answered already'), false);
   rmSync(dir, {recursive: true, force: true});
@@ -260,6 +259,22 @@ function proveEveryMarkedThreadAndAMarkedLastCommentLeaveNoSidebarUnansweredBloc
   });
   window.openCard('1');
   assert.deepEqual(window.sidebar(), []);
+  rmSync(dir, {recursive: true, force: true});
+}
+
+function proveAConversationCommentStaysOffTheFocus(): void {
+  const {dir, home, arcadia} = yard();
+  prepare(arcadia, home);
+  const window = openSide(home, [cycle('1', 'implementing')], {
+    review: () => ({
+      threads: [],
+      conversation: {last: {body: 'Заведи блокер на исправление плохих спек'}},
+    }),
+  });
+  window.openCard('1');
+  const blocks = window.sidebar();
+  assert.equal(kinds(blocks).includes('unanswered'), false);
+  assert.equal(JSON.stringify(blocks).includes('Заведи блокер'), false);
   rmSync(dir, {recursive: true, force: true});
 }
 
@@ -802,12 +817,13 @@ spec('sidebar', () => {
       proveAManagerCommentIsNotTheFocusBlock();
     });
   });
-  requirement('Unanswered review shows threads the port already gives', () => {
-    scenario('An unmarked thread is shown', () => {
+  requirement('The open row does not show the unanswered review', () => {
+    scenario('An unmarked thread stays off the focus', () => {
       proveAThreadWithNoMarkerIsInTheSidebarUnansweredBlock122();
-    });
-    scenario('A marked thread is omitted', () => {
       proveEveryMarkedThreadAndAMarkedLastCommentLeaveNoSidebarUnansweredBlock123();
+    });
+    scenario('A conversation comment stays off the focus', () => {
+      proveAConversationCommentStaysOffTheFocus();
     });
   });
   requirement('The hook block shows sddHooks in field order', () => {
@@ -1848,6 +1864,47 @@ spec('issue-description', () => {
 });
 
 spec('wait', () => {
+  requirement('Continue clears a refusal', () => {
+    scenario('Continue removes the refusal label', async () => {
+      const ticket = held('1', 'implementing', {
+        labels: ['sdd:cycle', 'sdd:implementing', 'sdd:refused', 'sdd:wait-human'],
+      });
+      const reason = 'refused implement-next-task: next open task';
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [ticket],
+          decision: () => ({kind: 'wait', issue: '1', reason}),
+          editLabels: (_key, add, remove) => {
+            ticket.labels = ticket.labels.filter(label => !remove?.includes(label));
+            for (const label of add) {
+              if (!ticket.labels.includes(label)) {
+                ticket.labels = [...ticket.labels, label];
+              }
+            }
+          },
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          assert.match(bandOf(await pageHtml(page.url), '1'), /Продолжить/);
+          assert.match(bandOf(await pageHtml(page.url), '1'), /refused implement-next-task: next open task/);
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'continue', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          assert.equal(ticket.labels.includes('sdd:refused'), false);
+          assert.equal(ticket.labels.includes('sdd:wait-human'), true);
+        },
+      );
+    });
+  });
+
   requirement('Continue clears only the label', () => {
     scenario('Continue removes the label', async () => {
       const ticket = held('1', 'implementing', {

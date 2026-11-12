@@ -55,7 +55,7 @@ export type CycleRecord = {
   autoMerge: boolean;
   /** A gate label on the issue. The same event as `sdd accept`. */
   accept: GateEvent | null;
-  /** Signature of an effect the last empty run refused. A later person comment clears it. */
+  /** Signature of an effect the label `sdd:refused` is holding. */
   refused: string | null;
   /** What the command said, on the lines after that signature. Empty when the refusal names only the effect. */
   refusalNote: string | null;

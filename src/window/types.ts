@@ -329,6 +329,8 @@ export type PoolCard = {
   /** Station of a phase that already exists. A phaseless ticket has none. */
   station?: ColumnName;
   phaseRow?: PhaseRow;
+  /** First open task id from `tasks.md`. */
+  task?: string;
   layers?: string;
   /** Ask text while `sdd:wait-human` is present. */
   ask?: string;
@@ -419,6 +421,8 @@ export type CycleCard = {
   occasion?: true;
   reason?: string;
   phaseRow?: PhaseRow;
+  /** First open task id from `tasks.md`. */
+  task?: string;
   layers?: string;
   /** Ask text while `sdd:wait-human` is present. */
   ask?: string;

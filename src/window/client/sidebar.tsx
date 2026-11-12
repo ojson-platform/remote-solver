@@ -958,19 +958,12 @@ function Blocks({
     });
 }
 
-function codeExtra(blocks: readonly SidebarBlock[], places: Record<string, string>): ReactNode {
+function codeExtra(blocks: readonly SidebarBlock[]): ReactNode {
   return blocks
-    .filter(block => block.kind === 'unanswered' || block.kind === 'hook')
+    .filter(block => block.kind === 'hook')
     .map((block, index) => {
-      if (block.kind === 'unanswered') {
-        return (
-          <section className="block" key={index}>
-            {(block.threads ?? []).map((thread, threadIndex) => (
-              <pre key={threadIndex}>{thread.lines.join('\n')}</pre>
-            ))}
-            {block.comment === undefined ? null : <pre>{block.comment}</pre>}
-          </section>
-        );
+      if (block.kind !== 'hook') {
+        return null;
       }
       if ('line' in block) {
         return (
@@ -1315,9 +1308,13 @@ export function Sidebar({
   const planAct = opened.layers.find(item => item.layer === 'Plan')?.act ?? 'none';
   const designAct = opened.layers.find(item => item.layer === 'Design')?.act ?? 'none';
   const acceptAct = opened.layers.find(item => item.layer === 'Accept')?.act ?? 'gate';
-  const unanswered = opened.blocks.some(block => block.kind === 'unanswered');
+  const codeThreads = opened.blocks.some(
+    block =>
+      (block.kind === 'line-thread' && layerOfPath(block.file) === 'Code') ||
+      (block.kind === 'phase-thread' && block.layer === 'Code'),
+  );
   const hook = opened.blocks.some(block => block.kind === 'hook');
-  const quiet = (name: SpineLayer): boolean => !layerHasFold(name, model, {unanswered, hook});
+  const quiet = (name: SpineLayer): boolean => !layerHasFold(name, model, {unanswered: codeThreads, hook});
   const acceptAutoMergeCaption =
     model.accept === 'На приёмке машина мержит сама.' ||
     model.accept === 'На приёмке мерж ждёт человека.';
@@ -1391,7 +1388,7 @@ export function Sidebar({
             ) : null,
           )}
         <Blocks blocks={opened.blocks} places={places} />
-        {codeExtra(opened.blocks, places)}
+        {codeExtra(opened.blocks)}
         {snapshot.roles.length === 0 ? null : (
           <div className="verbs">
             {snapshot.roles.map(role => (
@@ -1564,7 +1561,7 @@ export function Sidebar({
             {model.rest.map(line => (
               <p key={line}>{codeLine(line, places)}</p>
             ))}
-            {model.pull && !unanswered ? <p>Открытых тредов нет.</p> : null}
+            {model.pull && !codeThreads ? <p>Открытых тредов нет.</p> : null}
           </SpineRow>
           <SpineRow
             layer="Accept"

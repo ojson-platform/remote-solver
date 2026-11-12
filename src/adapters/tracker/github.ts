@@ -83,17 +83,34 @@ export function changesPayload(
 }
 
 /** One review thread as GitHub GraphQL returns it. */
+type ThreadComment = {databaseId: number; author: {login: string} | null; body: string};
+
 export type ThreadNode = {
   id: string;
   isResolved: boolean;
   path: string;
   line: number | null;
-  comments: {nodes: {databaseId: number; author: {login: string} | null; body: string}[]};
+  comments: {nodes: ThreadComment[]};
+  /** The last comment, when the query asks for it apart from the first. */
+  last?: {nodes: ThreadComment[]};
 };
+
+function threadComments(node: ThreadNode): ThreadComment[] {
+  const seen = new Set<number>();
+  const out: ThreadComment[] = [];
+  for (const item of [...(node.comments?.nodes ?? []), ...(node.last?.nodes ?? [])]) {
+    if (seen.has(item.databaseId)) {
+      continue;
+    }
+    seen.add(item.databaseId);
+    out.push(item);
+  }
+  return out;
+}
 
 /** The handles a skill answers with: the thread id resolves, the latest comment id takes the reply. */
 export function threadRecord(node: ThreadNode): ThreadRecord {
-  const nodes = node.comments.nodes;
+  const nodes = threadComments(node);
   const latest = nodes.at(-1);
   const comments = nodes.map(item => item.body);
   return {
@@ -175,6 +192,7 @@ export function clearGithubPause(): void {
   restBodies.clear();
   reportedLine = '';
   reportedAt = 0;
+  unreachableRetries = 0;
 }
 
 /** A GET `gh api` read. Mutations, GraphQL, and `--jq` stay on the plain path. */
@@ -341,8 +359,9 @@ type GhCommand = (
   input?: string,
 ) => Promise<{stdout: string; stderr: string}>;
 
-const GH_TRIES = 3;
-const GH_GAP_MS = [200, 400];
+const GH_TRIES = 2;
+const GH_GAP_MS = [200];
+let unreachableRetries = 0;
 const DECODER = /invalid character '(.)' looking for beginning of value/;
 
 function ghSnippet(stdout: string, stderr: string): string {
@@ -490,7 +509,9 @@ export async function gh(args: string[], input?: string, run: GhCommand = comman
   let last: unknown;
   for (let attempt = 1; attempt <= GH_TRIES; attempt += 1) {
     try {
-      return await ghOnce(args, input, run);
+      const body = await ghOnce(args, input, run);
+      unreachableRetries = 0;
+      return body;
     } catch (error) {
       last = error;
       const reason = ghFailureReason(
@@ -498,7 +519,12 @@ export async function gh(args: string[], input?: string, run: GhCommand = comman
         fieldOf(error, 'stderr'),
         error instanceof Error ? error.message : '',
       );
-      if (!reason || attempt === GH_TRIES) {
+      const unreachable = reason === 'GitHub could not be reached';
+      const budgetSpent = unreachable && unreachableRetries > 0;
+      if (!reason || attempt === GH_TRIES || budgetSpent) {
+        if (unreachable) {
+          unreachableRetries += 1;
+        }
         if (reason) {
           throw Object.assign(new Error(reason), {
             stdout: fieldOf(error, 'stdout'),
@@ -506,6 +532,9 @@ export async function gh(args: string[], input?: string, run: GhCommand = comman
           });
         }
         throw error;
+      }
+      if (unreachable) {
+        unreachableRetries += 1;
       }
       console.error(`gh: ${reason}. retrying`);
       await sleep(GH_GAP_MS[attempt - 1] ?? 400);
@@ -698,7 +727,7 @@ export type GitHubAdapters = {
 };
 
 /** How long one repository pull list serves every issue read in that span. */
-export const PULL_LIST_FRESH_MS = 15_000;
+export const PULL_LIST_FRESH_MS = 60_000;
 
 export function githubAdapters(
   options: GitHubAdapters = {},
@@ -709,7 +738,10 @@ export function githubAdapters(
   const run = options.run ?? gh;
   let slug: string | null = null;
   let user: string | null = null;
-  const seenPull = new Map<string, {checks: CheckState; head: string; base: string}>();
+  const seenPull = new Map<
+    string,
+    {checks: CheckState; head: string; base: string; conflict: boolean; at: number}
+  >();
   const repoSlug = () => {
     if (!slug) {
       slug = repo().slug;
@@ -745,19 +777,29 @@ export function githubAdapters(
     }
   };
 
+  type LinkNode = {
+    parent?: {number?: number} | null;
+    blockedBy?: {nodes?: {number?: number}[]};
+    blocking?: {nodes?: {number?: number}[]};
+  };
+
+  const LINK_FIELDS = 'parent{number} blockedBy(first:100){nodes{number}} blocking(first:100){nodes{number}}';
+
+  const linksFrom = (issue: LinkNode | null | undefined): IssueLinks => {
+    if (!issue) {
+      return emptyLinks();
+    }
+    return {
+      parent: issue.parent?.number === undefined ? undefined : String(issue.parent.number),
+      dependsOn: [],
+      blockedBy: issueNumbers(issue.blockedBy?.nodes),
+      blocks: issueNumbers(issue.blocking?.nodes),
+    };
+  };
+
   const readLinks = async (key: string): Promise<IssueLinks> => {
     const [owner, name] = repoSlug().split('/');
-    const query = [
-      'query($owner:String!,$name:String!,$number:Int!){',
-      'repository(owner:$owner,name:$name){',
-      'issue(number:$number){',
-      'parent{number}',
-      'blockedBy(first:100){nodes{number}}',
-      'blocking(first:100){nodes{number}}',
-      '}',
-      '}',
-      '}',
-    ].join('');
+    const query = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issue(number:$number){${LINK_FIELDS}}}}`;
     const raw = JSON.parse(
       await run([
         'api',
@@ -771,28 +813,36 @@ export function githubAdapters(
         '-F',
         `number=${key}`,
       ]),
-    ) as {
-      data?: {
-        repository?: {
-          issue?: {
-            parent?: {number?: number} | null;
-            blockedBy?: {nodes?: {number?: number}[]};
-            blocking?: {nodes?: {number?: number}[]};
-          };
-        };
-      };
-    };
-    const issue = raw.data?.repository?.issue;
-    if (!issue) {
-      return emptyLinks();
+    ) as {data?: {repository?: {issue?: LinkNode | null}}};
+    return linksFrom(raw.data?.repository?.issue);
+  };
+
+  const readLinkBatch = async (keys: string[]): Promise<Map<string, IssueLinks>> => {
+    const out = new Map<string, IssueLinks>();
+    const [owner, name] = repoSlug().split('/');
+    const chunk = 40;
+    for (let index = 0; index < keys.length; index += chunk) {
+      const slice = keys.slice(index, index + chunk);
+      const aliases = slice.map(key => `i${key}:issue(number:${key}){${LINK_FIELDS}}`).join(' ');
+      const query = `query($owner:String!,$name:String!){repository(owner:$owner,name:$name){${aliases}}}`;
+      const raw = JSON.parse(
+        await run([
+          'api',
+          'graphql',
+          '-f',
+          `query=${query}`,
+          '-f',
+          `owner=${owner}`,
+          '-f',
+          `name=${name}`,
+        ]),
+      ) as {data?: {repository?: Record<string, LinkNode | null>}};
+      const repository = raw.data?.repository ?? {};
+      for (const key of slice) {
+        out.set(key, linksFrom(repository[`i${key}`]));
+      }
     }
-    const blockedBy = issueNumbers(issue.blockedBy?.nodes);
-    return {
-      parent: issue.parent?.number === undefined ? undefined : String(issue.parent.number),
-      dependsOn: [],
-      blockedBy,
-      blocks: issueNumbers(issue.blocking?.nodes),
-    };
+    return out;
   };
 
   const issueNodeId = async (key: string): Promise<string> => {
@@ -865,14 +915,16 @@ export function githubAdapters(
       const found = JSON.parse(
         await run(['api', `repos/${repoSlug()}/issues?state=open&per_page=100`]),
       ) as RawIssue[];
+      const issues = found.filter(issue => issue.pull_request === undefined);
+      const links = await readLinkBatch(issues.map(issue => String(issue.number)));
       return Promise.all(
-        found
-          .filter(issue => issue.pull_request === undefined)
-          .map(async issue =>
-            carriesCycle(issue)
-              ? withField(issue)
-              : asRecord(issue, await readLinks(String(issue.number))),
-          ),
+        issues.map(async issue => {
+          const key = String(issue.number);
+          const link = links.get(key) ?? emptyLinks();
+          return carriesCycle(issue)
+            ? asRecord(issue, link, cycleField(await readFields(key)))
+            : asRecord(issue, link);
+        }),
       );
     },
     issue: async key => withField(await readIssue(key)),
@@ -926,7 +978,11 @@ export function githubAdapters(
 
   const viewPull = async (
     id: string,
-  ): Promise<{checks: CheckState; head: string; base: string; conflict: boolean}> => {
+  ): Promise<{checks: CheckState; head: string; base: string; conflict: boolean; at: number}> => {
+    const cached = seenPull.get(id);
+    if (cached && Date.now() - cached.at < PULL_LIST_FRESH_MS) {
+      return cached;
+    }
     let raw: string;
     try {
       raw = await run(viewArgs(id, PULL_VIEW_FIELDS));
@@ -958,9 +1014,11 @@ export function githubAdapters(
       checks: classifyChecks(view),
       head: typeof view.headRefOid === 'string' ? view.headRefOid : '',
       base: typeof view.baseRefOid === 'string' ? view.baseRefOid : '',
+      conflict: view.mergeable === 'CONFLICTING',
+      at: Date.now(),
     };
     seenPull.set(id, record);
-    return {...record, conflict: view.mergeable === 'CONFLICTING'};
+    return record;
   };
 
   const readPullList = async (state: 'open' | 'merged') =>
@@ -981,8 +1039,11 @@ export function githubAdapters(
 
   let repoPullsCache: {at: number; pulls: Promise<{number: number; title: string; state: string}[]>} | undefined;
 
+  let threadCache: {at: number; byPull: Map<string, ThreadRecord[]>} | undefined;
+
   const dropRepoPulls = () => {
     repoPullsCache = undefined;
+    threadCache = undefined;
   };
 
   const repoPulls = () => {
@@ -1005,6 +1066,59 @@ export function githubAdapters(
   const linked = async (key: string) => {
     const found = await repoPulls();
     return found.filter(pr => linkedTitle(key, pr.title));
+  };
+
+  const THREAD_SELECTION =
+    'reviewThreads(first:100){nodes{id isResolved path line comments(first:1){nodes{databaseId author{login} body}} last:comments(last:1){nodes{databaseId author{login} body}}}}';
+
+  const keptThreads = (nodes: ThreadNode[] | undefined): ThreadRecord[] =>
+    (nodes ?? []).flatMap(node => {
+      const comments = threadComments(node);
+      if (comments.length === 0) {
+        return [];
+      }
+      if (comments.every(item => machine.authorIgnored(item.author?.login ?? '', ignored))) {
+        return [];
+      }
+      return [threadRecord(node)];
+    });
+
+  const fetchThreads = async (ids: string[]): Promise<Map<string, ThreadRecord[]>> => {
+    const {owner, name} = repo();
+    const out = new Map<string, ThreadRecord[]>();
+    const read = async (query: string, number?: string) => {
+      const args = ['api', 'graphql', '-f', `query=${query}`, '-f', `owner=${owner}`, '-f', `name=${name}`];
+      if (number !== undefined) {
+        args.push('-F', `number=${number}`);
+      }
+      return JSON.parse(await run(args)) as {
+        data?: {repository?: Record<string, {reviewThreads?: {nodes: ThreadNode[]}} | null>};
+      };
+    };
+    const one = async (id: string) => {
+      const query = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){${THREAD_SELECTION}}}}`;
+      const data = await read(query, id);
+      out.set(id, keptThreads(data.data?.repository?.pullRequest?.reviewThreads?.nodes));
+    };
+    if (ids.length === 1) {
+      await one(ids[0] ?? '');
+      return out;
+    }
+    for (let index = 0; index < ids.length; index += 20) {
+      const slice = ids.slice(index, index + 20);
+      if (slice.length === 1) {
+        await one(slice[0] ?? '');
+        continue;
+      }
+      const aliases = slice.map(id => `p${id}:pullRequest(number:${id}){${THREAD_SELECTION}}`).join(' ');
+      const query = `query($owner:String!,$name:String!){repository(owner:$owner,name:$name){${aliases}}}`;
+      const data = await read(query);
+      const repository = data.data?.repository ?? {};
+      for (const id of slice) {
+        out.set(id, keptThreads(repository[`p${id}`]?.reviewThreads?.nodes));
+      }
+    }
+    return out;
   };
 
   const review: Review = {
@@ -1039,55 +1153,31 @@ export function githubAdapters(
       }));
     },
     async threadList(pull) {
-      const {owner, name} = repo();
-      const query = `query($owner:String!,$name:String!,$number:Int!){
-        repository(owner:$owner, name:$name) {
-          pullRequest(number:$number) {
-            reviewThreads(first:100) {
-              nodes {
-                id
-                isResolved
-                path
-                line
-                comments(first:100) { nodes { databaseId author { login } body } }
-              }
-            }
-          }
+      const now = Date.now();
+      if (threadCache && now - threadCache.at < PULL_LIST_FRESH_MS) {
+        const hit = threadCache.byPull.get(pull);
+        if (hit) {
+          return hit;
         }
-      }`;
-      const data = JSON.parse(
-        await run([
-          'api',
-          'graphql',
-          '-f',
-          `query=${query}`,
-          '-f',
-          `owner=${owner}`,
-          '-f',
-          `name=${name}`,
-          '-F',
-          `number=${pull}`,
-        ]),
-      ) as {
-        data: {
-          repository: {
-            pullRequest: {
-              reviewThreads: {nodes: ThreadNode[]};
-            } | null;
-          };
-        };
-      };
-      const nodes = data.data.repository.pullRequest?.reviewThreads.nodes ?? [];
-      return nodes.flatMap(node => {
-        const commentNodes = node.comments.nodes;
-        if (commentNodes.length === 0) {
-          return [];
+      }
+      let ids = [pull];
+      if (repoPullsCache && now - repoPullsCache.at < PULL_LIST_FRESH_MS) {
+        const open = (await repoPullsCache.pulls)
+          .filter(pr => pr.state === 'OPEN')
+          .map(pr => String(pr.number));
+        if (open.length > 0) {
+          ids = open.includes(pull) ? open : [...open, pull];
         }
-        if (commentNodes.every(item => machine.authorIgnored(item.author?.login ?? '', ignored))) {
-          return [];
-        }
-        return [threadRecord(node)];
-      });
+      }
+      const fetched = await fetchThreads(ids);
+      const byPull = new Map(
+        threadCache && now - threadCache.at < PULL_LIST_FRESH_MS ? threadCache.byPull : undefined,
+      );
+      for (const [id, records] of fetched) {
+        byPull.set(id, records);
+      }
+      threadCache = {at: now, byPull};
+      return byPull.get(pull) ?? [];
     },
     async comments(pull) {
       const comments = JSON.parse(
@@ -1231,7 +1321,7 @@ export function githubAdapters(
       };
       const head = seen.head !== '' ? seen.head : (view.head ?? '');
       const base = view.base ?? '';
-      const next = {checks: seen.checks, head, base};
+      const next = {checks: seen.checks, head, base, conflict: seen.conflict, at: seen.at};
       seenPull.set(pull, next);
       return commitRange(head, base);
     },
@@ -1312,7 +1402,7 @@ export type MemoryPorts = {
   tracker: Tracker;
   review: Review;
   calls: string[];
-  /** A person comment. It clears `sdd:refused` and is not a robot note. */
+  /** A person comment. It is not a robot note, and it does not clear `sdd:refused`. */
   person(key: string, body: string): void;
 };
 

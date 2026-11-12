@@ -43,7 +43,7 @@ export function shot(): WindowSnapshot {
         title: 'Заголовок',
         pool: false,
         station: 'specifying',
-        plaque: {},
+        plaque: {lines: []},
         choices: [],
         reason: 'вопросы 2',
         gateOff: {proposing: true, designing: true, accepting: true},

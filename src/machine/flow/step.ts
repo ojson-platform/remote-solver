@@ -4,8 +4,8 @@ import type {FileSource, IssueRecord, Openspec, Review, Tracker} from '../port.t
 import type {QueueConfig} from '../spy/service-config.ts';
 
 import {readChange} from '../change/change.ts';
-import {foldChange, restoreChange} from '../change/fold.ts';
-import {cycleRecord, decide, effectSignature, refusalBody} from '../decide/policy.ts';
+import {addedDiffLine, changedInDiff, foldChange, restoreChange} from '../change/fold.ts';
+import {cycleRecord, decide, effectSignature, postRefusal, refusalBody} from '../decide/policy.ts';
 import {gateAsk, openWait} from '../phase/labels.ts';
 import {labelsAfterAdvance} from '../phase/phase.ts';
 import {queueOf} from '../spy/queues.ts';
@@ -165,6 +165,7 @@ async function performEffect(
   decision: Decision,
   view: ChangeView,
   cache: WalkCache,
+  pulls: PullSnapshot[],
 ): Promise<StepResult> {
   if (decision.kind === 'merge') {
     if (!options.review) {
@@ -174,7 +175,7 @@ async function performEffect(
     return {again: await reread(options, cache)};
   }
   if ((decision.kind === 'archive' || decision.kind === 'unarchive') && options.checkout) {
-    const folded = await foldEffect(key, options, decision, view);
+    const folded = await foldEffect(key, options, decision, view, pulls);
     if ('stop' in folded) {
       return folded;
     }
@@ -196,11 +197,61 @@ async function reread(options: IssueRead, cache: WalkCache): Promise<WalkCache> 
   };
 }
 
+/** Capability ids named by `spec/<capability>` before the command's rule text. */
+function refusedSpecIds(text: string): string[] {
+  const head = text.split(':')[0] ?? '';
+  return [...head.matchAll(/spec\/([A-Za-z0-9._/-]+)/g)]
+    .map(match => match[1])
+    .filter((id): id is string => Boolean(id));
+}
+
+/** A thread already quoted this command, open or resolved. */
+function commandAlreadyThreaded(pulls: readonly PullSnapshot[], pull: string, command: string): boolean {
+  const snapshot = pulls.find(item => item.id === pull);
+  for (const thread of snapshot?.reading?.threads ?? []) {
+    const bodies = thread.comments ?? [thread.body];
+    if (bodies.some(body => body.includes(command))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Open the spec thread. False when the diff has no line to anchor, or the review port refuses. */
+async function openSpecThread(
+  key: string,
+  dir: string,
+  pull: string,
+  capability: string,
+  command: string,
+  review: NonNullable<IssueRead['review']>,
+): Promise<boolean> {
+  const range = await review.range(pull);
+  const specPath = `openspec/changes/issue-${key}/specs/${capability}/spec.md`;
+  const line = addedDiffLine(dir, range.base ?? '', range.head, specPath);
+  if (line === null || range.head === '') {
+    return false;
+  }
+  try {
+    await review.openThread(pull, {
+      commit: range.head,
+      path: specPath,
+      line,
+      side: 'right',
+      body: `sdd:layer=spec → specifying\n${command}`,
+    });
+  } catch {
+    return false;
+  }
+  return true;
+}
+
 async function foldEffect(
   key: string,
   options: IssueRead,
   decision: Extract<Decision, {kind: 'archive' | 'unarchive'}>,
   view: ChangeView,
+  pulls: PullSnapshot[],
 ): Promise<{stop: Decision} | {wrote: true}> {
   const dir = await options.checkout?.();
   if (!dir) {
@@ -225,12 +276,37 @@ async function foldEffect(
       return {stop: {kind: 'wait', issue: key, reason: baseline}};
     }
     const shown = `archive refused: ${reason}`;
+    if (decision.kind === 'archive' && options.review) {
+      const range = await options.review.range(decision.pr);
+      const capability = refusedSpecIds(reason).find(id =>
+        changedInDiff(
+          dir,
+          range.base ?? '',
+          range.head,
+          `openspec/changes/issue-${key}/specs/${id}/spec.md`,
+        ),
+      );
+      const repeated = capability !== undefined && commandAlreadyThreaded(pulls, decision.pr, reason);
+      if (capability && !repeated) {
+        const opened = await openSpecThread(
+          key,
+          dir,
+          decision.pr,
+          capability,
+          reason,
+          options.review,
+        );
+        if (opened) {
+          return {stop: {kind: 'wait', issue: key, reason: shown}};
+        }
+      }
+    }
     const signature = effectSignature({
       phase: decision.phase,
       action: decision.kind,
       reason: decision.reason,
     });
-    await options.tracker.comment(key, `${refusalBody(signature)}\n${shown}`);
+    await postRefusal(options.tracker, key, `${refusalBody(signature)}\n${shown}`);
     return {stop: {kind: 'wait', issue: key, reason: shown}};
   }
   return {wrote: true};
@@ -279,7 +355,7 @@ async function stepIssue(key: string, options: IssueRead, cache: WalkCache): Pro
   if (!options.perform) {
     return {stop: decision};
   }
-  return performEffect(key, options, decision, view, cache);
+  return performEffect(key, options, decision, view, cache, loaded);
 }
 
 /** One effect, written, then the issue is read again. Twelve effects is the stop. */

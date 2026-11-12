@@ -8,13 +8,13 @@ A skill run that changes nothing is not started again until the decision changes
 
 ### Requirement: A run with no commit is not repeated
 
-When a skill run produces no commit, the machine SHALL comment `sdd:refused` and that effect's phase, action, and reason on the issue.
+When a skill run produces no commit, the machine SHALL comment `sdd:refused` with that effect's phase, action, and reason, and SHALL set that label.
 
 The comment SHALL NOT contain a null byte.
 
-The next poll SHALL NOT start that effect while the refusal is the latest machine comment and the phase, the action, and the reason are unchanged.
+The next poll SHALL NOT start that effect while the label is on and the phase, action, and reason are unchanged.
 
-A later person comment SHALL clear the refusal.
+Removing the label SHALL let that effect start. A person comment SHALL NOT remove the label.
 
 A different phase, action, or reason SHALL start.
 
@@ -32,11 +32,16 @@ When one worker runs a later turn and that turn produces no commit, the refusal 
 #### Scenario: The same decision stays idle
 
 - **WHEN** a run produces no commit and the next poll has the same phase, action, and reason
-- **THEN** the issue carries `sdd:refused`, the phase, the action, and the reason, the comment has no null byte, and the spy does not start the issue
+- **THEN** the issue carries the label `sdd:refused` and a comment with the phase, the action, and the reason, the comment has no null byte, and the spy does not start the issue
 
-#### Scenario: A person comment starts the effect again
+#### Scenario: A person comment leaves the refusal
 
 - **WHEN** a person comments after `sdd:refused`
+- **THEN** the same effect does not start
+
+#### Scenario: Removing the label starts the effect again
+
+- **WHEN** the label `sdd:refused` is removed
 - **THEN** the same effect starts
 
 #### Scenario: A different action starts
@@ -74,7 +79,7 @@ A second process SHALL NOT start an agent for an issue a live process already ho
 
 ### Requirement: A crashed run resumes its chat once
 
-A skill run that crashes before a commit SHALL leave its chat and SHALL NOT post `sdd:refused`. The next start of that same decision SHALL resume that chat. A second crash of that chat SHALL post `sdd:refused` and SHALL NOT start an agent. A run that commits and a different decision SHALL each start a new chat. A run that finishes with no commit SHALL NOT start again until a person comments.
+A skill run that crashes before a commit SHALL leave its chat and SHALL NOT post `sdd:refused`. The next start of that same decision SHALL resume that chat. A second crash of that chat SHALL post `sdd:refused` and SHALL NOT start an agent. A run that commits and a different decision SHALL each start a new chat. A run that finishes with no commit SHALL NOT start again until the label `sdd:refused` is removed.
 
 #### Scenario: A crash resumes the same chat
 

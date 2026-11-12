@@ -226,7 +226,8 @@ spec('auto-gate', () => {
           assert.ok(tickets[0]?.labels.includes('sdd:auto-spec'));
           assert.ok(tickets[0]?.labels.includes('sdd:wait-human'));
           const plaque = stationOf(await pageHtml(page.url), '1', 'proposing');
-          assert.match(plaque, /<span class="kicker">ask<\/span>/);
+          assert.match(plaque, /Review the proposal and accept it/);
+          assert.equal(plaque.includes('class="kicker"'), false);
         },
       );
     });

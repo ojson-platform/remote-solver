@@ -1445,7 +1445,7 @@ spec('board', () => {
           const html = await pageHtml(page.url);
           const plaque = stationOf(html, '1', 'specifying');
           assert.equal(plaque.includes('блокеры'), false);
-          assert.match(plaque, /restore-baseline/);
+          assert.match(plaque, /Восстанавливаю базовую спеку/);
           assert.match(plaqueButton(plaque), /<svg class="hammer mark"/);
           const card = window
             .board()
@@ -1590,8 +1590,8 @@ spec('board', () => {
 });
 
 spec('board', () => {
-  requirement('A plaque shows the top and the bottom in order', () => {
-    scenario('Ask is the top while the cycle waits', async () => {
+  requirement('A plaque shows the current work', () => {
+    scenario('A wait shows the ask prose', async () => {
       const tickets = [
         held('1', 'proposing', {
           labels: ['sdd:cycle', 'sdd:proposing', 'sdd:wait-human'],
@@ -1601,16 +1601,15 @@ spec('board', () => {
       await hosted({login: () => MANAGER, tickets: () => tickets}, async (page, window) => {
         window.chooseAgent('cursor');
         const waiting = stationOf(await pageHtml(page.url), '1', 'proposing');
-        assert.match(waiting, /<span class="kicker">ask<\/span>/);
-        assert.match(waiting, /Review the proposal and accept it\./);
-        assert.equal(waiting.includes('class="stat"'), false);
+        assert.match(waiting, /Review the proposal and accept it/);
+        assert.equal(waiting.includes('class="kicker"'), false);
+        assert.equal(waiting.includes('>ask<'), false);
         tickets[0]?.labels.splice(tickets[0].labels.indexOf('sdd:wait-human'), 1);
         const cleared = stationOf(await pageHtml(page.url), '1', 'proposing');
-        assert.equal(cleared.includes('>ask<'), false);
-        assert.match(cleared, /<div class="stat">0<\/div>/);
+        assert.equal(cleared.includes('Review the proposal'), false);
       });
     });
-    scenario('A focus gap is the top when there is no ask', async () => {
+    scenario('A focus gap stays off the plaque', async () => {
       await hosted(
         {
           login: () => MANAGER,
@@ -1623,7 +1622,7 @@ spec('board', () => {
         async (page, window) => {
           window.chooseAgent('cursor');
           const plaque = stationOf(await pageHtml(page.url), '1', 'specifying');
-          assert.match(plaque, /<span class="kicker">Specify<\/span>/);
+          assert.equal(plaque.includes('Specify'), false);
           assert.equal(plaque.includes('Plan'), false);
         },
       );
@@ -1643,11 +1642,11 @@ spec('board', () => {
           const plaque = stationOf(await pageHtml(page.url), '1', 'proposing');
           assert.equal(plaque.includes('class="kicker"'), false);
           assert.equal(plaque.includes('Plan'), false);
-          assert.match(plaque, /<div class="stat">0<\/div>/);
+          assert.equal(plaque.includes('Specify'), false);
         },
       );
     });
-    scenario('Review is the top when text is unanswered', async () => {
+    scenario('Unanswered review stays off the plaque', async () => {
       await hosted(
         {
           login: () => MANAGER,
@@ -1657,23 +1656,23 @@ spec('board', () => {
         async (page, window) => {
           window.chooseAgent('cursor');
           const plaque = stationOf(await pageHtml(page.url), '1', 'specifying');
-          assert.match(plaque, /<span class="kicker">ревью<\/span>/);
-          assert.match(plaque, /please look/);
+          assert.equal(plaque.includes('ревью'), false);
+          assert.equal(plaque.includes('please look'), false);
         },
       );
     });
-    scenario('The check state is the top on verifying', async () => {
+    scenario('A red check names the checks', async () => {
       await hosted(
         {
           login: () => MANAGER,
-          tickets: () => [held('1', 'verifying', {checks: 'red'})],
+          tickets: () => [held('1', 'verifying', {checks: 'red', openPullRequests: 1, pull: '9'})],
         },
         async (page, window) => {
           window.chooseAgent('cursor');
           const plaque = stationOf(await pageHtml(page.url), '1', 'verifying');
-          assert.match(plaque, /<span class="kicker red">red<\/span>/);
+          assert.match(plaque, /Разбираю красные проверки|Красные без разбора/);
+          assert.equal(plaque.includes('>red<'), false);
           assert.equal(plaque.includes('lint'), false);
-          assert.equal(plaque.includes('class="stat"'), false);
         },
       );
     });
@@ -1702,7 +1701,7 @@ spec('board', () => {
         },
       );
     });
-    scenario('The closed plaque hides the tail of the ask', async () => {
+    scenario('The closed plaque clips after four lines', async () => {
       const body =
         'Review the proposal. To accept it, replace the label sdd:proposing with sdd:proposed on this issue, or run sdd accept 5.';
       await hosted(
@@ -1719,9 +1718,9 @@ spec('board', () => {
           window.chooseAgent('cursor');
           const closed = await pageHtml(page.url);
           const plaque = stationOf(closed, '1', 'proposing');
-          assert.equal(plaque.match(/<span class="reason">/g)?.length, 1);
-          assert.match(plaque, /text-overflow:\s*ellipsis|class="reason"/);
-          assert.match(closed, /\.plaque \.reason[\s\S]*white-space:\s*nowrap[\s\S]*ellipsis/);
+          assert.equal(plaque.match(/<span class="copy">/g)?.length, 1);
+          assert.match(plaque, /Review the proposal/);
+          assert.match(closed, /\.plaque \.copy[\s\S]*-webkit-line-clamp:\s*4/);
           assert.match(closed, /\.station > form:has\(\.plaque\) \{ min-width: 0; width: 100%; \}/);
           const opened = await post(
             page.url,
@@ -1736,7 +1735,7 @@ spec('board', () => {
         },
       );
     });
-    scenario('A running turn fills an empty plaque', async () => {
+    scenario('A running turn names the work', async () => {
       await hosted(
         {
           login: () => MANAGER,
@@ -1756,16 +1755,16 @@ spec('board', () => {
           const html = await pageHtml(page.url);
           const specifying = stationOf(html, '1', 'specifying');
           const tasking = stationOf(html, '2', 'tasking');
-          assert.match(specifying, /<span class="reason">restore-baseline<\/span>/);
+          assert.match(specifying, /Восстанавливаю базовую спеку/);
           assert.equal(specifying.includes('class="kicker"'), false);
           assert.equal(plaqueButton(specifying).includes('hammer mark'), false);
-          assert.match(tasking, /<span class="reason">create-tasks<\/span>/);
+          assert.match(tasking, /Пишу задачи/);
           assert.equal(tasking.includes('class="kicker"'), false);
           assert.equal(plaqueButton(tasking).includes('hammer mark'), false);
         },
       );
     });
-    scenario('A running turn does not replace plaque text', async () => {
+    scenario('A running turn does not replace the ask', async () => {
       await hosted(
         {
           login: () => MANAGER,
@@ -1780,9 +1779,9 @@ spec('board', () => {
         async (page, window) => {
           window.chooseAgent('cursor');
           const plaque = stationOf(await pageHtml(page.url), '1', 'specifying');
-          assert.match(plaque, /<span class="kicker">ask<\/span>/);
           assert.match(plaque, /please decide/);
           assert.equal(plaque.includes('restore-baseline'), false);
+          assert.equal(plaque.includes('Восстанавливаю базовую спеку'), false);
         },
       );
     });
@@ -1958,15 +1957,83 @@ spec('board', () => {
       proveOneOpenPullRequestLetsTakeWriteTheAssignee80();
     });
   });
-  requirement('A plaque shows the top and the bottom in order', () => {
-    scenario('A focus gap is the top when there is no ask', () => {
+  requirement('A plaque shows the current work', () => {
+    scenario('A focus gap stays off the plaque', () => {
       proveAFocusGapShowsSpecifyAndHidesASolidPlan56();
     });
     scenario('A solid focus adds no gap line', () => {
       proveEveryRecordedLayerSolidHasNoLayerLine57();
     });
+    scenario('Red checks nobody is reading yet', () => {
+      const plaque = plaqueLines({station: 'verifying', checks: 'red', phaseRow: 'red'});
+      assert.deepEqual(plaque.lines, ['Красные без разбора']);
+    });
+    scenario('A repeated refusal that is not the archive', () => {
+      const plaque = plaqueLines({
+        phase: 'implementing',
+        decision: {kind: 'wait', issue: '1', reason: 'refused implement-next-task: next open task'},
+      });
+      assert.deepEqual(plaque.lines, ['Отказ задачи']);
+      assert.equal(plaque.lines.includes('Архив отказал'), false);
+    });
+    scenario('Comment marks are not only on verifying', () => {
+      const plaque = plaqueLines({
+        station: 'implementing',
+        decision: {
+          kind: 'agent',
+          issue: '1',
+          action: 'classify-comments',
+          skill: 'pr-comments',
+          phase: 'implementing',
+          pr: '9',
+          reason: 'unclassified review threads',
+        },
+      });
+      assert.deepEqual(plaque.lines, ['Размечаю комментарии']);
+    });
+    scenario('Unarchive is not only on accepting', () => {
+      const plaque = plaqueLines({
+        station: 'specifying',
+        decision: {kind: 'unarchive', issue: '1', phase: 'specifying', reason: 'return the delta to the change'},
+      });
+      assert.deepEqual(plaque.lines, ['Возвращаю дельту из архива']);
+    });
+    scenario('A return names the destination', () => {
+      const plaque = plaqueLines({
+        station: 'implementing',
+        decision: {kind: 'advance', issue: '1', to: 'tasking', reason: 'tasks.md is missing'},
+      });
+      assert.deepEqual(plaque.lines, ['Нет задач', 'Назад на Tasks']);
+    });
+    scenario('Several pull requests stay under the code pair', () => {
+      const plaque = plaqueLines({
+        station: 'implementing',
+        phase: 'implementing',
+        phaseRow: {done: 2, open: 4},
+        task: 'remark-field',
+        reason: 'несколько pull request',
+        decision: {
+          kind: 'agent',
+          issue: '1',
+          action: 'implement-next-task',
+          skill: 'implement',
+          phase: 'implementing',
+          pr: '9',
+          reason: 'next open task',
+        },
+      });
+      assert.deepEqual(plaque.lines, ['Done 2/6', 'remark-field', 'Оставь один']);
+    });
   });
   requirement('The phase row is read from the cycle', () => {
+    scenario('A child that is not accepted is a different wait', () => {
+      const plaque = plaqueLines({
+        station: 'tasking',
+        phaseRow: {waits: ['12']},
+        decision: {kind: 'wait', issue: '55', reason: 'wait for children to be accepted: #12'},
+      });
+      assert.deepEqual(plaque.lines, ['Жду принятия #12']);
+    });
     scenario('Proposing shows the open-question count', () => {
       proveProposingShowsTwoOpenQuestionsUnderTheHeading51();
     });
@@ -1986,7 +2053,7 @@ spec('board', () => {
           pageWrite(paths.arcadia, '55', 'tasks.md', '- [ ] one\n');
           window.chooseAgent('cursor');
           const html = await pageHtml(page.url);
-          assert.match(stationOf(html, '55', 'tasking'), /Waits for 60/);
+          assert.match(stationOf(html, '55', 'tasking'), /Жду #60/);
           const opened = await post(
             page.url,
             'act',
@@ -2008,6 +2075,7 @@ spec('board', () => {
           pageWrite(paths.arcadia, '55', 'tasks.md', '- [ ] one\n');
           window.chooseAgent('cursor');
           const plaque = stationOf(await pageHtml(page.url), '55', 'tasking');
+          assert.equal(plaque.includes('Жду'), false);
           assert.equal(plaque.includes('Waits for'), false);
         },
       );
@@ -2025,8 +2093,8 @@ spec('board', () => {
         async (page, window) => {
           window.chooseAgent('cursor');
           const plaque = stationOf(await pageHtml(page.url), '55', 'tasking');
-          assert.match(plaque, /create-tasks/);
-          assert.equal(plaque.includes('Waits for'), false);
+          assert.match(plaque, /Пишу задачи/);
+          assert.equal(plaque.includes('Жду'), false);
         },
       );
     });
@@ -2574,7 +2642,8 @@ spec('hammer', () => {
         async (page, window) => {
           window.chooseAgent('cursor');
           const plaque = stationOf(await pageHtml(page.url), '1', 'proposing');
-          assert.match(plaque, /<span class="kicker">ask<\/span>/);
+          assert.match(plaque, /please decide/);
+          assert.equal(plaque.includes('class="kicker"'), false);
           assert.equal(plaqueButton(plaque).includes('hammer mark'), false);
         },
       );
@@ -2631,6 +2700,7 @@ function plaqueLiveInput(
     checks?: 'green' | 'red' | 'pending' | 'none';
     ask?: string;
     phaseRow?: {done: number; open: number} | {waits: string[]};
+    task?: string;
   } = {},
 ) {
   const phase = over.phase ?? 'implementing';
@@ -2652,22 +2722,28 @@ function plaqueLiveInput(
       checks: over.checks,
       ask: over.ask,
       phaseRow: over.phaseRow,
+      task: over.task,
+      station:
+        phase === 'tasking' || phase === 'implementing' || phase === 'verifying' || phase === 'accepting'
+          ? phase
+          : undefined,
     }),
     live: liveFocus(focusCtx),
   };
 }
 
 spec('live-focus-page', () => {
-  requirement('The closed plaque shows the live sentence until the reason passes', () => {
-    scenario('The plaque shows the same live sentence as the open page', () => {
+  requirement('The closed plaque shows the work, not the open-page sentence', () => {
+    scenario('The plaque shows the count and the task', () => {
       const {live, plaque} = plaqueLiveInput({
         running: true,
         turn: {phase: 'implementing', action: 'implement-next-task'},
         phaseRow: {done: 1, open: 3},
+        task: 'success-send',
       });
       assert.ok(live);
-      assert.equal(plaque.bottom, live.text);
-      assert.equal(plaque.bottom?.includes('Done'), false);
+      assert.deepEqual(plaque.lines, ['Done 1/4', 'success-send']);
+      assert.equal(plaque.lines.includes(live.text), false);
     });
     scenario('That sentence leaves when the reason passes', () => {
       const whileRunning = plaqueLiveInput({
@@ -2675,38 +2751,38 @@ spec('live-focus-page', () => {
         turn: {phase: 'implementing', action: 'implement-next-task'},
       });
       assert.ok(whileRunning.live);
-      assert.equal(whileRunning.plaque.bottom, whileRunning.live.text);
+      assert.equal(whileRunning.plaque.lines.includes(whileRunning.live.text), false);
       const after = plaqueLiveInput({
         running: false,
         turn: undefined,
         phaseRow: {done: 0, open: 2},
       });
       assert.equal(after.live, undefined);
-      assert.equal(after.plaque.bottom, 'Done 0/2');
-      assert.equal(after.plaque.bottom?.includes('implement-next-task') ?? false, false);
+      assert.deepEqual(after.plaque.lines, ['Done 0/2']);
+      assert.equal(after.plaque.lines.includes('implement-next-task'), false);
     });
     scenario('The Done count stays when no live reason applies', () => {
       const {live, plaque} = plaqueLiveInput({
         phaseRow: {done: 1, open: 3},
       });
       assert.equal(live, undefined);
-      assert.equal(plaque.bottom, 'Done 1/4');
+      assert.deepEqual(plaque.lines, ['Done 1/4']);
     });
-    scenario('The narrow Waits for line is only the child wait at tasking', () => {
+    scenario('The child wait is only the unspecified child', () => {
       const {plaque} = plaqueLiveInput({
         phase: 'tasking',
         phaseRow: {waits: ['12']},
       });
-      assert.equal(plaque.bottom, 'Waits for 12');
-      assert.equal(plaque.bottom?.includes('7'), false);
-      assert.equal(plaque.bottom?.includes('until'), false);
-      assert.equal(plaque.bottom?.includes('create-tasks'), false);
-      assert.equal(plaque.bottom?.includes('slot'), false);
-      assert.equal(plaque.bottom?.includes('checks'), false);
+      assert.deepEqual(plaque.lines, ['Жду #12']);
+      assert.equal(plaque.lines.join(' ').includes('7'), false);
+      assert.equal(plaque.lines.join(' ').includes('until'), false);
+      assert.equal(plaque.lines.join(' ').includes('create-tasks'), false);
+      assert.equal(plaque.lines.join(' ').includes('slot'), false);
+      assert.equal(plaque.lines.join(' ').includes('checks'), false);
     });
   });
   requirement('A refused archive is the open page', () => {
-    scenario('The plaque shows the same refused archive', () => {
+    scenario('The plaque shows the short archive refusal', () => {
       const said =
         'openspec validate --all --strict refused spec/board: Requirement text is very long (>500 characters)';
       const {live, plaque} = plaqueLiveInput({
@@ -2715,7 +2791,7 @@ spec('live-focus-page', () => {
         phaseRow: {done: 1, open: 3},
       });
       assert.equal(live?.text, said);
-      assert.equal(plaque.bottom, said);
+      assert.deepEqual(plaque.lines, ['Архив отказал']);
     });
   });
   requirement('A review gate keeps the written focus and the ask', () => {
@@ -2727,8 +2803,8 @@ spec('live-focus-page', () => {
         decision: reviewGateWait('specifying'),
       });
       assert.equal(live, undefined);
-      assert.equal(plaque.bottom?.includes('implement-next-task') ?? false, false);
-      assert.equal(plaque.bottom?.includes('→') ?? false, false);
+      assert.deepEqual(plaque.lines, ['Проверь спеки']);
+      assert.equal(plaque.lines.includes('implement-next-task'), false);
     });
   });
 });
@@ -3715,7 +3791,7 @@ spec('written-focus-page', () => {
             assert.equal(scroll.includes('<h3>повод</h3>'), false);
             assert.equal(scroll.includes('<h3>ask</h3>'), false);
             assert.equal(scroll.includes('<h3>ревью</h3>'), false);
-            assert.match(scroll, /please review this/);
+            assert.equal(scroll.includes('please review this'), false);
             const spine = side.slice(side.indexOf('<div class="spine">'));
             assert.equal(spine.includes('<h3>хук</h3>'), false);
           },

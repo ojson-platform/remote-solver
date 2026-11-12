@@ -206,7 +206,10 @@ test('threadList drops ignored-only threads and keeps a person with a later igno
     },
   });
   const listed = await review.threadList('58');
-  assert.match(calls.find(args => args.join(' ').includes('reviewThreads'))?.join(' ') ?? '', /comments\(first:100\)/);
+  const query = calls.find(args => args.join(' ').includes('reviewThreads'))?.join(' ') ?? '';
+  assert.match(query, /comments\(first:1\)/);
+  assert.match(query, /comments\(last:1\)/);
+  assert.equal(query.includes('comments(first:100)'), false);
   assert.deepEqual(listed, [
     {
       id: 'PRRT_stays',
@@ -796,6 +799,33 @@ spec('github-read', () => {
       assert.deepEqual(await review.range('11'), {head: 'aaa', base: 'bbb'});
       assert.equal(calls.filter(args => args.join(' ').includes('pulls/11')).length, 1);
     });
+
+    scenario('A fresh view is not requested again', async () => {
+      const calls: string[][] = [];
+      const {review} = githubAdapters({
+        run: async args => {
+          calls.push(args);
+          if (args[0] === 'pr' && args[1] === 'list' && args.includes('merged')) {
+            return '[]';
+          }
+          if (args[0] === 'pr' && args[1] === 'list') {
+            return JSON.stringify([{number: 11, title: '#7: change', state: 'OPEN'}]);
+          }
+          if (args[0] === 'pr' && args[1] === 'view') {
+            return JSON.stringify({
+              state: 'OPEN',
+              statusCheckRollup: [],
+              headRefOid: 'aaa',
+              baseRefOid: 'bbb',
+            });
+          }
+          throw new Error(args.join(' '));
+        },
+      });
+      await review.pulls('7');
+      await review.pulls('7');
+      assert.equal(calls.filter(args => args[0] === 'pr' && args[1] === 'view').length, 1);
+    });
   });
 
   requirement('Open pull requests are one repository list', () => {
@@ -1164,7 +1194,7 @@ spec('github-read', () => {
         const failed = assert.rejects(pending, /GitHub answered with text: Service Unavailable/);
         await vi.runAllTimersAsync();
         await failed;
-        assert.equal(calls, 3);
+        assert.equal(calls, 2);
         assert.equal(logs.join('\n').includes('invalid character'), false);
         assert.equal(
           ghErrorLine(Object.assign(new Error('gh exited 1'), {stderr: gateway.stderr, stdout: gateway.stdout})),
@@ -1264,6 +1294,113 @@ spec('github-read', () => {
         clearGithubPause();
         vi.useRealTimers();
       }
+    });
+
+    scenario('A later unreachable call is not tried again', async () => {
+      clearGithubPause();
+      let calls = 0;
+      const run = async () => {
+        calls += 1;
+        throw new Error('connect ETIMEDOUT');
+      };
+      await assert.rejects(gh(['api', 'user'], undefined, run), /could not be reached/);
+      const afterFirst = calls;
+      await assert.rejects(gh(['api', 'user'], undefined, run), /could not be reached/);
+      assert.equal(afterFirst, 2);
+      assert.equal(calls, 3);
+    });
+  });
+
+  requirement('Open issue links are one query', () => {
+    scenario('Two open issues share one link query', async () => {
+      const calls: string[] = [];
+      const {tracker} = githubAdapters({
+        run: async args => {
+          calls.push(args.join(' '));
+          const joined = args.join(' ');
+          if (joined.includes('/issues?state=open')) {
+            return JSON.stringify([
+              {number: 7, title: 't', body: '', state: 'OPEN', labels: [], assignees: []},
+              {number: 8, title: 'u', body: '', state: 'OPEN', labels: [], assignees: []},
+            ]);
+          }
+          if (joined.includes('graphql') && joined.includes('i7:') && joined.includes('i8:')) {
+            return JSON.stringify({
+              data: {
+                repository: {
+                  i7: {parent: {number: 1}, blockedBy: {nodes: [{number: 3}]}, blocking: {nodes: []}},
+                  i8: {parent: null, blockedBy: {nodes: []}, blocking: {nodes: [{number: 7}]}},
+                },
+              },
+            });
+          }
+          throw new Error(joined);
+        },
+      });
+      const open = await tracker.listOpen();
+      assert.equal(open.find(issue => issue.key === '7')?.parent, '1');
+      assert.deepEqual(open.find(issue => issue.key === '7')?.blockedBy, ['3']);
+      assert.deepEqual(open.find(issue => issue.key === '8')?.blocks, ['7']);
+      assert.equal(calls.filter(call => call.includes('graphql') && call.includes('parent{number}')).length, 1);
+    });
+  });
+
+  requirement('Threads are read with the first and last comment', () => {
+    scenario('A thread read asks for the first and the last comment', async () => {
+      const calls: string[][] = [];
+      const {review} = githubAdapters({
+        run: async args => {
+          calls.push(args);
+          if (args.join(' ').includes('reviewThreads')) {
+            return JSON.stringify({
+              data: {repository: {pullRequest: {reviewThreads: {nodes: []}}}},
+            });
+          }
+          throw new Error(args.join(' '));
+        },
+      });
+      await review.threadList('58');
+      const query = calls.find(args => args.join(' ').includes('reviewThreads'))?.join(' ') ?? '';
+      assert.match(query, /comments\(first:1\)/);
+      assert.match(query, /comments\(last:1\)/);
+      assert.equal(query.includes('comments(first:100)'), false);
+    });
+
+    scenario('Two open pull requests share one thread query', async () => {
+      const calls: string[][] = [];
+      const {review} = githubAdapters({
+        run: async args => {
+          calls.push(args);
+          const joined = args.join(' ');
+          if (args[0] === 'pr' && args[1] === 'list' && args.includes('merged')) {
+            return '[]';
+          }
+          if (args[0] === 'pr' && args[1] === 'list') {
+            return JSON.stringify([
+              {number: 11, title: '#7: change', state: 'OPEN'},
+              {number: 12, title: '#8: change', state: 'OPEN'},
+            ]);
+          }
+          if (args[0] === 'pr' && args[1] === 'view') {
+            return JSON.stringify({state: 'OPEN', statusCheckRollup: [], headRefOid: 'a', baseRefOid: 'b'});
+          }
+          if (joined.includes('reviewThreads')) {
+            return JSON.stringify({
+              data: {
+                repository: {
+                  p11: {reviewThreads: {nodes: []}},
+                  p12: {reviewThreads: {nodes: []}},
+                },
+              },
+            });
+          }
+          throw new Error(joined);
+        },
+      });
+      await review.pulls('7');
+      await review.threadList('11');
+      await review.threadList('12');
+      assert.equal(calls.filter(args => args.join(' ').includes('reviewThreads')).length, 1);
     });
   });
 });

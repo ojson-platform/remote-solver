@@ -466,12 +466,16 @@
       inset 0 0 0 1px var(--brass),
       inset 0 0 10px rgba(230, 179, 90, 0.45);
   }
-  .plaque .reason, .plaque .stat, .plaque .kicker {
-    display: block;
-    min-width: 0;
+  .plaque .copy {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
     overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    white-space: pre-wrap;
+    min-width: 0;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--muted);
   }
   .plaque svg.hammer.mark {
     position: absolute;

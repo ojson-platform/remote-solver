@@ -1,4 +1,9 @@
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
+import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
 
@@ -10,7 +15,7 @@ import {queueOf} from '../spy/queues.ts';
 import {loadCycle} from '../spy/snapshot.ts';
 import {memoryPorts} from '../../adapters/tracker/github.ts';
 import {change, foldedTip} from '../__tests__/harness.ts';
-import type {FileSource} from '../port.ts';
+import type {FileSource, ThreadRecord} from '../port.ts';
 
 const FINISHED_CLOSE =
   'SDLC finished: the pull request is merged and the change is archived.';
@@ -39,6 +44,48 @@ const files: FileSource = {
   read: () => '',
   list: () => [],
 };
+
+function acceptingIssue(key: string) {
+  return {
+    key,
+    title: `#${key}: title`,
+    body: '',
+    state: 'OPEN',
+    labels: ['Sandcastle', 'sdd:cycle', 'sdd:accepting'],
+  };
+}
+
+function threadOn(capability: string, body: string, resolved: boolean): ThreadRecord {
+  return {
+    id: 'T1',
+    comment: 'C1',
+    path: `openspec/changes/issue-3/specs/${capability}/spec.md`,
+    line: 1,
+    resolved,
+    body,
+    comments: [body],
+  };
+}
+
+function git(root: string, args: string[]): string {
+  return execFileSync('git', args, {cwd: root, encoding: 'utf8'}).trim();
+}
+
+function specDiffCheckout(key: string, capability: string): {root: string; base: string; head: string} {
+  const root = mkdtempSync(path.join(tmpdir(), 'archive-thread-'));
+  git(root, ['init', '-b', 'master']);
+  git(root, ['config', 'user.email', 'archive@test.example']);
+  git(root, ['config', 'user.name', 'Archive Test']);
+  writeFileSync(path.join(root, 'README.md'), 'fixture\n');
+  git(root, ['add', '-A']);
+  git(root, ['commit', '-m', 'base']);
+  const specPath = path.join(root, 'openspec', 'changes', `issue-${key}`, 'specs', capability);
+  mkdirSync(specPath, {recursive: true});
+  writeFileSync(path.join(specPath, 'spec.md'), '### Requirement: Kept\n');
+  git(root, ['add', '-A']);
+  git(root, ['commit', '-m', 'delta']);
+  return {root, base: git(root, ['rev-parse', 'HEAD~1']), head: git(root, ['rev-parse', 'HEAD'])};
+}
 
 test('resolveIssue loads the cycle once and flushes mechanical advances in one write', async () => {
   const {tracker, review, calls} = memoryPorts({
@@ -323,6 +370,7 @@ spec('spec-archive', () => {
       }
       const notes = await tracker.comments('3');
       assert.equal(notes.some(note => note.body.includes('sdd:refused')), false);
+      assert.equal((await tracker.labels('3')).includes('sdd:refused'), false);
     });
 
     scenario('A refused validate names the specs and the rule', async () => {
@@ -365,6 +413,7 @@ spec('spec-archive', () => {
       const notes = await tracker.comments('3');
       const refusal = notes.find(note => note.body.includes('sdd:refused'));
       assert.ok(refusal);
+      assert.ok((await tracker.labels('3')).includes('sdd:refused'));
       assert.match(refusal.body, /archive the change/);
       assert.match(refusal.body, /spec\/board/);
       assert.equal(notes.some(note => note.body.startsWith('sdd:focus:accept')), false);
@@ -403,6 +452,162 @@ spec('spec-archive', () => {
       assert.equal(again.kind, 'wait');
       if (again.kind === 'wait') {
         assert.match(again.reason, /spec\/board/);
+      }
+    });
+  });
+
+  requirement('A refused spec this change owns returns to specifying', () => {
+    const said =
+      'openspec validate --all --strict refused spec/board: Requirement text is very long (>500 characters)';
+
+    scenario('A refused spec this change owns opens a spec thread', async () => {
+      const box = specDiffCheckout('3', 'board');
+      try {
+        const {tracker, review, calls} = memoryPorts({
+          issues: [acceptingIssue('3')],
+          pulls: {'3': [{id: '9', title: '#3: title', state: 'OPEN'}]},
+          ranges: {'9': {head: box.head, base: box.base}},
+        });
+        let opened: {path?: string; line?: number; body?: string} | undefined;
+        const openThread = review.openThread.bind(review);
+        review.openThread = async (pull, target) => {
+          opened = target;
+          return openThread(pull, target);
+        };
+        const decision = await performIssue('3', {
+          tracker,
+          review,
+          files: {exists: () => false, read: () => '', list: () => []},
+          queues: [{name: 'Sandcastle'}],
+          change: change({proposal: true, capabilities: ['board']}),
+          tip: '',
+          checkout: async () => box.root,
+          fold() {
+            throw new Error(said);
+          },
+        });
+        assert.equal(decision.kind, 'wait');
+        if (decision.kind === 'wait') {
+          assert.equal(decision.reason, `archive refused: ${said}`);
+        }
+        const notes = await tracker.comments('3');
+        assert.equal(notes.some(note => note.body.includes('sdd:refused')), false);
+        assert.equal((await tracker.labels('3')).includes('sdd:refused'), false);
+        assert.equal(opened?.path, 'openspec/changes/issue-3/specs/board/spec.md');
+        assert.equal(opened?.line, 1);
+        assert.match(opened?.body ?? '', /^sdd:layer=spec → specifying\n/);
+        assert.match(opened?.body ?? '', /spec\/board/);
+        assert.equal(calls.includes('say'), false);
+        assert.equal(calls.includes('speak'), false);
+      } finally {
+        rmSync(box.root, {recursive: true, force: true});
+      }
+    });
+
+    scenario('A delta the proposal does not name still opens a spec thread', async () => {
+      const box = specDiffCheckout('3', 'board');
+      try {
+        const {tracker, review} = memoryPorts({
+          issues: [acceptingIssue('3')],
+          pulls: {'3': [{id: '9', title: '#3: title', state: 'OPEN'}]},
+          ranges: {'9': {head: box.head, base: box.base}},
+        });
+        let opened: {path?: string; body?: string} | undefined;
+        const openThread = review.openThread.bind(review);
+        review.openThread = async (pull, target) => {
+          opened = target;
+          return openThread(pull, target);
+        };
+        const decision = await performIssue('3', {
+          tracker,
+          review,
+          files: {exists: () => false, read: () => '', list: () => []},
+          queues: [{name: 'Sandcastle'}],
+          change: change({proposal: true, capabilities: ['section']}),
+          tip: '',
+          checkout: async () => box.root,
+          fold() {
+            throw new Error(said);
+          },
+        });
+        assert.equal(decision.kind, 'wait');
+        const notes = await tracker.comments('3');
+        assert.equal(notes.some(note => note.body.includes('sdd:refused')), false);
+        assert.equal((await tracker.labels('3')).includes('sdd:refused'), false);
+        assert.equal(opened?.path, 'openspec/changes/issue-3/specs/board/spec.md');
+        assert.match(opened?.body ?? '', /^sdd:layer=spec → specifying\n/);
+        assert.match(opened?.body ?? '', /spec\/board/);
+      } finally {
+        rmSync(box.root, {recursive: true, force: true});
+      }
+    });
+
+    scenario('The next poll moves that issue to specifying', async () => {
+      const body = `sdd:layer=spec → specifying\n${said}`;
+      const {tracker, review} = memoryPorts({
+        issues: [acceptingIssue('3')],
+        pulls: {'3': [{id: '9', title: '#3: title', state: 'OPEN'}]},
+        threadList: {'9': [threadOn('board', body, false)]},
+      });
+      const decision = await performIssue('3', {
+        tracker,
+        review,
+        files: {exists: () => false, read: () => '', list: () => []},
+        queues: [{name: 'Sandcastle'}],
+        change: change({proposal: true, capabilities: ['board']}),
+        tip: '',
+        checkout: async () => '/tmp/unused',
+        fold() {
+          throw new Error('archive ran');
+        },
+      });
+      assert.equal(decision.kind, 'advance');
+      if (decision.kind === 'advance') {
+        assert.equal(decision.to, 'specifying');
+      }
+    });
+  });
+
+  requirement('The same archive refusal does not open another thread', () => {
+    scenario('A repeated validate refusal waits', async () => {
+      const said =
+        'openspec validate --all --strict refused spec/board: Requirement text is very long (>500 characters)';
+      const box = specDiffCheckout('3', 'board');
+      try {
+        const {tracker, review, calls} = memoryPorts({
+          issues: [acceptingIssue('3')],
+          pulls: {'3': [{id: '9', title: '#3: title', state: 'OPEN'}]},
+          ranges: {'9': {head: box.head, base: box.base}},
+          threadList: {'9': [threadOn('board', `sdd:layer=spec → specifying\n${said}`, true)]},
+        });
+        let folds = 0;
+        const options = {
+          tracker,
+          review,
+          files: {exists: () => false, read: () => '', list: () => []},
+          queues: [{name: 'Sandcastle'}],
+          change: change({proposal: true, capabilities: ['board']}),
+          tip: '',
+          checkout: async () => box.root,
+          fold() {
+            folds += 1;
+            throw new Error(said);
+          },
+        };
+        const decision = await performIssue('3', options);
+        const again = await performIssue('3', options);
+        assert.equal(folds, 1);
+        assert.equal(decision.kind, 'wait');
+        if (decision.kind === 'wait') {
+          assert.equal(decision.reason, `archive refused: ${said}`);
+        }
+        assert.equal(again.kind, 'wait');
+        assert.equal(calls.includes('openThread'), false);
+        const notes = await tracker.comments('3');
+        assert.equal(notes.some(note => note.body.includes('sdd:refused')), true);
+        assert.ok((await tracker.labels('3')).includes('sdd:refused'));
+      } finally {
+        rmSync(box.root, {recursive: true, force: true});
       }
     });
   });

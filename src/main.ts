@@ -5,7 +5,7 @@ import {tryHoldIssue} from './adapters/runtime/lock.ts';
 import {claimChat, clearChat} from './adapters/runtime/session.ts';
 import {githubPauseRemaining, reportGithubError} from './adapters/tracker/github.ts';
 import {packageLinks} from './adapters/vcs/vcs.ts';
-import {effectSignature, refusalBody, type Decision} from './machine/decide/policy.ts';
+import {effectSignature, postRefusal, refusalBody, type Decision} from './machine/decide/policy.ts';
 import {performCycle} from './machine/flow/flow.ts';
 import {endStep, observedSignal, runMarks} from './machine/mark/focus.ts';
 import {contentFiles} from './machine/port.ts';
@@ -73,7 +73,7 @@ async function driveHeldIssue(box: Machine, key: string, watch?: SpyWatch): Prom
     const claim = claimChat(box.root, key, decision.action, sig);
     if (claim.kind === 'spent') {
       console.error(`Stopped: ${decision.action} already resumed its chat once.`);
-      await box.tracker.comment(key, refusalBody(sig));
+      await postRefusal(box.tracker, key, refusalBody(sig));
       return {code: 0};
     }
     watch?.onTurn?.(key, {issue: key, phase: decision.phase, action: decision.action});
@@ -109,7 +109,7 @@ async function driveHeldIssue(box: Machine, key: string, watch?: SpyWatch): Prom
       console.error(
         `Stopped: ${decision.action} made no commit, so the next poll would repeat it.`,
       );
-      await box.tracker.comment(key, refusalBody(effectSignature(decision)));
+      await postRefusal(box.tracker, key, refusalBody(effectSignature(decision)));
       return {code: 0};
     }
   }

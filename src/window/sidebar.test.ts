@@ -1068,6 +1068,8 @@ spec('focus-pager', () => {
         }),
       );
       assert.equal(html.includes('focus-pager'), false);
+      assert.equal(html.includes('data-focus="back"'), false);
+      assert.equal(html.includes('data-focus="forward"'), false);
     });
     scenario('The row is the badge and the prose', () => {
       const html = renderToStaticMarkup(
@@ -1077,6 +1079,8 @@ spec('focus-pager', () => {
         }),
       );
       assert.equal(html.includes('focus-row'), false);
+      assert.equal(html.includes('focus-pager'), false);
+      assert.match(html, /<section class="block focus-block">\s*<span class="badge">/);
       assert.match(html, /class="badge"/);
       assert.match(html, /<pre>/);
     });

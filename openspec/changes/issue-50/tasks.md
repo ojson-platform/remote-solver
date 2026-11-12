@@ -5,4 +5,4 @@ sdd-absorbed: 8a9d19d70803a3ac
 - [x] `unmarked-counts` A thread with no marker counts as this phase
 - [x] `active-when-not-counting` A phase thread leaves acceptance active; A thread marked for a later phase does not; A note does not
 - [x] `open-question-empty` An open question still leaves that place empty, as it does now
-- [ ] `machine-no-accept-ask` While such a thread is open, the machine does not set sdd:wait-human and does not ask to accept the phase
+- [x] `machine-no-accept-ask` While such a thread is open, the machine does not set sdd:wait-human and does not ask to accept the phase

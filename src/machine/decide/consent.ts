@@ -3,7 +3,7 @@ import type {GateEvent, Phase} from '../phase/phase.ts';
 import type {IssueRecord} from '../port.ts';
 import type {CycleRecord, Decision, LabelFix, PullSnapshot} from './types.ts';
 
-import {reviewGate} from './agent.ts';
+import {acceptReviewGate} from './ahead.ts';
 import {gateBlocker} from './gates.ts';
 
 const HUMAN_NEXT: Partial<Record<Phase, Phase>> = {
@@ -88,6 +88,7 @@ export function heldReview(
   change: ChangeView,
   record: CycleRecord,
   hand: Hand,
+  pr?: PullSnapshot,
 ): Decision | null {
   if (record.hold === null || record.phase === null) {
     return null;
@@ -102,7 +103,7 @@ export function heldReview(
           ? {artifact: 'design' as const, to: 'designed' as const}
           : null;
   if (review && !gateBlocker(issue.key, phase, change)) {
-    return hand(reviewGate(issue.key, review.artifact, phase, review.to));
+    return hand(acceptReviewGate(issue.key, review.artifact, phase, review.to, change, pr));
   }
   return hand({kind: 'wait', issue: issue.key, reason: record.hold});
 }

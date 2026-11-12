@@ -2,10 +2,11 @@ import type {ChangeView} from '../change/change.ts';
 import type {IssueRecord} from '../port.ts';
 import type {CycleRecord, Decision, PullSnapshot} from './types.ts';
 
-import {emptyReview, layerOfPhase} from '../mark/review.ts';
+import {emptyReview, layerOfPhase, phaseThreadCountsForAccept} from '../mark/review.ts';
 import {phaseRank, type Phase} from '../phase/phase.ts';
 
-import {agent} from './agent.ts';
+import {agent, reviewGate} from './agent.ts';
+import {gateBlocker} from './gates.ts';
 import {linkWait} from './links.ts';
 import {finishedCycle, mergeOrWait} from './pulls.ts';
 import {LAYER_ACTION} from './route.ts';
@@ -107,7 +108,48 @@ export function decideAhead(read: AheadRead): Decision | null {
   if (shelf) {
     return shelf;
   }
-  return layerThread(issue.key, phase, pr);
+  const layer = layerThread(issue.key, phase, pr);
+  if (layer) {
+    return layer;
+  }
+  if (acceptGateWithheld(phase, issue.key, change, pr)) {
+    return {kind: 'wait', issue: issue.key, reason: 'a thread on this phase is still open'};
+  }
+  return null;
+}
+
+/** A counting phase thread blocks the review-gate ask while the row would show acceptance. */
+export function acceptGateWithheld(
+  phase: Phase,
+  key: string,
+  change: ChangeView,
+  pr: PullSnapshot | undefined,
+): boolean {
+  if (phase !== 'proposing' && phase !== 'specifying' && phase !== 'designing') {
+    return false;
+  }
+  if (gateBlocker(key, phase, change)) {
+    return false;
+  }
+  const threads = pr?.reading?.threads;
+  if (!threads?.length) {
+    return false;
+  }
+  return phaseThreadCountsForAccept(phase, threads);
+}
+
+export function acceptReviewGate(
+  key: string,
+  artifact: string,
+  from: Phase,
+  to: Phase,
+  change: ChangeView,
+  pr: PullSnapshot | undefined,
+): Decision {
+  if (acceptGateWithheld(from, key, change, pr)) {
+    return {kind: 'wait', issue: key, reason: 'a thread on this phase is still open'};
+  }
+  return reviewGate(key, artifact, from, to);
 }
 
 function specShelf(

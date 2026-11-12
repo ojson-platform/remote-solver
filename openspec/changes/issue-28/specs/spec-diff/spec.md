@@ -2,7 +2,15 @@
 
 ### Requirement: A line comment uses a thread when the line has an anchor
 
-A row copied from the delta SHALL carry an anchor: the delta path, the line number in that file, and side `right`. Choosing that row and sending text SHALL call `openThread` with the person's text only. A row without an anchor SHALL call `speak` with the visible line quoted above the text. A refused thread that is not a send from «Записать» SHALL call `speak` with the same quote and SHALL NOT put the host error in the snapshot. A refused send from «Записать» SHALL NOT post a conversation comment. Both calls failing SHALL yield `комментарий не записан`. A Plan body line SHALL carry an anchor to that line of `proposal.md`. An open question SHALL stay a conversation reply. A Design body line SHALL carry an anchor to that line of `design.md`. That plan thread SHALL be on `openspec/changes/issue-<key>/proposal.md`, that design thread SHALL be on `openspec/changes/issue-<key>/design.md`, and the pull-request conversation SHALL receive no quote for either thread. An open question of the design SHALL stay a conversation reply. A `- [ ]` line of the design outside Open questions SHALL open a thread. A `- [ ]` line outside Open questions SHALL open a thread even when its text equals an open question.
+A row copied from the delta SHALL carry an anchor: the delta path, the line number in that file, and side `right`.
+
+Choosing that row and sending text SHALL call `openThread` with the person's text only.
+
+A row without an anchor SHALL call `speak` with the visible line quoted above the text.
+
+A refused thread that is not a send from «Записать» SHALL call `speak` with the same quote and SHALL NOT put the host error in the snapshot.
+
+Both calls failing SHALL yield `комментарий не записан`.
 
 #### Scenario: A line copied from the delta opens a thread
 

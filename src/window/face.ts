@@ -56,5 +56,5 @@ export function sendMark(): string {
 
 /** The circle that closes a field. */
 export function fieldClose(): string {
-  return `<button class="shut" type="button" data-dismiss-line aria-label="Закрыть">${CROSS}</button>`;
+  return `<button class="round shut" type="button" data-dismiss-line aria-label="Закрыть">${CROSS}</button>`;
 }

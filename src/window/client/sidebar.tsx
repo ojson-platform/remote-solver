@@ -267,7 +267,7 @@ function LineNote({
           <SendMark />
         </button>
       </div>
-      <button className="shut" type="button" data-dismiss-line aria-label="Закрыть">
+      <button className="round shut" type="button" data-dismiss-line aria-label="Закрыть">
         <Cross />
       </button>
     </ActForm>

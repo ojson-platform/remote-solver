@@ -55,8 +55,9 @@ spec('line-field', () => {
             /\.spine form\.line-note textarea:focus,\s*\.spine \.plan-foot textarea:focus\s*\{[^}]*rgba\(230, 179, 90, 0\.45\)/,
           );
           assert.match(html, /\.spine form\.line-note\s*\{[^}]*position:\s*relative[^}]*margin:\s*18px 10px 8px/);
-          assert.match(html, /\.spine \.shut\s*\{[^}]*border-radius:\s*50%/);
-          assert.match(bandOf(html, '1'), /class="shut"[^>]*aria-label="Закрыть"/);
+          assert.match(html, /\.round\s*\{[^}]*border-radius:\s*50%/);
+          assert.doesNotMatch(html, /\.spine \.shut\s*\{[^}]*border-radius/);
+          assert.match(bandOf(html, '1'), /class="round shut"[^>]*aria-label="Закрыть"/);
           assert.match(bandOf(html, '1'), /class="send"[^>]*aria-label="Записать"/);
         },
       );

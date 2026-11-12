@@ -25,15 +25,27 @@ An issue on the board this card waits on, named by blocked-by or depends-on. The
 _Avoid_: An edge drawn between cards, listing an issue past the direct link
 
 **Pill**:
-A named action. A block has one brass pill. A hairline pill is a secondary name. The acceptance control uses the plaque's frame. A word that is not an action stays text.
-_Avoid_: Button, link
+A named action, a word on a capsule. A block has one brass pill. A hairline pill is a secondary word. The acceptance control uses the plaque's frame. A word that is not an action stays text.
+_Avoid_: Button, link, an icon on a pill
 
-**Circle**:
-An icon control. One takes a cycle. One closes a sheet. One closes a field and sits on that field's corner. The gate has two signs: a small empty circle when the gate can be set, and a larger Gandalf when the gate is on. Those signs stay off the row of the phase the plaque is standing on. One opens a station door.
-_Avoid_: Icon button
+**Round**:
+The small brass circle with one icon and no word. Play, the breakdown, and the field's close circle are rounds. A round that cannot act stays put and goes quiet.
+_Avoid_: Circle, icon button, a word or a character inside it
+
+**Door**:
+The station circle, larger than a round, with one icon. A broken door is red.
+_Avoid_: Round
+
+**Close**:
+The bare cross that closes a sheet. It grows and wears no brass edge.
+_Avoid_: Round, door
+
+**Gate sign**:
+Two signs on a station, never on the row where the plaque stands. An empty circle when the gate can be set, and the Gandalf when it is on.
+_Avoid_: Round, door
 
 **Field**:
-A quiet card for writing. Choosing a line of a change document opens one. The send mark sits inside the field. The close control is a circle on the field's corner.
+A quiet card for writing. Choosing a line of a change document opens one. The send mark sits inside the field and is not a round. The field's close control is a round on the field's corner.
 _Avoid_: Textarea, input
 
 **Live page**:

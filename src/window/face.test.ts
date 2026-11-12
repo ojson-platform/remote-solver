@@ -43,7 +43,7 @@ test('the face emits the named controls', () => {
   assert.equal(hairline('Удалить'), '<button class="quiet" type="submit">Удалить</button>');
   assert.match(crossButton('Закрыть'), /class="x"[^>]*aria-label="Закрыть"/);
   assert.match(sendMark(), /class="send"[^>]*aria-label="Записать"/);
-  assert.match(fieldClose(), /class="shut"[^>]*aria-label="Закрыть"/);
+  assert.match(fieldClose(), /class="round shut"[^>]*aria-label="Закрыть"/);
   assert.match(rootCss, /--bg: #0e0d0b/);
   assert.match(rootCss, /--brass: #e6b35a/);
   assert.match(rootCss, /--line: rgba\(244, 240, 230, 0\.1\)/);
@@ -68,10 +68,10 @@ test('the drawer is a haze sheet', () => {
   );
   assert.match(
     css,
-    /\.spine \.shut\s*\{[^}]*rgba\(230, 179, 90, 0\.12\)[^}]*rgba\(230, 179, 90, 0\.45\)/,
+    /\.round\s*\{[^}]*rgba\(230, 179, 90, 0\.12\)[^}]*rgba\(230, 179, 90, 0\.45\)/,
   );
-  assert.match(css, /\.spine \.shut:hover\s*\{[^}]*inset 0 0 0 1px var\(--brass\)[^}]*scale\(1\.06\)/);
-  assert.match(css, /\.round\.bang:hover\s*\{[^}]*scale\(1\.06\)/);
+  assert.match(css, /\.round:hover:not\(\.off\)\s*\{[^}]*inset 0 0 0 1px var\(--brass\)[^}]*scale\(1\.06\)/);
+  assert.doesNotMatch(css, /\.spine \.shut\s*\{[^}]*rgba\(230, 179, 90/);
   assert.match(css, /\.tick:hover\s*\{\s*transform:\s*scale\(1\.06\)/);
   assert.match(css, /\.stop:hover\s*\{\s*transform:\s*scale\(1\.06\)/);
   assert.doesNotMatch(css, /\.stop:hover\s*\{[^}]*inset/);

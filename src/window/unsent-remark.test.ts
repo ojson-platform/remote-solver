@@ -2,7 +2,7 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import assert from 'node:assert/strict';
 import {mkdirSync, rmSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
-import {test} from 'vitest';
+import {vi} from 'vitest';
 
 import {changeDir} from '../machine/change/naming.ts';
 
@@ -33,6 +33,8 @@ import type {WindowReview} from './types.ts';
 const SPEC_ID = 'case-read';
 const SPEC_LINE_PATH = `openspec/changes/issue-1/specs/${SPEC_ID}/spec.md`;
 const SPEC_LINE_TEXT = '- **WHEN** the section is long';
+
+vi.setConfig({testTimeout: 15_000});
 
 const BASELINE_SPEC_BODY = [
   '### Requirement: Rows show the section',
@@ -532,7 +534,6 @@ spec('unsent-remark', () => {
           },
         );
       },
-      15_000,
     );
     scenario('The draft remains only when that thread is not on the pull request', async () => {
       const proposalRel = `${changeDir('1')}/proposal.md`;
@@ -878,7 +879,6 @@ spec('unsent-remark', () => {
           },
         );
       },
-      15_000,
     );
     scenario('A reload drops unsent remarks', async () => {
       const draft = 'после перезагрузки нет';

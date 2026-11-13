@@ -1,9 +1,23 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createElement} from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {changeDir} from '../machine/change/naming.ts';
 
-import {MANAGER, held, hosted, pageHtml, post, spineOf, writeChange} from './__tests__/page.harness.ts';
+import {App} from './client/app.tsx';
+import {draftsAfterClick} from './page.ts';
+import {
+  MANAGER,
+  held,
+  hosted,
+  pageHtml,
+  post,
+  readSnapshot,
+  spineOf,
+  writeChange,
+} from './__tests__/page.harness.ts';
 
 const KEY = '87';
 
@@ -30,6 +44,10 @@ function lineButton(html: string, line: string): string {
   assert.ok(at >= 0, marker);
   const start = html.lastIndexOf('<button', at);
   return html.slice(start, html.indexOf('</button>', at) + '</button>'.length);
+}
+
+function escapeRe(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function docOf(spine: string): string {
@@ -192,6 +210,132 @@ spec('source-line', () => {
           await openIssue(page);
           const button = lineButton(await pageHtml(page.url), line);
           assert.match(button, /data-side="right"/);
+        },
+      );
+    });
+  });
+
+  requirement('The line stays a comment target', () => {
+    scenario('The line stays a comment target', async () => {
+      const line = '- list item';
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'proposing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', MARKDOWN_PROPOSAL);
+          writeChange(paths.arcadia, KEY, 'design.md', MARKDOWN_DESIGN);
+          await openIssue(page);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(await pageHtml(page.url), KEY, layer));
+            const button = lineButton(doc, layer === 'Plan' ? line : 'Пункт с *курсивом*.'.trimEnd());
+            assert.match(button, /^<button\b[^>]*type="button"[^>]*class="[^"]*\bline\b/);
+            assert.equal(button.includes('class="diff-row'), false);
+          }
+        },
+      );
+    });
+  });
+
+  requirement('A click opens the remark draft on that line', () => {
+    scenario('A click opens the remark draft on that line', async () => {
+      const line = '- **bold**, *em*, `inline`, and [link](https://example.com)';
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'proposing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', MARKDOWN_PROPOSAL);
+          await openIssue(page);
+          const shot = await readSnapshot(page.url);
+          const drafts = draftsAfterClick([], line);
+          const html = renderToStaticMarkup(createElement(App, {snapshot: shot, drafts}));
+          const plan = docOf(spineOf(html, KEY, 'Plan'));
+          const button = lineButton(plan, line);
+          assert.match(button, /<a href="https:\/\/example\.com">link<\/a>/);
+          assert.match(
+            plan,
+            new RegExp(
+              `${escapeRe(button)}[\\s\\S]*<form[^>]*class="line-note"[\\s\\S]*name="line"[^>]*value="${escapeRe(line)}"`,
+            ),
+          );
+          const main = readFileSync(new URL('./client/main.tsx', import.meta.url), 'utf8');
+          const lineClick = main.slice(
+            main.indexOf("target?.closest('button.line, button.diff-row')"),
+            main.indexOf('memory.drafts = next.map', main.indexOf("target?.closest('button.line, button.diff-row')")),
+          );
+          assert.match(lineClick, /preventDefault\(\)/);
+          assert.match(lineClick, /button\.line/);
+        },
+      );
+    });
+  });
+
+  requirement('There is no diff row', () => {
+    scenario('There is no diff row', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', MARKDOWN_PROPOSAL);
+          writeChange(paths.arcadia, KEY, 'design.md', MARKDOWN_DESIGN);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            assert.equal(doc.includes('class="diff-row'), false);
+            assert.equal(doc.includes('button.diff-row'), false);
+          }
+        },
+      );
+    });
+  });
+
+  requirement('LineNote and posted line comments stay on that path and line', () => {
+    scenario('LineNote and posted line comments stay on that path and line', async () => {
+      const line = '- list item';
+      const body = 'замечание на строке плана';
+      const at = sourceLineNumber(MARKDOWN_PROPOSAL, line);
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'proposing', {openPullRequests: 1, pull: '91'})],
+          review: () => ({
+            threads: [
+              {
+                marker: null,
+                file: PROPOSAL_PATH,
+                line: at,
+                lines: [body],
+                comments: [body],
+              },
+            ],
+          }),
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', MARKDOWN_PROPOSAL);
+          await openIssue(page);
+          const plain = spineOf(await pageHtml(page.url), KEY, 'Plan');
+          const onLine = plain.slice(plain.indexOf(`data-at="${at}"`), plain.indexOf(`data-at="${at}"`) + 1600);
+          assert.match(onLine, /class="posted-comment"[\s\S]*замечание на строке плана/);
+          assert.match(onLine, new RegExp(`data-path="${escapeRe(PROPOSAL_PATH)}"`));
+          assert.match(onLine, new RegExp(`data-at="${at}"`));
+          const shot = await readSnapshot(page.url);
+          const drafts = [{line, text: 'черновик', question: ''}];
+          const plan = spineOf(renderToStaticMarkup(createElement(App, {snapshot: shot, drafts})), KEY, 'Plan');
+          const button = lineButton(plan, line);
+          assert.match(button, new RegExp(`data-path="${escapeRe(PROPOSAL_PATH)}"`));
+          assert.match(button, new RegExp(`data-at="${at}"`));
+          const slice = plan.slice(plan.indexOf(`data-at="${at}"`), plan.indexOf(`data-at="${at}"`) + 1200);
+          assert.match(slice, /class="line-note"/);
+          assert.match(slice, new RegExp(`name="path"[^>]*value="${escapeRe(PROPOSAL_PATH)}"`));
+          assert.match(slice, new RegExp(`name="at"[^>]*value="${at}"`));
+          assert.equal(slice.match(/class="diff-row/g)?.length ?? 0, 0);
+          assert.equal(plain.includes('class="diff-row'), false);
         },
       );
     });

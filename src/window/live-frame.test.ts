@@ -6,11 +6,14 @@ import path from 'node:path';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
+import type {BranchText} from '../machine/change/types.ts';
 import type {IssueRecord} from '../machine/port.ts';
 import {changeDir} from '../machine/change/naming.ts';
 import {git, held, hosted, MANAGER, post, writeChange} from './__tests__/page.harness.ts';
 import {post as livePost, readSnapshot, yard} from './__tests__/live.harness.ts';
-import {serveLiveBoard} from './live.ts';
+import {keptBranchText, serveLiveBoard} from './live.ts';
+import type {Spine} from './spine.ts';
+import {createBoardStore} from './store.ts';
 import type {WindowSnapshot} from './snapshot.ts';
 import {projectSpine} from './spine.ts';
 import {
@@ -994,6 +997,98 @@ spec('live-frame', () => {
         },
       };
       assert.equal(reuseSpineSections(arrived, kept).opened?.spine.proposal, plan);
+    });
+  });
+});
+
+spec('spine', () => {
+  requirement('The first open frame uses the stored branch text', () => {
+    scenario('Stored text opens on the card station', async () => {
+      const stored: BranchText = {
+        proposal: '',
+        design: '## Design\n\nФорма.\n',
+        tasks: '',
+        specs: [],
+        baselines: [],
+      };
+      const facts = {fingerprint: 'same', questions: 0, decisions: 0, specs: []};
+      assert.equal(keptBranchText(facts, undefined, facts, stored), stored);
+      assert.equal(
+        keptBranchText({...facts, fingerprint: 'other'}, undefined, facts, stored),
+        undefined,
+      );
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'designing')],
+          branchText: () => stored,
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const response = await fetch(new URL('act', page.url), {
+            method: 'POST',
+            headers: {'content-type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({act: 'open', key: '1'}).toString(),
+          });
+          const first = (await response.json()) as WindowSnapshot;
+          assert.equal(first.opened?.spine.open, 'Design');
+          assert.equal(first.opened?.spineReady, true);
+          assert.equal(first.opened?.spine.design.present, true);
+        },
+      );
+    });
+  });
+
+  requirement('A station change does not show the previous section', () => {
+    scenario('A station change does not show Accept on Plan', async () => {
+      const store = createBoardStore();
+      store.warm('1', 'plan', {open: 'Plan'} as Spine);
+      store.arm('1', 'next');
+      assert.equal(store.held('1', 'designing').spine, undefined);
+      assert.equal(store.held('1', 'proposing').spine?.open, 'Plan');
+      const open = openedShot();
+      const kept = open.opened;
+      assert.ok(kept);
+      const planKept = {
+        ...kept,
+        spine: {...kept.spine, open: 'Plan' as const},
+        layers: kept.layers.map(layer =>
+          layer.layer === 'Plan' ? {...layer, act: 'accept' as const} : layer,
+        ),
+      };
+      const base = shot();
+      const designing = {...base, rows: [{...rowOf(base), station: 'designing' as const}]};
+      const painted = paintFrame(
+        designing,
+        holdGesture(emptyHold(), 1, 'open', new URLSearchParams('key=7'), designing),
+        planKept,
+      );
+      assert.equal(painted.opened?.spine.open, 'Design');
+      assert.notEqual(painted.opened?.layers.find(layer => layer.layer === 'Plan')?.act, 'accept');
+      let phase = 'proposing';
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', phase)],
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          const openCard = () =>
+            fetch(new URL('act', page.url), {
+              method: 'POST',
+              headers: {'content-type': 'application/x-www-form-urlencoded'},
+              body: new URLSearchParams({act: 'open', key: '1'}).toString(),
+            });
+          assert.equal((await openCard()).status, 200);
+          await flushSpine();
+          phase = 'designing';
+          assert.equal((await openCard()).status, 200);
+          const response = await openCard();
+          const first = (await response.json()) as WindowSnapshot;
+          assert.equal(first.opened?.spine.open, 'Design');
+          assert.notEqual(first.opened?.layers.find(layer => layer.layer === 'Plan')?.act, 'accept');
+        },
+      );
     });
   });
 });

@@ -157,7 +157,8 @@ export function liveFocus(input: LiveFocusInput): LiveFocus | undefined {
     const action = turnAction(input.turn);
     const phase = turnPhase(input.turn);
     if (action !== undefined && phase !== undefined) {
-      const reason = input.decision?.kind === 'agent' ? input.decision.reason : '';
+      const reason =
+        input.decision?.kind === 'agent' && input.decision.action === action ? input.decision.reason : '';
       return {badge: 'working', text: workingSentence(action, reason)};
     }
   }

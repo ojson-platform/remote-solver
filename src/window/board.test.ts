@@ -21,7 +21,7 @@ import {changeDir} from '../machine/change/naming.ts';
 import type {FileSource} from '../machine/port.ts';
 
 import {gesture} from './client/gesture.ts';
-import {openLiveBoard} from './live.ts';
+import {createBoardSpyState, openLiveBoard} from './live.ts';
 import {yard as liveYard} from './__tests__/live.harness.ts';
 import {serveBoard} from './page.ts';
 import {
@@ -2720,6 +2720,10 @@ function plaqueLiveInput(
       running: over.running,
       turn: over.turn,
       decision: over.decision,
+      activity:
+        over.running && over.turn?.action && over.turn.phase
+          ? {kind: 'running' as const, phase: over.turn.phase, action: over.turn.action}
+          : undefined,
       checks: over.checks,
       ask: over.ask,
       phaseRow: over.phaseRow,
@@ -2793,6 +2797,41 @@ spec('live-focus-page', () => {
       });
       assert.equal(live?.text, said);
       assert.deepEqual(plaque.lines, ['Архив отказал']);
+    });
+  });
+  requirement('The plaque names the open step', () => {
+    scenario('A later step replaces the plaque of the step that started the worker', () => {
+      const decision: Decision = {
+        kind: 'agent',
+        issue: '1',
+        action: 'create-tasks',
+        skill: 'tasks',
+        phase: 'tasking',
+        pr: '',
+        reason: 'write tasks',
+      };
+      const {plaque} = plaqueLiveInput({
+        phase: 'implementing',
+        running: true,
+        turn: {phase: 'implementing', action: 'implement-next-task'},
+        decision,
+        phaseRow: {done: 1, open: 3},
+      });
+      const spy = createBoardSpyState(() => {});
+      spy.sink.setTurn('1', {issue: '1', phase: 'implementing', action: 'implement-next-task'});
+      spy.sink.onDecision('1', decision);
+      assert.match(plaque.lines.join('\n'), /Done /);
+      assert.equal(plaque.lines.join('\n').includes('Пишу задачи'), false);
+      assert.match(spy.turnsLine(), /implement-next-task/);
+    });
+    scenario('A running worker does not replace the design gate plaque', () => {
+      const {plaque} = plaqueLiveInput({
+        phase: 'designing',
+        running: true,
+        turn: {phase: 'designing', action: 'create-design'},
+        decision: reviewGateWait('designing'),
+      });
+      assert.deepEqual(plaque.lines, ['Проверь дизайн']);
     });
   });
   requirement('A review gate keeps the written focus and the ask', () => {

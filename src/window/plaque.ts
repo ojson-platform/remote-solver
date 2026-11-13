@@ -18,6 +18,10 @@ export function plaqueLines(input: {
   running?: boolean;
   turn?: BoardTurn;
   decision?: Decision;
+  /** The open step. It names the plaque outside a review gate. */
+  activity?: {phase: string; action: string};
+  /** The plaque's decision. A review-gate wait stays here while a worker runs. */
+  plaqueDecision?: Decision;
   checks?: 'green' | 'red' | 'pending' | 'none';
   /** First open task id from `tasks.md`. */
   task?: string;
@@ -228,9 +232,20 @@ function codeLines(input: PlaqueInput, extra?: string): string[] {
   return lines;
 }
 
+function reviewGate(decision: Decision | undefined): boolean {
+  return decision?.kind === 'wait' && decision.gate !== undefined;
+}
+
 function actionOf(input: PlaqueInput): {action: string; reason: string} | undefined {
-  if (input.decision?.kind === 'agent') {
-    return {action: input.decision.action, reason: input.decision.reason};
+  const plaque = input.plaqueDecision ?? input.decision;
+  if (reviewGate(plaque)) {
+    return undefined;
+  }
+  if (input.activity) {
+    return {action: input.activity.action, reason: ''};
+  }
+  if (plaque?.kind === 'agent') {
+    return {action: plaque.action, reason: plaque.reason};
   }
   if (input.decision !== undefined) {
     return undefined;

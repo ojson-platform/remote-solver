@@ -35,6 +35,8 @@ export type PullSnapshot = {
   state: string;
   review: ReviewView;
   checks: CheckState;
+  /** Failed check runs as `name@completedAt`. Empty when the host named none. */
+  failures?: readonly string[];
   /** The head does not apply onto the base. Absent when the host did not say. */
   conflict?: boolean;
   /** Threads and conversation from the one read. The board paints them without asking again. */

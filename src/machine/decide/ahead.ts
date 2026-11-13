@@ -26,6 +26,10 @@ export type AheadRead = {
  * marker, a conflict, and a spec that still has no baseline or shelf.
  * Null means the phase itself may decide.
  */
+function taskReason(change: ChangeView): string {
+  return change.openTask ? `next open task ${change.openTask}` : 'next open task';
+}
+
 export function decideAhead(read: AheadRead): Decision | null {
   const {issue, issues, pulls, change, record, open} = read;
   const phase = record.phase;
@@ -33,7 +37,7 @@ export function decideAhead(read: AheadRead): Decision | null {
     return {kind: 'done', issue: issue.key, reason: 'cancelled'};
   }
   if (open.length > 1 && phase === 'implementing' && change.tasks && change.openTasks > 0) {
-    return agent(issue.key, 'implement-next-task', phase, String(open[0].id), 'next open task');
+    return agent(issue.key, 'implement-next-task', phase, String(open[0].id), taskReason(change));
   }
   if (!phase) {
     return {kind: 'advance', issue: issue.key, to: 'proposing', reason: 'enter the cycle'};

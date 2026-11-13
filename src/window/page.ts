@@ -39,6 +39,7 @@ type Surface = {
   openTicket?: () => {comments?: readonly {body: string; manager?: boolean}[]; body?: string} | undefined;
   spine: () => Spine | undefined;
   heldSpine?: () => {spine?: Spine; ready: boolean; revision?: string};
+  storedBranch?: () => boolean;
   armSpine?: (epoch: number) => boolean;
   warmSpine?: (epoch: number) => void;
   failSpine?: (epoch: number) => void;
@@ -81,6 +82,7 @@ type Surface = {
   turn: (key: string) => BoardTurn | undefined;
   running: (key: string) => boolean;
   decision?: (key: string) => import('../machine/decide/policy.ts').Decision | undefined;
+  screen?: (key: string) => import('./desk.ts').Screen | undefined;
   cycleLabel?: (key: string) => string | null;
   checks?: (key: string) => 'green' | 'red' | 'pending' | 'none' | undefined;
   openReviewPlace: (file: string, line: number) => string | undefined;
@@ -875,6 +877,15 @@ export async function serveBoard(surface: Surface, port = 0): Promise<{
 
   function scheduleSpine(surface: Surface, view: PageView, listeners: Set<ServerResponse>): void {
     if (view.opened === '' || !surface.armSpine?.(view.contentEpoch)) {
+      return;
+    }
+    if (surface.storedBranch?.() && surface.heldSpine?.().spine === undefined) {
+      try {
+        surface.warmSpine?.(view.contentEpoch);
+      } catch (error) {
+        console.error(error);
+        surface.failSpine?.(view.contentEpoch);
+      }
       return;
     }
     const token = ++warmToken;

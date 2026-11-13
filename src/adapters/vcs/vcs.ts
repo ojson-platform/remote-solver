@@ -626,6 +626,22 @@ export async function ensureIssueBranch(
   }
 }
 
+async function porcelain(cwd: string): Promise<string[]> {
+  const entries = (await gitAsync(cwd, ['status', '--porcelain', '-z'])).split('\0');
+  const paths: string[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (!entry) {
+      continue;
+    }
+    paths.push(entry.slice(3));
+    if (entry[0] === 'R' || entry[0] === 'C') {
+      index += 1;
+    }
+  }
+  return paths;
+}
+
 export function gitVcs(
   root: string,
   config: GitVcsConfig = {},
@@ -702,19 +718,14 @@ export function gitVcs(
       return tip === commit || (await isAncestor(root, commit, tip));
     },
     async dirty() {
-      const entries = (await gitAsync(root, ['status', '--porcelain', '-z'])).split('\0');
-      const paths: string[] = [];
-      for (let index = 0; index < entries.length; index += 1) {
-        const entry = entries[index];
-        if (!entry) {
-          continue;
-        }
-        paths.push(entry.slice(3));
-        if (entry[0] === 'R' || entry[0] === 'C') {
-          index += 1;
-        }
+      return porcelain(root);
+    },
+    async issueDirty(key) {
+      const dir = await checkoutOf(root, machine.branchName(key, prefix));
+      if (dir === null) {
+        return [];
       }
-      return paths;
+      return porcelain(dir);
     },
   };
 }

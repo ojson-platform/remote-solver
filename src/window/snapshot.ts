@@ -3,6 +3,7 @@ import type {Decision} from '../machine/decide/policy.ts';
 
 import {specsReady} from '../machine/change/change.ts';
 
+import type {Screen} from './desk.ts';
 import {plaqueLines} from './board.ts';
 import {exclusivePage, paintedTail} from './phrase.ts';
 import {
@@ -156,6 +157,7 @@ type SnapshotSurface = {
   turn(key: string): BoardTurn | undefined;
   running(key: string): boolean;
   decision?(key: string): Decision | undefined;
+  screen?(key: string): Screen | undefined;
   waiting?(key: string): boolean;
   refused?(key: string): boolean;
   cycleLabel?(key: string): string | null;
@@ -272,9 +274,14 @@ function layerAct(
   action: string | undefined,
   decision: Decision | undefined,
   reading: WindowReview | undefined,
+  station: string | undefined,
+  busy: boolean,
 ): LayerAct {
   const review = reviewGateForLayer(layer);
-  const here = model.station !== undefined && layerForStation(model.station) === layer;
+  const here = station !== undefined && layerForStation(station) === layer;
+  if (busy && here && review !== undefined) {
+    return 'none';
+  }
   if (here && review !== undefined && decision !== undefined) {
     const gate =
       decision.kind === 'wait' &&
@@ -388,6 +395,8 @@ function publish(
   const action = turnAction(turn);
   const shown = action === '' ? undefined : action;
   const inRunning = surface.running(row.key);
+  const screen = surface.screen?.(row.key);
+  const plaqueDecision = screen?.plaqueDecision ?? surface.decision?.(row.key);
   return {
     key: row.key,
     title: row.title,
@@ -417,7 +426,9 @@ function publish(
       phase: surface.cycleLabel?.(row.key) ?? null,
       running: inRunning,
       turn,
-      decision: surface.decision?.(row.key),
+      decision: plaqueDecision,
+      activity: screen?.activity,
+      plaqueDecision,
       checks: surface.checks?.(row.key),
       action: shown,
     }),
@@ -480,8 +491,10 @@ function openCycle(
     model = surface.spine() ?? unread();
     spineReady = true;
   }
+  const screen = surface.screen?.(row.key);
+  const station = screen?.station ?? row.station;
   const action = turnAction(surface.turn(row.key));
-  const decision = surface.decision?.(row.key);
+  const decision = screen?.plaqueDecision ?? surface.decision?.(row.key);
   const reading = surface.review?.();
   const blocks = surface.sidebar();
   const questions = model.proposal.questions.filter(item => item.open).length;
@@ -492,7 +505,7 @@ function openCycle(
   const alone = exclusivePage(decision);
   const layers = SPINE_LAYERS.map(layer => ({
     layer,
-    act: layerAct(layer, model, action, decision, reading),
+    act: layerAct(layer, model, action, decision, reading, station, screen?.activity !== undefined),
   }));
   const proceed = offerContinue({
     waiting: surface.waiting?.(row.key) === true,

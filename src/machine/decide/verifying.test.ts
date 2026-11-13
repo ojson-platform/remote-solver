@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
+import {failedCheckMarks} from '../../adapters/tracker/github.ts';
 import {decide, settle} from './policy.ts';
 import {action, change, issue, pull, ready} from '../__tests__/harness.ts';
 
@@ -109,6 +110,55 @@ spec('verifying', () => {
         assert.equal(decision.skill, 'fix');
       }
       assert.notEqual(decision.kind, 'advance');
+    });
+  });
+
+  requirement('A red run is named in the classify reason', () => {
+    scenario('Two completions of one check are different decisions', () => {
+      const name = 'Test on Node.js 20.x';
+      const earlier = decide(
+        issue(1, ['sdd:verifying']),
+        [],
+        [pull(9, {checks: 'red', failures: [`${name}@2026-11-12T12:33:00Z`]})],
+        ready,
+      );
+      const later = decide(
+        issue(1, ['sdd:verifying']),
+        [],
+        [pull(9, {checks: 'red', failures: [`${name}@2026-11-12T12:59:00Z`]})],
+        ready,
+      );
+      assert.equal(earlier.kind, 'agent');
+      assert.equal(later.kind, 'agent');
+      if (earlier.kind === 'agent' && later.kind === 'agent') {
+        assert.notEqual(earlier.reason, later.reason);
+        assert.match(earlier.reason, /Test on Node\.js 20\.x@2026-11-12T12:33:00Z/);
+        assert.match(later.reason, /Test on Node\.js 20\.x@2026-11-12T12:59:00Z/);
+      }
+    });
+    scenario('A cancelled check is not the name', () => {
+      assert.deepEqual(
+        failedCheckMarks({
+          state: 'OPEN',
+          statusCheckRollup: [
+            {name: 'Test on Node.js 22.x', conclusion: 'CANCELLED', completedAt: '2026-11-12T12:59:10Z'},
+            {name: 'Test on Node.js 20.x', conclusion: 'FAILURE', completedAt: '2026-11-12T12:59:01Z'},
+          ],
+        }),
+        ['Test on Node.js 20.x@2026-11-12T12:59:01Z'],
+      );
+      assert.deepEqual(
+        failedCheckMarks({
+          state: 'OPEN',
+          statusCheckRollup: [{name: 'units', conclusion: 'FAILURE'}],
+        }),
+        [],
+      );
+      const unnamed = decide(issue(1, ['sdd:verifying']), [], [pull(9, {checks: 'red'})], ready);
+      assert.equal(unnamed.kind, 'agent');
+      if (unnamed.kind === 'agent') {
+        assert.equal(unnamed.reason, 'red checks');
+      }
     });
   });
 });

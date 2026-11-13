@@ -356,7 +356,8 @@ export function paintFrame(
   } else if (key !== undefined && shot.opened?.key !== key) {
     const row = shot.rows.find(item => item.key === key);
     if (row) {
-      next.opened = kept?.key === key ? {...kept, title: row.title} : shellDrawer(row);
+      const sameLayer = kept?.spine.open === shellOpen(row.station);
+      next.opened = kept?.key === key && sameLayer ? {...kept, title: row.title} : shellDrawer(row);
     }
   }
   return next;

@@ -20,7 +20,9 @@ import {adapterMachine, type AdapterMachine} from '../../machine.ts';
 
 export type CheckRollup = {
   state: string;
-  statusCheckRollup: {name?: string; status?: string; conclusion?: string; state?: string}[] | null;
+  statusCheckRollup:
+    | {name?: string; status?: string; conclusion?: string; state?: string; completedAt?: string}[]
+    | null;
 };
 
 const FAILED = ['FAILURE', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED'];
@@ -563,6 +565,22 @@ export function classifyChecks(view: CheckRollup, name?: string): CheckState {
   return pending ? 'pending' : 'green';
 }
 
+/** Failed runs as `name@completedAt`, sorted. A cancelled sibling and a run without a time are omitted. */
+export function failedCheckMarks(view: CheckRollup): string[] {
+  const marks: string[] = [];
+  for (const check of view.statusCheckRollup ?? []) {
+    if ((check.conclusion ?? '') !== 'FAILURE') {
+      continue;
+    }
+    const at = check.completedAt ?? '';
+    if (at === '') {
+      continue;
+    }
+    marks.push(`${check.name ?? 'check'}@${at}`);
+  }
+  return marks.sort();
+}
+
 type RawIssue = {
   number: number;
   title: string;
@@ -740,7 +758,7 @@ export function githubAdapters(
   let user: string | null = null;
   const seenPull = new Map<
     string,
-    {checks: CheckState; head: string; base: string; conflict: boolean; at: number}
+    {checks: CheckState; failures: string[]; head: string; base: string; conflict: boolean; at: number}
   >();
   const repoSlug = () => {
     if (!slug) {
@@ -978,7 +996,14 @@ export function githubAdapters(
 
   const viewPull = async (
     id: string,
-  ): Promise<{checks: CheckState; head: string; base: string; conflict: boolean; at: number}> => {
+  ): Promise<{
+    checks: CheckState;
+    failures: string[];
+    head: string;
+    base: string;
+    conflict: boolean;
+    at: number;
+  }> => {
     const cached = seenPull.get(id);
     if (cached && Date.now() - cached.at < PULL_LIST_FRESH_MS) {
       return cached;
@@ -1012,6 +1037,7 @@ export function githubAdapters(
     };
     const record = {
       checks: classifyChecks(view),
+      failures: failedCheckMarks(view),
       head: typeof view.headRefOid === 'string' ? view.headRefOid : '',
       base: typeof view.baseRefOid === 'string' ? view.baseRefOid : '',
       conflict: view.mergeable === 'CONFLICTING',
@@ -1141,6 +1167,7 @@ export function githubAdapters(
           title: pr.title,
           state: pr.state,
           checks: viewed.checks,
+          failures: viewed.failures,
           conflict: viewed.conflict,
         });
       }
@@ -1321,7 +1348,14 @@ export function githubAdapters(
       };
       const head = seen.head !== '' ? seen.head : (view.head ?? '');
       const base = view.base ?? '';
-      const next = {checks: seen.checks, head, base, conflict: seen.conflict, at: seen.at};
+      const next = {
+        checks: seen.checks,
+        failures: seen.failures,
+        head,
+        base,
+        conflict: seen.conflict,
+        at: seen.at,
+      };
       seenPull.set(pull, next);
       return commitRange(head, base);
     },

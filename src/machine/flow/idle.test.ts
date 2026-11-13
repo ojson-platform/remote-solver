@@ -374,6 +374,109 @@ spec('idle', () => {
       assert.equal(readChat(root, '8'), undefined);
     });
   });
+
+  requirement('A changed run is not idle', () => {
+    scenario('A dirty worktree does not refuse the open task', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-dirty-'));
+      const seen: string[] = [];
+      const runtime: Runtime = {
+        async run(skill) {
+          seen.push(skill.action);
+          return {commits: 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
+      };
+      const box = implementing(root, runtime);
+      box.vcs.issueDirty = async () => ['src/a.ts'];
+      const first = await driveIssue(box, '8');
+      assert.equal(first.code, 0);
+      const notes = await box.tracker.comments('8');
+      assert.equal(
+        notes.some(note => note.body.includes('sdd:refused')),
+        false,
+      );
+      assert.equal((await box.tracker.labels('8')).includes('sdd:refused'), false);
+      await driveIssue(box, '8');
+      assert.deepEqual(seen, ['implement-next-task', 'implement-next-task']);
+    });
+    scenario('A layer marker does not refuse the run', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-marker-'));
+      const seen: string[] = [];
+      const threads: {resolved: boolean; body: string}[] = [];
+      const tasks = path.join('openspec', 'changes', 'issue-8', 'tasks.md');
+      const {tracker, review} = memoryPorts({
+        issues: [
+          {
+            key: '8',
+            title: '#8: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['remote-solver', 'sdd:cycle', 'sdd:implementing'],
+          },
+        ],
+        pulls: {8: [{id: '80', title: '#8: title', state: 'OPEN'}]},
+        threads: {80: threads},
+      });
+      const runtime: Runtime = {
+        async run(skill) {
+          seen.push(skill.action);
+          threads.push({resolved: false, body: 'sdd:layer=spec'});
+          return {commits: 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
+      };
+      const box = machine(root, {
+        config: {
+          queues: [{name: 'remote-solver'}],
+          base: 'master',
+          branchScope: 'sdd',
+          ignoreComments: [],
+        },
+        tracker,
+        review,
+        vcs: {
+          ...emptyVcs(),
+          filesAt: () => ({
+            exists: rel => rel === tasks,
+            read: rel => (rel === tasks ? '- [ ] one\n' : ''),
+            list: () => [],
+          }),
+        },
+        runtime,
+      });
+      const first = await driveIssue(box, '8');
+      assert.equal(first.code, 0);
+      assert.deepEqual(seen, ['implement-next-task']);
+      const notes = await tracker.comments('8');
+      assert.equal(
+        notes.some(note => note.body.includes('sdd:refused')),
+        false,
+      );
+      assert.equal((await tracker.labels('8')).includes('sdd:refused'), false);
+      assert.equal((await tracker.labels('8')).includes('sdd:specifying'), true);
+    });
+    scenario('The refusal names the open task', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-task-name-'));
+      const runtime: Runtime = {
+        async run() {
+          return {commits: 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
+      };
+      const box = implementing(root, runtime);
+      await driveIssue(box, '8');
+      const notes = await box.tracker.comments('8');
+      const refusal = notes.find(note => note.body.includes('sdd:refused'));
+      assert.ok(refusal);
+      assert.match(refusal.body, /next open task one/);
+    });
+  });
 });
 
 function emptyVcs(): Vcs {

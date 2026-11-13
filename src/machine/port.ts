@@ -42,6 +42,8 @@ export type Pull = {
   title: string;
   state: string;
   checks: CheckState;
+  /** Failed check runs as `name@completedAt`. Empty when the host named none. */
+  failures?: readonly string[];
   /** The head does not apply onto the base. Absent when the host did not say. */
   conflict?: boolean;
 };
@@ -179,6 +181,8 @@ export type Vcs = {
   published(key: IssueKey, commit: string): Promise<boolean>;
   /** Paths `git status` reports in this checkout: changed, staged, or untracked. Empty on a clean tree. */
   dirty(): Promise<string[]>;
+  /** Paths `git status` reports in the issue worktree. Absent means the caller treats the tree as clean. */
+  issueDirty?(key: IssueKey): Promise<string[]>;
 };
 
 /** The commit a pull-request diff ends at. The parent when `head` is this issue's archive commit. */

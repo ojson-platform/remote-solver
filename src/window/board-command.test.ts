@@ -12,8 +12,10 @@ import {route} from '../cli.ts';
 import {memoryPorts} from '../adapters/tracker/github.ts';
 import type {RunningTurn} from '../main.ts';
 import type {IssueRecord, Review, Runtime, Vcs} from '../machine/port.ts';
-import {pullSnapshots} from '../machine/spy/snapshot.ts';
+import {pullSnapshots, type CycleSnapshot} from '../machine/spy/snapshot.ts';
+import type {BranchFacts, BranchText} from '../machine/change/types.ts';
 import {modelFor} from '../machine/skill/skill.ts';
+import {createDesk} from './desk.ts';
 import {
   applyTurn,
   boardModel,
@@ -573,6 +575,7 @@ spec('board-command', () => {
       };
       const notes: string[] = [];
       const turns = new Map<string, RunningTurn>();
+      const desk = createDesk();
       const sink = {
         running: new Set<string>(),
         setNote(line: string) {
@@ -580,6 +583,11 @@ spec('board-command', () => {
         },
         setTurn(issue: string, turn: RunningTurn | undefined) {
           applyTurn(turns, issue, turn);
+          if (turn === undefined) {
+            desk.noteWork(issue, {kind: 'clear'});
+          } else {
+            desk.noteWork(issue, {kind: 'running', phase: turn.phase, action: turn.action});
+          }
         },
         refresh: async () => {},
       };
@@ -593,7 +601,7 @@ spec('board-command', () => {
         async run(skill) {
           runs.push(`${skill.key} ${skill.action}`);
           leading = sink.running.has(skill.key);
-          assert.equal(turnsLine([...turns.values()]), '#6 proposing → create-proposal');
+          assert.equal(desk.projectHeader(), '#6 proposing → create-proposal');
           release();
           return {commits: 0};
         },
@@ -630,11 +638,14 @@ spec('board-command', () => {
     });
 
     scenario("Another worker's line stays", () => {
-      const turns = new Map<string, RunningTurn>();
-      applyTurn(turns, '6', {issue: '6', phase: 'specifying', action: 'restore-baseline'});
-      applyTurn(turns, '7', {issue: '7', phase: 'proposing', action: 'create-proposal'});
-      applyTurn(turns, '6', undefined);
-      assert.equal(turnsLine([...turns.values()]), '#7 proposing → create-proposal');
+      const desk = createDesk();
+      desk.noteWork('6', {kind: 'running', phase: 'specifying', action: 'restore-baseline'});
+      desk.noteWork('7', {kind: 'running', phase: 'proposing', action: 'create-proposal'});
+      desk.noteWork('6', {kind: 'clear'});
+      assert.equal(desk.projectHeader(), '#7 proposing → create-proposal');
+      desk.hold([{key: '8', phase: 'tasking', action: 'create-tasks'}]);
+      assert.equal(desk.projectHeader().includes('#8'), false);
+      assert.equal(desk.project('8')?.activity?.kind, 'held');
     });
 
     scenario('The page shows the spy line', async () => {
@@ -766,22 +777,22 @@ spec('board-command', () => {
         });
         assert.equal((await read()).generation, 1);
         assert.equal(await post(page.url, '/act', 'act=open&key=6'), 200);
-        await new Promise(resolve => setImmediate(resolve));
-        await new Promise(resolve => setImmediate(resolve));
-        assert.equal((await read()).generation, 3);
+        const opened = await read();
+        assert.equal(opened.generation, 2);
+        assert.equal(opened.opened?.spineReady, true);
         await page.refresh();
-        assert.equal((await read()).generation, 3);
+        assert.equal((await read()).generation, 2);
         staged.cycle.title = 'Renamed plan';
         await page.refresh();
-        assert.equal((await read()).generation, 4);
+        assert.equal((await read()).generation, 3);
         await new Promise(resolve => setImmediate(resolve));
         await new Promise(resolve => setImmediate(resolve));
-        assert.equal((await read()).generation, 4);
+        assert.equal((await read()).generation, 3);
         noteTurn(turns, '6', undefined, () => {
           page.note();
         });
         const gone = await read();
-        assert.equal(gone.generation, 5);
+        assert.equal(gone.generation, 4);
         assert.equal(gone.spy, '');
       } finally {
         await page.close();
@@ -1171,7 +1182,92 @@ spec('board-command', () => {
       }
     });
   });
+
+  requirement('A late read does not replace a newer one', () => {
+    scenario('A slow refresh keeps the newer labels', async () => {
+      const staged = yard();
+      let release: (issues: IssueRecord[]) => void = () => {};
+      const pending = new Promise<IssueRecord[]>(resolve => {
+        release = resolve;
+      });
+      staged.tracker.listOpen = () => pending;
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        const refreshing = live.refresh();
+        live.apply(reading(staged.cycle, ['sdd:cycle', 'remote-solver', 'sdd:designing']));
+        release([labeled(staged.cycle, ['sdd:cycle', 'remote-solver', 'sdd:proposing'])]);
+        await refreshing;
+        assert.equal(live.window.cycleLabel('6'), 'designing');
+      } finally {
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+    scenario('An older apply does not clear newer branch text', async () => {
+      const staged = yard();
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+        checkout: staged.github,
+      });
+      const text: BranchText = {
+        proposal: '',
+        design: '## Design\n\nФорма.\n',
+        tasks: '',
+        specs: [],
+        baselines: [],
+      };
+      try {
+        const older = live.beginRead();
+        live.apply(
+          reading(staged.cycle, ['sdd:cycle', 'remote-solver', 'sdd:designing'], facts('new'), text),
+        );
+        live.apply(
+          reading(staged.cycle, ['sdd:cycle', 'remote-solver', 'sdd:proposing'], facts('old')),
+          older,
+        );
+        assert.equal(live.window.openCard('6'), true);
+        assert.equal(live.window.spine()?.design.present, true);
+        assert.equal(live.window.cycleLabel('6'), 'designing');
+      } finally {
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+  });
 });
+
+function labeled(issue: IssueRecord, labels: string[]): IssueRecord {
+  return {...issue, labels};
+}
+
+function facts(fingerprint: string): BranchFacts {
+  return {fingerprint, questions: 0, decisions: 0, specs: []};
+}
+
+function reading(
+  issue: IssueRecord,
+  labels: string[],
+  branch?: BranchFacts,
+  text?: BranchText,
+): CycleSnapshot {
+  const row = labeled(issue, labels);
+  return {
+    issues: [row],
+    cycles: [row],
+    pulls: new Map(),
+    changes: new Map(),
+    ...(branch ? {facts: new Map([[row.key, branch]])} : {}),
+    ...(text ? {texts: new Map([[row.key, text]])} : {}),
+  };
+}
 
 function freePort(): Promise<number> {
   const probe = createServer();

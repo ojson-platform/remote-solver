@@ -1,4 +1,4 @@
-import type {Spine} from './spine.ts';
+import {layerForStation, type Spine} from './spine.ts';
 import type {WindowReview, WindowTicket} from './types.ts';
 import type {BranchFacts, BranchText} from '../machine/change/change.ts';
 import type {FileSource} from '../machine/port.ts';
@@ -352,11 +352,15 @@ export function createBoardStore() {
       spineKey = key;
       spineState = 'failed';
     },
-    held(key: string): {spine?: Spine; ready: boolean; revision?: string} {
+    held(key: string, station?: string): {spine?: Spine; ready: boolean; revision?: string} {
       if (key === '') {
         return {ready: true};
       }
       const saved = shelf.get(key);
+      const open = saved?.spine?.open;
+      if (station !== undefined && open !== undefined && open !== layerForStation(station)) {
+        return {ready: false};
+      }
       if (spineKey === key && spineState === 'due') {
         return {spine: saved?.spine, ready: false, revision: saved?.revision};
       }

@@ -161,6 +161,8 @@ async function runBoard(home: string | undefined, port: number | undefined): Pro
     spyNote: () => spy.turnsLine(),
     turn: spy.turn,
     decision: spy.decision,
+    screen: spy.screen,
+    desk: spy.desk,
     ...(port !== undefined ? {port} : {}),
   });
   pageNote = () => {
@@ -170,9 +172,10 @@ async function runBoard(home: string | undefined, port: number | undefined): Pro
   void watchSpy(box, {
     ...spy.sink,
     refresh: () => page.refresh(),
-    apply: snapshot => {
-      page.apply(snapshot);
+    apply: (snapshot, readId) => {
+      page.apply(snapshot, readId);
     },
+    beginRead: () => page.beginRead(),
   }).catch(error => {
     console.error(error instanceof Error ? error.message : String(error));
   });

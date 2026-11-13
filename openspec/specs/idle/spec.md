@@ -2,23 +2,15 @@
 
 ## Purpose
 
-A skill run that changes nothing is not started again until the decision changes.
+A skill run that changes nothing is not started again until the decision changes. A run that leaves a marker or a dirty worktree is not that case.
 
 ## Requirements
 
 ### Requirement: A run with no commit is not repeated
 
-When a skill run produces no commit, the machine SHALL comment `sdd:refused` with that effect's phase, action, and reason, and SHALL set that label.
+A clean run with no commit and no new marker SHALL comment `sdd:refused` with the effect's phase, action, and reason, and SHALL set that label. The comment SHALL NOT contain a null byte.
 
-The comment SHALL NOT contain a null byte.
-
-The next poll SHALL NOT start that effect while the label is on and the phase, action, and reason are unchanged.
-
-Removing the label SHALL let that effect start. A person comment SHALL NOT remove the label.
-
-A different phase, action, or reason SHALL start.
-
-The spy SHALL NOT keep the mark in its own memory.
+The next poll SHALL NOT start that effect while the label matches it. Removing the label SHALL let it start. A person comment SHALL NOT remove the label. A different phase, action, or reason SHALL start. The spy SHALL NOT remember the mark.
 
 #### Scenario: A later turn with no commit stays idle
 
@@ -79,7 +71,7 @@ A second process SHALL NOT start an agent for an issue a live process already ho
 
 ### Requirement: A crashed run resumes its chat once
 
-A skill run that crashes before a commit SHALL leave its chat and SHALL NOT post `sdd:refused`. The next start of that same decision SHALL resume that chat. A second crash of that chat SHALL post `sdd:refused` and SHALL NOT start an agent. A run that commits and a different decision SHALL each start a new chat. A run that finishes with no commit SHALL NOT start again until the label `sdd:refused` is removed.
+A skill run that crashes before a commit SHALL leave its chat and SHALL NOT post `sdd:refused`. The next start of that same decision SHALL resume that chat. A second crash of that chat SHALL post `sdd:refused` and SHALL NOT start an agent. A run that commits and a different decision SHALL each start a new chat. A clean run with no commit and no new marker SHALL NOT start again until `sdd:refused` is removed.
 
 #### Scenario: A crash resumes the same chat
 
@@ -105,3 +97,22 @@ A skill run that crashes before a commit SHALL leave its chat and SHALL NOT post
 
 - **WHEN** a chat is recorded for one decision and the next decision is different
 - **THEN** that run begins a new chat
+
+### Requirement: A changed run is not idle
+
+When a skill run produces no commit and the issue worktree has uncommitted paths, the machine SHALL NOT post `sdd:refused`, and the next drive SHALL start that effect. When a skill run produces no commit and leaves a new layer marker, the machine SHALL NOT post `sdd:refused`. When a clean run refuses `implement-next-task` and an open task id is known, the reason SHALL include that id.
+
+#### Scenario: A dirty worktree does not refuse the open task
+
+- **WHEN** the run edits the issue worktree and commits nothing
+- **THEN** the issue has no `sdd:refused` and the next drive starts the agent again
+
+#### Scenario: A layer marker does not refuse the run
+
+- **WHEN** the run opens a layer thread and commits nothing
+- **THEN** the issue has no `sdd:refused`
+
+#### Scenario: The refusal names the open task
+
+- **WHEN** the open task id is `one` and the run commits nothing on a clean worktree
+- **THEN** the refusal contains `next open task one`

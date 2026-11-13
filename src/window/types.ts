@@ -120,6 +120,8 @@ export type WindowOutside = {
   turn?: (key: string) => BoardTurn | undefined;
   /** Settled decision the spy published for this key. */
   decision?: (key: string) => import('../machine/decide/policy.ts').Decision | undefined;
+  /** The cycle screen. The plaque and the header read it. */
+  screen?: (key: string) => import('./desk.ts').Screen | undefined;
   /** Write `sddService`. The next read sees it. */
   writeService?: (key: string, service: string) => void;
   /**

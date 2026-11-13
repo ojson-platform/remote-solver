@@ -308,6 +308,20 @@ The plaque SHALL show `Done <done>/<done+open>` and the open task id for the nex
 - **WHEN** the phase is `tasking` and the phase row waits on child `12`
 - **THEN** the plaque says `Жду #12` and does not name `7`, a worker, a cap, or checks
 
+### Requirement: The plaque names the open step
+
+Outside a review gate, when a worker is on the issue, the plaque SHALL name that worker's action. A stored agent decision from before that step SHALL NOT choose the plaque. A review-gate wait SHALL keep its own plaque while that worker runs.
+
+#### Scenario: A later step replaces the plaque of the step that started the worker
+
+- **WHEN** the stored decision is `create-tasks` and the worker's current action is `implement-next-task` and the branch facts have task counts
+- **THEN** the plaque contains the `Done` count and does not contain `Пишу задачи`, and the header names `implement-next-task`
+
+#### Scenario: A running worker does not replace the design gate plaque
+
+- **WHEN** the decision is the design review gate and a worker is on the issue
+- **THEN** the plaque is `Проверь дизайн`
+
 ### Requirement: No written page leaves the live page as the only page
 
 While no written page exists, the live page SHALL be the only page and Back SHALL do nothing.

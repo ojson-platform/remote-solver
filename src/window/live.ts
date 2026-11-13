@@ -27,9 +27,29 @@ import {runSpy, type RunningTurn} from '../main.ts';
 import {changeFiles, contentChangeFiles} from './change-files.ts';
 import {FACTORY_AGENTS, mergeFactory, readOverlayDoc} from './factory.ts';
 import {serveBoard} from './page.ts';
+import {createDesk, type Desk, type Screen} from './desk.ts';
 import {createBoardStore, mergeReviewsPreservingLocal} from './store.ts';
 import {isDoc, type BoardTurn, type WindowReview, type WindowTicket} from './types.ts';
 import {openWindow} from './window.ts';
+
+/**
+ * Text that stays with a newer facts packet.
+ * A packet that repeats the stored fingerprint and brings no text keeps the stored text.
+ */
+export function keptBranchText(
+  incoming: BranchFacts,
+  incomingText: BranchText | undefined,
+  storedFacts: BranchFacts | undefined,
+  storedText: BranchText | undefined,
+): BranchText | undefined {
+  if (incomingText) {
+    return incomingText;
+  }
+  if (storedText && storedFacts?.fingerprint === incoming.fingerprint) {
+    return storedText;
+  }
+  return undefined;
+}
 
 /** How often the served page reads the tracker again. */
 export const REFRESH_MS = 60_000;
@@ -49,6 +69,8 @@ export function createBoardSpyState(note: () => void): {
   turnsLine: () => string;
   turn: (key: string) => BoardTurn | undefined;
   decision: (key: string) => Decision | undefined;
+  screen: (key: string) => Screen | undefined;
+  desk: Desk;
   sink: {
     running: Set<string>;
     setTurn: (issue: string, turn: RunningTurn | undefined) => void;
@@ -56,37 +78,44 @@ export function createBoardSpyState(note: () => void): {
     onDecision: (issue: string, decision: Decision) => void;
   };
 } {
+  const desk = createDesk();
   const running = new Set<string>();
-  const turns = new Map<string, RunningTurn>();
-  const heldActions = new Map<string, string>();
-  const decisions = new Map<string, Decision>();
   return {
     running,
     leading: key => running.has(key),
-    turnsLine: () => turnsLine([...turns.values()]),
+    turnsLine: () => desk.projectHeader(),
     turn: key => {
-      const turn = turns.get(key);
-      if (turn !== undefined) {
-        return {action: turn.action, phase: turn.phase};
+      const activity = desk.project(key)?.activity;
+      if (activity === undefined) {
+        return undefined;
       }
-      const held = heldActions.get(key);
-      return held === undefined ? undefined : {action: held};
+      if (activity.kind === 'held') {
+        return {action: activity.action};
+      }
+      return {phase: activity.phase, action: activity.action};
     },
-    decision: key => decisions.get(key),
+    decision: key => desk.project(key)?.plaqueDecision,
+    screen: key => desk.project(key),
+    desk,
     sink: {
       running,
       setTurn(issue, turn) {
-        noteTurn(turns, issue, turn, note);
+        const before = desk.projectHeader();
+        if (turn === undefined) {
+          desk.noteWork(issue, {kind: 'clear'});
+        } else {
+          desk.noteWork(issue, {kind: 'running', phase: turn.phase, action: turn.action});
+        }
+        if (desk.projectHeader() !== before) {
+          note();
+        }
       },
       onHeld(held) {
-        heldActions.clear();
-        for (const item of held) {
-          heldActions.set(item.issue, item.action);
-        }
+        desk.hold(held.map(item => ({key: item.issue, phase: '', action: item.action})));
         note();
       },
       onDecision(issue, decision) {
-        decisions.set(issue, decision);
+        desk.noteWork(issue, {kind: 'settled', decision});
         note();
       },
     },
@@ -160,8 +189,10 @@ export function watchSpy(
     onHeld?: (held: readonly {issue: string; action: string}[]) => void;
     onDecision?: (issue: string, decision: Decision) => void;
     refresh: () => Promise<void>;
-    /** Paint from a poll that already read the tracker. */
-    apply?: (snapshot: CycleSnapshot) => void;
+    /** Paint from a poll that already read the tracker. `readId` was taken when that read started. */
+    apply?: (snapshot: CycleSnapshot, readId?: number) => void;
+    /** The number for a tracker read, taken before the read starts. */
+    beginRead?: () => number;
   },
   signal?: AbortSignal,
 ): Promise<void> {
@@ -185,13 +216,14 @@ export function watchSpy(
     onDecision(issue: string, decision: Decision) {
       sink.onDecision?.(issue, decision);
     },
-    onCycle(snapshot?: CycleSnapshot) {
+    onCycle(snapshot?: CycleSnapshot, readId?: number) {
       if (snapshot) {
-        sink.apply?.(snapshot);
+        sink.apply?.(snapshot, readId);
         return;
       }
       forget(sink.refresh());
     },
+    beginRead: sink.beginRead,
   };
   return runSpy(box, ['--parallel', '20'], watch);
 }
@@ -240,6 +272,10 @@ export type LiveBoardOptions = {
   turn?: (key: string) => BoardTurn | undefined;
   /** Settled decision the spy published for this key. */
   decision?: (key: string) => Decision | undefined;
+  /** The cycle screen. The plaque and the header read it. */
+  screen?: (key: string) => Screen | undefined;
+  /** One desk for the host packet and the spy. Absent means this board keeps its own. */
+  desk?: Desk;
   /** TCP port. Absent means the system chooses one. */
   port?: number;
 };
@@ -314,7 +350,9 @@ function reviewOf(threads: readonly ThreadRecord[], notes: readonly Conversation
 export function openLiveBoard(options: LiveBoardOptions) {
   const {tracker, review, vcs, repo} = options;
   const store = createBoardStore();
+  const host = options.desk ?? createDesk();
   let generation = 0;
+  let readSeq = 0;
   const services = new Map<string, string>();
   let gatheredOf: (ticket: WindowTicket) => string | undefined = () => undefined;
   type LabelWish = {token: number; key: string; label: string; on: boolean};
@@ -532,9 +570,14 @@ export function openLiveBoard(options: LiveBoardOptions) {
       const fromSpy = incoming?.get(ticket.key);
       if (fromSpy && sameCheckout(gatheredOf(ticket))) {
         next.set(ticket.key, fromSpy);
-        const stored = incomingText?.get(ticket.key);
-        if (stored) {
-          nextText.set(ticket.key, stored);
+        const kept = keptBranchText(
+          fromSpy,
+          incomingText?.get(ticket.key),
+          store.factsOf(ticket.key),
+          store.textOf(ticket.key),
+        );
+        if (kept) {
+          nextText.set(ticket.key, kept);
         }
         continue;
       }
@@ -568,6 +611,32 @@ export function openLiveBoard(options: LiveBoardOptions) {
     return {facts: next, texts: nextText};
   }
 
+  function beginRead(): number {
+    readSeq += 1;
+    return readSeq;
+  }
+
+  function keepRead(
+    id: number,
+    tickets: WindowTicket[],
+    reviews: Map<string, WindowReview>,
+    read: {facts: Map<string, BranchFacts>; texts: Map<string, BranchText>},
+  ): boolean {
+    if (!host.admit({id, tickets, reviews})) {
+      return false;
+    }
+    for (const [key, fact] of read.facts) {
+      const text = read.texts.get(key);
+      host.noteBranch(
+        key,
+        text
+          ? {token: id, fingerprint: fact.fingerprint, facts: fact, text}
+          : {token: id, fingerprint: fact.fingerprint, facts: fact},
+      );
+    }
+    return true;
+  }
+
   function remember(
     tickets: WindowTicket[],
     nextPulls: Map<string, string>,
@@ -595,6 +664,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
     if (githubPauseRemaining() > 0) {
       return false;
     }
+    const id = beginRead();
     const gen = generation;
     const issues = await tracker.listOpen();
     const login = await tracker.login().catch(error => {
@@ -613,18 +683,21 @@ export function openLiveBoard(options: LiveBoardOptions) {
     if (gen !== generation) {
       return false;
     }
-    retire(issues);
     const painted = paintTickets(tickets, new Map(issues.map(issue => [issue.key, issue.labels])));
     const read = factsFor(painted);
     const mergedReviews = mergeReviewsPreservingLocal(store.copyReviews(), nextReviews);
+    if (!keepRead(id, painted, mergedReviews, read)) {
+      return false;
+    }
+    retire(issues);
     const nextLogin = login ?? store.login();
     const changed = store.changed(painted, mergedReviews, read.facts, nextLogin);
     remember(painted, nextPulls, mergedReviews, store.copySpyPulls(), read, login);
     return changed;
   }
 
-  function apply(snapshot: CycleSnapshot): boolean {
-    retire(snapshot.issues);
+  function apply(snapshot: CycleSnapshot, readId?: number): boolean {
+    const id = readId ?? beginRead();
     const prior = new Map(store.tickets().map(ticket => [ticket.key, ticket]));
     const nextPulls = store.copyPulls();
     const nextReviews = store.copyReviews();
@@ -675,6 +748,11 @@ export function openLiveBoard(options: LiveBoardOptions) {
         ...(phaseOf(issue.labels) === 'accepting' && openCount === 1 ? {mergeAhead: true} : {}),
       });
     }
+    const read = factsFor(tickets, snapshot.facts, snapshot.texts);
+    const mergedReviews = mergeReviewsPreservingLocal(store.copyReviews(), nextReviews);
+    if (!keepRead(id, tickets, mergedReviews, read)) {
+      return false;
+    }
     if (snapshot.facts) {
       const used = new Set<string>();
       for (const ticket of tickets) {
@@ -684,8 +762,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
       }
       store.setSpyKeys(used);
     }
-    const read = factsFor(tickets, snapshot.facts, snapshot.texts);
-    const mergedReviews = mergeReviewsPreservingLocal(store.copyReviews(), nextReviews);
+    retire(snapshot.issues);
     const changed = store.changed(tickets, mergedReviews, read.facts, store.login());
     remember(tickets, nextPulls, mergedReviews, nextSpy, read, undefined);
     return changed;
@@ -724,6 +801,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
       spyNote: options.spyNote,
       turn: options.turn,
       decision: options.decision,
+      screen: options.screen,
       writeAssignee(key, login) {
         bump();
         patch(key, ticket => ({...ticket, assignee: login}));
@@ -821,6 +899,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
     window: view,
     refresh,
     apply,
+    beginRead,
     whenPainted(listener: () => void) {
       onPaint = listener;
     },
@@ -831,7 +910,8 @@ export function openLiveBoard(options: LiveBoardOptions) {
 export async function serveLiveBoard(options: LiveBoardOptions): Promise<{
   url: string;
   refresh(): Promise<void>;
-  apply(snapshot: CycleSnapshot): void;
+  apply(snapshot: CycleSnapshot, readId?: number): void;
+  beginRead(): number;
   close(): Promise<void>;
   note(): void;
 }> {
@@ -851,8 +931,8 @@ export async function serveLiveBoard(options: LiveBoardOptions): Promise<{
       page.note();
     }
   };
-  const apply = (snapshot: CycleSnapshot) => {
-    if (live.apply(snapshot)) {
+  const apply = (snapshot: CycleSnapshot, readId?: number) => {
+    if (live.apply(snapshot, readId)) {
       page.note();
     }
   };
@@ -864,6 +944,7 @@ export async function serveLiveBoard(options: LiveBoardOptions): Promise<{
     url: page.url,
     refresh,
     apply,
+    beginRead: () => live.beginRead(),
     note: () => {
       page.note();
     },

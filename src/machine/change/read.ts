@@ -74,6 +74,7 @@ export function readChange(key: string, files: FileSource): ChangeView {
       .read(tasksPath)
       .split('\n')
       .filter(line => line.trimStart().startsWith('- [ ]')).length,
+    openTask: openTaskId(tasksText) ?? '',
     capabilities: namedCapabilities(proposal),
     missingBaseline: missing,
     unjudged: unjudgedAddedIds(proposal),
@@ -91,6 +92,25 @@ export function readChange(key: string, files: FileSource): ChangeView {
     cardRevision: sharedDelta(cardTexts),
     slicedScenarios: slicedScenarioNames(tasksText),
   };
+}
+
+/** The id on the first open checkbox. A backtick token wins over a bare word. */
+export function openTaskId(text: string | undefined): string | undefined {
+  if (text === undefined) {
+    return undefined;
+  }
+  for (const line of text.split('\n')) {
+    const trimmed = line.trimStart();
+    const boxed = /^- \[ \] `([^`]+)`/.exec(trimmed);
+    if (boxed?.[1]) {
+      return boxed[1];
+    }
+    const bare = /^- \[ \] (\S+)/.exec(trimmed);
+    if (bare?.[1]) {
+      return bare[1];
+    }
+  }
+  return undefined;
 }
 
 function slash(rel: string): string {

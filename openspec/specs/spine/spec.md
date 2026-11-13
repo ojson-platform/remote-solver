@@ -187,3 +187,21 @@ When it exists, Code SHALL show the hook.
 
 - **WHEN** the Tasks row lists a task
 - **THEN** its open or done mark is a short chip, and the first task has no rule above it
+
+### Requirement: The first open frame uses the stored branch text
+
+When the poll has already stored the branch text, the open response SHALL use that text for the card's station. That open SHALL NOT call the branch reader. A new read of the same station SHALL keep returning the previous spine with the spine not ready until the next spine is ready.
+
+#### Scenario: Stored text opens on the card station
+
+- **WHEN** the poll has already stored the branch text and the card station is `designing`
+- **THEN** the open response's spine is open on Design and the spine is ready
+
+### Requirement: A station change does not show the previous section
+
+When the card station changes before the next spine is ready, the first frame SHALL NOT show the previous section, and SHALL NOT show «Принять» on that section.
+
+#### Scenario: A station change does not show Accept on Plan
+
+- **WHEN** the stored spine is open on Plan and the card station is `designing`
+- **THEN** the first frame does not show «Принять» on Plan

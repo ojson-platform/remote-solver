@@ -7,6 +7,8 @@ export type ChangeView = {
   openQuestions: number;
   openDecisions: number;
   openTasks: number;
+  /** Id of the first open task. Empty when `tasks.md` names none. */
+  openTask?: string;
   /** Ids under Added and Modified. Empty when the proposal names none. */
   capabilities: string[];
   missingBaseline: string[];

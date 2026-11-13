@@ -261,3 +261,17 @@ When the command is given `--port`, the page SHALL listen on `127.0.0.1` at that
 
 - **WHEN** the named port is already in use
 - **THEN** the board does not start
+
+### Requirement: A late read does not replace a newer one
+
+A tracker read SHALL take its number when the read starts. A read that finishes after a newer read SHALL NOT replace that newer read's labels or branch text.
+
+#### Scenario: A slow refresh keeps the newer labels
+
+- **WHEN** a refresh has started and a later reading commits `designing`
+- **THEN** the refresh's older `proposing` labels do not replace `designing`
+
+#### Scenario: An older apply does not clear newer branch text
+
+- **WHEN** a newer read stored branch text and an older apply carries facts and no text
+- **THEN** the stored branch text stays

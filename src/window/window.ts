@@ -306,6 +306,16 @@ export function openWindow(
     return createHash('sha256').update(source).digest('hex');
   }
 
+  function stationOf(key: string): string | undefined {
+    const item = checkout.sorted().find(ticket => ticket.key === key);
+    if (!item) {
+      return undefined;
+    }
+    const cycles = placed(checkout.settle().watch);
+    const column = cycles.columns.find(entry => entry.cards.some(card => card.key === item.key));
+    return column?.name ?? cycles.pool.find(card => card.key === item.key)?.station;
+  }
+
   function readOpenSpine(): Spine | undefined {
     if (openKey === '') {
       return undefined;
@@ -335,7 +345,7 @@ export function openWindow(
       reviewGate: reviewGateForPhase(phase),
       gateOff,
     };
-    const previous = store.held(openKey).spine;
+    const previous = store.held(openKey, station).spine;
     const text = outside.branchText?.(item.key);
     if (text) {
       return projectSpine(text, chrome, previous);
@@ -358,6 +368,7 @@ export function openWindow(
     turn: (key: string) => outside.turn?.(key),
     running: (key: string) => outside.leading?.(key) === true,
     decision: (key: string) => outside.decision?.(key),
+    screen: (key: string) => outside.screen?.(key),
     waiting(key: string) {
       const item = checkout.sorted().find(ticket => ticket.key === key);
       return item?.labels.includes('sdd:wait-human') === true;
@@ -451,7 +462,10 @@ export function openWindow(
       store.fail(key, spineRevision(key, epoch));
     },
     heldSpine(): {spine?: Spine; ready: boolean; revision?: string} {
-      return store.held(openKey);
+      return store.held(openKey, stationOf(openKey));
+    },
+    storedBranch(): boolean {
+      return openKey !== '' && outside.branchText?.(openKey) !== undefined;
     },
     async answer(
       key: string,

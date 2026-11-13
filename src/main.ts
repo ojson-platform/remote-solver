@@ -62,6 +62,7 @@ async function driveHeldIssue(box: Machine, key: string, watch?: SpyWatch): Prom
   if (!runtime) {
     throw new Error('runtime is not configured');
   }
+  let heldSignature = '';
   for (let step = 1; step <= 40; step += 1) {
     const decision = await turn(box, key);
     if (decision.kind !== 'agent') {
@@ -70,6 +71,11 @@ async function driveHeldIssue(box: Machine, key: string, watch?: SpyWatch): Prom
       return {code: 0};
     }
     const sig = effectSignature(decision);
+    if (sig === heldSignature) {
+      watch?.onTurn?.(key, undefined);
+      console.log(`#${key} ${decision.action} is unchanged after a run that did not commit.`);
+      return {code: 0};
+    }
     const claim = claimChat(box.root, key, decision.action, sig);
     if (claim.kind === 'spent') {
       console.error(`Stopped: ${decision.action} already resumed its chat once.`);
@@ -106,6 +112,14 @@ async function driveHeldIssue(box: Machine, key: string, watch?: SpyWatch): Prom
       outcome.signal ?? observedSignal(outcome.commits, before, await runMarks(key, box));
     await endStep(key, {...outcome, signal}, box);
     if (outcome.commits === 0) {
+      const dirty = (await box.vcs.issueDirty?.(key)) ?? [];
+      if (signal === 'Hand-off' || signal === 'Wait' || dirty.length > 0) {
+        console.error(
+          `Held: ${decision.action} made no commit; the work changed, so it is not refused.`,
+        );
+        heldSignature = sig;
+        continue;
+      }
       console.error(
         `Stopped: ${decision.action} made no commit, so the next poll would repeat it.`,
       );
@@ -127,8 +141,10 @@ export type SpyWatch = {
   onReport?: (line: string) => void;
   /** Sets one issue's turn, or clears it when the worker has left that turn. */
   onTurn?: (issue: string, turn: RunningTurn | undefined) => void;
-  /** A poll finished. The snapshot is the reading that poll already made. */
-  onCycle?: (snapshot?: CycleSnapshot) => void;
+  /** A poll finished. The snapshot is the reading that poll already made. `readId` is the number taken when that read started. */
+  onCycle?: (snapshot?: CycleSnapshot, readId?: number) => void;
+  /** The number for a tracker read, taken before the read starts. */
+  beginRead?: () => number;
   /** Ready agent turns the cap did not start on this poll. */
   onHeld?: (held: readonly {issue: string; action: string}[]) => void;
   /** The decision `performCycle` settled for one issue this poll. */
@@ -174,6 +190,7 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
     }
     if (githubPauseRemaining() === 0) {
       try {
+        const readId = watch?.beginRead?.();
         const snapshot = await loadCycle(
           box.tracker,
           box.review,
@@ -243,7 +260,7 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
             },
           );
         }
-        watch?.onCycle?.(snapshot);
+        watch?.onCycle?.(snapshot, readId);
       } catch (error) {
         reportGithubError(error);
       }

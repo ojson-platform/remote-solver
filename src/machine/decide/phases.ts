@@ -174,6 +174,15 @@ function task(read: PhaseRead): Decision {
   );
 }
 
+function taskReason(change: ChangeView): string {
+  return change.openTask ? `next open task ${change.openTask}` : 'next open task';
+}
+
+function checkReason(failures: readonly string[] | undefined): string {
+  const marks = [...(failures ?? [])].filter(mark => mark !== '').sort();
+  return marks.length === 0 ? 'red checks' : `red checks ${marks.join(', ')}`;
+}
+
 function implement(read: PhaseRead): Decision {
   const {issue, issues, change, phase, pr} = read;
   if (!change.tasks) {
@@ -192,7 +201,7 @@ function implement(read: PhaseRead): Decision {
       'implement-next-task',
       phase,
       pr ? String(pr.id) : '',
-      'next open task',
+      taskReason(change),
     );
   }
   const slice = unslicedScenario(change);
@@ -215,7 +224,7 @@ function verify(read: PhaseRead): Decision {
     return {kind: 'wait', issue: issue.key, reason: NO_OPEN_PULL};
   }
   if (pr.checks === 'red') {
-    return agent(issue.key, 'classify-failures', phase, String(pr.id), 'red checks');
+    return agent(issue.key, 'classify-failures', phase, String(pr.id), checkReason(pr.failures));
   }
   if (pr.checks !== 'green') {
     return {kind: 'wait', issue: issue.key, reason: `checks are ${pr.checks}`};

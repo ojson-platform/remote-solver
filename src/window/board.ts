@@ -3,6 +3,7 @@ import type {FileSource} from '../machine/port.ts';
 import path from 'node:path';
 
 import {documentDir, HEADINGS, type BranchFacts} from '../machine/change/change.ts';
+import {openTaskId} from '../machine/change/read.ts';
 import {isFocusRecord} from '../machine/mark/marker.ts';
 import {GATE_CLOSES, GATE_PHASES, phaseOf, phaseRank, type Phase} from '../machine/phase/phase.ts';
 
@@ -155,25 +156,6 @@ function taskRow(text: string | undefined): {done: number; open: number} | undef
     }
   }
   return {done, open};
-}
-
-/** The id on the first open checkbox. A backtick token wins over a bare word. */
-export function openTaskId(text: string | undefined): string | undefined {
-  if (text === undefined) {
-    return undefined;
-  }
-  for (const line of text.split('\n')) {
-    const trimmed = line.trimStart();
-    const boxed = /^- \[ \] `([^`]+)`/.exec(trimmed);
-    if (boxed?.[1]) {
-      return boxed[1];
-    }
-    const bare = /^- \[ \] (\S+)/.exec(trimmed);
-    if (bare?.[1]) {
-      return bare[1];
-    }
-  }
-  return undefined;
 }
 
 /** A lone gate is not a rank. The plaque still treats specified and designed as reached. */

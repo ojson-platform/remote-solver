@@ -86,3 +86,12 @@ A failed read of the issue branch SHALL NOT be treated as a change with no propo
 
 - **WHEN** the phase is `implementing`, the issue branch has `tasks.md`, and the file read fails
 - **THEN** the machine does not move to `tasking` and does not start `create-proposal`
+
+### Requirement: A failed tip read is not a missing archive line
+
+A thrown read of the tip message SHALL NOT be stored as an empty message. An empty message is a tip that was read and has no `Sdd-Archive` line.
+
+#### Scenario: A thrown tip read does not load an empty tip
+
+- **WHEN** reading the tip message throws
+- **THEN** the cycle is not loaded as a tip without an archive line

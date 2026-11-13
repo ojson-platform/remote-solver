@@ -132,11 +132,7 @@ export async function loadCycle(
       texts.set(item.issue.key, read.text);
     }
     if (tips && tipMessage) {
-      try {
-        tips.set(item.issue.key, await tipMessage(item.issue.key));
-      } catch {
-        tips.set(item.issue.key, '');
-      }
+      tips.set(item.issue.key, await tipMessage(item.issue.key));
     }
   }
   return {issues, cycles, pulls, changes, facts, texts, tips};

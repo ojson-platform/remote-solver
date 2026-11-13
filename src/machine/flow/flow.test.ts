@@ -1065,4 +1065,35 @@ spec('change', () => {
       assert.equal((await tracker.labels('7')).includes('sdd:tasking'), false);
     });
   });
+
+  requirement('A failed tip read is not a missing archive line', () => {
+    scenario('A thrown tip read does not load an empty tip', async () => {
+      const {tracker, review} = memoryPorts({
+        user: 'robot',
+        issues: [
+          {
+            key: '7',
+            title: '#7: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['Sandcastle', 'sdd:cycle', 'sdd:accepting'],
+          },
+        ],
+      });
+      await assert.rejects(
+        () =>
+          loadCycle(
+            tracker,
+            review,
+            () => files,
+            [{name: 'Sandcastle'}],
+            () => files,
+            async () => {
+              throw new Error('tip unread');
+            },
+          ),
+        /tip unread/,
+      );
+    });
+  });
 });

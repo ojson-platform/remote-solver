@@ -675,7 +675,11 @@ export function gitVcs(
       if (ref === null) {
         return '';
       }
-      return messageOf(root, ref, false) ?? '';
+      const message = messageOf(root, ref, true);
+      if (message === undefined) {
+        throw new Error(`tip message was not read for ${key}`);
+      }
+      return message;
     },
     filesAt: key => issueTree(root, key, 'tip', false, prefix, machine) ?? gitFiles(root, key, prefix, machine),
     contentAt: key => issueTree(root, key, 'content', false, prefix, machine) ?? gitFiles(root, key, prefix, machine),

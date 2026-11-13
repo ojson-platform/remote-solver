@@ -1,12 +1,11 @@
-import type {MDXComponents} from 'mdx/types';
 import type {ReactNode} from 'react';
 
 import {evaluateSync} from '@mdx-js/mdx';
 import {Fragment, createElement} from 'react';
 import * as runtime from 'react/jsx-runtime';
 
-const phrasingComponents: MDXComponents = {
-  p: ({children}) => createElement(Fragment, null, children),
+const phrasingComponents = {
+  p: ({children}: {children: ReactNode}) => createElement(Fragment, null, children),
 };
 
 function mdxPhrasing(text: string): ReactNode {

@@ -85,10 +85,8 @@ const GAP_PROPOSAL = ['## Outcome', '', 'Первая строка.', '', '', ''
 );
 
 spec('source-line', () => {
-  requirement('On each surface, every source line the leaf paints renders markdown', () => {
-    scenario(
-      'On each surface, every source line the leaf paints renders markdown (headings, lists, emphasis, links, and code)',
-      async () => {
+  requirement('The document renders as one markdown document', () => {
+    scenario('Plan and Design render the source as one markdown document', async () => {
         await hosted(
           {
             login: () => MANAGER,
@@ -115,6 +113,28 @@ spec('source-line', () => {
         );
       },
     );
+
+    scenario('A source line is not wrapped as its own markdown document', async () => {
+      const renderer = readFileSync(new URL('./client/source-line.tsx', import.meta.url), 'utf8');
+      assert.equal(renderer.includes('@mdx-js/mdx'), false);
+      assert.equal(renderer.includes('evaluateSync'), false);
+      assert.match(renderer, /remark/);
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'proposing', {openPullRequests: 1})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', MARKDOWN_PROPOSAL);
+          await openIssue(page);
+          const doc = docOf(spineOf(await pageHtml(page.url), KEY, 'Plan'));
+          const buttons = doc.match(/<button[^>]*class="[^"]*line/g) ?? [];
+          for (const button of buttons) {
+            assert.equal(button.includes('<div class="doc">'), false);
+          }
+        },
+      );
+    });
   });
 
   requirement('PlanLines stays the leaf', () => {
@@ -178,8 +198,8 @@ spec('source-line', () => {
     });
   });
 
-  requirement('data-at is the source line number sectionsOf already assigns', () => {
-    scenario('data-at is the source line number sectionsOf already assigns', async () => {
+  requirement('data-at is the source line number the rendered place came from', () => {
+    scenario('data-at is the source line number the rendered place came from', async () => {
       const line = 'Пункт с *курсивом*.';
       await hosted(
         {
@@ -239,7 +259,7 @@ spec('source-line', () => {
   });
 
   requirement('A click opens the remark draft on that line', () => {
-    scenario('A click opens the remark draft on that line', async () => {
+    scenario('A click opens the remark draft on the source line', async () => {
       const line = '- **bold**, *em*, `inline`, and [link](https://example.com)';
       await hosted(
         {
@@ -431,8 +451,8 @@ spec('source-line', () => {
     });
   });
 
-  requirement('With no pull request, the line stays a p.line and is not a comment target', () => {
-    scenario('With no pull request, the line stays a p.line and is not a comment target', async () => {
+  requirement('With no pull request, the document is not a comment target', () => {
+    scenario('With no pull request, the document is not a comment target', async () => {
       const proposal = ['## Scope', '', 'Строка **bold**.', ''].join('\n');
       const design = ['## Approach', '', 'Пункт *курсив*.', ''].join('\n');
       await hosted(

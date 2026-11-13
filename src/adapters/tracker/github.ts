@@ -501,8 +501,61 @@ async function ghOnce(args: string[], input: string | undefined, run: GhCommand)
   }
 }
 
+/** A short call name. Field values and the request body stay out of the log. */
+function ghCallName(args: readonly string[]): string {
+  const kept: string[] = [];
+  const skipValue = new Set(['-f', '-F', '--raw-field', '--field', '--body', '--comment', '--input']);
+  const keepValue = new Set(['--json', '--jq', '--method', '--repo']);
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i] ?? '';
+    if (skipValue.has(arg)) {
+      const value = args[i + 1] ?? '';
+      i += 1;
+      if (value.startsWith('query=') || value.startsWith('query ') || value.startsWith('query{')) {
+        kept.push('query');
+        continue;
+      }
+      const eq = value.indexOf('=');
+      const name = eq === -1 ? value : value.slice(0, eq);
+      if (name !== '' && name.length <= 40 && !value.includes('\n')) {
+        kept.push(name);
+      }
+      continue;
+    }
+    if (keepValue.has(arg)) {
+      const value = args[i + 1] ?? '';
+      i += 1;
+      kept.push(arg);
+      if (value !== '' && value.length <= 80 && !value.includes('\n')) {
+        kept.push(value);
+      }
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      continue;
+    }
+    kept.push(arg.length > 160 ? `${arg.slice(0, 160)}…` : arg);
+  }
+  return kept.join(' ') || 'gh';
+}
+
+function ghLog(ms: number, outcome: 'ok' | 'retry' | 'fail' | 'pause', name: string, detail?: string): void {
+  const tail = detail && detail !== '' ? ` ${detail}` : '';
+  console.error(`gh ${ms}ms ${outcome} ${name}${tail}`);
+}
+
+function ratePause(error: unknown): boolean {
+  const stdout = fieldOf(error, 'stdout');
+  const stderr = fieldOf(error, 'stderr');
+  const message = error instanceof Error ? error.message : '';
+  const text = rateText(stdout, stderr, message);
+  return secondaryLimited(text) || PRIMARY_LIMIT.test(text) || rateLimited(stdout, stderr);
+}
+
 export async function gh(args: string[], input?: string, run: GhCommand = command): Promise<string> {
+  const name = ghCallName(args);
   if (githubPauseRemaining() > 0) {
+    ghLog(0, 'pause', name);
     throw Object.assign(new Error('gh exited 1'), {
       stdout: '',
       stderr: pauseStderr,
@@ -510,12 +563,15 @@ export async function gh(args: string[], input?: string, run: GhCommand = comman
   }
   let last: unknown;
   for (let attempt = 1; attempt <= GH_TRIES; attempt += 1) {
+    const started = Date.now();
     try {
       const body = await ghOnce(args, input, run);
       unreachableRetries = 0;
+      ghLog(Date.now() - started, 'ok', name);
       return body;
     } catch (error) {
       last = error;
+      const ms = Date.now() - started;
       const reason = ghFailureReason(
         fieldOf(error, 'stdout'),
         fieldOf(error, 'stderr'),
@@ -526,6 +582,11 @@ export async function gh(args: string[], input?: string, run: GhCommand = comman
       if (!reason || attempt === GH_TRIES || budgetSpent) {
         if (unreachable) {
           unreachableRetries += 1;
+        }
+        if (ratePause(error)) {
+          ghLog(ms, 'pause', name);
+        } else {
+          ghLog(ms, 'fail', name, reason || ghErrorLine(error));
         }
         if (reason) {
           throw Object.assign(new Error(reason), {
@@ -538,7 +599,7 @@ export async function gh(args: string[], input?: string, run: GhCommand = comman
       if (unreachable) {
         unreachableRetries += 1;
       }
-      console.error(`gh: ${reason}. retrying`);
+      ghLog(ms, 'retry', name, reason);
       await sleep(GH_GAP_MS[attempt - 1] ?? 400);
     }
   }

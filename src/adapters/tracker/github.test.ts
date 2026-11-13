@@ -1089,7 +1089,8 @@ spec('github-read', () => {
         reportGithubError(shown);
         reportGithubError(shown);
         assert.equal(calls, 1);
-        assert.deepEqual(logs, ['GitHub secondary rate limit']);
+        assert.equal(logs.filter(line => line === 'GitHub secondary rate limit').length, 1);
+        assert.match(logs.join('\n'), /gh \d+ms pause /);
         assert.ok(githubPauseRemaining() > 59_000);
         await assert.rejects(gh(['api', 'repos/acme/billing/issues'], undefined, run));
         assert.equal(calls, 1);
@@ -1227,7 +1228,8 @@ spec('github-read', () => {
         await assert.rejects(gh(['pr', 'view', '9', '--json', 'baseRefOid'], undefined, run), /gh exited 1/);
         assert.equal(calls, 1);
         reportGithubError(error);
-        assert.deepEqual(logs, ['Unknown JSON field: "baseRefOid"']);
+        assert.ok(logs.some(line => line === 'Unknown JSON field: "baseRefOid"'));
+        assert.match(logs.join('\n'), /gh \d+ms fail pr view 9/);
       } finally {
         console.error = write;
         clearGithubPause();
@@ -1308,6 +1310,26 @@ spec('github-read', () => {
       await assert.rejects(gh(['api', 'user'], undefined, run), /could not be reached/);
       assert.equal(afterFirst, 2);
       assert.equal(calls, 3);
+    });
+  });
+
+  requirement('Each GitHub call logs its time', () => {
+    scenario('A call logs its elapsed time and not the body', async () => {
+      clearGithubPause();
+      const logs: string[] = [];
+      const write = console.error;
+      console.error = line => {
+        logs.push(String(line));
+      };
+      try {
+        const run = async () => ({stdout: '[]', stderr: ''});
+        assert.equal(await gh(['api', 'repos/acme/billing/issues'], 'SECRET-BODY', run), '[]');
+        assert.match(logs.join('\n'), /gh \d+ms ok api repos\/acme\/billing\/issues/);
+        assert.equal(logs.join('\n').includes('SECRET-BODY'), false);
+      } finally {
+        console.error = write;
+        clearGithubPause();
+      }
     });
   });
 

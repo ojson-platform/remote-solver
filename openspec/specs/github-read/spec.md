@@ -162,6 +162,15 @@ Any other failure SHALL be logged as the text `gh` wrote, and that line SHALL NO
 - **WHEN** one unreachable call has already used its retry and the next call cannot reach the network
 - **THEN** that later call is made once
 
+### Requirement: Each GitHub call logs its time
+
+Each `gh` call SHALL log one line with the elapsed milliseconds, an outcome of `ok`, `retry`, `fail`, or `pause`, and a short name of the call. The line SHALL NOT include the request body. A call that is not made because a rate-limit pause already holds SHALL log `pause`. The failure lines the other requirements name SHALL still be logged as those requirements say.
+
+#### Scenario: A call logs its elapsed time and not the body
+
+- **WHEN** a call reads an issue list and returns a body
+- **THEN** the log names the elapsed milliseconds and `ok`, and does not include that body
+
 ### Requirement: Open issue links are one query
 
 `listOpen` SHALL read parent, blocked-by, and blocks for the open issues in one GraphQL query. It SHALL NOT send one query per issue.

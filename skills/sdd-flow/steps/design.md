@@ -22,7 +22,7 @@ An open thread of layer `design`: steps 1–4 do not write `design.md` again. St
    No one-file command, or no layer command: Wait before Publish. The person runs `/sdd-init`.
 3. **Write the approach.** `## Approach` says how this change is built: module boundaries, risks, rejected alternatives. `none` when there is nothing to say. Leave the three required sections as step 2 wrote them.
    When the service describes its architecture, record the seams of this change in the service model.
-4. No decision yet: an open decision item. Leave it open.
+4. No decision yet: an open decision item. Do not Wait for it. The phase paints the count. Leave it open.
 5. `improve-design`: Fix thread (`CONTEXT.md`), layer `design`. A thread on an open decision records the choice and checks that item in the same commit, before a hand-off or `thread fix`. The hand-off is a new thread on the other layer's file.
 6. Publish (`CONTEXT.md`). When `design.md` is in the commit, focus with marker `sdd:focus:design`. Mirror: `Design`. Open decisions do not delay the push.
 7. An open decision remains in `design.md`. Do not Wait for it. The phase paints the count.
@@ -39,5 +39,4 @@ An open thread of layer `design`: steps 1–4 do not write `design.md` again. St
 - Publish. The machine opens the review gate. An open decision stays in the file. This step does not Wait for it. The phase paints the count.
 - `Open questions:` in the init block: Wait with those questions.
 - No one-file command, or no layer command, in the repository: Wait before Publish. The person runs `/sdd-init`.
-- The spec does not give a capability enough behavior to name its boundary: Hand-off to `spec` on that requirement.
 - The approach contradicts a scenario: Hand-off to `spec` on that scenario and do not move `sdd-absorbed`.

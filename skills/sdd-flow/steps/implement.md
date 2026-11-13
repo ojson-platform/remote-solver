@@ -30,9 +30,9 @@ A file the task does not name stays unread and unedited, including other changes
 2. The named scenarios do not contain the behavior the task asks for: Hand-off to `spec` on the scenario closest to it. Write no code.
 3. The task does not fit one commit: split `tasks.md` in its own commit and keep the scenario links. Publish after that commit and end the run.
 4. **Implement the task.** For each scenario the task names, do 4.1 and then 4.2 before the next scenario. The substeps still hold. One commit covers the whole task.
-   4.1 **Write the test red.** The test file is the path in `## Proof`. The test name contains this scenario's title. The test observes only what `## Proof` says. Run the one-file command from `## Proof`. Red is the test whose name contains this scenario's title failing on its assertion or on behavior that is not there yet. Exit 0, a test file that does not load, or a run that collects no test is not red: rewrite the test. Do not edit a file from `## Source` before the command is red.
+   4.1 **Write the test red.** The test file is the path in `## Proof`. The test name contains this scenario's title. The test observes only what `## Proof` says. Run the one-file command from `## Proof`. Red is the test whose name contains this scenario's title failing on its assertion or on behavior that is not there yet. Exit 0, a test file that does not load, or a run that collects no test is not red on its assertion: § Once. Do not edit a file from `## Source` before the command is red.
    4.2 **Edit source code** only as `## Source` says, and only enough for this scenario. Run the one-file command from the card. It exits 0 before the next scenario. Do not run the layer command, the fast suite, or the type check in this step.
-   4.3 **Run the suite once.** After every scenario of this task has a one-file command that exits 0, run the layer command from the card once, before the commit. Run the fast suite and the type check once when the card names them. The card names these commands. This step says when they run. The layer command exits 0, or its only coverage gaps are scenarios this task does not name. Those gaps belong to their own tasks. A layer failure is § Once. Do not choose a command the card did not write.
+   4.3 **Run the suite once.** After every scenario of this task has a one-file command that exits 0, run the layer command from the card once, before the commit. Run the fast suite and the type check once when the card names them. The card names these commands. This step says when they run. The layer command exits 0. A coverage gap outside this task is a Hand-off, not a success. A layer failure is § Once. Do not choose a command the card did not write.
 5. Check this task's `- [x]` only. One commit naming `<id>`. Publish (`CONTEXT.md`). When source or tests from the task are in the commit, focus with marker `sdd:focus:code`. Mirror: `Tasks`.
 
 ## Check
@@ -40,7 +40,7 @@ A file the task does not name stays unread and unedited, including other changes
 - The task's test was red before any edit of a file from `## Source`
 - The code adds no behavior outside `## Source`
 - The checkbox lands in the same commit as the code
-- A coverage gap for a scenario this task does not name stays for that scenario's task
+- A coverage gap for a scenario this task does not name is a Hand-off
 - The layer command ran once after the one-file command exited 0, not after each edit
 
 ## Stop

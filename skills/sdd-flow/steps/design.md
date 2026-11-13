@@ -19,7 +19,7 @@ An open thread of layer `design`: steps 1–4 do not write `design.md` again. St
    The block between `<!-- sdd:init:begin -->` and `<!-- sdd:init:end -->` in `AGENTS.md` contains `Open questions:`: Wait. Name those questions. Do not search for commands. Do not publish.
    The block is present and has no open questions: copy its one-file command, its layer command, its trace line, and its test path rule into the boundary. A fast suite line is copied when the block has one, otherwise `none`. Do not search again. Do not edit `AGENTS.md`.
    The block is absent: find the one-file command, the layer command, and the type check in CI, a hook, `package.json`, or a Makefile, and write them in `design.md`. The section shape is § Artifacts. Stop when those three commands are known.
-   Neither a one-file command nor a layer command is found: Wait. The service is not connected to SDD. The person runs `/sdd-init`.
+   No one-file command, or no layer command: Wait before Publish. The person runs `/sdd-init`.
 3. **Write the approach.** `## Approach` says how this change is built: module boundaries, risks, rejected alternatives. `none` when there is nothing to say. Leave the three required sections as step 2 wrote them.
    When the service describes its architecture, record the seams of this change in the service model.
 4. No decision yet: an open decision item. Leave it open.
@@ -38,6 +38,6 @@ An open thread of layer `design`: steps 1–4 do not write `design.md` again. St
 
 - Publish. The machine opens the review gate. An open decision stays in the file. This step does not Wait for it. The phase paints the count.
 - `Open questions:` in the init block: Wait with those questions.
-- No one-file command and no layer command in the repository: Wait. The person runs `/sdd-init`.
+- No one-file command, or no layer command, in the repository: Wait before Publish. The person runs `/sdd-init`.
 - The spec does not give a capability enough behavior to name its boundary: Hand-off to `spec` on that requirement.
 - The approach contradicts a scenario: Hand-off to `spec` on that scenario and do not move `sdd-absorbed`.

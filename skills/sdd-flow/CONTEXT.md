@@ -20,7 +20,7 @@ Read this file once in a run, the first time a step names one of its sections. A
 
 One edit of a file covers one scenario of the step. When the check command fails after that edit and a file has changed since the last run of the command, one further edit of that file is allowed, then the command runs once more. A command the card does not name does not run, apart from the verbs and the git steps in § Publish. The git steps are § Onto the base. `git log`, `git show`, and a diff of an older commit do not run.
 
-The one-file command is the check while its test is red and after each edit of that test or its source. It runs again after a later edit even when it already exited 0. The layer command runs once per task, after the one-file command exits 0 for every scenario of that task, and before the commit. The fast suite and the type check run then too, when the card names them. They do not run while the one-file command is failing, and they do not run after each edit. A layer failure in a file this task names returns to the one-file command. The layer command runs once more after that command exits 0. A layer failure outside this task is a Hand-off, and the layer command does not run again.
+The one-file command is the check while its test is red and after each edit of that test or its source. It runs again after a later edit even when it already exited 0. The layer command runs once per task, after the one-file command exits 0 for every scenario of that task, and before the commit. The fast suite and the type check run then too, when the card names them. They do not run while the one-file command is failing, and they do not run after each edit. A layer failure in a file this task names returns to the one-file command. The layer command runs once more after that command exits 0. A layer failure outside this task is a Hand-off, and the layer command does not run again. A coverage gap outside this task is that Hand-off, not a success. A one-file command that is not red on its assertion allows one further edit of that test, then Wait.
 
 A long command keeps its exit code. On failure the output keeps the failing test name and its assertion. On success the output keeps the last lines.
 
@@ -82,7 +82,7 @@ another id and stays out.
 
 Archive folds the delta into `openspec/specs/<capability>/spec.md`: RENAMED, then REMOVED, then MODIFIED replaces the block, then ADDED appends. A baseline must keep at least one requirement after that fold. REMOVED of the last requirement is a change of scope, not of spec: hand off to `proposal`.
 
-`openspec validate --all --strict --no-interactive` checks all of this. Exit non-zero names the spec file and the rule; fix that file and run it again.
+`openspec validate --all --strict --no-interactive` checks all of this. Exit non-zero names the spec file and the rule. That file is a delta of this change: fix it and run the command again. A file that is not: Hand-off. Publish only after the command exits 0.
 
 ## Artifacts
 

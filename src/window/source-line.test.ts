@@ -341,6 +341,78 @@ spec('source-line', () => {
     });
   });
 
+  requirement('On Design, model.design.questions is passed only for Open questions', () => {
+    scenario(
+      'On Design, model.design.questions is passed only for Open questions, and a checkbox outside Open questions stays a line comment',
+      async () => {
+        const question = 'Имя модуля?';
+        const line = `- [ ] ${question}`;
+        const outside = '- [ ] не вопрос';
+        const design = ['## Open questions', '', line, '', '## Notes', '', outside, ''].join('\n');
+        await hosted(
+          {
+            login: () => MANAGER,
+            tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+          },
+          async (page, _window, paths) => {
+            writeChange(paths.arcadia, KEY, 'design.md', design);
+            await openIssue(page);
+            const designDoc = docOf(spineOf(await pageHtml(page.url), KEY, 'Design'));
+            const openButton = lineButton(designDoc, line);
+            assert.match(openButton, new RegExp(`data-question="${escapeRe(question)}"`));
+            const notesAt = designDoc.indexOf('<h3>Notes</h3>');
+            assert.ok(notesAt >= 0);
+            const outsideButton = lineButton(designDoc.slice(notesAt), outside);
+            assert.equal(outsideButton.includes('data-question'), false);
+            assert.match(outsideButton, /^<button\b/);
+          },
+        );
+      },
+    );
+  });
+
+  requirement('A ## line stays the section h3, not a button', () => {
+    scenario('A ## line stays the section h3, not a button', async () => {
+      const proposal = ['## Scope', '', 'Текст.', '', '## Outcome', '', 'Готово.', ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'proposing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', proposal);
+          await openIssue(page);
+          const plan = spineOf(await pageHtml(page.url), KEY, 'Plan');
+          assert.match(plan, /<h3>Scope<\/h3>/);
+          assert.match(plan, /<h3>Outcome<\/h3>/);
+          assert.equal(plan.includes('data-line="## Scope"'), false);
+          assert.equal(plan.includes('data-line="## Outcome"'), false);
+        },
+      );
+    });
+  });
+
+  requirement('A ### line stays the h4 from partsOf, not a button', () => {
+    scenario('A ### line stays the h4 from partsOf, not a button', async () => {
+      const proposal = ['## Scope', '', '### Detail', '', 'Строка.', ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'proposing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', proposal);
+          await openIssue(page);
+          const plan = docOf(spineOf(await pageHtml(page.url), KEY, 'Plan'));
+          assert.match(plan, /<h4>Detail<\/h4>/);
+          assert.equal(plan.includes('data-line="### Detail"'), false);
+          const button = lineButton(plan, 'Строка.');
+          assert.match(button, /^<button\b/);
+        },
+      );
+    });
+  });
+
   requirement('A run of blank lines stays one span.gap', () => {
     scenario('A run of blank lines stays one span.gap', async () => {
       await hosted(

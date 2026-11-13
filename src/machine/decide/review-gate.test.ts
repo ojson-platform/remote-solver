@@ -290,120 +290,180 @@ spec('review-gate', () => {
 });
 
 spec('phase-thread-accept', () => {
-  requirement('The machine does not ask to accept while a thread of this phase is open', () => {
-    scenario(
-      'While such a thread is open, the machine does not set sdd:wait-human and does not ask to accept the phase',
-      async () => {
-        const countingPull = (withholdReview: boolean) => ({
-          ...pull(9, {
-            review: withholdReview
-              ? {unanswered: false, rollback: null, layers: []}
-              : undefined,
-          }),
-          reading: {
-            threads: [
-              {
-                id: 'T1',
-                comment: 'C1',
-                path: 'openspec/changes/issue-5/proposal.md',
-                line: 1,
-                resolved: false,
-                body: 'sdd:layer=proposal → proposing',
-                comments: ['🤖 sdd:layer=proposal → proposing'],
-              },
-            ],
-            notes: [],
-          },
-        });
-        const fresh = memoryPorts({
-          issues: [
-            {
-              key: '5',
-              title: '#5: title',
-              body: '',
-              state: 'OPEN',
-              labels: ['Sandcastle', 'sdd:cycle', 'sdd:proposing'],
-            },
-          ],
-        });
-        const readyChange = {...readChange('5', files), proposal: true};
-        const held = await walk('5', {
-          tracker: fresh.tracker,
-          review: fresh.review,
-          files,
-          queues: [{name: 'Sandcastle'}],
-          change: readyChange,
-          pulls: [countingPull(true)],
-        });
-        assert.equal(held.kind, 'wait');
-        if (held.kind === 'wait') {
-          assert.equal(held.gate, undefined);
-        }
-        assert.equal((await fresh.tracker.labels('5')).includes('sdd:wait-human'), false);
-        assert.equal(
-          fresh.calls.filter(call => call.includes('Review the proposal')).length,
-          0,
-        );
+  const readyProposal = {...readChange('5', files), proposal: true};
 
-        const kept = memoryPorts({
-          issues: [
-            {
-              key: '5',
-              title: '#5: title',
-              body: '',
-              state: 'OPEN',
-              labels: ['Sandcastle', 'sdd:cycle', 'sdd:proposing', 'sdd:wait-human'],
-            },
-          ],
-        });
-        const again = await walk('5', {
-          tracker: kept.tracker,
-          review: kept.review,
-          files,
-          queues: [{name: 'Sandcastle'}],
-          change: readyChange,
-          pulls: [countingPull(true)],
-        });
-        assert.equal(again.kind, 'wait');
-        assert.equal((await kept.tracker.labels('5')).includes('sdd:wait-human'), true);
-        assert.equal(kept.calls.filter(call => call.includes('Review the proposal')).length, 0);
-
-        const {tracker, review, calls} = memoryPorts({
-          issues: [
-            {
-              key: '5',
-              title: '#5: title',
-              body: '',
-              state: 'OPEN',
-              labels: ['Sandcastle', 'sdd:cycle', 'sdd:proposing'],
-            },
-          ],
-          pulls: {'5': [{id: '9', title: '#5: title', state: 'OPEN'}]},
-          threadList: {
-            '9': [
-              {
-                id: 'T1',
-                comment: 'C1',
-                path: 'openspec/changes/issue-5/proposal.md',
-                line: 1,
-                resolved: false,
-                body: 'sdd:layer=proposal → proposing',
-                comments: ['🤖 sdd:layer=proposal → proposing'],
-              },
-            ],
+  requirement('A thread of this phase withholds the accept ask', () => {
+    scenario('An unmarked thread is classified instead of the ask', async () => {
+      const {tracker, review, calls} = memoryPorts({
+        issues: [
+          {
+            key: '5',
+            title: '#5: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['Sandcastle', 'sdd:cycle', 'sdd:proposing'],
           },
-        });
-        const synced = await resolveIssue('5', {
-          tracker,
-          review,
-          files,
-          queues: [{name: 'Sandcastle'}],
-          change: readyChange,
-        });
-        assert.equal(synced.kind, 'agent');
-        assert.equal((await tracker.labels('5')).includes('sdd:wait-human'), false);
-        assert.equal(calls.filter(call => call.includes('Review the proposal')).length, 0);
-      },
-    );
+        ],
+        pulls: {'5': [{id: '9', title: '#5: title', state: 'OPEN'}]},
+        threadList: {
+          '9': [
+            {
+              id: 'T1',
+              comment: 'C1',
+              path: 'openspec/changes/issue-5/proposal.md',
+              line: 1,
+              resolved: false,
+              body: 'What changes here?',
+              comments: ['What changes here?'],
+            },
+          ],
+        },
+      });
+      const decision = await resolveIssue('5', {
+        tracker,
+        review,
+        files,
+        queues: [{name: 'Sandcastle'}],
+        change: readyProposal,
+      });
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'classify-comments');
+      }
+      assert.equal((await tracker.labels('5')).includes('sdd:wait-human'), false);
+      assert.equal(calls.filter(call => call.includes('Review the proposal')).length, 0);
+    });
+
+    scenario('A thread of this phase continues the phase instead of the ask', async () => {
+      const counted = memoryPorts({
+        issues: [
+          {
+            key: '5',
+            title: '#5: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['Sandcastle', 'sdd:cycle', 'sdd:proposing'],
+          },
+        ],
+      });
+      const held = await walk('5', {
+        tracker: counted.tracker,
+        review: counted.review,
+        files,
+        queues: [{name: 'Sandcastle'}],
+        change: readyProposal,
+        pulls: [
+          {
+            ...pull(9, {review: {unanswered: false, rollback: null, layers: ['proposal']}}),
+            reading: {
+              threads: [
+                {
+                  id: 'T1',
+                  comment: 'C1',
+                  path: 'openspec/changes/issue-5/proposal.md',
+                  line: 1,
+                  resolved: false,
+                  body: 'sdd:layer=proposal → proposing',
+                  comments: ['🤖 sdd:layer=proposal → proposing'],
+                },
+              ],
+              notes: [],
+            },
+          },
+        ],
+      });
+      assert.equal(held.kind, 'agent');
+      if (held.kind === 'agent') {
+        assert.equal(held.action, 'improve-proposal');
+      }
+      assert.equal((await counted.tracker.labels('5')).includes('sdd:wait-human'), false);
+      assert.equal(
+        counted.calls.filter(call => call.includes('Review the proposal')).length,
+        0,
+      );
+    });
+
+    scenario('A later-phase thread still opens the ask', async () => {
+      const {tracker, review, calls} = memoryPorts({
+        issues: [
+          {
+            key: '5',
+            title: '#5: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['Sandcastle', 'sdd:cycle', 'sdd:proposing'],
+          },
+        ],
+        pulls: {'5': [{id: '9', title: '#5: title', state: 'OPEN'}]},
+        threadList: {
+          '9': [
+            {
+              id: 'T1',
+              comment: 'C1',
+              path: 'openspec/changes/issue-5/proposal.md',
+              line: 1,
+              resolved: false,
+              body: 'sdd:layer=code → implementing',
+              comments: ['🤖 sdd:layer=code → implementing'],
+            },
+          ],
+        },
+      });
+      const decision = await resolveIssue('5', {
+        tracker,
+        review,
+        files,
+        queues: [{name: 'Sandcastle'}],
+        change: readyProposal,
+      });
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.deepEqual(decision.gate, {artifact: 'proposal', from: 'proposing', to: 'proposed'});
+      }
+      assert.ok((await tracker.labels('5')).includes('sdd:wait-human'));
+      assert.equal(calls.filter(call => call.includes('Review the proposal')).length, 1);
+    });
+
+    scenario('A note still opens the ask', async () => {
+      const readyDesign = change({proposal: true, delta: true, design: true});
+      const {tracker, review, calls} = memoryPorts({
+        issues: [
+          {
+            key: '5',
+            title: '#5: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['Sandcastle', 'sdd:cycle', 'sdd:designing'],
+          },
+        ],
+        pulls: {'5': [{id: '9', title: '#5: title', state: 'OPEN'}]},
+        threadList: {
+          '9': [
+            {
+              id: 'T1',
+              comment: 'C1',
+              path: 'openspec/changes/issue-5/design.md',
+              line: 1,
+              resolved: false,
+              body: 'sdd:note',
+              comments: ['🤖 sdd:note'],
+            },
+          ],
+        },
+      });
+      const decision = await resolveIssue('5', {
+        tracker,
+        review,
+        files,
+        queues: [{name: 'Sandcastle'}],
+        change: readyDesign,
+      });
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.deepEqual(decision.gate, {artifact: 'design', from: 'designing', to: 'designed'});
+      }
+      assert.ok((await tracker.labels('5')).includes('sdd:wait-human'));
+      assert.equal(calls.filter(call => call.includes('Review the design')).length, 1);
+    });
   });
 });

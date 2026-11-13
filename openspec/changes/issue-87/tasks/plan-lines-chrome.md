@@ -5,11 +5,11 @@ sdd-delta: 5203d0361d4326a4
 
 ## Source
 
-In `src/window/client/sidebar.tsx`, when there is no pull request each document line is `p.line` with rendered markdown and no comment-target listener; with a pull request the remark slice already sets `button.line`.
+In `src/window/client/sidebar.tsx`, when there is no pull request a place in the rendered document is `p.line` and is not a comment target. With a pull request the remark slice already keeps the rendered place as the comment target.
 
 Keep `reviewFold` as the phase foot, a sibling after the document, not inside `.doc`.
 
-Assume earlier slices: markdown rendering, remark targets when a pull request exists, and section structure. This slice closes the no-PR and foot boundaries only.
+Assume earlier slices: one markdown document, remark targets when a pull request exists, and section structure. This slice closes the no-PR and foot boundaries only.
 
 Seams (no child issues): pull-request presence branch in `PlanLines` vs `reviewFold` placement in the sidebar tree.
 

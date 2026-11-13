@@ -8,7 +8,7 @@ A cycle has one open pull request. The title links the pull request to the issue
 
 ### Requirement: Several open pull requests hold the phase line
 
-When more than one open pull request belongs to the issue, the machine SHALL wait and name them, and SHALL NOT enter a phase, leave a phase, close a gate, archive, or finish, until one open pull request remains. An open task on `implementing` SHALL still run.
+When more than one open pull request belongs to the issue, the machine SHALL wait and name them, and SHALL NOT enter a phase, leave a phase, close a gate, archive, or finish, until one open pull request remains. An archived change SHALL be restored before any other step, including an unlabeled thread. An unlabeled thread SHALL be classified before an open task. An open task on `implementing` SHALL still run once those two are clear.
 
 #### Scenario: Two open pull requests stop proposing
 
@@ -24,6 +24,16 @@ When more than one open pull request belongs to the issue, the machine SHALL wai
 
 - **WHEN** an issue has no phase and two open pull requests belong to it
 - **THEN** the machine does not set `proposing`
+
+#### Scenario: An archived change is restored while two pull requests are open
+
+- **WHEN** `implementing` has an open task, the change is archived, and two open pull requests belong to the issue
+- **THEN** the machine restores the change and does not run the task
+
+#### Scenario: An unlabeled thread is classified while two pull requests are open
+
+- **WHEN** `implementing` has an open task, the change is not archived, two open pull requests belong to the issue, and one of them has a thread with no marker
+- **THEN** the machine classifies that thread and does not run the task
 
 #### Scenario: An open task still runs while two pull requests are open
 

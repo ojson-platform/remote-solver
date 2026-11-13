@@ -83,7 +83,13 @@ export function holdOpenPulls(
   if (ids.length <= 1 || decision.issue === null) {
     return decision;
   }
-  if (decision.kind === 'agent' && decision.action === 'implement-next-task') {
+  if (decision.kind === 'unarchive') {
+    return decision;
+  }
+  if (
+    decision.kind === 'agent' &&
+    (decision.action === 'implement-next-task' || decision.action === 'classify-comments')
+  ) {
     return decision;
   }
   if (

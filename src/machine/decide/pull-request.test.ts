@@ -5,7 +5,7 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {linkedTitle, memoryPorts} from '../../adapters/tracker/github.ts';
 import {decide, settle} from './policy.ts';
 import {publish} from '../../sdd.ts';
-import {change, issue, pull} from '../__tests__/harness.ts';
+import {asFolded, change, issue, pull} from '../__tests__/harness.ts';
 
 spec('pull-request', () => {
   requirement('Several open pull requests hold the phase line', () => {
@@ -37,6 +37,29 @@ spec('pull-request', () => {
       const settled = settle(issue(1, ['sdd:cycle']), [], [pull(3), pull(4)], change());
       assert.deepEqual(settled.transitions, []);
       assert.equal(settled.labels.includes('sdd:proposing'), false);
+    });
+    scenario('An archived change is restored while two pull requests are open', () => {
+      const row = issue(1, ['sdd:implementing']);
+      const decision = decide(
+        row,
+        [],
+        [pull(3), pull(4)],
+        change({tasks: true, openTasks: 1}),
+        asFolded(row),
+      );
+      assert.equal(decision.kind, 'unarchive');
+    });
+    scenario('An unlabeled thread is classified while two pull requests are open', () => {
+      const decision = decide(
+        issue(1, ['sdd:implementing']),
+        [],
+        [pull(3, {review: {unanswered: true, rollback: null, layers: []}}), pull(4)],
+        change({tasks: true, openTasks: 1}),
+      );
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'classify-comments');
+      }
     });
     scenario('An open task still runs while two pull requests are open', () => {
       const decision = decide(

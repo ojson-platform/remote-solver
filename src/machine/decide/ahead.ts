@@ -36,9 +36,6 @@ export function decideAhead(read: AheadRead): Decision | null {
   if (phase === 'cancelled') {
     return {kind: 'done', issue: issue.key, reason: 'cancelled'};
   }
-  if (open.length > 1 && phase === 'implementing' && change.tasks && change.openTasks > 0) {
-    return agent(issue.key, 'implement-next-task', phase, String(open[0].id), taskReason(change));
-  }
   if (!phase) {
     return {kind: 'advance', issue: issue.key, to: 'proposing', reason: 'enter the cycle'};
   }
@@ -52,18 +49,20 @@ export function decideAhead(read: AheadRead): Decision | null {
     const acceptedMerged = pulls.filter(item => item.state === 'MERGED');
     return mergeOrWait(issue.key, open[0], acceptedMerged, false);
   }
-  // A repair must not commit on top of the archive commit. Accepting still
-  // rolls back first. A merged pull request stays archived.
+  const pr = open[0];
+  const feedback = pr?.review ?? emptyReview;
+  // A repair must not commit on top of the archive commit. This stays ahead
+  // of an unlabeled thread: the thread is classified on the restored change.
   if (
     phaseRank(phase) < phaseRank('accepting') &&
     record.folded &&
-    !pulls.some(pr => pr.state === 'MERGED')
+    !pulls.some(item => item.state === 'MERGED')
   ) {
     return {kind: 'unarchive', issue: issue.key, phase, reason: 'return the delta to the change'};
   }
 
-  const pr = open[0];
-  const feedback = pr?.review ?? emptyReview;
+  // An unlabeled thread is classified before the open task. Two pull requests
+  // would otherwise start that task and never reach classify-comments.
   if (feedback.unanswered && pr) {
     return agent(
       issue.key,
@@ -74,21 +73,14 @@ export function decideAhead(read: AheadRead): Decision | null {
     );
   }
 
-  // `out` is not in the map, so it does not move the phase. On verifying the
-  // checks must already be red or green; pending does not roll back.
-  // A classified marker moves before a held review gate (ADR-0028).
-  const back = feedback.rollback;
-  const checksKnown = pr?.checks === 'red' || pr?.checks === 'green';
-  if (back && phaseRank(back) < phaseRank(phase) && (phase !== 'verifying' || checksKnown)) {
-    return {
-      kind: 'advance',
-      issue: issue.key,
-      to: back,
-      reason: 'review thread sent the change back',
-    };
+  // Two open pull requests keep the open task only after unarchive and after
+  // an unlabeled thread.
+  if (open.length > 1 && phase === 'implementing' && change.tasks && change.openTasks > 0) {
+    return agent(issue.key, 'implement-next-task', phase, String(open[0].id), taskReason(change));
   }
 
-  // One conflict move, after the back move and before the shelf and the gate.
+  // Conflict is its own move. A marker that points at an earlier phase does
+  // not run in the same decision, or the two advances trade labels.
   const conflicted = open.find(item => item.conflict);
   if (conflicted) {
     if (phase === 'implementing') {
@@ -105,6 +97,20 @@ export function decideAhead(read: AheadRead): Decision | null {
       issue: issue.key,
       to: 'implementing',
       reason: 'pull request conflicts with the base',
+    };
+  }
+
+  // `out` is not in the map, so it does not move the phase. On verifying the
+  // checks must already be red or green; pending does not roll back.
+  // A classified marker moves before a held review gate (ADR-0028).
+  const back = feedback.rollback;
+  const checksKnown = pr?.checks === 'red' || pr?.checks === 'green';
+  if (back && phaseRank(back) < phaseRank(phase) && (phase !== 'verifying' || checksKnown)) {
+    return {
+      kind: 'advance',
+      issue: issue.key,
+      to: back,
+      reason: 'review thread sent the change back',
     };
   }
 

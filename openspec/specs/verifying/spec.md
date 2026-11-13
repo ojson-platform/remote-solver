@@ -75,3 +75,8 @@ When the open pull request conflicts with its base, `verifying` SHALL move the i
 
 - **WHEN** the phase is `implementing` and the open pull request conflicts with its base
 - **THEN** the machine runs the fix that rebases and does not move to `verifying`
+
+#### Scenario: A spec marker does not undo a conflict
+
+- **WHEN** the phase is `specifying`, the open pull request conflicts with its base, and a thread marks `spec`
+- **THEN** the machine moves to `implementing` and asks for the rebase, and does not return to `specifying`

@@ -97,6 +97,26 @@ spec('verifying', () => {
         assert.match(settlement.decision.reason, /rebase/);
       }
     });
+    scenario('A spec marker does not undo a conflict', () => {
+      const settlement = settle(
+        issue(1, ['sdd:specifying']),
+        [],
+        [
+          pull(9, {
+            conflict: true,
+            review: {unanswered: false, rollback: 'specifying', layers: ['spec']},
+          }),
+        ],
+        change({...ready, openTasks: 1}),
+      );
+      assert.equal(settlement.decision.kind, 'agent');
+      if (settlement.decision.kind === 'agent') {
+        assert.equal(settlement.decision.action, 'fix-implementation');
+      }
+      assert.equal(settlement.labels.includes('sdd:implementing'), true);
+      assert.equal(settlement.labels.includes('sdd:specifying'), false);
+      assert.notEqual(settlement.decision.reason, 'Too many mechanical transitions');
+    });
     scenario('Implementing rebases a conflicting pull request', () => {
       const decision = decide(
         issue(1, ['sdd:implementing']),

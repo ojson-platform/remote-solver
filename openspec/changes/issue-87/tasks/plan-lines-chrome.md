@@ -1,7 +1,7 @@
-- With no pull request, the line stays a p.line and is not a comment target
+- With no pull request, the document is not a comment target
 - The phase foot stays outside the document
 
-sdd-delta: 5203d0361d4326a4
+sdd-delta: e878d73e50f8c514
 
 ## Source
 
@@ -15,7 +15,7 @@ Seams (no child issues): pull-request presence branch in `PlanLines` vs `reviewF
 
 ## Proof
 
-`src/window/source-line.test.ts` observes that without a pull request lines are `p.line` and not comment targets, and that the phase foot sits outside the document.
+`src/window/source-line.test.ts` observes that without a pull request a place in the rendered document is not a comment target (still `p.line`), and that the phase foot sits outside the document.
 
 - **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --reporter=default src/window/source-line.test.ts`
 - **Once** after that command exits 0: `pnpm test`; then `pnpm run test:types`

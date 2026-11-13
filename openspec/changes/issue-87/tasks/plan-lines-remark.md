@@ -1,9 +1,9 @@
 - The line stays a comment target
-- A click opens the remark draft on that line
+- A click opens the remark draft on the source line
 - There is no diff row
 - LineNote and posted line comments stay on that path and line
 
-sdd-delta: 5203d0361d4326a4
+sdd-delta: e878d73e50f8c514
 
 ## Source
 

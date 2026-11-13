@@ -3,17 +3,16 @@
 - PlanLines stays the leaf
 - data-line is the source line with trailing space removed and stays the draft key
 - data-path is proposal.md or design.md under the change read path
-- data-at is the source line number sectionsOf already assigns
+- data-at is the source line number the rendered place came from
 - data-side is right
-- A run of blank lines stays one span.gap
 
-sdd-delta: 5203d0361d4326a4
+sdd-delta: e878d73e50f8c514
 
 ## Source
 
 Add the shared renderer in `src/window/client/source-line.tsx`. It takes the source of the one document and returns the nodes `PlanLines` paints. A source line is not parsed as its own markdown document and is not wrapped as one. Headings, lists, emphasis, links, and code render in that document. The function does not read the spine, the draft, the pull request, or the review, and it does not set the data attributes.
 
-In `src/window/client/sidebar.tsx`, `PlanLines` stays the leaf that renders the markdown document. It does not call the renderer inside `p.line` or `button.line` for a private document of one line. It sets `data-line` to the source line the rendered place came from, with trailing space removed, `data-path` to `proposal.md` or `design.md` under the change read path, `data-at` from the number `sectionsOf` assigned, and `data-side` to `right`, and collapses a run of blank lines to one `span.gap`. A place that spans several source lines still exposes each source line it came from. `PlanDocument` and `DesignDocument` still call only `PlanLines`.
+In `src/window/client/sidebar.tsx`, `PlanLines` stays the leaf that renders the markdown document. It does not call the renderer inside `p.line` or `button.line` for a private document of one line. It sets `data-line` to the source line the rendered place came from, with trailing space removed, `data-path` to `proposal.md` or `design.md` under the change read path, `data-at` to that line's number the rendered place came from (the number `sectionsOf` already stored), and `data-side` to `right`, and collapses a run of blank lines to one `span.gap`. A place that spans several source lines still exposes each source line it came from. `PlanDocument` and `DesignDocument` still call only `PlanLines`.
 
 Update `src/window/FACE.md` so a code span in the document joins the monospaced sentence. Leave remark click, `LineNote`, posted comments, section `h3`/`h4` lifting, Open questions wiring, no-pull-request `p.line`, and `reviewFold` outside the document to later slices. Leave Specify, Tasks, the focus block, and the issue body untouched.
 

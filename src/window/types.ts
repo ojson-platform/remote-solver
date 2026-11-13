@@ -135,6 +135,8 @@ export type WindowOutside = {
    * A write that does not fit leaves the previous value.
    */
   writeHooks?: (key: string, text: string) => void;
+  /** Read `sddHooks` for the card that just opened. The list does not carry the field. */
+  readHooks?: (key: string) => void;
   /** The comment on the single open pull request. */
   commentPull?: (key: string, body: string) => void;
   /**

@@ -109,7 +109,7 @@ async function driveHeldIssue(box: Machine, key: string, watch?: SpyWatch): Prom
       );
     }
     const signal =
-      outcome.signal ?? observedSignal(outcome.commits, before, await runMarks(key, box));
+      outcome.signal ?? observedSignal(outcome.commits, before, await runMarks(key, box, {fresh: true}));
     await endStep(key, {...outcome, signal}, box);
     if (outcome.commits === 0) {
       const dirty = (await box.vcs.issueDirty?.(key)) ?? [];
@@ -174,7 +174,6 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
     publish();
     watch?.onTurn?.(issue, undefined);
     say(watch, `#${issue} worker exited ${code}`);
-    watch?.onCycle?.();
     if (wake) {
       wake();
     } else {
@@ -263,6 +262,7 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
         watch?.onCycle?.(snapshot, readId);
       } catch (error) {
         reportGithubError(error);
+        watch?.onCycle?.();
       }
     }
 

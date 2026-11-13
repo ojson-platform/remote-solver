@@ -12,10 +12,11 @@ import {commandRefusal} from '../change/fold.ts';
 import {performIssue, resolveCycle, resolveIssue} from './flow.ts';
 import {markRobot} from '../mark/marker.ts';
 import {queueOf} from '../spy/queues.ts';
-import {loadCycle} from '../spy/snapshot.ts';
+import {loadCycle, type CycleSnapshot} from '../spy/snapshot.ts';
+import {emptyReview} from '../mark/review.ts';
 import {memoryPorts} from '../../adapters/tracker/github.ts';
 import {change, foldedTip} from '../__tests__/harness.ts';
-import type {FileSource, ThreadRecord} from '../port.ts';
+import type {FileSource, IssueRecord, ThreadRecord} from '../port.ts';
 
 const FINISHED_CLOSE =
   'SDLC finished: the pull request is merged and the change is archived.';
@@ -964,4 +965,71 @@ test('a cycle includes every configured queue and the earlier name wins', async 
   );
   assert.equal(snapshot.cycles.filter(issue => issue.key === '3').length, 1);
   assert.equal(queueOf(['SECOND', 'FIRST', 'sdd:cycle', 'sdd:proposed'], queues)?.name, 'FIRST');
+});
+
+function cycleIssue(key: string, labels: string[]): IssueRecord {
+  return {key, title: `#${key}: title`, body: '', state: 'OPEN', labels, assignee: 'me'};
+}
+
+function cycleSnapshot(issues: IssueRecord[], view = change(), pulls: CycleSnapshot['pulls'] = new Map()): CycleSnapshot {
+  return {
+    issues,
+    cycles: issues,
+    pulls,
+    changes: new Map(issues.map(issue => [issue.key, view])),
+    facts: new Map(),
+    texts: new Map(),
+  };
+}
+
+spec('github-read', () => {
+  requirement('A poll settles from the list it already read', () => {
+    scenario('Two cycles do not read the list again', async () => {
+      const issues = [
+        cycleIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposing']),
+        cycleIssue('2', ['Sandcastle', 'sdd:cycle', 'sdd:proposing']),
+      ];
+      const {tracker, calls} = memoryPorts({issues, user: 'me'});
+      const before = calls.length;
+      await resolveCycle(cycleSnapshot(issues), tracker, [{name: 'Sandcastle'}], new Set(), () => files);
+      assert.equal(calls.slice(before).filter(call => call === 'listOpen').length, 0);
+    });
+
+    scenario('The next step sees the label this step wrote', async () => {
+      const issues = [cycleIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:tasking'])];
+      const pulls = new Map([
+        [
+          '1',
+          [
+            {
+              id: '9',
+              title: '#1: title',
+              state: 'OPEN' as const,
+              review: emptyReview,
+              checks: 'green',
+            },
+          ],
+        ],
+      ]);
+      const {tracker, calls} = memoryPorts({issues, user: 'me'});
+      const decisions = await resolveCycle(
+        cycleSnapshot(issues, change({design: true, tasks: true, openTasks: 1, openTask: 'one'}), pulls),
+        tracker,
+        [{name: 'Sandcastle'}],
+        new Set(),
+        () => files,
+      );
+      assert.equal(calls.filter(call => call === 'listOpen').length, 0);
+      assert.equal(calls.filter(call => call === 'editLabels').length, 1);
+      assert.equal(decisions[0]?.kind, 'agent');
+    });
+
+    scenario('Issue comments are read only for a refusal', async () => {
+      const refused = cycleIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposing', 'sdd:refused']);
+      const quiet = cycleIssue('2', ['Sandcastle', 'sdd:cycle', 'sdd:proposing']);
+      const {tracker, calls} = memoryPorts({issues: [refused, quiet], user: 'me'});
+      await resolveCycle(cycleSnapshot([refused, quiet]), tracker, [{name: 'Sandcastle'}], new Set(), () => files);
+      assert.equal(calls.filter(call => call === 'comments').length, 1);
+    });
+  });
 });

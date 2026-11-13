@@ -48,7 +48,7 @@ The prompt carries an `## Upstream` block. That block is the current input and t
 - The block names an input revision: a fact in that text that this file does not already say is an edit. Move `sdd-absorbed:` to that revision only when the input is folded. Do not blank a section this file owns.
 - The block says the previous artifact could not be read: do not leave this file.
 
-`plan`: the issue text above the block is the previous artifact. A caller-visible sentence there that `proposal.md` does not say is an edit. The file existing is not a reason to leave it. `specify`: the previous artifact is `proposal.md`. `design`: the previous artifact is the delta specs. `tasks`: the previous artifacts are the delta specs and `design.md`. Any other action: the block says this action has no previous artifact.
+`plan`: the issue text above the block is the previous artifact. A caller-visible sentence there that `proposal.md` has never stated is an edit. The file existing is not a reason to leave that sentence. A sentence `proposal.md` already replaced is not copied back. `specify`: the previous artifact is `proposal.md`. `design`: the previous artifact is the delta specs. `tasks`: the previous artifacts are the delta specs and `design.md`. Any other action: the block says this action has no previous artifact.
 
 ## Capability
 
@@ -92,7 +92,7 @@ The other files of `openspec/changes/issue-<issue>/`, with these headings exactl
 - `## Problem`: why, in the caller's words.
 - `## Outcome`: what the caller sees once the change lands.
 - `## Scope`, `## Out of scope`: what this change touches, and what it leaves to another id.
-- `## Constraints`: limits the solution keeps. A limit that names what the caller sees is a Scenario of this capability. Its WHEN shows each of those things already visible, and its THEN states those same values.
+- `## Constraints`: limits the solution keeps. A limit that names what the caller sees is a Scenario of this capability. Its WHEN is the caller's action. Its THEN is the check a wrong result would miss. The WHEN does not start from the result already visible.
 - `## Capabilities`: `### Added` and `### Modified`, lines `- <id> <gist>`, ids by § Capability. Both lists empty means the change names no rule and needs no delta. A line under either list is a named capability. The machine requires a baseline for each `### Modified` id.
 - `## Open questions`: `- [ ]` items. The machine counts them.
 

@@ -10,10 +10,11 @@ import {memoryPorts} from '../../adapters/tracker/github.ts';
 import {tryHoldIssue} from '../../adapters/runtime/lock.ts';
 import {readChat, rememberChat} from '../../adapters/runtime/session.ts';
 import {resolveCycle} from './flow.ts';
-import {files} from '../__tests__/harness.ts';
+import {change, files} from '../__tests__/harness.ts';
+import {emptyReview} from '../mark/review.ts';
 import type {Runtime, Vcs} from '../port.ts';
 import type {Decision} from '../decide/policy.ts';
-import {loadCycle} from '../spy/snapshot.ts';
+import {loadCycle, type CycleSnapshot} from '../spy/snapshot.ts';
 import {exited, tick, type State} from '../spy/scheduler.ts';
 import {driveIssue} from '../../main.ts';
 import {laterTurn} from '../../window/__tests__/live.harness.ts';
@@ -459,6 +460,68 @@ spec('idle', () => {
       assert.equal((await tracker.labels('8')).includes('sdd:refused'), false);
       assert.equal((await tracker.labels('8')).includes('sdd:specifying'), true);
     });
+    scenario('A cached thread list does not hide a new layer marker', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-cached-marker-'));
+      const threads: {resolved: boolean; body: string}[] = [];
+      const tasks = path.join('openspec', 'changes', 'issue-8', 'tasks.md');
+      const {tracker, review} = memoryPorts({
+        issues: [
+          {
+            key: '8',
+            title: '#8: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['remote-solver', 'sdd:cycle', 'sdd:implementing'],
+          },
+        ],
+        pulls: {8: [{id: '80', title: '#8: title', state: 'OPEN'}]},
+        threads: {80: threads},
+      });
+      const listed = review.threadList.bind(review);
+      let cache: Awaited<ReturnType<typeof listed>> | undefined;
+      review.threadList = async (pull, read) => {
+        if (cache === undefined || read?.fresh) {
+          cache = await listed(pull);
+        }
+        return cache;
+      };
+      const runtime: Runtime = {
+        async run() {
+          threads.push({resolved: false, body: 'sdd:layer=spec'});
+          return {commits: 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
+      };
+      const box = machine(root, {
+        config: {
+          queues: [{name: 'remote-solver'}],
+          base: 'master',
+          branchScope: 'sdd',
+          ignoreComments: [],
+        },
+        tracker,
+        review,
+        vcs: {
+          ...emptyVcs(),
+          filesAt: () => ({
+            exists: rel => rel === tasks,
+            read: rel => (rel === tasks ? '- [ ] one\n' : ''),
+            list: () => [],
+          }),
+        },
+        runtime,
+      });
+      const first = await driveIssue(box, '8');
+      assert.equal(first.code, 0);
+      const notes = await tracker.comments('8');
+      assert.equal(
+        notes.some(note => note.body.includes('sdd:refused')),
+        false,
+      );
+      assert.equal((await tracker.labels('8')).includes('sdd:refused'), false);
+    });
     scenario('The refusal names the open task', async () => {
       const root = mkdtempSync(path.join(tmpdir(), 'sdd-task-name-'));
       const runtime: Runtime = {
@@ -475,6 +538,58 @@ spec('idle', () => {
       const refusal = notes.find(note => note.body.includes('sdd:refused'));
       assert.ok(refusal);
       assert.match(refusal.body, /next open task one/);
+    });
+  });
+
+  requirement('A closed thread releases the refusal', () => {
+    scenario('A closed code thread releases the refusal', async () => {
+      const row = {
+        key: '8',
+        title: '#8: title',
+        body: '',
+        state: 'OPEN',
+        labels: ['Sandcastle', 'sdd:cycle', 'sdd:implementing', 'sdd:refused'],
+        assignee: 'me',
+      };
+      const {tracker} = memoryPorts({issues: [row], user: 'me'});
+      await tracker.comment(
+        '8',
+        'sdd:refused\nimplementing\nfix-implementation\nthreads on code',
+      );
+      const snapshot: CycleSnapshot = {
+        issues: [row],
+        cycles: [row],
+        pulls: new Map([
+          [
+            '8',
+            [
+              {
+                id: '9',
+                title: '#8: title',
+                state: 'OPEN',
+                checks: 'green',
+                review: emptyReview,
+              },
+            ],
+          ],
+        ]),
+        changes: new Map([['8', change({proposal: true, delta: true, design: true, tasks: true})]]),
+        facts: new Map(),
+        texts: new Map(),
+      };
+      const decisions = await resolveCycle(
+        snapshot,
+        tracker,
+        [{name: 'Sandcastle'}],
+        new Set(),
+        () => files,
+      );
+      assert.equal((await tracker.labels('8')).includes('sdd:refused'), false);
+      assert.equal(
+        decisions.some(item => item.kind === 'wait' && item.reason.includes('threads on code')),
+        false,
+      );
+      assert.ok((await tracker.comments('8')).some(note => note.body.includes('threads on code')));
     });
   });
 });

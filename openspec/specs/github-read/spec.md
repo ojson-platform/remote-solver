@@ -6,14 +6,82 @@ GitHub reads for the board and the spy stay inside the rate limit. A gateway or 
 
 ## Requirements
 
-### Requirement: The cycle field is read for a cycle
+### Requirement: The cycle field is read for one issue
 
-`listOpen` SHALL read the organization field `sddHooks` for an open issue that carries `sdd:cycle`. It SHALL NOT read that field for an open issue that does not carry `sdd:cycle`. Reading one issue by key SHALL still read the field.
+`listOpen` SHALL NOT read the organization field `sddHooks`. Reading one issue by key SHALL read that field. The board SHALL read it for the open card on open and on the next list while that card stays open, and SHALL NOT read it for another cycle. That read SHALL update the open row even when its list is discarded. A list that omits the field SHALL leave the shown field. An empty value SHALL clear it. A failed read SHALL leave it.
 
-#### Scenario: An issue without the cycle label skips the field
+#### Scenario: The open list skips the field
 
-- **WHEN** the open list has one issue with `sdd:cycle` and one issue without it
-- **THEN** the field is read for the cycle issue and not for the other
+- **WHEN** the open list has two issues that carry `sdd:cycle`
+- **THEN** `listOpen` does not request `issue-field-values` for either issue
+
+#### Scenario: One issue by key still reads the field
+
+- **WHEN** one issue is read by key
+- **THEN** that read requests `issue-field-values` for that key and the record carries `sddHooks`
+
+#### Scenario: Opening a card reads only that field
+
+- **WHEN** two cycles are listed and one card is opened
+- **THEN** the field is read for the opened key and not for the other, and the open row shows that field
+
+#### Scenario: A later list keeps the open field
+
+- **WHEN** the open row already shows a field and the next list omits it
+- **THEN** the open row still shows that field
+
+#### Scenario: A discarded list still shows the field read
+
+- **WHEN** the open card's field read finishes after a newer list that omitted the field
+- **THEN** the open row shows the value from that read
+
+#### Scenario: An empty field clears the open row
+
+- **WHEN** the open row shows a field and the next read of that key is empty
+- **THEN** the open row has no hook block
+
+#### Scenario: A failed field read leaves the shown field
+
+- **WHEN** the open row shows a field and the next read of that key fails
+- **THEN** the open row still shows that field
+
+### Requirement: A poll settles from the list it already read
+
+A settlement given the open list SHALL NOT read that list again. It SHALL use the labels it just wrote on the next step of that settlement. A settlement without that list SHALL read the open list. Issue comments SHALL be read only when the issue carries `sdd:refused`.
+
+#### Scenario: Two cycles do not read the list again
+
+- **WHEN** two cycles are settled from one open list
+- **THEN** the open list is not read again
+
+#### Scenario: The next step sees the label this step wrote
+
+- **WHEN** a step writes the implementing label and the walk takes another step
+- **THEN** that step sees implementing and does not read the open list
+
+#### Scenario: Issue comments are read only for a refusal
+
+- **WHEN** one settled issue carries `sdd:refused` and another does not
+- **THEN** issue comments are read for the refused issue and not for the other
+
+### Requirement: Open pull request conversations are one query
+
+When a poll reads the conversation of more than one open pull request, it SHALL read those conversations in one GraphQL query and SHALL NOT send one REST query per pull request. A further query SHALL be sent only when one query cannot hold every pull request. One open pull request SHALL stay one REST read. A query that fails SHALL NOT be taken as an empty conversation.
+
+#### Scenario: Two conversations are one query
+
+- **WHEN** a poll reads two open pull request conversations
+- **THEN** one GraphQL query returns both and no REST comment read is sent
+
+#### Scenario: One conversation stays one read
+
+- **WHEN** a poll reads one open pull request conversation
+- **THEN** one REST read returns it
+
+#### Scenario: A failed conversation query is not an empty conversation
+
+- **WHEN** the conversation query fails
+- **THEN** the poll does not receive an empty conversation
 
 ### Requirement: One pull view carries checks and commits
 
@@ -182,7 +250,7 @@ Each `gh` call SHALL log one line with the elapsed milliseconds, an outcome of `
 
 ### Requirement: Threads are read with the first and last comment
 
-A thread read SHALL request the first comment and the last comment on each thread. It SHALL NOT request every comment. When the repository pull list is still fresh, the threads of its open pull requests SHALL be read in one query.
+A thread read SHALL request the first comment and the last comment on each thread. It SHALL NOT request every comment. When the repository pull list is still fresh, the threads of its open pull requests SHALL be read in one query. A read that asks for a fresh list SHALL ignore a list cached in the same minute and replace that cache.
 
 #### Scenario: A thread read asks for the first and the last comment
 
@@ -193,3 +261,8 @@ A thread read SHALL request the first comment and the last comment on each threa
 
 - **WHEN** the pull list is fresh and the review reads threads for two of its open pull requests
 - **THEN** one query reads both
+
+#### Scenario: A fresh thread read replaces the minute cache
+
+- **WHEN** threads were read, the latest reply changes, and the same pull is read again as fresh before the minute ends
+- **THEN** the fresh read returns the new reply and the next ordinary read returns that reply

@@ -84,7 +84,7 @@ export function upstreamBlock(
     return [
       heading,
       '',
-      'The issue text above is the upstream of `proposal.md`. A caller-visible sentence in it that `proposal.md` does not say is an edit. The file existing is not a reason to leave it.',
+      'The issue text above is the upstream of `proposal.md`. A caller-visible sentence in it that `proposal.md` has never stated is an edit. The file existing is not a reason to leave that sentence. A sentence `proposal.md` already replaced is not copied back.',
     ].join('\n');
   }
   if (skill !== 'specify' && skill !== 'design' && skill !== 'tasks') {

@@ -74,6 +74,8 @@ export type Tracker = {
   login(): Promise<string>;
   listOpen(): Promise<IssueRecord[]>;
   issue(key: IssueKey): Promise<IssueRecord>;
+  /** Organization field `sddHooks` for one issue. Absent when this tracker has no such field. */
+  hooks?(key: IssueKey): Promise<unknown>;
   /** Give the issue to this login, replacing whoever holds it. */
   assign(key: IssueKey, login: string): Promise<void>;
   labels(key: IssueKey): Promise<string[]>;
@@ -104,9 +106,15 @@ export type ThreadTarget = {
 export type Review = {
   pulls(key: IssueKey): Promise<Pull[]>;
   threads(pull: string): Promise<Thread[]>;
-  /** The threads with their handles. What `sdd threads` prints for a skill. */
-  threadList(pull: string): Promise<ThreadRecord[]>;
+  /** The threads with their handles. What `sdd threads` prints for a skill. `fresh` skips the minute cache. */
+  threadList(pull: string, read?: {fresh?: boolean}): Promise<ThreadRecord[]>;
   comments(pull: string): Promise<Conversation[]>;
+  /**
+   * Conversations of several open pull requests, in one query.
+   * Absent means each pull request is read with `comments`.
+   * A failure rejects. It does not look like an empty conversation.
+   */
+  conversations?(pulls: readonly string[]): Promise<Map<string, Conversation[]>>;
   /**
    * The open pull request, or a new one. Several open pull requests are the
    * machine's stop, applied before this is called.

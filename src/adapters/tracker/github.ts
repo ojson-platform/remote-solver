@@ -710,10 +710,6 @@ function issueNumbers(nodes: unknown): string[] {
     .filter((key): key is string => key !== undefined);
 }
 
-function carriesCycle(issue: RawIssue): boolean {
-  return (issue.labels ?? []).some(label => label.name === 'sdd:cycle');
-}
-
 function asRecord(issue: RawIssue, links: IssueLinks, sddHooks?: unknown): IssueRecord {
   const body = issue.body ?? '';
   return {
@@ -996,17 +992,13 @@ export function githubAdapters(
       ) as RawIssue[];
       const issues = found.filter(issue => issue.pull_request === undefined);
       const links = await readLinkBatch(issues.map(issue => String(issue.number)));
-      return Promise.all(
-        issues.map(async issue => {
-          const key = String(issue.number);
-          const link = links.get(key) ?? emptyLinks();
-          return carriesCycle(issue)
-            ? asRecord(issue, link, cycleField(await readFields(key)))
-            : asRecord(issue, link);
-        }),
-      );
+      return issues.map(issue => {
+        const key = String(issue.number);
+        return asRecord(issue, links.get(key) ?? emptyLinks());
+      });
     },
     issue: async key => withField(await readIssue(key)),
+    hooks: async key => cycleField(await readFields(key)),
     async assign(key, login) {
       await run(['issue', 'edit', key, '--repo', repoSlug(), '--add-assignee', login]);
     },
@@ -1208,6 +1200,23 @@ export function githubAdapters(
     return out;
   };
 
+  type ConversationNode = {body?: string | null; author?: {login?: string | null} | null};
+
+  function conversationRow(node: ConversationNode): {body: string; robot: boolean} {
+    const body = node.body ?? '';
+    return {
+      body,
+      robot: machine.spokeByRobot(body, node.author?.login ?? '', ignored),
+    };
+  }
+
+  async function readConversation(pull: string): Promise<{body: string; robot: boolean}[]> {
+    const comments = JSON.parse(
+      await run(['api', `repos/${repoSlug()}/issues/${pull}/comments?per_page=100`]),
+    ) as {user?: {login?: string}; body?: string}[];
+    return comments.map(comment => conversationRow({body: comment.body, author: {login: comment.user?.login}}));
+  }
+
   const review: Review = {
     async pulls(key) {
       const found: Pull[] = [];
@@ -1240,9 +1249,9 @@ export function githubAdapters(
         body: thread.body,
       }));
     },
-    async threadList(pull) {
+    async threadList(pull, read) {
       const now = Date.now();
-      if (threadCache && now - threadCache.at < PULL_LIST_FRESH_MS) {
+      if (!read?.fresh && threadCache && now - threadCache.at < PULL_LIST_FRESH_MS) {
         const hit = threadCache.byPull.get(pull);
         if (hit) {
           return hit;
@@ -1268,13 +1277,58 @@ export function githubAdapters(
       return byPull.get(pull) ?? [];
     },
     async comments(pull) {
-      const comments = JSON.parse(
-        await run(['api', `repos/${repoSlug()}/issues/${pull}/comments?per_page=100`]),
-      ) as {user?: {login?: string}; body?: string}[];
-      return comments.map(comment => ({
-        body: comment.body ?? '',
-        robot: machine.spokeByRobot(comment.body ?? '', comment.user?.login ?? '', ignored),
-      }));
+      return readConversation(pull);
+    },
+    async conversations(pulls) {
+      const ids = [...pulls];
+      if (ids.length <= 1) {
+        const out = new Map<string, ReturnType<typeof conversationRow>[]>();
+        if (ids[0]) {
+          out.set(ids[0], await readConversation(ids[0]));
+        }
+        return out;
+      }
+      const [owner, name] = repoSlug().split('/');
+      const out = new Map<string, ReturnType<typeof conversationRow>[]>();
+      const chunk = 15;
+      for (let index = 0; index < ids.length; index += chunk) {
+        const slice = ids.slice(index, index + chunk);
+        const aliases = slice
+          .map(id => `p${id}:issue(number:${id}){comments(first:100){nodes{body author{login}}}}`)
+          .join(' ');
+        const query = `query($owner:String!,$name:String!){repository(owner:$owner,name:$name){${aliases}}}`;
+        const raw = JSON.parse(
+          await run([
+            'api',
+            'graphql',
+            '-f',
+            `query=${query}`,
+            '-f',
+            `owner=${owner}`,
+            '-f',
+            `name=${name}`,
+          ]),
+        ) as {
+          errors?: unknown[];
+          data?: {repository?: Record<string, {comments?: {nodes?: ConversationNode[] | null}} | null>};
+        };
+        const repository = raw.data?.repository;
+        if (raw.errors?.length || !repository) {
+          throw new Error('pull request conversations were not read');
+        }
+        for (const id of slice) {
+          const issue = repository[`p${id}`];
+          const nodes = issue?.comments?.nodes;
+          if (!issue?.comments || !nodes) {
+            throw new Error(`pull request ${id} conversation was not read`);
+          }
+          out.set(
+            id,
+            nodes.filter((node): node is ConversationNode => node !== null).map(node => conversationRow(node)),
+          );
+        }
+      }
+      return out;
     },
     async ensurePull(key, title, body) {
       const open = (await linked(key))

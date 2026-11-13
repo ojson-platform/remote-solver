@@ -261,9 +261,13 @@ function actionLines(action: string, reason: string, input: PlaqueInput): string
     case 'improve-proposal':
       return ['Правлю план по замечанию'];
     case 'create-initial-specs':
-      return [reason === 'the proposal revision is not the stamp' ? 'Обновляю спеки под план' : 'Пишу спеки'];
+      return ['Пишу спеки'];
     case 'improve-specs':
-      return ['Правлю спеки по замечанию'];
+      return [
+        reason === 'the proposal revision is not the stamp'
+          ? 'Обновляю спеки под план'
+          : 'Правлю спеки по замечанию',
+      ];
     case 'restore-baseline':
       return ['Восстанавливаю базовую спеку'];
     case 'create-design':

@@ -96,7 +96,7 @@ function specify(read: PhaseRead): Decision {
   }
   const stamp = stampBehind(phase, change);
   if (stamp) {
-    return hand(agent(issue.key, 'create-initial-specs', phase, String(pr.id), stamp));
+    return hand(agent(issue.key, 'improve-specs', phase, String(pr.id), stamp));
   }
   return hand(acceptReviewGate(issue.key, 'spec', 'specifying', 'specified', change, pr));
 }

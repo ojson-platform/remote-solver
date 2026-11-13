@@ -234,6 +234,8 @@ export type LiveTracker = {
   assign(key: string, login: string): Promise<void>;
   editLabels(key: string, add: string[], remove: string[]): Promise<void>;
   comments(key: string): Promise<{body: string; manager?: boolean}[]>;
+  /** Organization field `sddHooks` for one issue. Absent when this tracker has no such field. */
+  hooks?(key: string): Promise<unknown>;
 };
 
 export type LiveReview = {
@@ -288,6 +290,13 @@ function forget(work: Promise<unknown>): void {
   void work.catch(error => {
     logProblem(error);
   });
+}
+
+function keptHooks(incoming: WindowTicket, previous: WindowTicket | undefined): WindowTicket {
+  if (incoming.sddHooks !== undefined || previous?.sddHooks === undefined) {
+    return incoming;
+  }
+  return {...incoming, sddHooks: previous.sddHooks};
 }
 
 function ticketFrom(issue: IssueRecord, repo: string, service: string | undefined): WindowTicket {
@@ -353,6 +362,8 @@ export function openLiveBoard(options: LiveBoardOptions) {
   const host = options.desk ?? createDesk();
   let generation = 0;
   let readSeq = 0;
+  let openedKey: () => string = () => '';
+  let hookNote = 0;
   const services = new Map<string, string>();
   let gatheredOf: (ticket: WindowTicket) => string | undefined = () => undefined;
   type LabelWish = {token: number; key: string; label: string; on: boolean};
@@ -673,27 +684,46 @@ export function openLiveBoard(options: LiveBoardOptions) {
     });
     const nextPulls = new Map<string, string>();
     const nextReviews = new Map<string, WindowReview>();
+    const prior = new Map(store.tickets().map(ticket => [ticket.key, ticket]));
     const tickets: WindowTicket[] = [];
     for (const issue of issues) {
       if (!issue.labels.includes('sdd:cycle')) {
         continue;
       }
-      tickets.push(await oneTicket(issue, nextPulls, nextReviews));
+      tickets.push(keptHooks(await oneTicket(issue, nextPulls, nextReviews), prior.get(issue.key)));
     }
+    const opened = openedKey();
     if (gen !== generation) {
+      await noteHooks(opened);
       return false;
     }
     const painted = paintTickets(tickets, new Map(issues.map(issue => [issue.key, issue.labels])));
     const read = factsFor(painted);
     const mergedReviews = mergeReviewsPreservingLocal(store.copyReviews(), nextReviews);
     if (!keepRead(id, painted, mergedReviews, read)) {
+      await noteHooks(opened);
       return false;
     }
     retire(issues);
     const nextLogin = login ?? store.login();
     const changed = store.changed(painted, mergedReviews, read.facts, nextLogin);
     remember(painted, nextPulls, mergedReviews, store.copySpyPulls(), read, login);
+    await noteHooks(opened);
     return changed;
+  }
+
+  /** The open card's field, written on its own so a discarded list cannot drop it. */
+  async function noteHooks(key: string): Promise<void> {
+    if (!key || !tracker.hooks) {
+      return;
+    }
+    const note = ++hookNote;
+    const value = await tracker.hooks(key);
+    if (note !== hookNote || openedKey() !== key || value === undefined) {
+      return;
+    }
+    patch(key, ticket => ({...ticket, sddHooks: value}));
+    onPaint();
   }
 
   function apply(snapshot: CycleSnapshot, readId?: number): boolean {
@@ -738,7 +768,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
           nextSpy.delete(issue.key);
         }
       }
-      tickets.push({
+      tickets.push(keptHooks({
         ...ticket,
         ...(previous?.comments ? {comments: previous.comments} : {}),
         ...(openCount !== undefined ? {openPullRequests: openCount} : {}),
@@ -746,7 +776,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
         ...(previous?.diff ? {diff: true} : {}),
         ...(onlyId !== undefined ? {pull: onlyId} : {}),
         ...(phaseOf(issue.labels) === 'accepting' && openCount === 1 ? {mergeAhead: true} : {}),
-      });
+      }, previous));
     }
     const read = factsFor(tickets, snapshot.facts, snapshot.texts);
     const mergedReviews = mergeReviewsPreservingLocal(store.copyReviews(), nextReviews);
@@ -833,6 +863,9 @@ export function openLiveBoard(options: LiveBoardOptions) {
         services.set(key, service);
         patch(key, ticket => ({...ticket, sddService: service}));
       },
+      readHooks(key) {
+        forget(noteHooks(key));
+      },
       commentPull(key, body) {
         const pull = store.pull(key);
         if (!pull) {
@@ -888,6 +921,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
     },
     store,
   );
+  openedKey = () => view.opened();
   if (fresh) {
     view.leaveWatch([repo]);
   }

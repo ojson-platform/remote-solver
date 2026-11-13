@@ -119,7 +119,7 @@ A missing file SHALL say that file does not exist yet.
 
 #### Scenario: A design run after a spec edit carries that text
 
-`plan` SHALL be told that the issue text is the upstream and that the proposal existing is not a reason to leave it.
+`plan` SHALL be told that the issue text is the upstream, that a sentence the proposal has never stated is an edit, that the proposal existing is not a reason to leave that sentence, and that a sentence the proposal already replaced is not copied back.
 
 Any other skill SHALL be told that the action has no previous artifact.
 
@@ -145,7 +145,7 @@ The prompt SHALL NOT be a diff against a commit.
 #### Scenario: A plan run says the issue text is the upstream
 
 - **WHEN** the machine runs `plan`
-- **THEN** the prompt says the issue text is the upstream of `proposal.md` and that the file existing is not a reason to leave it
+- **THEN** the prompt says the issue text is the upstream of `proposal.md`, that the file existing is not a reason to leave that sentence, and that a sentence the proposal already replaced is not copied back
 
 #### Scenario: A code run says the action has no previous artifact
 
@@ -164,7 +164,7 @@ The prompt SHALL NOT be a diff against a commit.
 
 ### Requirement: A stale stamp restarts the writing skill
 
-On `specifying`, when a delta exists and its stamp is not the proposal revision, the machine SHALL run the spec skill before the review gate and before `sdd:auto-spec`.
+On `specifying`, when a delta exists and its stamp is not the proposal revision, the machine SHALL run `improve-specs` before the review gate and before `sdd:auto-spec`.
 
 On `designing`, an open decision SHALL wait before that check.
 
@@ -179,7 +179,7 @@ A matching stamp SHALL leave the gate or the advance in place, including when th
 `sdd accept` SHALL refuse while the stamp of that phase is behind.
 
 - **WHEN** the phase is `specifying`, `sdd:auto-spec` is set, and the delta stamp is not the proposal revision
-- **THEN** the machine runs the spec skill and does not advance
+- **THEN** the machine runs `improve-specs` and does not advance
 
 #### Scenario: A matching spec stamp still opens the gate
 

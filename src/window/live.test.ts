@@ -10,6 +10,7 @@ import {machine} from '../adapters/compose.ts';
 import {clearGithubPause, memoryPorts} from '../adapters/tracker/github.ts';
 import type {Runtime, Vcs} from '../machine/port.ts';
 import type {ThreadTarget} from '../machine/port.ts';
+import type {CycleSnapshot} from '../machine/spy/snapshot.ts';
 import {
   createBoardSpyState,
   openLiveBoard,
@@ -444,4 +445,198 @@ spec('live-focus-page', () => {
     });
   });
 });
+
+spec('github-read', () => {
+  requirement('The cycle field is read for one issue', () => {
+    scenario('Opening a card reads only that field', async () => {
+      const staged = yard();
+      const other = {...staged.cycle, key: '7', title: 'Other cycle'};
+      const reads: string[] = [];
+      staged.tracker.listOpen = async () => [staged.cycle, other];
+      staged.tracker.hooks = async key => {
+        reads.push(key);
+        return key === '6' ? {archive: {before: 'keep'}} : undefined;
+      };
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        await live.refresh();
+        assert.deepEqual(reads, []);
+        assert.equal(live.window.openCard('6'), true);
+        const hook = await hookBlock(live.window);
+        assert.deepEqual(hook, {
+          kind: 'hook',
+          points: [{action: 'archive', point: 'before', paragraph: 'keep'}],
+        });
+        assert.deepEqual(reads, ['6']);
+        await live.refresh();
+        assert.deepEqual(reads, ['6', '6']);
+      } finally {
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('A later list keeps the open field', async () => {
+      const staged = yard();
+      const reads: string[] = [];
+      staged.tracker.hooks = async key => {
+        reads.push(key);
+        return {archive: {before: 'keep'}};
+      };
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        await live.refresh();
+        assert.equal(live.window.openCard('6'), true);
+        await hookBlock(live.window);
+        const snapshot: CycleSnapshot = {
+          issues: [staged.cycle],
+          cycles: [staged.cycle],
+          pulls: new Map(),
+          changes: new Map(),
+        };
+        live.apply(snapshot);
+        const hook = live.window.sidebar().find(block => block.kind === 'hook');
+        assert.deepEqual(hook, {
+          kind: 'hook',
+          points: [{action: 'archive', point: 'before', paragraph: 'keep'}],
+        });
+        assert.deepEqual(reads, ['6']);
+      } finally {
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('A discarded list still shows the field read', async () => {
+      const staged = yard();
+      let releaseList: (issues: (typeof staged.cycle)[]) => void = () => {};
+      let listHeld = false;
+      let fresh = false;
+      let started: () => void = () => {};
+      const listStarted = new Promise<void>(resolve => {
+        started = resolve;
+      });
+      staged.tracker.listOpen = () => {
+        if (!listHeld) {
+          return Promise.resolve([staged.cycle]);
+        }
+        started();
+        return new Promise(resolve => {
+          releaseList = resolve;
+        });
+      };
+      staged.tracker.hooks = async () =>
+        fresh ? {archive: {before: 'fresh'}} : {archive: {before: 'old'}};
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        await live.refresh();
+        assert.equal(live.window.openCard('6'), true);
+        await hookBlock(live.window);
+        listHeld = true;
+        fresh = true;
+        const refreshing = live.refresh();
+        await listStarted;
+        live.apply({
+          issues: [staged.cycle],
+          cycles: [staged.cycle],
+          pulls: new Map(),
+          changes: new Map(),
+        });
+        releaseList([staged.cycle]);
+        await refreshing;
+        const hook = live.window.sidebar().find(block => block.kind === 'hook');
+        assert.deepEqual(hook, {
+          kind: 'hook',
+          points: [{action: 'archive', point: 'before', paragraph: 'fresh'}],
+        });
+      } finally {
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('An empty field clears the open row', async () => {
+      const staged = yard();
+      let reads = 0;
+      staged.tracker.hooks = async () => {
+        reads += 1;
+        return reads === 1 ? {archive: {before: 'keep'}} : '';
+      };
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        await live.refresh();
+        assert.equal(live.window.openCard('6'), true);
+        await hookBlock(live.window);
+        await live.refresh();
+        assert.equal(
+          live.window.sidebar().some(block => block.kind === 'hook'),
+          false,
+        );
+      } finally {
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('A failed field read leaves the shown field', async () => {
+      const staged = yard();
+      let reads = 0;
+      staged.tracker.hooks = async () => {
+        reads += 1;
+        return reads === 1 ? {archive: {before: 'keep'}} : undefined;
+      };
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        await live.refresh();
+        assert.equal(live.window.openCard('6'), true);
+        await hookBlock(live.window);
+        await live.refresh();
+        const hook = live.window.sidebar().find(block => block.kind === 'hook');
+        assert.deepEqual(hook, {
+          kind: 'hook',
+          points: [{action: 'archive', point: 'before', paragraph: 'keep'}],
+        });
+      } finally {
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+  });
+});
+
+async function hookBlock(window: {sidebar(): readonly {kind: string}[]}): Promise<{kind: string}> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const hook = window.sidebar().find(block => block.kind === 'hook');
+    if (hook) {
+      return hook;
+    }
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  throw new Error('open row has no hook block');
+}
 

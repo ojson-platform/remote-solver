@@ -133,7 +133,6 @@ export async function laterTurn(): Promise<{lines: string[]; runs: number}> {
   const lines: string[] = [];
   const turns = new Map<string, RunningTurn>();
   let cleared = false;
-  let pollsAfter = 0;
   let release: () => void = () => {};
   const settled = new Promise<void>(resolve => {
     release = resolve;
@@ -170,10 +169,7 @@ export async function laterTurn(): Promise<{lines: string[]; runs: number}> {
     if (!cleared) {
       return;
     }
-    pollsAfter += 1;
-    if (pollsAfter >= 2) {
-      release();
-    }
+    release();
   };
   const done = watchSpy(
     box,

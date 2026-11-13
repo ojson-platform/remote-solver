@@ -66,6 +66,7 @@ export async function runMarks(
     tracker: Pick<Tracker, 'labels' | 'comments'>;
     review: Pick<Review, 'pulls' | 'threadList' | 'comments'>;
   },
+  read?: {fresh?: boolean},
 ): Promise<RunMarks> {
   const labels = await deps.tracker.labels(key);
   const comments = await deps.tracker.comments(key);
@@ -73,7 +74,7 @@ export async function runMarks(
   const threads: string[] = [];
   const spoken: string[] = [];
   if (open.length === 1 && open[0]) {
-    for (const thread of await deps.review.threadList(open[0].id)) {
+    for (const thread of await deps.review.threadList(open[0].id, read?.fresh ? {fresh: true} : undefined)) {
       if (!thread.resolved && handedOff(thread.body)) {
         threads.push(thread.id);
       }

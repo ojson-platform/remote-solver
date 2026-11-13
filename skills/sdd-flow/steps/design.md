@@ -40,3 +40,4 @@ An open thread of layer `design`: steps 1–4 do not write `design.md` again. St
 - `Open questions:` in the init block: Wait with those questions.
 - No one-file command and no layer command in the repository: Wait. The person runs `/sdd-init`.
 - The spec does not give a capability enough behavior to name its boundary: Hand-off to `spec` on that requirement.
+- The approach contradicts a scenario: Hand-off to `spec` on that scenario and do not move `sdd-absorbed`.

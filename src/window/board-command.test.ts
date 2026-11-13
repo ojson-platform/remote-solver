@@ -1280,3 +1280,118 @@ function freePort(): Promise<number> {
     });
   });
 }
+
+spec('board-command', () => {
+  requirement('A worker exit does not read the tracker', () => {
+    async function leave(failPoll: boolean): Promise<{refreshes: number; applies: number; ran: number}> {
+      const staged = yard();
+      const ports = memoryPorts({
+        user: MANAGER,
+        issues: [
+          {
+            key: '6',
+            title: 'Show the whole Plan',
+            body: '',
+            state: 'OPEN',
+            labels: ['sdd:cycle', 'remote-solver', 'sdd:proposing'],
+            assignee: MANAGER,
+          },
+        ],
+      });
+      let refreshes = 0;
+      let applies = 0;
+      let ran = 0;
+      let fail = false;
+      const listOpen = ports.tracker.listOpen.bind(ports.tracker);
+      ports.tracker.listOpen = async () => {
+        if (fail) {
+          throw new Error('poll failed');
+        }
+        return listOpen();
+      };
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: ports.tracker,
+        review: ports.review,
+        githubRoot: staged.github,
+      });
+      const vcs: Vcs = {
+        prepare: async () => '',
+        tip: async () => 'abc',
+        filesAt: () => ({exists: () => false, read: () => '', list: () => []}),
+        compare: async () => null,
+        push: async () => {},
+        head: async () => 'abc',
+        published: async () => true,
+        dirty: async () => [],
+      };
+      const runtime: Runtime = {
+        async run() {
+          ran += 1;
+          fail = failPoll;
+          return {commits: 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
+      };
+      const box = machine(staged.dir, {
+        config: {
+          queues: [{name: 'remote-solver'}],
+          base: 'master',
+          branchScope: 'sdd',
+          ignoreComments: [],
+        },
+        tracker: ports.tracker,
+        review: ports.review,
+        vcs,
+        runtime,
+      });
+      const controller = new AbortController();
+      const done = watchSpy(
+        box,
+        {
+          running: new Set<string>(),
+          refresh: async () => {
+            refreshes += 1;
+          },
+          apply(snapshot) {
+            applies += 1;
+            live.apply(snapshot);
+          },
+        },
+        controller.signal,
+      );
+      try {
+        const deadline = Date.now() + 4000;
+        while (Date.now() < deadline) {
+          if (ran > 0 && (failPoll ? refreshes > 0 : applies >= 2)) {
+            break;
+          }
+          await new Promise(resolve => {
+            setTimeout(resolve, 20);
+          });
+        }
+        return {refreshes, applies, ran};
+      } finally {
+        controller.abort();
+        await done;
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    }
+
+    scenario('A worker exit waits for the next poll', async () => {
+      const seen = await leave(false);
+      assert.equal(seen.ran, 1);
+      assert.ok(seen.applies >= 2);
+      assert.equal(seen.refreshes, 0);
+    });
+
+    scenario('A failed poll reads the tracker', async () => {
+      const seen = await leave(true);
+      assert.equal(seen.ran, 1);
+      assert.ok(seen.refreshes >= 1);
+    });
+  });
+});

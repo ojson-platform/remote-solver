@@ -1,7 +1,7 @@
 import type {QueueConfig} from './service-config.ts';
 import type {PullSnapshot} from '../decide/policy.ts';
 import type {OpenItemFile} from '../mark/review.ts';
-import type {FileSource, IssueRecord, Review, Tracker} from '../port.ts';
+import type {Conversation, FileSource, IssueRecord, Pull, Review, Tracker} from '../port.ts';
 
 import {readBranch, type BranchFacts, type BranchText, type ChangeView} from '../change/change.ts';
 import {emptyReview, reviewOf} from '../mark/review.ts';
@@ -29,13 +29,18 @@ function openItemFile(files: FileSource | undefined): OpenItemFile | undefined {
   return rel => (rel && files.exists(rel) ? files.read(rel) : undefined);
 }
 
-export async function pullSnapshots(
+async function pullRecords(
   review: Review,
-  key: string,
+  pulls: readonly Pull[],
   files?: FileSource,
+  shared?: Map<string, Conversation[]>,
 ): Promise<PullSnapshot[]> {
-  const pulls = await review.pulls(key);
   const fileAt = openItemFile(files);
+  const openIds = pulls.filter(pull => pull.state === 'OPEN').map(pull => pull.id);
+  let conversations = shared;
+  if (!conversations && openIds.length > 1 && review.conversations) {
+    conversations = await review.conversations(openIds);
+  }
   const snapshots: PullSnapshot[] = [];
   for (const pull of pulls) {
     if (pull.state !== 'OPEN') {
@@ -43,7 +48,9 @@ export async function pullSnapshots(
       continue;
     }
     const threads = await review.threadList(pull.id);
-    const notes = await review.comments(pull.id);
+    const notes = conversations
+      ? conversationOf(conversations, pull.id)
+      : await review.comments(pull.id);
     snapshots.push({
       ...pull,
       review: reviewOf(threads, notes, fileAt),
@@ -51,6 +58,22 @@ export async function pullSnapshots(
     });
   }
   return snapshots;
+}
+
+function conversationOf(conversations: Map<string, Conversation[]>, pull: string): Conversation[] {
+  const notes = conversations.get(pull);
+  if (!notes) {
+    throw new Error(`pull request ${pull} conversation was not read`);
+  }
+  return notes;
+}
+
+export async function pullSnapshots(
+  review: Review,
+  key: string,
+  files?: FileSource,
+): Promise<PullSnapshot[]> {
+  return pullRecords(review, await review.pulls(key), files);
 }
 
 /** A cycle this login holds: the queue, the cycle label, and this assignee. */
@@ -80,20 +103,39 @@ export async function loadCycle(
   const facts = new Map<string, BranchFacts>();
   const texts = new Map<string, BranchText>();
   const tips = tipMessage ? new Map<string, string>() : undefined;
+  const prepared: {
+    issue: IssueRecord;
+    files: FileSource;
+    read: ReturnType<typeof readBranch>;
+    listed: Pull[];
+  }[] = [];
   for (const issue of cycles) {
     const files = filesAt(issue.key);
     const read = readBranch(issue.key, files, contentAt(issue.key));
-    pulls.set(issue.key, await pullSnapshots(review, issue.key, files));
-    changes.set(issue.key, read.change);
-    if (!files.failed?.()) {
-      facts.set(issue.key, read.facts);
-      texts.set(issue.key, read.text);
+    prepared.push({issue, files, read, listed: await review.pulls(issue.key)});
+  }
+  const openIds = [
+    ...new Set(
+      prepared.flatMap(item =>
+        item.listed.filter(pull => pull.state === 'OPEN').map(pull => pull.id),
+      ),
+    ),
+  ];
+  const shared =
+    openIds.length > 1 && review.conversations ? await review.conversations(openIds) : undefined;
+  for (const item of prepared) {
+    pulls.set(item.issue.key, await pullRecords(review, item.listed, item.files, shared));
+    const {read} = item;
+    changes.set(item.issue.key, read.change);
+    if (!item.files.failed?.()) {
+      facts.set(item.issue.key, read.facts);
+      texts.set(item.issue.key, read.text);
     }
     if (tips && tipMessage) {
       try {
-        tips.set(issue.key, await tipMessage(issue.key));
+        tips.set(item.issue.key, await tipMessage(item.issue.key));
       } catch {
-        tips.set(issue.key, '');
+        tips.set(item.issue.key, '');
       }
     }
   }

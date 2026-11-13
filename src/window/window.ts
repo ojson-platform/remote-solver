@@ -650,7 +650,11 @@ export function openWindow(
         remember(located);
       }
       openKey = key;
+      outside.readHooks?.(key);
       return true;
+    },
+    opened(): string {
+      return openKey;
     },
     chooseCheckout(next: string) {
       if (!checkout.gatheredCheckouts().includes(next)) {

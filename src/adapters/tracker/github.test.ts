@@ -373,7 +373,10 @@ test('an organization issue field named sddHooks is the cycle field', async () =
   });
   const record = await tracker.issue('7');
   assert.deepEqual(record.sddHooks, {archive: {before: 'keep'}});
-  assert.deepEqual((await tracker.listOpen())[0]?.sddHooks, {archive: {before: 'keep'}});
+  const fieldReads = calls.filter(call => call.includes('issue-field-values')).length;
+  const listed = await tracker.listOpen();
+  assert.equal(listed[0] !== undefined && 'sddHooks' in listed[0], false);
+  assert.equal(calls.filter(call => call.includes('issue-field-values')).length, fieldReads);
   assert.equal(
     calls.some(call => call.includes('repos/ojson-platform/remote-solver/issues/7/issue-field-values')),
     true,
@@ -631,8 +634,8 @@ spec('dependencies', () => {
 });
 
 spec('github-read', () => {
-  requirement('The cycle field is read for a cycle', () => {
-    scenario('An issue without the cycle label skips the field', async () => {
+  requirement('The cycle field is read for one issue', () => {
+    scenario('The open list skips the field', async () => {
       const calls: string[] = [];
       const {tracker} = githubAdapters({
         run: async args => {
@@ -656,10 +659,43 @@ spec('github-read', () => {
                 title: 'u',
                 body: '',
                 state: 'OPEN',
-                labels: [{name: 'bug'}],
+                labels: [{name: 'sdd:cycle'}],
                 assignees: [],
               },
             ]);
+          }
+          if (args.join(' ').includes('issue-field-values')) {
+            return '[]';
+          }
+          throw new Error(args.join(' '));
+        },
+      });
+      const open = await tracker.listOpen();
+      assert.equal(open.some(issue => 'sddHooks' in issue), false);
+      assert.equal(
+        calls.some(call => call.includes('issue-field-values')),
+        false,
+      );
+    });
+
+    scenario('One issue by key still reads the field', async () => {
+      const calls: string[] = [];
+      const {tracker} = githubAdapters({
+        run: async args => {
+          calls.push(args.join(' '));
+          const graph = answerGithubGraphql(args);
+          if (graph !== undefined) {
+            return graph;
+          }
+          if (args[0] === 'issue' && args[1] === 'view') {
+            return JSON.stringify({
+              number: 7,
+              title: 't',
+              body: '',
+              state: 'OPEN',
+              labels: [{name: 'sdd:cycle'}],
+              assignees: [],
+            });
           }
           if (args.join(' ').includes('issues/7/issue-field-values')) {
             return JSON.stringify([
@@ -669,18 +705,11 @@ spec('github-read', () => {
           throw new Error(args.join(' '));
         },
       });
-      const open = await tracker.listOpen();
-      const cycle = open.find(issue => issue.key === '7');
-      const other = open.find(issue => issue.key === '8');
-      assert.deepEqual(cycle?.sddHooks, {archive: {before: 'keep'}});
-      assert.equal(other !== undefined && 'sddHooks' in other, false);
+      const record = await tracker.issue('7');
+      assert.deepEqual(record.sddHooks, {archive: {before: 'keep'}});
       assert.equal(
         calls.some(call => call.includes('issues/7/issue-field-values')),
         true,
-      );
-      assert.equal(
-        calls.some(call => call.includes('issues/8/issue-field-values')),
-        false,
       );
     });
   });
@@ -1423,6 +1452,160 @@ spec('github-read', () => {
       await review.threadList('11');
       await review.threadList('12');
       assert.equal(calls.filter(args => args.join(' ').includes('reviewThreads')).length, 1);
+    });
+
+    scenario('A fresh thread read replaces the minute cache', async () => {
+      let reply = 'please change the architecture';
+      let reads = 0;
+      const {review} = githubAdapters({
+        run: async args => {
+          const joined = args.join(' ');
+          if (!joined.includes('reviewThreads')) {
+            throw new Error(joined);
+          }
+          reads += 1;
+          return JSON.stringify({
+            data: {
+              repository: {
+                pullRequest: {
+                  reviewThreads: {
+                    nodes: [
+                      {
+                        id: 'PRRT_1',
+                        isResolved: false,
+                        path: 'src/window/client/source-line.tsx',
+                        line: 20,
+                        comments: {
+                          nodes: [{databaseId: 1, author: {login: 'ada'}, body: 'please change the architecture'}],
+                        },
+                        last: {nodes: [{databaseId: 2, author: {login: 'ada'}, body: reply}]},
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          });
+        },
+      });
+      assert.equal((await review.threadList('91'))[0]?.body, 'please change the architecture');
+      reply = 'sdd:layer=code → implementing';
+      assert.equal((await review.threadList('91'))[0]?.body, 'please change the architecture');
+      assert.equal((await review.threadList('91', {fresh: true}))[0]?.body, 'sdd:layer=code → implementing');
+      assert.equal((await review.threadList('91'))[0]?.body, 'sdd:layer=code → implementing');
+      assert.equal(reads, 2);
+    });
+  });
+});
+
+spec('github-read', () => {
+  requirement('Open pull request conversations are one query', () => {
+    scenario('Two conversations are one query', async () => {
+      const calls: string[] = [];
+      const {tracker, review} = githubAdapters({
+        run: async args => {
+          const text = args.join(' ');
+          calls.push(text);
+          if (text.startsWith('api user')) return 'me\n';
+          if (text.includes('/issues?state=open')) {
+            return JSON.stringify([
+              {number: 1, title: '#1: one', state: 'open', labels: [{name: 'remote-solver'}, {name: 'sdd:cycle'}], assignees: [{login: 'me'}]},
+              {number: 2, title: '#2: two', state: 'open', labels: [{name: 'remote-solver'}, {name: 'sdd:cycle'}], assignees: [{login: 'me'}]},
+            ]);
+          }
+          if (text.includes('parent{number}')) return githubLinkGraph({});
+          if (text.includes("pr list") && text.includes('open')) {
+            return JSON.stringify([
+              {number: 11, title: '#1: one', state: 'OPEN'},
+              {number: 12, title: '#2: two', state: 'OPEN'},
+            ]);
+          }
+          if (text.includes('pr list')) return '[]';
+          if (text.startsWith('pr view')) {
+            return JSON.stringify({
+              statusCheckRollup: [],
+              state: 'OPEN',
+              headRefOid: 'a',
+              baseRefOid: 'b',
+              mergeable: 'MERGEABLE',
+            });
+          }
+          if (text.includes('reviewThreads')) {
+            return JSON.stringify({data: {repository: {p11: {reviewThreads: {nodes: []}}, p12: {reviewThreads: {nodes: []}}}}});
+          }
+          if (text.includes('comments(first:100)')) {
+            return JSON.stringify({
+              data: {
+                repository: {
+                  p11: {comments: {nodes: [{body: 'left', author: {login: 'ada'}}]}},
+                  p12: {comments: {nodes: [{body: 'right', author: {login: 'ada'}}]}},
+                },
+              },
+            });
+          }
+          throw new Error(text);
+        },
+      });
+      const snapshot = await loadCycle(tracker, review, () => files, [{name: 'remote-solver'}]);
+      const notes = (key: string) => snapshot.pulls.get(key)?.[0]?.reading?.notes.map(note => note.body);
+      assert.deepEqual(notes('1'), ['left']);
+      assert.deepEqual(notes('2'), ['right']);
+      assert.equal(calls.filter(call => call.includes('comments(first:100)')).length, 1);
+      assert.equal(calls.filter(call => call.includes('/comments?per_page=100')).length, 0);
+    });
+
+    scenario('One conversation stays one read', async () => {
+      const calls: string[] = [];
+      const {tracker, review} = githubAdapters({
+        run: async args => {
+          const text = args.join(' ');
+          calls.push(text);
+          if (text.startsWith('api user')) return 'me\n';
+          if (text.includes('/issues?state=open')) {
+            return JSON.stringify([
+              {number: 1, title: '#1: one', state: 'open', labels: [{name: 'remote-solver'}, {name: 'sdd:cycle'}], assignees: [{login: 'me'}]},
+            ]);
+          }
+          if (text.includes('parent{number}')) return githubLinkGraph({});
+          if (text.includes('pr list') && text.includes('open')) {
+            return JSON.stringify([{number: 11, title: '#1: one', state: 'OPEN'}]);
+          }
+          if (text.includes('pr list')) return '[]';
+          if (text.startsWith('pr view')) {
+            return JSON.stringify({
+              statusCheckRollup: [],
+              state: 'OPEN',
+              headRefOid: 'a',
+              baseRefOid: 'b',
+              mergeable: 'MERGEABLE',
+            });
+          }
+          if (text.includes('reviewThreads')) {
+            return JSON.stringify({data: {repository: {p11: {reviewThreads: {nodes: []}}}}});
+          }
+          if (text.includes('/comments?per_page=100')) {
+            return JSON.stringify([{body: 'only', user: {login: 'ada'}}]);
+          }
+          throw new Error(text);
+        },
+      });
+      const snapshot = await loadCycle(tracker, review, () => files, [{name: 'remote-solver'}]);
+      assert.deepEqual(snapshot.pulls.get('1')?.[0]?.reading?.notes.map(note => note.body), ['only']);
+      assert.equal(calls.filter(call => call.includes('/comments?per_page=100')).length, 1);
+      assert.equal(calls.filter(call => call.includes('comments(first:100)')).length, 0);
+    });
+
+    scenario('A failed conversation query is not an empty conversation', async () => {
+      const {review} = githubAdapters({
+        run: async args => {
+          const text = args.join(' ');
+          if (text.includes('comments(first:100)')) {
+            return JSON.stringify({errors: [{message: 'down'}]});
+          }
+          throw new Error(text);
+        },
+      });
+      await assert.rejects(() => review.conversations?.(['11', '12']));
     });
   });
 });

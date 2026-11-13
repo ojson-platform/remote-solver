@@ -100,11 +100,11 @@ function agentSentence(action: AgentAction, reason: string): string {
     case 'improve-proposal':
       return 'Правлю план по замечанию.';
     case 'create-initial-specs':
+      return 'Пишу спеки.';
+    case 'improve-specs':
       return reason === 'the proposal revision is not the stamp'
         ? 'Обновляю спеки под новую ревизию плана.'
-        : 'Пишу спеки.';
-    case 'improve-specs':
-      return 'Правлю спеки по замечанию.';
+        : 'Правлю спеки по замечанию.';
     case 'restore-baseline':
       return 'Восстанавливаю базовую спеку.';
     case 'create-design':

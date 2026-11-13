@@ -103,7 +103,8 @@ spec('artifact', () => {
     scenario('A plan run says the issue text is the upstream', async () => {
       const upstream = await promptOf(repo(), 'plan', 'proposing');
       assert.match(upstream, /issue text above is the upstream of `proposal\.md`/);
-      assert.match(upstream, /file existing is not a reason to leave it/);
+      assert.match(upstream, /file existing is not a reason to leave that sentence/);
+      assert.match(upstream, /already replaced is not copied back/);
     });
 
     scenario('A code run says the action has no previous artifact', async () => {
@@ -161,7 +162,7 @@ spec('artifact', () => {
         [pull(9)],
         change({proposal: true, delta: true, ...behind}),
       );
-      assert.equal(action(decision), 'create-initial-specs');
+      assert.equal(action(decision), 'improve-specs');
     });
     scenario('A matching spec stamp still opens the gate', () => {
       const decision = decide(

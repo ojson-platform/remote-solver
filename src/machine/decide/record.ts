@@ -40,6 +40,16 @@ function refusalFrom(notes: readonly IssueNote[]): Refusal | null {
   return null;
 }
 
+/** `threads on <layer>` whose layer has no open thread. Any other refusal stays. */
+export function spentThreadRefusal(notes: readonly IssueNote[], layers: readonly string[]): boolean {
+  const found = refusalFrom(notes);
+  if (!found) {
+    return false;
+  }
+  const layer = /^threads on ([a-z]+)$/.exec(found.reason)?.[1];
+  return layer !== undefined && !layers.includes(layer);
+}
+
 /** The refusal the label `sdd:refused` is holding. */
 export function refusalOf(notes: readonly IssueNote[]): string | null {
   const found = refusalFrom(notes);

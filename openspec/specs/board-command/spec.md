@@ -275,3 +275,17 @@ A tracker read SHALL take its number when the read starts. A read that finishes 
 
 - **WHEN** a newer read stored branch text and an older apply carries facts and no text
 - **THEN** the stored branch text stays
+
+### Requirement: A worker exit does not read the tracker
+
+When a worker leaves, the page SHALL wait for the next spy poll and SHALL NOT read the tracker on that exit. When that poll fails, the page SHALL read the tracker.
+
+#### Scenario: A worker exit waits for the next poll
+
+- **WHEN** a worker leaves and the next poll paints
+- **THEN** the page does not read the tracker on the exit
+
+#### Scenario: A failed poll reads the tracker
+
+- **WHEN** the poll after a worker leaves fails
+- **THEN** the page reads the tracker

@@ -167,7 +167,12 @@ test('an existing artifact stays only when the upstream block says nothing chang
   const tasks = readFileSync(path.join(stepsDir, 'tasks.md'), 'utf8');
   assert.match(context, /## Upstream/);
   assert.match(context, /Do not run git to rebuild it/);
-  assert.match(plan, /file existing is not a reason to leave it|every caller-visible sentence/);
+  assert.match(plan, /file existing is not a reason to leave that sentence|every caller-visible sentence/);
+  assert.match(plan, /already replaced is not copied back/);
+  assert.match(specify, /does not start from the result already visible/);
+  assert.match(tasks, /reopens that task's `- \[ \]`/);
+  assert.match(design, /do not move `sdd-absorbed`/);
+  assert.match(readFileSync(path.join(stepsDir, 'fix.md'), 'utf8'), /## Source` asks for behavior/);
   assert.match(specify, /stamp matches/);
   assert.match(specify, /Do not judge a match from the whole proposal/);
   assert.match(design, /Do not judge `design.md` already right from the whole spec/);

@@ -6,7 +6,14 @@ import type {QueueConfig} from '../spy/service-config.ts';
 import {readChange} from '../change/change.ts';
 import {addedDiffLine, changedInDiff, foldChange, restoreChange} from '../change/fold.ts';
 import {acceptGateWithheld} from '../decide/ahead.ts';
-import {cycleRecord, decide, effectSignature, postRefusal, refusalBody} from '../decide/policy.ts';
+import {
+  cycleRecord,
+  decide,
+  effectSignature,
+  postRefusal,
+  refusalBody,
+  spentThreadRefusal,
+} from '../decide/policy.ts';
 import {gateAsk, openWait} from '../phase/labels.ts';
 import {labelsAfterAdvance} from '../phase/phase.ts';
 import {queueOf} from '../spy/queues.ts';
@@ -98,6 +105,8 @@ type WalkCache = {
   change: ChangeView | undefined;
   tip: string | undefined;
   pulls: PullSnapshot[] | undefined;
+  /** Labels this walk already wrote. The next step uses them instead of the list. */
+  labels?: string[];
 };
 
 type StepResult = {stop: Decision} | {again: WalkCache};
@@ -315,8 +324,11 @@ async function foldEffect(
 
 /** Read the issue, write the label move, then either stop or ask for another step. */
 async function stepIssue(key: string, options: IssueRead, cache: WalkCache): Promise<StepResult> {
-  const open = await options.tracker.listOpen();
-  const record = cycleRecordOf(open, key, options);
+  const given = options.issues;
+  const open = given ?? (await options.tracker.listOpen());
+  const found = cycleRecordOf(open, key, options);
+  const record =
+    given && found && cache.labels !== undefined ? {...found, labels: [...cache.labels]} : found;
   if (!record) {
     return {stop: {kind: 'done', issue: key, reason: 'not in the open cycle'}};
   }
@@ -329,11 +341,21 @@ async function stepIssue(key: string, options: IssueRead, cache: WalkCache): Pro
   const view = cache.change ?? readChange(key, options.files);
   const loaded =
     cache.pulls ?? (options.review ? await pullSnapshots(options.review, key, options.files) : []);
-  const notes = await options.tracker.comments(key);
+  let notes = record.labels.includes('sdd:refused') ? await options.tracker.comments(key) : [];
+  const layers = loaded.filter(pull => pull.state === 'OPEN').flatMap(pull => pull.review.layers);
+  if (loaded.some(pull => pull.state === 'OPEN') && spentThreadRefusal(notes, layers)) {
+    await options.tracker.editLabels(key, [], ['sdd:refused']);
+    notes = [];
+    record.labels = record.labels.filter(name => name !== 'sdd:refused');
+  }
   const cycle = cycleRecord(record, cache.tip ?? '', notes);
-  const others = (options.issues ?? open).map(issue => (issue.key === key ? record : issue));
+  const others = open.map(issue => (issue.key === key ? record : issue));
   const decision = decide(record, others, loaded, view, cycle);
-  await applyLabels(options.tracker, key, record.labels, nextLabels(record.labels, decision));
+  const moved = nextLabels(record.labels, decision);
+  await applyLabels(options.tracker, key, record.labels, moved);
+  if (given) {
+    cache = {...cache, labels: moved};
+  }
   if (decision.kind === 'advance' || decision.kind === 'done') {
     const closed = await writeAdvance(key, options, decision);
     if (closed) {

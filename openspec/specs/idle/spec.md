@@ -100,7 +100,7 @@ A skill run that crashes before a commit SHALL leave its chat and SHALL NOT post
 
 ### Requirement: A changed run is not idle
 
-When a skill run produces no commit and the issue worktree has uncommitted paths, the machine SHALL NOT post `sdd:refused`, and the next drive SHALL start that effect. When a skill run produces no commit and leaves a new layer marker, the machine SHALL NOT post `sdd:refused`. When a clean run refuses `implement-next-task` and an open task id is known, the reason SHALL include that id.
+When a skill run produces no commit and the issue worktree has uncommitted paths, the machine SHALL NOT post `sdd:refused`, and the next drive SHALL start that effect. When a skill run produces no commit and leaves a new layer marker, the machine SHALL NOT post `sdd:refused`, including when the thread list was already read at the start of that run. When a clean run refuses `implement-next-task` and an open task id is known, the reason SHALL include that id.
 
 #### Scenario: A dirty worktree does not refuse the open task
 
@@ -112,7 +112,21 @@ When a skill run produces no commit and the issue worktree has uncommitted paths
 - **WHEN** the run opens a layer thread and commits nothing
 - **THEN** the issue has no `sdd:refused`
 
+#### Scenario: A cached thread list does not hide a new layer marker
+
+- **WHEN** the thread list was read at the start of a run and the run adds a layer marker without a commit
+- **THEN** the issue has no `sdd:refused`
+
 #### Scenario: The refusal names the open task
 
 - **WHEN** the open task id is `one` and the run commits nothing on a clean worktree
 - **THEN** the refusal contains `next open task one`
+
+### Requirement: A closed thread releases the refusal
+
+When `sdd:refused` holds a reason `threads on <layer>` and an open pull request of this issue has no open thread of that layer, the machine SHALL remove the label before it decides. The refusal comment SHALL stay. The decision SHALL NOT be that held effect.
+
+#### Scenario: A closed code thread releases the refusal
+
+- **WHEN** the label holds `threads on code` and the open pull request has no open code thread
+- **THEN** the label is removed and the decision is not that held effect

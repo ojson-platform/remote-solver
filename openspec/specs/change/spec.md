@@ -77,3 +77,12 @@ When that parent cannot be resolved, a lenient read SHALL use the tip and a stri
 
 - **WHEN** the tip commit contains `Sdd-Archive: issue-<key>` and that commit has no parent
 - **THEN** the strict read fails
+
+### Requirement: A failed file read is not an empty change
+
+A failed read of the issue branch SHALL NOT be treated as a change with no proposal and no tasks. The machine SHALL wait and SHALL NOT move the phase because a file is missing.
+
+#### Scenario: A failed read does not move implementing back to tasking
+
+- **WHEN** the phase is `implementing`, the issue branch has `tasks.md`, and the file read fails
+- **THEN** the machine does not move to `tasking` and does not start `create-proposal`

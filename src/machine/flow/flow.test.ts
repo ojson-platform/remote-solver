@@ -1033,3 +1033,36 @@ spec('github-read', () => {
     });
   });
 });
+
+spec('change', () => {
+  requirement('A failed file read is not an empty change', () => {
+    scenario('A failed read does not move implementing back to tasking', async () => {
+      const {tracker, review} = memoryPorts({
+        user: 'robot',
+        issues: [
+          {
+            key: '7',
+            title: '#7: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['Sandcastle', 'sdd:cycle', 'sdd:implementing'],
+          },
+        ],
+        pulls: {7: [{id: '71', title: '#7: change', state: 'OPEN'}]},
+      });
+      const failed: FileSource = {
+        exists: () => false,
+        read: () => '',
+        list: () => [],
+        failed: () => true,
+      };
+      const snapshot = await loadCycle(tracker, review, () => failed, [{name: 'Sandcastle'}]);
+      const decisions = await resolveCycle(snapshot, tracker, [{name: 'Sandcastle'}]);
+      assert.equal(decisions[0]?.kind, 'wait');
+      if (decisions[0]?.kind === 'wait') {
+        assert.equal(decisions[0].reason, 'change was not loaded');
+      }
+      assert.equal((await tracker.labels('7')).includes('sdd:tasking'), false);
+    });
+  });
+});

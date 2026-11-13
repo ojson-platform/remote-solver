@@ -126,8 +126,8 @@ export async function loadCycle(
   for (const item of prepared) {
     pulls.set(item.issue.key, await pullRecords(review, item.listed, item.files, shared));
     const {read} = item;
-    changes.set(item.issue.key, read.change);
     if (!item.files.failed?.()) {
+      changes.set(item.issue.key, read.change);
       facts.set(item.issue.key, read.facts);
       texts.set(item.issue.key, read.text);
     }

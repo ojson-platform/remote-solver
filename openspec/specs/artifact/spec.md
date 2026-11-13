@@ -113,7 +113,7 @@ For `specify`, `design`, and `tasks`, the prompt SHALL carry the current text of
 
 A stamp that equals the revision of that text SHALL be one sentence and SHALL NOT include the text.
 
-For `tasks`, that prompt SHALL also name the delta revision on its own line.
+For `tasks`, that prompt SHALL also name the delta revision on its own line and SHALL list the issues already linked.
 
 For `implement`, that prompt SHALL name the delta revision and any Scenario title that is on no card. The step reads those lines.
 
@@ -167,7 +167,12 @@ The prompt SHALL NOT be a diff against a commit.
 #### Scenario: A tasks run whose stamp matches names the delta revision
 
 - **WHEN** `tasks.md` records `sdd-absorbed` equal to the revision of the delta and the design, and the delta states a fact
-- **THEN** the tasks prompt says the stamp matches, names the delta revision, and does not include that fact
+- **THEN** the tasks prompt says the stamp matches, names the delta revision, lists the linked issues, and does not include that fact
+
+#### Scenario: A tasks run prints the issues already linked
+
+- **WHEN** the machine runs `tasks` and the issue already links another issue
+- **THEN** the tasks prompt lists that issue
 
 ### Requirement: A stale stamp restarts the writing skill
 

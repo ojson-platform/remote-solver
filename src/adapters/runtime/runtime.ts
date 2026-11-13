@@ -13,6 +13,15 @@ import {runAgent} from './agent.ts';
 import {rememberChat} from './session.ts';
 import {upstreamBlock} from './upstream.ts';
 
+function tasksLinks(block: string, skill: SkillRun): string {
+  if (skill.skill !== 'tasks') {
+    return block;
+  }
+  const ids = [...new Set(skill.links ?? [])];
+  const list = ids.length === 0 ? 'none' : ids.map(id => `#${id}`).join(', ');
+  return `${block}\n\nLinked issues: ${list}.`;
+}
+
 /** The hook sandcastle runs. Links whatever of this package is on disk. */
 export function linkCommand(solverRoot: string, serviceRoot: string): string {
   return checkoutLinks(packageLinks(solverRoot), serviceRoot);
@@ -157,7 +166,7 @@ export function agentRuntime(config: AgentRuntimeConfig): Runtime {
           QUEUE: config.queueLabel,
           BASE: config.prBase,
           ISSUE_TEXT: issueText(skill.issue?.title ?? '', skill.issue?.body ?? ''),
-          UPSTREAM: upstreamBlock(dir, skill.skill, skill.key, machine),
+          UPSTREAM: tasksLinks(upstreamBlock(dir, skill.skill, skill.key, machine), skill),
           STEP: stepText
             ? machine.stepPrompt(stepText, skill.action, machine.serviceHookDoc(serviceRoot), skill.sddHooks)
             : '',

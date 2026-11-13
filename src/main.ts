@@ -96,6 +96,13 @@ async function driveHeldIssue(box: Machine, key: string, watch?: SpyWatch): Prom
       sddHooks: record.sddHooks,
       service: record.service,
       issue: {title: record.title, body: record.body},
+      links: [
+        ...new Set([
+          ...(record.dependsOn ?? []),
+          ...(record.blockedBy ?? []),
+          ...(record.blocks ?? []),
+        ]),
+      ],
       signature: effectSignature(decision),
       ...(claim.kind === 'resume' ? {resumeSession: claim.sessionId} : {}),
     });

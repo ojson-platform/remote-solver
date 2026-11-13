@@ -40,7 +40,12 @@ function write(root: string, rel: string, text: string): void {
   writeFileSync(file, text);
 }
 
-async function promptOf(root: string, skill: string, phase: string): Promise<string> {
+async function promptOf(
+  root: string,
+  skill: string,
+  phase: string,
+  links?: readonly string[],
+): Promise<string> {
   runAgent.mockClear();
   const runtime = launcherRuntime({
     root,
@@ -55,6 +60,7 @@ async function promptOf(root: string, skill: string, phase: string): Promise<str
     pull: '9',
     mode: 'judgment',
     issue: {title: 'Hold the remark', body: 'The draft stays until send.'},
+    ...(links ? {links} : {}),
   });
   return runAgent.mock.calls[0]?.[0].promptArgs.UPSTREAM ?? '';
 }
@@ -146,8 +152,16 @@ spec('artifact', () => {
       const upstream = await promptOf(root, 'tasks', 'tasking');
       assert.match(upstream, /matches the input revision/);
       assert.match(upstream, /The delta revision is `/);
+      assert.match(upstream, /Linked issues: none/);
       assert.equal(upstream.includes(deltaRevision), true);
       assert.equal(upstream.includes('A remark stays until send.'), false);
+    });
+
+    scenario('A tasks run prints the issues already linked', async () => {
+      const root = repo();
+      write(root, 'openspec/changes/issue-6/tasks.md', '# tasks\n');
+      const upstream = await promptOf(root, 'tasks', 'tasking', ['8']);
+      assert.match(upstream, /Linked issues: #8/);
     });
 
     scenario(

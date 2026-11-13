@@ -238,6 +238,8 @@ export type SkillRun = {
   sddHooks?: unknown;
   /** Title and body already on the issue. The prompt carries them. */
   issue?: {title: string; body: string};
+  /** Issues already linked. The tasks prompt prints them. The step reads that list. */
+  links?: readonly string[];
 };
 
 /** What one skill run changed. Zero commits leaves the issue idle. */

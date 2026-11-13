@@ -22,12 +22,10 @@ A file the task does not name stays unread and unedited, including other changes
 - More than one task
 - Review threads
 
-{{before-implement}}
-
 ## Steps
 
 1. The Upstream block names a delta revision the card's `sdd-delta` is not, or it lists a Scenario title on no card: Hand-off to `tasks`. Write no code. No `tasks/<id>.md`, or it lacks a § Artifacts heading: Hand-off to `tasks` on that line of `tasks.md`. Do not reconstruct the task from the code.
-2. The task does not fit one commit: split `tasks.md` in its own commit and keep the scenario links. Publish after that commit and end the run.
+2. One commit covers one `tasks/<id>.md` card. Scenarios from two Requirements on that card: split `tasks.md` in its own commit and keep the scenario links. Publish after that commit and end the run.
 3. **Implement the task.** For each scenario the task names, do 3.1 and then 3.2 before the next scenario. The substeps still hold. One commit covers the whole task.
    3.1 **Write the test red.** The test file is the path in `## Proof`. The test name contains this scenario's title. The test observes only what `## Proof` says. Run the one-file command from `## Proof`. Red is the test whose name contains this scenario's title failing on its assertion or on behavior that is not there yet. Exit 0, a test file that does not load, or a run that collects no test is not red on its assertion: § Once. Do not edit a file from `## Source` before the command is red.
    3.2 **Edit source code** only as `## Source` says, and only enough for this scenario. Run the one-file command from the card. It exits 0 before the next scenario. Do not run the layer command, the fast suite, or the type check in this step.

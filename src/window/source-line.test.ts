@@ -430,4 +430,62 @@ spec('source-line', () => {
       );
     });
   });
+
+  requirement('With no pull request, the line stays a p.line and is not a comment target', () => {
+    scenario('With no pull request, the line stays a p.line and is not a comment target', async () => {
+      const proposal = ['## Scope', '', 'Строка **bold**.', ''].join('\n');
+      const design = ['## Approach', '', 'Пункт *курсив*.', ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'proposing', {openPullRequests: 0})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', proposal);
+          writeChange(paths.arcadia, KEY, 'design.md', design);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          const plan = docOf(spineOf(html, KEY, 'Plan'));
+          assert.match(plan, /<p class="line">/);
+          assert.match(plan, /<strong>bold<\/strong>/);
+          assert.equal(plan.includes('<button'), false);
+          assert.equal(plan.includes('data-line'), false);
+          const designDoc = docOf(spineOf(html, KEY, 'Design'));
+          assert.match(designDoc, /<p class="line">/);
+          assert.match(designDoc, /<em>курсив<\/em>/);
+          assert.equal(designDoc.includes('<button'), false);
+          assert.equal(designDoc.includes('data-path'), false);
+        },
+      );
+    });
+  });
+
+  requirement('The phase foot stays outside the document', () => {
+    scenario('The phase foot stays outside the document', async () => {
+      const minimal = ['## Scope', '', 'Строка.', ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'proposing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', minimal);
+          writeChange(paths.arcadia, KEY, 'design.md', minimal);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const spine = spineOf(html, KEY, layer);
+            const doc = docOf(spine);
+            assert.equal(doc.includes('plan-foot'), false);
+            const fold = spine.slice(spine.indexOf('<div class="fold">'));
+            const docOpen = fold.indexOf('<div class="doc">');
+            assert.ok(docOpen >= 0);
+            const docClose = fold.indexOf('</div>', docOpen + '<div class="doc">'.length);
+            const footAt = fold.indexOf('class="plan-foot"');
+            assert.ok(footAt > docClose);
+          }
+        },
+      );
+    });
+  });
 });

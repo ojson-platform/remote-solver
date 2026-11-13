@@ -110,6 +110,22 @@ spec('artifact', () => {
     scenario('A code run says the action has no previous artifact', async () => {
       const upstream = await promptOf(repo(), 'implement', 'implementing');
       assert.match(upstream, /This action has no previous artifact/);
+      assert.match(upstream, /The delta revision is `/);
+      assert.match(upstream, /Every delta Scenario title is on a card/);
+    });
+
+    scenario('An implement run names a Scenario title on no card', async () => {
+      const root = repo();
+      write(
+        root,
+        'openspec/changes/issue-6/specs/hold/spec.md',
+        '## ADDED Requirements\n\n### Requirement: Hold\n\n#### Scenario: The draft stays\n\n- **WHEN** the person records\n- **THEN** the draft stays\n',
+      );
+      const upstream = await promptOf(root, 'implement', 'implementing');
+      const again = await promptOf(root, 'implement', 'implementing');
+      assert.equal(again, upstream);
+      assert.match(upstream, /Scenario titles on no card/);
+      assert.match(upstream, /- The draft stays/);
     });
 
     scenario('A tasks run whose stamp matches names the delta revision', async () => {

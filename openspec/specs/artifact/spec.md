@@ -115,6 +115,8 @@ A stamp that equals the revision of that text SHALL be one sentence and SHALL NO
 
 For `tasks`, that prompt SHALL also name the delta revision on its own line.
 
+For `implement`, that prompt SHALL name the delta revision and any Scenario title that is on no card. The step reads those lines.
+
 A missing file SHALL say that file does not exist yet.
 
 #### Scenario: A design run after a spec edit carries that text
@@ -150,7 +152,12 @@ The prompt SHALL NOT be a diff against a commit.
 #### Scenario: A code run says the action has no previous artifact
 
 - **WHEN** the machine runs `implement`
-- **THEN** the prompt says this action has no previous artifact
+- **THEN** the prompt says this action has no previous artifact, names the delta revision, and says every delta Scenario title is on a card when none is missing
+
+#### Scenario: An implement run names a Scenario title on no card
+
+- **WHEN** the machine runs `implement` and a delta Scenario title is on no card
+- **THEN** the prompt lists that title under Scenario titles on no card
 
 #### Scenario: A run whose previous artifact cannot be read does not treat the file as already right
 

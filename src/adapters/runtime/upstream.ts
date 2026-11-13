@@ -2,6 +2,7 @@ import {existsSync, readdirSync, statSync} from 'node:fs';
 import path from 'node:path';
 
 import {runtimeMachine, type RuntimeMachine} from '../../machine.ts';
+import {cardScenarioNames, deltaScenarioNames} from '../../machine/change/text.ts';
 import {workingTree} from '../../window/change-files.ts';
 
 const heading = '## Upstream';
@@ -72,6 +73,40 @@ function unreadable(): string {
   ].join('\n');
 }
 
+function taskCards(cwd: string, key: string): string[] {
+  const dir = path.join(cwd, change(key), 'tasks');
+  if (!existsSync(dir) || !statSync(dir).isDirectory()) {
+    return [];
+  }
+  return readdirSync(dir)
+    .filter(name => name.endsWith('.md'))
+    .sort()
+    .map(name => readFile(cwd, path.join(change(key), 'tasks', name)) ?? '');
+}
+
+/** The delta revision and any Scenario title the cards do not list. The step reads this and does not judge a live revision. */
+function implementBlock(cwd: string, key: string, machine: RuntimeMachine): string {
+  const specs = specChunks(cwd, key);
+  const revision = machine.contentRevision(specs);
+  const onCard = new Set(taskCards(cwd, key).flatMap(cardScenarioNames));
+  const missing = specs
+    .flatMap(chunk => deltaScenarioNames(chunk.text))
+    .filter(name => !onCard.has(name));
+  const titles =
+    missing.length === 0
+      ? 'Every delta Scenario title is on a card.'
+      : ['Scenario titles on no card:', ...missing.map(name => `- ${name}`)].join('\n');
+  return [
+    heading,
+    '',
+    'This action has no previous artifact.',
+    '',
+    `The delta revision is \`${revision}\`.`,
+    '',
+    titles,
+  ].join('\n');
+}
+
 /** The prompt block for the input this step absorbs. A matching stamp is one sentence. */
 export function upstreamBlock(
   cwd: string,
@@ -88,6 +123,13 @@ export function upstreamBlock(
     ].join('\n');
   }
   if (skill !== 'specify' && skill !== 'design' && skill !== 'tasks') {
+    if (skill === 'implement') {
+      try {
+        return implementBlock(cwd, key, machine);
+      } catch {
+        return unreadable();
+      }
+    }
     return [heading, '', 'This action has no previous artifact.'].join('\n');
   }
   try {

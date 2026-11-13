@@ -16,8 +16,8 @@ export type Decision =
       pr: string;
       reason: string;
     } & LabelFix)
-  /** `gate` names the open review. The ask is posted only when `sdd:wait-human` is not already set. */
-  | ({kind: 'wait'; issue: string | null; reason: string; gate?: Gate} & LabelFix)
+  /** `gate` is the review ask. `ask` is any other sentence. Either is posted once, when `sdd:wait-human` is not already set. */
+  | ({kind: 'wait'; issue: string | null; reason: string; gate?: Gate; ask?: string} & LabelFix)
   | ({kind: 'done'; issue: string | null; reason: string} & LabelFix)
   /** `comment` is posted on the issue after the move. */
   | ({kind: 'advance'; issue: string; to: Phase; reason: string; comment?: string} & LabelFix)

@@ -68,7 +68,12 @@ export function mergeOrWait(
     };
   }
   if (!autoMerge) {
-    return {kind: 'wait', issue: issueKey, reason: `wait for merge of PR #${pr.id}`};
+    return {
+      kind: 'wait',
+      issue: issueKey,
+      reason: `wait for merge of PR #${pr.id}`,
+      ask: `Merge pull request #${pr.id}.`,
+    };
   }
   return {kind: 'merge', issue: issueKey, pull: String(pr.id), reason: `merge PR #${pr.id}`};
 }

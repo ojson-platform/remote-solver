@@ -37,7 +37,7 @@ On a phase before `accepting`, an archived change SHALL be returned to the activ
 
 ### Requirement: Accepting archives before it merges
 
-On `accepting`, a change that is not archived SHALL be archived before the merge wait, once a pull request exists. With no pull request and nothing merged, the machine SHALL wait and SHALL NOT archive yet. After the archive, green checks and `auto-merge` SHALL merge. Green checks without `auto-merge` SHALL wait for a person to merge. Checks that are not green SHALL wait, including when `auto-merge` is set.
+On `accepting`, a change that is not archived SHALL be archived before the merge wait, once a pull request exists. With no pull request and nothing merged, the machine SHALL wait and SHALL NOT archive yet. After the archive, green checks and `auto-merge` SHALL merge and SHALL NOT post a merge ask. Green checks without `auto-merge` SHALL wait for a person to merge and SHALL post one ask that names that pull request. A later poll SHALL NOT post that ask again. Checks that are not green SHALL wait, including when `auto-merge` is set.
 
 #### Scenario: Accepting archives a change that is still open
 
@@ -52,12 +52,12 @@ On `accepting`, a change that is not archived SHALL be archived before the merge
 #### Scenario: Auto-merge merges a green archived pull request
 
 - **WHEN** `accepting` has an archived change, green checks, and `auto-merge`
-- **THEN** the machine merges that pull request
+- **THEN** the machine merges that pull request and does not post a merge ask
 
 #### Scenario: Without auto-merge the person merges
 
 - **WHEN** `accepting` has an archived change and green checks, and `auto-merge` is absent
-- **THEN** the machine waits for a person to merge
+- **THEN** the machine waits for a person to merge, posts one ask that names the pull request, and a second poll does not post that ask again
 
 #### Scenario: Auto-merge waits for green checks
 

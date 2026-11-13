@@ -4,6 +4,7 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {memoryPorts} from '../../adapters/tracker/github.ts';
 import {resolveIssue} from '../flow/flow.ts';
+import {walk} from '../flow/step.ts';
 import type {ChangeView} from '../change/change.ts';
 import {decide, settle, type Decision, type PullSnapshot} from './policy.ts';
 import type {IssueRecord} from '../port.ts';
@@ -100,7 +101,7 @@ spec('merge', () => {
       assert.equal(decision.kind, 'wait');
       assert.notEqual(action(decision), 'archive');
     });
-    scenario('Auto-merge merges a green archived pull request', () => {
+    scenario('Auto-merge merges a green archived pull request', async () => {
       const decision = onDisk(
         issue(1, ['sdd:accepting', 'sdd:auto-merge']),
         [],
@@ -108,8 +109,22 @@ spec('merge', () => {
         change({archived: true}),
       );
       assert.equal(decision.kind, 'merge');
+      const row = issue(1, ['Sandcastle', 'sdd:cycle', 'sdd:accepting', 'sdd:auto-merge']);
+      const {tracker, review} = memoryPorts({issues: [row]});
+      const walked = await walk('1', {
+        tracker,
+        review,
+        files,
+        queues: [{name: 'Sandcastle'}],
+        change: change({archived: true}),
+        tip: foldedTip(1),
+        pulls: [pull(9, {checks: 'green'})],
+      });
+      assert.equal(walked.kind, 'merge');
+      assert.equal((await tracker.comments('1')).length, 0);
+      assert.equal((await tracker.labels('1')).includes('sdd:wait-human'), false);
     });
-    scenario('Without auto-merge the person merges', () => {
+    scenario('Without auto-merge the person merges', async () => {
       const decision = onDisk(
         issue(1, ['sdd:accepting']),
         [],
@@ -119,7 +134,29 @@ spec('merge', () => {
       assert.equal(decision.kind, 'wait');
       if (decision.kind === 'wait') {
         assert.match(decision.reason, /wait for merge/);
+        assert.match(decision.ask ?? '', /Merge pull request #9/);
       }
+      const row = issue(1, ['Sandcastle', 'sdd:cycle', 'sdd:accepting']);
+      const {tracker, review} = memoryPorts({issues: [row]});
+      const view = change({archived: true});
+      const pulls = [pull(9, {checks: 'green'})];
+      const read = {
+        tracker,
+        review,
+        files,
+        queues: [{name: 'Sandcastle'}],
+        change: view,
+        tip: foldedTip(1),
+        pulls,
+      };
+      const walked = await walk('1', read);
+      assert.equal(walked.kind, 'wait');
+      assert.ok((await tracker.labels('1')).includes('sdd:wait-human'));
+      const notes = await tracker.comments('1');
+      assert.equal(notes.filter(note => note.body.includes('Merge pull request #9')).length, 1);
+      await walk('1', read);
+      const again = await tracker.comments('1');
+      assert.equal(again.filter(note => note.body.includes('Merge pull request #9')).length, 1);
     });
     scenario('Auto-merge waits for green checks', () => {
       const decision = onDisk(

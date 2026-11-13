@@ -14,7 +14,7 @@ import {
   refusalBody,
   spentThreadRefusal,
 } from '../decide/policy.ts';
-import {gateAsk, openWait} from '../phase/labels.ts';
+import {askComment, gateAsk, openWait} from '../phase/labels.ts';
 import {labelsAfterAdvance} from '../phase/phase.ts';
 import {queueOf} from '../spy/queues.ts';
 import {sameService} from '../spy/service-config.ts';
@@ -371,6 +371,10 @@ async function stepIssue(key: string, options: IssueRead, cache: WalkCache): Pro
     if (!cycle.phase || !acceptGateWithheld(cycle.phase, key, view, openPull)) {
       await openWait(key, gateAsk(key, decision.gate, options.tracker), options.tracker);
     }
+    return {stop: decision};
+  }
+  if (decision.kind === 'wait' && decision.ask && !record.labels.includes('sdd:wait-human')) {
+    await openWait(key, askComment(decision.ask), options.tracker);
     return {stop: decision};
   }
   if (!options.perform) {

@@ -15,6 +15,7 @@ import {BusyEdge} from './busy.tsx';
 import {ActForm, Hidden} from './forms.tsx';
 import {capIsOpen, layerHasFold, linkFocusProseParts, type FocusProsePart} from './gesture.ts';
 import {ChevronBack, ChevronForward, Cross, Pill, SendMark} from './marks.tsx';
+import {sourceLine} from './source-line.tsx';
 
 function codeLine(line: string, places: Record<string, string>): ReactNode {
   const matched = /^(\s*)Code(\s+)(\S.*)$/.exec(line);
@@ -496,31 +497,32 @@ function PlanLines({
     }
     gap = false;
     const trimmed = line.text.trim();
+    const painted = line.text.trimEnd();
     const question = pull
       ? questions.find(item => item.open && trimmed === `- [ ] ${item.text}`)
       : undefined;
     if (!pull) {
       out.push(
         <p className="line" key={index}>
-          {line.text.trimEnd()}
+          {sourceLine(painted)}
         </p>,
       );
       return;
     }
-    const draft = drafts.find(item => item.line === line.text.trimEnd());
+    const draft = drafts.find(item => item.line === painted);
     const path = `${root}/${file}`;
     out.push(
       <span key={index}>
         <button
           type="button"
           className={draft ? 'line is-on' : 'line'}
-          data-line={line.text.trimEnd()}
+          data-line={painted}
           data-path={path}
           data-at={line.line}
           data-side="right"
           data-question={question?.text}
         >
-          {line.text.trimEnd()}
+          {sourceLine(painted)}
         </button>
         {draft ? (
           <LineNote

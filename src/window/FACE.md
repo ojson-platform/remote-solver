@@ -26,7 +26,7 @@ The drawer is one document. Its sections are rows of type, divided by a hairline
 
 ## Type
 
-The window speaks in a small grotesque. A key, a file path, and a capability name are monospaced. A station name, a kicker, and the small line of a verb are tracked capitals. The settings sheet title is the only serif.
+The window speaks in a small grotesque. A key, a file path, a capability name, and a code span in a document line are monospaced. A station name, a kicker, and the small line of a verb are tracked capitals. The settings sheet title is the only serif.
 
 ## Ground
 

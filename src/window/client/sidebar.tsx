@@ -521,7 +521,7 @@ function PlanLines({
           data-path={path}
           data-at={line.line}
           data-side="right"
-          data-question={question?.text}
+          {...(question ? {'data-question': question.text} : {})}
         >
           {documentPaint[index]}
         </button>

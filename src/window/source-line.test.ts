@@ -249,9 +249,16 @@ spec('source-line', () => {
           await openIssue(page);
           for (const layer of ['Plan', 'Design'] as const) {
             const doc = docOf(spineOf(await pageHtml(page.url), KEY, layer));
-            const button = lineButton(doc, layer === 'Plan' ? line : 'Пункт с *курсивом*.'.trimEnd());
+            const lineKey = layer === 'Plan' ? line : 'Пункт с *курсивом*.'.trimEnd();
+            const button = lineButton(doc, lineKey);
             assert.match(button, /^<button\b[^>]*type="button"[^>]*class="[^"]*\bline\b/);
             assert.equal(button.includes('class="diff-row'), false);
+            if (layer === 'Design') {
+              assert.match(button, /<em>курсивом<\/em>/);
+            } else {
+              assert.match(button, />- list item<\/span>/);
+              assert.equal(button.includes('data-question='), false);
+            }
           }
         },
       );
@@ -270,10 +277,15 @@ spec('source-line', () => {
           writeChange(paths.arcadia, KEY, 'proposal.md', MARKDOWN_PROPOSAL);
           await openIssue(page);
           const shot = await readSnapshot(page.url);
+          const other = '- list item';
           const drafts = draftsAfterClick([], line);
+          assert.equal(drafts.length, 1);
+          assert.equal(drafts[0]?.line, line);
+          assert.equal(drafts[0]?.line, lineButton(await pageHtml(page.url), line).match(/data-line="([^"]*)"/)?.[1]);
           const html = renderToStaticMarkup(createElement(App, {snapshot: shot, drafts}));
           const plan = docOf(spineOf(html, KEY, 'Plan'));
           const button = lineButton(plan, line);
+          assert.equal(lineButton(plan, other).includes('is-on'), false);
           assert.match(button, /<a href="https:\/\/example\.com">link<\/a>/);
           assert.match(
             plan,
@@ -309,6 +321,11 @@ spec('source-line', () => {
             const doc = docOf(spineOf(html, KEY, layer));
             assert.equal(doc.includes('class="diff-row'), false);
             assert.equal(doc.includes('button.diff-row'), false);
+            const targets = doc.match(/<button[^>]*class="[^"]*\bline\b[^"]*"[^>]*>/g) ?? [];
+            assert.ok(targets.length > 0);
+            for (const target of targets) {
+              assert.equal(/\bdiff-row\b/.test(target), false);
+            }
           }
         },
       );

@@ -1,4 +1,4 @@
-sdd-absorbed: 5203d0361d4326a4
+sdd-absorbed: 9e6c741a49e98173
 
 - [ ] `plan-lines-markdown` On each surface, every source line the leaf paints renders markdown (headings, lists, emphasis, links, and code); PlanLines stays the leaf; data-line is the source line with trailing space removed and stays the draft key; data-path is proposal.md or design.md under the change read path; data-at is the source line number sectionsOf already assigns; data-side is right; A run of blank lines stays one span.gap
 - [ ] `plan-lines-remark` The line stays a comment target; A click opens the remark draft on that line; There is no diff row; LineNote and posted line comments stay on that path and line

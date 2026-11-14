@@ -539,7 +539,7 @@ spec('marker', () => {
               path: 'src/a.ts',
               line: 3,
               resolved: false,
-              body: 'sdd:layer=code',
+              body: 'sdd:layer=spec → specifying',
             },
           ],
         },

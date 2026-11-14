@@ -206,7 +206,7 @@ The thread SHALL stay open.
 
 ### Requirement: Thread fix closes a thread in one call
 
-`thread fix` SHALL refuse while HEAD is not the tip of the remote issue branch. Otherwise it SHALL reply `fixed` with that HEAD and resolve the thread in the same call. A thread that is already `fixed` and still open SHALL only be resolved. A resolved thread SHALL be left unchanged. The conversation form SHALL post that same line to the conversation.
+`thread fix` SHALL refuse while HEAD is not the tip of the remote issue branch. Otherwise, when the open thread's latest reply does not mark `code`, it SHALL reply `fixed` with that HEAD and resolve the thread in the same call. A thread that is already `fixed` and still open SHALL only be resolved. A resolved thread SHALL be left unchanged. The conversation form SHALL post that same line to the conversation.
 
 #### Scenario: Fix refuses before the commit is on the remote branch
 
@@ -215,5 +215,29 @@ The thread SHALL stay open.
 
 #### Scenario: Fix replies and resolves together
 
-- **WHEN** `thread fix` runs for an open thread and HEAD is on the remote issue branch
+- **WHEN** `thread fix` runs for an open thread whose latest reply does not mark `code`, and HEAD is on the remote issue branch
+- **THEN** the thread's reply is `fixed` with that HEAD and the thread is resolved
+
+### Requirement: A code thread is fixed only when its new test fails on the parent
+
+`thread fix` on an open `code` thread SHALL refuse, and SHALL NOT reply `fixed` and SHALL NOT resolve the thread, when the HEAD commit changes no test, when every test it changes passes on the first parent, or when such a test fails on HEAD. It SHALL reply `fixed` with that HEAD and resolve the thread when a test that commit changes fails on the first parent and passes on HEAD, and HEAD is the tip of the remote issue branch.
+
+#### Scenario: Fix refuses a code thread whose commit changes no test
+
+- **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, and the answering commit changes no test
+- **THEN** the command fails and the thread stays open
+
+#### Scenario: Fix refuses a code thread whose new test passes on the parent
+
+- **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, and every test the answering commit changes passes on that commit's parent
+- **THEN** the command fails and the thread stays open
+
+#### Scenario: Fix refuses a code thread whose new test fails on HEAD
+
+- **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, a test the answering commit changes fails on the parent, and that test fails on HEAD
+- **THEN** the command fails and the thread stays open
+
+#### Scenario: Fix closes a code thread after the new test fails on the parent
+
+- **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, and a test the answering commit changes fails on the parent and passes on HEAD
 - **THEN** the thread's reply is `fixed` with that HEAD and the thread is resolved

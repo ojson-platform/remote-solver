@@ -217,6 +217,11 @@ test('a code fix hands off before the commit, and verify reads the THEN first', 
   const handed = fix.indexOf('behavior the named scenarios do not describe');
   const commit = fix.indexOf('One commit per thread');
   assert.ok(handed !== -1 && commit !== -1 && handed < commit);
+  assert.match(fix, /fails on that commit's parent and passes on HEAD/);
+  assert.match(
+    readFileSync(path.join(flow, 'CONTEXT.md'), 'utf8'),
+    /fails on that commit's parent and passes on HEAD/,
+  );
   const then = verify.indexOf("read that scenario's THEN");
   const code = verify.indexOf('Hand-off (`CONTEXT.md`) to `code`');
   assert.ok(then !== -1 && code !== -1 && then < code);

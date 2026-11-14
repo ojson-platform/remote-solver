@@ -10,6 +10,7 @@ import {readChange} from './machine/change/change.ts';
 import {changeDir} from './machine/change/naming.ts';
 import {accept as acceptGate, cycleRecord, publishChoice, type Decision} from './machine/decide/policy.ts';
 import {applyLabels, pick, resolveCycle, serviceWait} from './machine/flow/flow.ts';
+import {proveCodeFix} from './machine/mark/code-fix.ts';
 import {postFocusComment, validateFocusBody} from './machine/mark/focus.ts';
 import {focusMarkerLine} from './machine/mark/marker.ts';
 import {parseMarker} from './machine/mark/marker.ts';
@@ -142,8 +143,10 @@ export function fixArgs(rest: string[]): {key: string; pull: string; thread: str
 
 /**
  * Replies `sdd:fixed <HEAD>` and resolves the thread, or answers the
- * conversation. Refuses while HEAD is not on the remote issue branch. A thread
- * whose latest reply is already `sdd:fixed` is only resolved.
+ * conversation. Refuses while HEAD is not on the remote issue branch. A `code`
+ * thread also refuses unless a test the answering commit changes fails on that
+ * commit's parent and passes on HEAD. A thread whose latest reply is already
+ * `sdd:fixed` is only resolved.
  */
 export async function fixThread(
   args: {key: string; pull: string; thread: string | null},
@@ -151,6 +154,8 @@ export async function fixThread(
     review: Review;
     vcs: Pick<Vcs, 'head' | 'published'>;
     readFile?: OpenItemFile;
+    root?: string;
+    prove?: (root: string) => Promise<void>;
   },
 ): Promise<string> {
   const head = await deps.vcs.head();
@@ -176,7 +181,11 @@ export async function fixThread(
       `${record.path}:${record.line} is still an open item. Check it, publish, then thread fix.`,
     );
   }
-  if (parseMarker(record.body)?.kind !== 'fixed') {
+  const marker = parseMarker(record.body);
+  if (marker?.kind === 'layer' && marker.layer === 'code') {
+    await (deps.prove ?? proveCodeFix)(deps.root ?? process.cwd());
+  }
+  if (marker?.kind !== 'fixed') {
     await deps.review.reply(args.pull, record.comment, body);
   }
   await deps.review.resolveThread(record.id);

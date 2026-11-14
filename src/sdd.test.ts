@@ -50,7 +50,7 @@ test('thread fix refuses while HEAD is not on the remote issue branch', async ()
 });
 
 test('thread fix replies sdd:fixed HEAD on the latest comment and resolves in one call', async () => {
-  const {memory, deps} = surface('sdd:layer=code → implementing', true);
+  const {memory, deps} = surface('sdd:layer=spec → specifying', true);
   assert.equal(await fixThread({key: '7', pull: '12', thread: 'PRRT_1'}, deps), 'sdd:fixed abc123');
   assert.deepEqual(memory.calls, [
     'threadList',

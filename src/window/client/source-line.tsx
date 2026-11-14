@@ -95,7 +95,7 @@ function phrasingChildren(children: PhrasingContent[]): ReactNode {
   ));
 }
 
-function paintBlock(block: BlockContent | ListItem, rawLine: string): ReactNode {
+function phrasingFromBlock(block: BlockContent | ListItem): PhrasingContent[] {
   switch (block.type) {
     case 'listItem': {
       const phrasing: PhrasingContent[] = [];
@@ -104,22 +104,57 @@ function paintBlock(block: BlockContent | ListItem, rawLine: string): ReactNode 
           phrasing.push(...child.children);
         }
       }
-      return (
-        <span>
-          {listMarker(rawLine)}
-          {phrasingChildren(phrasing)}
-        </span>
-      );
+      return phrasing;
     }
     case 'heading':
-      return <span>{phrasingChildren(block.children)}</span>;
     case 'paragraph':
-      return phrasingChildren(block.children);
-    case 'code':
-      return <code>{rawLine.trimEnd()}</code>;
+      return block.children;
     default:
-      return rawLine.trimEnd();
+      return [];
   }
+}
+
+function textOnSourceLine(node: PhrasingContent & {type: 'text'}, line: number, rawLine: string): PhrasingContent | undefined {
+  const position = node.position;
+  if (!position || !lineInPlace(position, line)) {
+    return undefined;
+  }
+  if (position.start.line === line && position.end.line === line) {
+    return node;
+  }
+  const parts = node.value.split('\n');
+  const index = line - position.start.line;
+  if (index < 0 || index >= parts.length) {
+    const trimmed = rawLine.trimEnd();
+    return trimmed ? {type: 'text', value: trimmed, position} : undefined;
+  }
+  const slice = parts[index] ?? '';
+  return slice ? {type: 'text', value: slice, position} : undefined;
+}
+
+function phrasingOnSourceLine(children: PhrasingContent[], line: number, rawLine: string): PhrasingContent[] {
+  const out: PhrasingContent[] = [];
+  for (const child of children) {
+    if (child.type === 'text') {
+      const sliced = textOnSourceLine(child, line, rawLine);
+      if (sliced) {
+        out.push(sliced);
+      }
+      continue;
+    }
+    if (!child.position || !lineInPlace(child.position, line)) {
+      continue;
+    }
+    if (child.type === 'emphasis' || child.type === 'strong' || child.type === 'link') {
+      const nested = phrasingOnSourceLine(child.children as PhrasingContent[], line, rawLine);
+      if (nested.length) {
+        out.push({...child, children: nested} as PhrasingContent);
+      }
+      continue;
+    }
+    out.push(child);
+  }
+  return out;
 }
 
 function paintBlockSlice(
@@ -133,11 +168,25 @@ function paintBlockSlice(
   if (block.type === 'code') {
     return <code>{rawLine.trimEnd()}</code>;
   }
-  if (line !== block.position.start.line) {
-    const trimmed = rawLine.trimEnd();
-    return trimmed || undefined;
+  if (!lineInPlace(block.position, line)) {
+    return undefined;
   }
-  return paintBlock(block, rawLine);
+  const phrasing = phrasingOnSourceLine(phrasingFromBlock(block), line, rawLine);
+  if (block.type === 'listItem' && line === block.position.start.line) {
+    return (
+      <span>
+        {listMarker(rawLine)}
+        {phrasingChildren(phrasing)}
+      </span>
+    );
+  }
+  if (phrasing.length === 0) {
+    return undefined;
+  }
+  if (block.type === 'heading') {
+    return <span>{phrasingChildren(phrasing)}</span>;
+  }
+  return phrasingChildren(phrasing);
 }
 
 function paintOneLine(tree: Root, lineIndex: number, rawLine: string): PaintedSourceLine {

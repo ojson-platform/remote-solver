@@ -122,6 +122,28 @@ spec('source-line', () => {
       assert.match(renderToStaticMarkup(createElement(Fragment, null, painted[2].paint)), /<code>x<\/code>/);
     });
 
+    scenario('Each covered line of a block paints only that line slice', async () => {
+      const continuation = 'continuation';
+      const proposal = ['## Scope', '', '### Body', '', '- item **one**', continuation, ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'proposing', {openPullRequests: 1})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', proposal);
+          await openIssue(page);
+          const plan = docOf(spineOf(await pageHtml(page.url), KEY, 'Plan'));
+          const head = lineButton(plan, '- item **one**');
+          assert.match(head, /<strong>one<\/strong>/);
+          assert.equal(head.includes('continuation'), false);
+          const tail = lineButton(plan, continuation);
+          assert.match(tail, />continuation</);
+          assert.equal(tail.includes('<strong>'), false);
+        },
+      );
+    });
+
     scenario('A source line is not wrapped as its own markdown document', async () => {
       const renderer = readFileSync(new URL('./client/source-line.tsx', import.meta.url), 'utf8');
       assert.equal(renderer.includes('@mdx-js/mdx'), false);

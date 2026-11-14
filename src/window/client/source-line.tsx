@@ -131,8 +131,7 @@ function paintBlockSlice(
     return undefined;
   }
   if (block.type === 'code') {
-    const trimmed = rawLine.trimEnd();
-    return trimmed ? <code>{trimmed}</code> : undefined;
+    return <code>{rawLine.trimEnd()}</code>;
   }
   if (line !== block.position.start.line) {
     const trimmed = rawLine.trimEnd();

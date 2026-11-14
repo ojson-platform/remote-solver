@@ -15,6 +15,7 @@ import {BusyEdge} from './busy.tsx';
 import {ActForm, Hidden} from './forms.tsx';
 import {capIsOpen, layerHasFold, linkFocusProseParts, type FocusProsePart} from './gesture.ts';
 import {ChevronBack, ChevronForward, Cross, Pill, SendMark} from './marks.tsx';
+import {paintSourceDocument} from './source-line.tsx';
 
 function codeLine(line: string, places: Record<string, string>): ReactNode {
   const matched = /^(\s*)Code(\s+)(\S.*)$/.exec(line);
@@ -484,6 +485,7 @@ function PlanLines({
   root: string;
   blocks: readonly SidebarBlock[];
 }): ReactNode {
+  const documentPaint = paintSourceDocument(lines.map(item => item.text));
   let gap = false;
   const out: ReactNode[] = [];
   lines.forEach((line, index) => {
@@ -496,31 +498,34 @@ function PlanLines({
     }
     gap = false;
     const trimmed = line.text.trim();
+    const lineKey = line.text.trimEnd();
     const question = pull
       ? questions.find(item => item.open && trimmed === `- [ ] ${item.text}`)
       : undefined;
     if (!pull) {
       out.push(
         <p className="line" key={index}>
-          {line.text.trimEnd()}
+          {documentPaint[index]?.paint}
         </p>,
       );
       return;
     }
-    const draft = drafts.find(item => item.line === line.text.trimEnd());
+    const draft = drafts.find(item => item.line === lineKey);
     const path = `${root}/${file}`;
+    const painted = documentPaint[index];
+    const at = line.line;
     out.push(
       <span key={index}>
         <button
           type="button"
           className={draft ? 'line is-on' : 'line'}
-          data-line={line.text.trimEnd()}
+          data-line={lineKey}
           data-path={path}
-          data-at={line.line}
+          data-at={at}
           data-side="right"
-          data-question={question?.text}
+          {...(question ? {'data-question': question.text} : {})}
         >
-          {line.text.trimEnd()}
+          {painted?.paint}
         </button>
         {draft ? (
           <LineNote
@@ -529,11 +534,11 @@ function PlanLines({
             question={draft.question}
             text={draft.text}
             path={path}
-            at={String(line.line)}
+            at={String(at)}
             side="right"
           />
         ) : null}
-        <PostedComments comments={commentsOnLine(blocks, path, line.line)} />
+        <PostedComments comments={commentsOnLine(blocks, path, at)} />
       </span>,
     );
   });

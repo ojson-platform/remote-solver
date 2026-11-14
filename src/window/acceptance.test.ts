@@ -546,20 +546,21 @@ spec('acceptance', () => {
 });
 
 spec('phase-thread-accept', () => {
+  function phaseThread(file: string, marker: string | null): WindowReview {
+    return {
+      threads: [
+        {
+          marker,
+          file,
+          line: null,
+          lines: ['open thread'],
+          comments: ['open thread'],
+        },
+      ],
+    };
+  }
+
   requirement('Acceptance stays inactive while a thread of this phase is open', () => {
-    function phaseThread(file: string, marker: string | null): WindowReview {
-      return {
-        threads: [
-          {
-            marker,
-            file,
-            line: null,
-            lines: ['open thread'],
-            comments: ['open thread'],
-          },
-        ],
-      };
-    }
 
     scenario('On Plan, Specify, and Design, «Принять» stays in the gate\'s place', async () => {
       const proposalFile = `services/billing/${changeDir('1')}/proposal.md`;
@@ -693,32 +694,6 @@ spec('phase-thread-accept', () => {
       );
     });
 
-    scenario('A phase thread leaves acceptance active', async () => {
-      const specFile = `services/billing/${changeDir('1')}/specs/section-text/spec.md`;
-      const reading = phaseThread(specFile, 'proposal');
-      await hosted(
-        {
-          login: () => MANAGER,
-          tickets: () => [held('1', 'specifying', {openPullRequests: 1})],
-          review: () => reading,
-        },
-        async (page, window, paths) => {
-          writeChange(paths.arcadia, '1', 'specs/section-text/spec.md', deltaRequirement());
-          window.chooseAgent('cursor');
-          assert.equal(
-            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
-              .status,
-            200,
-          );
-          const specify = spineOf(await pageHtml(page.url), '1', 'Specify');
-          assert.match(specify, /aria-label="Принять Specify"/);
-          assert.equal(specify.includes('disabled'), false);
-          assert.equal(specify.includes('нить этой фазы ещё открыта'), false);
-          assert.equal(specify.includes('data-gate="'), false);
-        },
-      );
-    });
-
     scenario('A thread marked for a later phase does not', async () => {
       const proposalFile = `services/billing/${changeDir('1')}/proposal.md`;
       const reading = phaseThread(proposalFile, 'code');
@@ -798,6 +773,34 @@ spec('phase-thread-accept', () => {
           assert.equal(plan.includes('Принять Plan'), false);
           assert.equal(plan.includes('нить этой фазы ещё открыта'), false);
           assert.equal(plan.includes('data-gate="proposing"'), false);
+        },
+      );
+    });
+  });
+
+  requirement('Acceptance stays active while a review thread is open', () => {
+    scenario('A phase thread leaves acceptance active', async () => {
+      const specFile = `services/billing/${changeDir('1')}/specs/section-text/spec.md`;
+      const reading = phaseThread(specFile, 'proposal');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1})],
+          review: () => reading,
+        },
+        async (page, window, paths) => {
+          writeChange(paths.arcadia, '1', 'specs/section-text/spec.md', deltaRequirement());
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const specify = spineOf(await pageHtml(page.url), '1', 'Specify');
+          assert.match(specify, /aria-label="Принять Specify"/);
+          assert.equal(specify.includes('disabled'), false);
+          assert.equal(specify.includes('нить этой фазы ещё открыта'), false);
+          assert.equal(specify.includes('data-gate="'), false);
         },
       );
     });

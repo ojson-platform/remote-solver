@@ -918,6 +918,9 @@ function boot(): void {
       if (dragLeavesSelection(line)) {
         return;
       }
+      if (line.matches('button.line')) {
+        event.preventDefault();
+      }
       const targetLine = line.getAttribute('data-line') ?? '';
       const current = lineDrafts();
       const next = draftsAfterClick(current, targetLine);

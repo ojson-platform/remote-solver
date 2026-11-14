@@ -2,15 +2,27 @@ import type {ReactNode} from 'react';
 
 import type {BlockContent, ListItem, PhrasingContent, Root} from 'mdast';
 
+type SourcePosition = NonNullable<Root['position']>;
+
 import {Fragment} from 'react';
 import {remark} from 'remark';
 import {visit} from 'unist-util-visit';
 
-function fenceLine(line: string): ReactNode | undefined {
-  if (/^\s*```/.test(line)) {
-    return <code>{line}</code>;
+export type PaintedSourceLine = {
+  paint: ReactNode | undefined;
+  /** 1-based source line in this fragment that remark mapped this place onto */
+  placeAt: number | undefined;
+};
+
+function placeEndLine(position: SourcePosition): number {
+  return position.end.column === 1 ? position.end.line - 1 : position.end.line;
+}
+
+function lineInPlace(position: SourcePosition | undefined, line: number): boolean {
+  if (!position) {
+    return false;
   }
-  return undefined;
+  return position.start.line <= line && line <= placeEndLine(position);
 }
 
 function headingLine(line: string): ReactNode | undefined {
@@ -30,10 +42,10 @@ function listMarker(line: string): string {
   return matched?.[1] ?? '';
 }
 
-function blockOnLine(tree: Root, line: number): BlockContent | ListItem | undefined {
+function blockCoveringLine(tree: Root, line: number): BlockContent | ListItem | undefined {
   const hits: (BlockContent | ListItem)[] = [];
   visit(tree, node => {
-    if (!('position' in node) || !node.position || node.position.start.line !== line) {
+    if (!('position' in node) || !node.position || !lineInPlace(node.position, line)) {
       return;
     }
     if (
@@ -104,30 +116,53 @@ function paintBlock(block: BlockContent | ListItem, rawLine: string): ReactNode 
     case 'paragraph':
       return phrasingChildren(block.children);
     case 'code':
-      return <code>{block.value}</code>;
+      return <code>{rawLine.trimEnd()}</code>;
     default:
       return rawLine.trimEnd();
   }
 }
 
-function paintOneLine(tree: Root, lineIndex: number, rawLine: string): ReactNode | undefined {
-  const fence = fenceLine(rawLine);
-  if (fence) {
-    return fence;
+function paintBlockSlice(
+  block: BlockContent | ListItem,
+  line: number,
+  rawLine: string,
+): ReactNode | undefined {
+  if (!block.position) {
+    return undefined;
   }
-  const block = blockOnLine(tree, lineIndex + 1);
-  if (block) {
-    return paintBlock(block, rawLine);
+  if (block.type === 'code') {
+    const trimmed = rawLine.trimEnd();
+    return trimmed ? <code>{trimmed}</code> : undefined;
+  }
+  if (line !== block.position.start.line) {
+    const trimmed = rawLine.trimEnd();
+    return trimmed || undefined;
+  }
+  return paintBlock(block, rawLine);
+}
+
+function paintOneLine(tree: Root, lineIndex: number, rawLine: string): PaintedSourceLine {
+  const lineNum = lineIndex + 1;
+  const block = blockCoveringLine(tree, lineNum);
+  if (block?.position && lineInPlace(block.position, lineNum)) {
+    return {
+      paint: paintBlockSlice(block, lineNum, rawLine),
+      placeAt: lineNum,
+    };
   }
   const lifted = headingLine(rawLine);
   if (lifted) {
-    return lifted;
+    return {paint: lifted, placeAt: undefined};
   }
-  return rawLine.trimEnd() ? rawLine.trimEnd() : undefined;
+  const trimmed = rawLine.trimEnd();
+  if (trimmed) {
+    return {paint: trimmed, placeAt: undefined};
+  }
+  return {paint: undefined, placeAt: undefined};
 }
 
 /** The spine lines of one document, painted as nodes in that single markdown document. */
-export function paintSourceDocument(texts: readonly string[]): (ReactNode | undefined)[] {
+export function paintSourceDocument(texts: readonly string[]): PaintedSourceLine[] {
   const source = texts.join('\n');
   const tree = remark().parse(source) as Root;
   return texts.map((text, index) => paintOneLine(tree, index, text));

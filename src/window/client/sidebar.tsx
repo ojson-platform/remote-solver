@@ -505,13 +505,16 @@ function PlanLines({
     if (!pull) {
       out.push(
         <p className="line" key={index}>
-          {documentPaint[index]}
+          {documentPaint[index]?.paint}
         </p>,
       );
       return;
     }
     const draft = drafts.find(item => item.line === lineKey);
     const path = `${root}/${file}`;
+    const painted = documentPaint[index];
+    const at =
+      painted?.placeAt !== undefined ? lines[painted.placeAt - 1]?.line ?? line.line : line.line;
     out.push(
       <span key={index}>
         <button
@@ -519,11 +522,11 @@ function PlanLines({
           className={draft ? 'line is-on' : 'line'}
           data-line={lineKey}
           data-path={path}
-          data-at={line.line}
+          data-at={at}
           data-side="right"
           {...(question ? {'data-question': question.text} : {})}
         >
-          {documentPaint[index]}
+          {painted?.paint}
         </button>
         {draft ? (
           <LineNote
@@ -532,11 +535,11 @@ function PlanLines({
             question={draft.question}
             text={draft.text}
             path={path}
-            at={String(line.line)}
+            at={String(at)}
             side="right"
           />
         ) : null}
-        <PostedComments comments={commentsOnLine(blocks, path, line.line)} />
+        <PostedComments comments={commentsOnLine(blocks, path, at)} />
       </span>,
     );
   });

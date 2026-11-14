@@ -12,7 +12,7 @@ Plan and Design render as one markdown document, and a click opens the remark dr
 
 ### Requirement: The document renders as one markdown document
 
-Plan and Design SHALL render the source as one markdown document. Headings, lists, emphasis, links, and code SHALL render in that document. A source line SHALL NOT be wrapped as its own markdown document.
+Plan and Design SHALL render the source as one markdown document. Headings, lists, emphasis, links, and code SHALL render in that document. A source line SHALL NOT be wrapped as its own markdown document. A line of code inside a fenced code block SHALL render inside `<code>`. The opening fence marker SHALL NOT render inside `<code>`. A blank line inside a fenced code block SHALL be one `span.gap` and SHALL NOT render as an empty `<code>`.
 
 #### Scenario: Plan and Design render the source as one markdown document
 
@@ -23,6 +23,11 @@ Plan and Design SHALL render the source as one markdown document. Headings, list
 
 - **WHEN** the caller opens Plan on a source of several lines and then opens Design on that same source
 - **THEN** on each surface those lines render inside the one document, and no source line is wrapped as its own markdown document
+
+#### Scenario: A line of code renders inside code, the opening fence marker does not, and the blank line is one span.gap
+
+- **WHEN** the caller opens Plan on a source that contains a fenced code block with an opening fence marker, a blank line, and a line of code, and then opens Design on that same source
+- **THEN** on each surface that line of code renders inside `<code>`, the opening fence marker does not render inside `<code>`, and the blank line is one `span.gap` and not an empty `<code>`
 
 ### Requirement: The line stays a comment target
 

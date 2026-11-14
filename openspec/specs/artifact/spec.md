@@ -109,13 +109,13 @@ The prompt for a skill run SHALL include the issue title and body. It SHALL say 
 
 ### Requirement: The writing prompt carries the input revision
 
-For `specify`, `design`, and `tasks`, the prompt SHALL carry the current text of the previous artifact and the `sdd-absorbed` stamp in this step's file.
+For `specify`, `design`, and `tasks`, the prompt SHALL carry the previous artifact's current text and this step's `sdd-absorbed` stamp.
 
-A stamp that equals the revision of that text SHALL be one sentence and SHALL NOT include the text.
+A stamp that equals that revision SHALL be one sentence without the text.
 
-For `tasks`, that prompt SHALL also name the delta revision on its own line and SHALL list the issues already linked.
+For `tasks`, the prompt SHALL name the delta revision on its own line and SHALL list the linked issues.
 
-For `implement`, that prompt SHALL name the delta revision and any Scenario title that is on no card. The step reads those lines.
+For `implement`, the prompt SHALL name the delta revision and any Scenario title on no card. The step reads those lines.
 
 A missing file SHALL say that file does not exist yet.
 

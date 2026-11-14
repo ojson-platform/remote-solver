@@ -430,12 +430,6 @@ function pick(input: PlaqueInput): string[] {
       return [sentence];
     }
   }
-  if (decision?.kind === 'archive') {
-    return ['Архивирую'];
-  }
-  if (decision?.kind === 'unarchive') {
-    return ['Возвращаю дельту из архива'];
-  }
   if (decision?.kind === 'merge') {
     return [`Смержи #${decision.pull}`];
   }

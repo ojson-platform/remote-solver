@@ -70,12 +70,6 @@ export function pageSentence(decision: Decision, openCount = 0): string | undefi
   if (decision.kind === 'agent') {
     return agentSentence(decision.action, decision.reason);
   }
-  if (decision.kind === 'archive') {
-    return 'Архивирую изменение.';
-  }
-  if (decision.kind === 'unarchive') {
-    return 'Возвращаю дельту из архива в изменение.';
-  }
   if (decision.kind === 'merge') {
     return `Мержу #${decision.pull}.`;
   }
@@ -125,6 +119,10 @@ function agentSentence(action: AgentAction, reason: string): string {
       return 'Разбираю красные проверки.';
     case 'classify-comments':
       return 'Размечаю комментарии в пул-реквесте.';
+    case 'archive':
+      return 'Архивирую изменение.';
+    case 'unarchive':
+      return 'Возвращаю дельту из архива в изменение.';
     default:
       return action;
   }

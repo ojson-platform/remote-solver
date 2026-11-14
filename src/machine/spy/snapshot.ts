@@ -92,12 +92,15 @@ export async function loadCycle(
   queues: QueueConfig[],
   contentAt: (key: string) => FileSource = filesAt,
   tipMessage?: (key: string) => Promise<string>,
+  note?: (line: string) => void,
 ): Promise<CycleSnapshot> {
   const issues = await tracker.listOpen();
   const me = await tracker.login();
   const cycles = issues
     .filter(issue => ownCycle(issue, me, queues))
     .sort((a, b) => a.key.localeCompare(b.key, undefined, {numeric: true}));
+  const names = cycles.map(issue => `#${issue.key}`).join(' ');
+  note?.(`Poll cycles as ${me}: ${names || 'none'}`);
   const pulls = new Map<string, PullSnapshot[]>();
   const changes = new Map<string, ChangeView>();
   const facts = new Map<string, BranchFacts>();
@@ -112,7 +115,14 @@ export async function loadCycle(
   for (const issue of cycles) {
     const files = filesAt(issue.key);
     const read = readBranch(issue.key, files, contentAt(issue.key));
-    prepared.push({issue, files, read, listed: await review.pulls(issue.key)});
+    if (files.failed?.()) {
+      note?.(`Poll #${issue.key} change was not read`);
+    }
+    note?.(`Poll #${issue.key} reading pulls`);
+    const listed = await review.pulls(issue.key);
+    const ids = listed.map(pull => pull.id).join(' ');
+    note?.(`Poll #${issue.key} pulls ${ids || 'none'}`);
+    prepared.push({issue, files, read, listed});
   }
   const openIds = [
     ...new Set(
@@ -121,9 +131,13 @@ export async function loadCycle(
       ),
     ),
   ];
+  if (openIds.length > 1 && review.conversations) {
+    note?.(`Poll reading ${openIds.length} pull conversations`);
+  }
   const shared =
     openIds.length > 1 && review.conversations ? await review.conversations(openIds) : undefined;
   for (const item of prepared) {
+    note?.(`Poll #${item.issue.key} reading review`);
     pulls.set(item.issue.key, await pullRecords(review, item.listed, item.files, shared));
     const {read} = item;
     if (!item.files.failed?.()) {

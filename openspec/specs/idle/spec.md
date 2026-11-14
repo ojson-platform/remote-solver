@@ -8,9 +8,9 @@ A skill run that changes nothing is not started again until the decision changes
 
 ### Requirement: A run with no commit is not repeated
 
-A clean run with no commit and no new marker SHALL comment `sdd:refused` with the effect's phase, action, and reason, and SHALL set that label. The comment SHALL NOT contain a null byte.
+A clean run with no commit and no new marker SHALL comment `sdd:refused` with its phase, action, and reason, and SHALL set that label. It SHALL say a comment on the issue runs this step again. The comment SHALL NOT contain a null byte.
 
-The next poll SHALL NOT start that effect while the label matches it. Removing the label SHALL let it start. A person comment SHALL NOT remove the label. A different phase, action, or reason SHALL start. The spy SHALL NOT remember the mark.
+The next poll SHALL NOT start that effect while the label matches. Removing the label SHALL let it start. A person comment SHALL remove the label and that effect SHALL start. A different phase, action, or reason SHALL start. The spy SHALL NOT remember the mark.
 
 #### Scenario: A later turn with no commit stays idle
 
@@ -26,10 +26,10 @@ When one worker runs a later turn and that turn produces no commit, the refusal 
 - **WHEN** a run produces no commit and the next poll has the same phase, action, and reason
 - **THEN** the issue carries the label `sdd:refused` and a comment with the phase, the action, and the reason, the comment has no null byte, and the spy does not start the issue
 
-#### Scenario: A person comment leaves the refusal
+#### Scenario: A person comment starts the effect
 
 - **WHEN** a person comments after `sdd:refused`
-- **THEN** the same effect does not start
+- **THEN** the label is removed and the same effect starts
 
 #### Scenario: Removing the label starts the effect again
 

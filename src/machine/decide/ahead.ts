@@ -58,7 +58,13 @@ export function decideAhead(read: AheadRead): Decision | null {
     record.folded &&
     !pulls.some(item => item.state === 'MERGED')
   ) {
-    return {kind: 'unarchive', issue: issue.key, phase, reason: 'return the delta to the change'};
+    return agent(
+      issue.key,
+      'unarchive',
+      phase,
+      pr ? String(pr.id) : '',
+      'return the delta to the change',
+    );
   }
 
   // An unlabeled thread is classified before the open task. Two pull requests

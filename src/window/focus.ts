@@ -178,7 +178,7 @@ export function liveFocus(input: LiveFocusInput): LiveFocus | undefined {
     const linked =
       decision.kind === 'wait' &&
       (decision.reason.startsWith('wait for children') || decision.reason.startsWith('wait for blockers'));
-    const working = decision.kind === 'agent' || decision.kind === 'archive';
+    const working = decision.kind === 'agent';
     return {badge: working ? 'working' : linked ? 'waiting on an issue' : 'waiting', text: spoken};
   }
   if (decision?.kind === 'wait' && decision.gate === undefined) {

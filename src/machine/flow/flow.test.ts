@@ -7,19 +7,45 @@ import path from 'node:path';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {test} from 'vitest';
 
-import {readChange} from '../change/change.ts';
+import {readChange, type ChangeView} from '../change/change.ts';
 import {commandRefusal} from '../change/fold.ts';
 import {performIssue, resolveCycle, resolveIssue} from './flow.ts';
+import {reportFoldFailure} from './step.ts';
 import {markRobot} from '../mark/marker.ts';
 import {queueOf} from '../spy/queues.ts';
 import {loadCycle, type CycleSnapshot} from '../spy/snapshot.ts';
 import {emptyReview} from '../mark/review.ts';
 import {memoryPorts} from '../../adapters/tracker/github.ts';
 import {change, foldedTip} from '../__tests__/harness.ts';
-import type {FileSource, IssueRecord, ThreadRecord} from '../port.ts';
+import type {FileSource, IssueRecord, Review, ThreadRecord, Tracker} from '../port.ts';
 
-const FINISHED_CLOSE =
-  'SDLC finished: the pull request is merged and the change is archived.';
+const FINISHED_CLOSE = 'SDLC finished: the pull request is merged and the change is archived.';
+
+async function refuseFold(
+  options: {
+    tracker: Tracker;
+    review: Review;
+    files: FileSource;
+    change: ChangeView;
+    checkout: () => Promise<string>;
+  },
+  error: unknown,
+  key = '3',
+) {
+  return reportFoldFailure({
+    key,
+    tracker: options.tracker,
+    review: options.review,
+    files: options.files,
+    capabilities: options.change.capabilities,
+    dir: await options.checkout(),
+    action: 'archive',
+    phase: 'accepting',
+    pr: '9',
+    reason: 'archive the change',
+    error,
+  });
+}
 
 const finishedChange = change({
   proposal: true,
@@ -72,7 +98,10 @@ function git(root: string, args: string[]): string {
   return execFileSync('git', args, {cwd: root, encoding: 'utf8'}).trim();
 }
 
-function specDiffCheckout(key: string, capability: string): {root: string; base: string; head: string} {
+function specDiffCheckout(
+  key: string,
+  capability: string,
+): {root: string; base: string; head: string} {
   const root = mkdtempSync(path.join(tmpdir(), 'archive-thread-'));
   git(root, ['init', '-b', 'master']);
   git(root, ['config', 'user.email', 'archive@test.example']);
@@ -339,6 +368,82 @@ test('performIssue merges a green archived pull request and settles the close', 
 });
 
 spec('spec-archive', () => {
+  requirement('The poll starts the accept step', () => {
+    scenario('Accepting starts the accept step', async () => {
+      const {tracker, review} = memoryPorts({
+        issues: [
+          {
+            key: '3',
+            title: '#3: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['Sandcastle', 'sdd:cycle', 'sdd:accepting'],
+          },
+        ],
+        pulls: {'3': [{id: '9', title: '#3: title', state: 'OPEN'}]},
+      });
+      let folded = false;
+      const decision = await performIssue('3', {
+        tracker,
+        review,
+        files: {exists: () => false, read: () => '', list: () => []},
+        queues: [{name: 'Sandcastle'}],
+        change: change({proposal: true}),
+        tip: '',
+        checkout: async () => {
+          folded = true;
+          return '/tmp/unused';
+        },
+        openspec: () => {
+          folded = true;
+          return 'openspec';
+        },
+      });
+      assert.equal(folded, false);
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'archive');
+        assert.equal(decision.skill, 'accept');
+        assert.equal(decision.reason, 'archive the change');
+      }
+    });
+
+    scenario('A phase before accepting starts the accept step to restore', async () => {
+      const {tracker, review} = memoryPorts({
+        issues: [
+          {
+            key: '9',
+            title: '#9: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['Sandcastle', 'sdd:cycle', 'sdd:tasking'],
+          },
+        ],
+        pulls: {'9': [{id: '37', title: '#9: title', state: 'OPEN'}]},
+      });
+      let reverted = false;
+      const decision = await performIssue('9', {
+        tracker,
+        review,
+        files: {exists: () => false, read: () => '', list: () => []},
+        queues: [{name: 'Sandcastle'}],
+        change: change({archived: true, proposal: true, design: true, tasks: true}),
+        tip: foldedTip('9'),
+        checkout: async () => {
+          reverted = true;
+          return '/tmp/unused';
+        },
+      });
+      assert.equal(reverted, false);
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'unarchive');
+        assert.equal(decision.skill, 'accept');
+        assert.equal(decision.reason, 'return the delta to the change');
+      }
+    });
+  });
+
   requirement('A refusal does not publish', () => {
     scenario('The machine waits and names the baseline instead of refusing', async () => {
       const {tracker, review} = memoryPorts({
@@ -353,24 +458,25 @@ spec('spec-archive', () => {
         ],
         pulls: {'3': [{id: '9', title: '#3: title', state: 'OPEN'}]},
       });
-      const decision = await performIssue('3', {
-        tracker,
-        review,
-        files: {exists: () => false, read: () => '', list: () => []},
-        queues: [{name: 'Sandcastle'}],
-        change: change({proposal: true, capabilities: ['section']}),
-        tip: '',
-        checkout: async () => '/tmp/unused',
-        fold() {
-          throw new Error('Spec must have at least one requirement');
+      const decision = await refuseFold(
+        {
+          tracker,
+          review,
+          files: {exists: () => false, read: () => '', list: () => []},
+          change: change({proposal: true, capabilities: ['section']}),
+          checkout: async () => '/tmp/unused',
         },
-      });
+        new Error('Spec must have at least one requirement'),
+      );
       assert.equal(decision.kind, 'wait');
       if (decision.kind === 'wait') {
         assert.match(decision.reason, /openspec\/specs\/section\/spec\.md/);
       }
       const notes = await tracker.comments('3');
-      assert.equal(notes.some(note => note.body.includes('sdd:refused')), false);
+      assert.equal(
+        notes.some(note => note.body.includes('sdd:refused')),
+        false,
+      );
       assert.equal((await tracker.labels('3')).includes('sdd:refused'), false);
     });
 
@@ -395,18 +501,16 @@ spec('spec-archive', () => {
         ],
         pulls: {'3': [{id: '9', title: '#3: title', state: 'OPEN'}]},
       });
-      const decision = await performIssue('3', {
-        tracker,
-        review,
-        files: {exists: () => false, read: () => '', list: () => []},
-        queues: [{name: 'Sandcastle'}],
-        change: change({proposal: true, capabilities: ['section']}),
-        tip: '',
-        checkout: async () => '/tmp/unused',
-        fold() {
-          throw new Error(said);
+      const decision = await refuseFold(
+        {
+          tracker,
+          review,
+          files: {exists: () => false, read: () => '', list: () => []},
+          change: change({proposal: true, capabilities: ['section']}),
+          checkout: async () => '/tmp/unused',
         },
-      });
+        new Error(said),
+      );
       assert.equal(decision.kind, 'wait');
       if (decision.kind === 'wait') {
         assert.equal(decision.reason, `archive refused: ${said}`);
@@ -417,7 +521,10 @@ spec('spec-archive', () => {
       assert.ok((await tracker.labels('3')).includes('sdd:refused'));
       assert.match(refusal.body, /archive the change/);
       assert.match(refusal.body, /spec\/board/);
-      assert.equal(notes.some(note => note.body.startsWith('sdd:focus:accept')), false);
+      assert.equal(
+        notes.some(note => note.body.startsWith('sdd:focus:accept')),
+        false,
+      );
     });
 
     scenario('The next poll does not archive again', async () => {
@@ -433,7 +540,6 @@ spec('spec-archive', () => {
         ],
         pulls: {'3': [{id: '9', title: '#3: title', state: 'OPEN'}]},
       });
-      let folds = 0;
       const options = {
         tracker,
         review,
@@ -442,14 +548,15 @@ spec('spec-archive', () => {
         change: change({proposal: true, capabilities: ['section']}),
         tip: '',
         checkout: async () => '/tmp/unused',
-        fold() {
-          folds += 1;
-          throw new Error('openspec validate --all --strict refused spec/board: Requirement text is very long (>500 characters)');
-        },
       };
-      await performIssue('3', options);
+      await refuseFold(
+        options,
+        new Error(
+          'openspec validate --all --strict refused spec/board: Requirement text is very long (>500 characters)',
+        ),
+      );
       const again = await performIssue('3', options);
-      assert.equal(folds, 1);
+      assert.notEqual(again.kind === 'agent' ? again.action : again.kind, 'archive');
       assert.equal(again.kind, 'wait');
       if (again.kind === 'wait') {
         assert.match(again.reason, /spec\/board/);
@@ -475,24 +582,25 @@ spec('spec-archive', () => {
           opened = target;
           return openThread(pull, target);
         };
-        const decision = await performIssue('3', {
-          tracker,
-          review,
-          files: {exists: () => false, read: () => '', list: () => []},
-          queues: [{name: 'Sandcastle'}],
-          change: change({proposal: true, capabilities: ['board']}),
-          tip: '',
-          checkout: async () => box.root,
-          fold() {
-            throw new Error(said);
+        const decision = await refuseFold(
+          {
+            tracker,
+            review,
+            files: {exists: () => false, read: () => '', list: () => []},
+            change: change({proposal: true, capabilities: ['board']}),
+            checkout: async () => box.root,
           },
-        });
+          new Error(said),
+        );
         assert.equal(decision.kind, 'wait');
         if (decision.kind === 'wait') {
           assert.equal(decision.reason, `archive refused: ${said}`);
         }
         const notes = await tracker.comments('3');
-        assert.equal(notes.some(note => note.body.includes('sdd:refused')), false);
+        assert.equal(
+          notes.some(note => note.body.includes('sdd:refused')),
+          false,
+        );
         assert.equal((await tracker.labels('3')).includes('sdd:refused'), false);
         assert.equal(opened?.path, 'openspec/changes/issue-3/specs/board/spec.md');
         assert.equal(opened?.line, 1);
@@ -519,21 +627,22 @@ spec('spec-archive', () => {
           opened = target;
           return openThread(pull, target);
         };
-        const decision = await performIssue('3', {
-          tracker,
-          review,
-          files: {exists: () => false, read: () => '', list: () => []},
-          queues: [{name: 'Sandcastle'}],
-          change: change({proposal: true, capabilities: ['section']}),
-          tip: '',
-          checkout: async () => box.root,
-          fold() {
-            throw new Error(said);
+        const decision = await refuseFold(
+          {
+            tracker,
+            review,
+            files: {exists: () => false, read: () => '', list: () => []},
+            change: change({proposal: true, capabilities: ['section']}),
+            checkout: async () => box.root,
           },
-        });
+          new Error(said),
+        );
         assert.equal(decision.kind, 'wait');
         const notes = await tracker.comments('3');
-        assert.equal(notes.some(note => note.body.includes('sdd:refused')), false);
+        assert.equal(
+          notes.some(note => note.body.includes('sdd:refused')),
+          false,
+        );
         assert.equal((await tracker.labels('3')).includes('sdd:refused'), false);
         assert.equal(opened?.path, 'openspec/changes/issue-3/specs/board/spec.md');
         assert.match(opened?.body ?? '', /^sdd:layer=spec → specifying\n/);
@@ -558,9 +667,6 @@ spec('spec-archive', () => {
         change: change({proposal: true, capabilities: ['board']}),
         tip: '',
         checkout: async () => '/tmp/unused',
-        fold() {
-          throw new Error('archive ran');
-        },
       });
       assert.equal(decision.kind, 'advance');
       if (decision.kind === 'advance') {
@@ -581,7 +687,6 @@ spec('spec-archive', () => {
           ranges: {'9': {head: box.head, base: box.base}},
           threadList: {'9': [threadOn('board', `sdd:layer=spec → specifying\n${said}`, true)]},
         });
-        let folds = 0;
         const options = {
           tracker,
           review,
@@ -590,14 +695,9 @@ spec('spec-archive', () => {
           change: change({proposal: true, capabilities: ['board']}),
           tip: '',
           checkout: async () => box.root,
-          fold() {
-            folds += 1;
-            throw new Error(said);
-          },
         };
-        const decision = await performIssue('3', options);
+        const decision = await refuseFold(options, new Error(said));
         const again = await performIssue('3', options);
-        assert.equal(folds, 1);
         assert.equal(decision.kind, 'wait');
         if (decision.kind === 'wait') {
           assert.equal(decision.reason, `archive refused: ${said}`);
@@ -605,7 +705,10 @@ spec('spec-archive', () => {
         assert.equal(again.kind, 'wait');
         assert.equal(calls.includes('openThread'), false);
         const notes = await tracker.comments('3');
-        assert.equal(notes.some(note => note.body.includes('sdd:refused')), true);
+        assert.equal(
+          notes.some(note => note.body.includes('sdd:refused')),
+          true,
+        );
         assert.ok((await tracker.labels('3')).includes('sdd:refused'));
       } finally {
         rmSync(box.root, {recursive: true, force: true});
@@ -630,7 +733,6 @@ spec('focus', () => {
         pulls: {'3': [{id: '9', title: '#3: title', state: 'OPEN'}]},
         checks: {'9': {checks: 'green'}},
       });
-      let folded = false;
       const decision = await performIssue('3', {
         tracker,
         review,
@@ -638,47 +740,51 @@ spec('focus', () => {
         queues: [{name: 'Sandcastle'}],
         change: change({proposal: true}),
         tip: '',
-        checkout: async () => '/tmp/unused',
-        fold() {
-          folded = true;
-        },
-        readTip: async () => (folded ? 'Sdd-Archive: issue-3\n' : ''),
       });
-      assert.equal(decision.kind, 'wait');
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'archive');
+      }
       const notes = await tracker.comments('3');
-      assert.equal(notes.some(note => note.body.startsWith('sdd:focus:accept')), false);
+      assert.equal(
+        notes.some(note => note.body.startsWith('sdd:focus:accept')),
+        false,
+      );
     });
   });
 });
 
 spec('finished-cycle', () => {
   requirement('A finished cycle leaves the board', () => {
-    scenario('A cycle is finished when its pull request is merged and its change is archived', async () => {
-      const {tracker, review, calls} = memoryPorts({
-        issues: [
-          {
-            key: '9',
-            title: '#9: title',
-            body: '',
-            state: 'OPEN',
-            labels: ['Sandcastle', 'sdd:cycle', 'sdd:tasking'],
-          },
-        ],
-        pulls: {'9': [{id: '25', title: '#9: title', state: 'MERGED'}]},
-      });
-      const decision = await resolveIssue('9', {
-        tracker,
-        review,
-        files,
-        queues: [{name: 'Sandcastle'}],
-        change: finishedChange,
-        tip: foldedTip('9'),
-      });
-      assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
-      assert.equal((await tracker.issue('9')).state, 'CLOSED');
-      assert.ok(calls.some(call => call === `close:${FINISHED_CLOSE}`));
-      assert.ok(!(await tracker.listOpen()).some(issue => issue.key === '9'));
-    });
+    scenario(
+      'A cycle is finished when its pull request is merged and its change is archived',
+      async () => {
+        const {tracker, review, calls} = memoryPorts({
+          issues: [
+            {
+              key: '9',
+              title: '#9: title',
+              body: '',
+              state: 'OPEN',
+              labels: ['Sandcastle', 'sdd:cycle', 'sdd:tasking'],
+            },
+          ],
+          pulls: {'9': [{id: '25', title: '#9: title', state: 'MERGED'}]},
+        });
+        const decision = await resolveIssue('9', {
+          tracker,
+          review,
+          files,
+          queues: [{name: 'Sandcastle'}],
+          change: finishedChange,
+          tip: foldedTip('9'),
+        });
+        assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
+        assert.equal((await tracker.issue('9')).state, 'CLOSED');
+        assert.ok(calls.some(call => call === `close:${FINISHED_CLOSE}`));
+        assert.ok(!(await tracker.listOpen()).some(issue => issue.key === '9'));
+      },
+    );
 
     scenario("The issue closes and the board's open list no longer has it", async () => {
       const {tracker, review} = memoryPorts({
@@ -865,7 +971,11 @@ spec('finished-cycle', () => {
         change: finishedChange,
         tip: foldedTip('9'),
       });
-      assert.equal(decision.kind, 'unarchive');
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'unarchive');
+        assert.equal(decision.skill, 'accept');
+      }
       assert.equal((await tracker.issue('9')).state, 'OPEN');
       assert.ok((await tracker.listOpen()).some(issue => issue.key === '9'));
       assert.ok(!calls.some(call => call.startsWith('close:')));
@@ -971,7 +1081,11 @@ function cycleIssue(key: string, labels: string[]): IssueRecord {
   return {key, title: `#${key}: title`, body: '', state: 'OPEN', labels, assignee: 'me'};
 }
 
-function cycleSnapshot(issues: IssueRecord[], view = change(), pulls: CycleSnapshot['pulls'] = new Map()): CycleSnapshot {
+function cycleSnapshot(
+  issues: IssueRecord[],
+  view = change(),
+  pulls: CycleSnapshot['pulls'] = new Map(),
+): CycleSnapshot {
   return {
     issues,
     cycles: issues,
@@ -991,7 +1105,13 @@ spec('github-read', () => {
       ];
       const {tracker, calls} = memoryPorts({issues, user: 'me'});
       const before = calls.length;
-      await resolveCycle(cycleSnapshot(issues), tracker, [{name: 'Sandcastle'}], new Set(), () => files);
+      await resolveCycle(
+        cycleSnapshot(issues),
+        tracker,
+        [{name: 'Sandcastle'}],
+        new Set(),
+        () => files,
+      );
       assert.equal(calls.slice(before).filter(call => call === 'listOpen').length, 0);
     });
 
@@ -1013,7 +1133,11 @@ spec('github-read', () => {
       ]);
       const {tracker, calls} = memoryPorts({issues, user: 'me'});
       const decisions = await resolveCycle(
-        cycleSnapshot(issues, change({design: true, tasks: true, openTasks: 1, openTask: 'one'}), pulls),
+        cycleSnapshot(
+          issues,
+          change({design: true, tasks: true, openTasks: 1, openTask: 'one'}),
+          pulls,
+        ),
         tracker,
         [{name: 'Sandcastle'}],
         new Set(),
@@ -1028,7 +1152,13 @@ spec('github-read', () => {
       const refused = cycleIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposing', 'sdd:refused']);
       const quiet = cycleIssue('2', ['Sandcastle', 'sdd:cycle', 'sdd:proposing']);
       const {tracker, calls} = memoryPorts({issues: [refused, quiet], user: 'me'});
-      await resolveCycle(cycleSnapshot([refused, quiet]), tracker, [{name: 'Sandcastle'}], new Set(), () => files);
+      await resolveCycle(
+        cycleSnapshot([refused, quiet]),
+        tracker,
+        [{name: 'Sandcastle'}],
+        new Set(),
+        () => files,
+      );
       assert.equal(calls.filter(call => call === 'comments').length, 1);
     });
   });

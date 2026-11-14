@@ -97,8 +97,6 @@ export async function performIssue(
     tip?: string;
     checkout?: () => Promise<string>;
     readTip?: () => Promise<string | undefined>;
-    fold?: (root: string, key: string) => void;
-    restore?: (root: string, key: string) => void;
     openspec?: Openspec;
     root?: string;
     login?: string;
@@ -139,8 +137,7 @@ export async function performCycle(
   );
   const performed: Decision[] = [];
   for (const decision of decisions) {
-    const command =
-      decision.kind === 'merge' || decision.kind === 'archive' || decision.kind === 'unarchive';
+    const command = decision.kind === 'merge';
     if (!command || decision.issue === null) {
       performed.push(decision);
       continue;
@@ -168,9 +165,7 @@ export function pick(decisions: Decision[]): Decision {
   return (
     decisions.find(item => item.kind === 'advance') ??
     decisions.find(item => item.kind === 'agent') ??
-    decisions.find(
-      item => item.kind === 'merge' || item.kind === 'archive' || item.kind === 'unarchive',
-    ) ?? {
+    decisions.find(item => item.kind === 'merge') ?? {
       kind: 'wait',
       issue: null,
       reason: decisions.map(item => `#${item.issue}: ${item.reason}`).join('\n'),

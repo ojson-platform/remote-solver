@@ -19,6 +19,7 @@ export {
   postRefusal,
   refusalBody,
   refusalOf,
+  personReleasedRefusal,
   spentThreadRefusal,
 } from './record.ts';
 export {decide} from './open.ts';

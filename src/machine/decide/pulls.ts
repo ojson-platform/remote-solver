@@ -78,7 +78,7 @@ export function mergeOrWait(
   return {kind: 'merge', issue: issueKey, pull: String(pr.id), reason: `merge PR #${pr.id}`};
 }
 
-/** Several open pull requests hold every exit except an open task and a wait that is not a gate. */
+/** Several open pull requests hold every exit except an open task, unarchive, and a wait that is not a gate. */
 export function holdOpenPulls(
   decision: Decision,
   issue: IssueRecord,
@@ -88,12 +88,11 @@ export function holdOpenPulls(
   if (ids.length <= 1 || decision.issue === null) {
     return decision;
   }
-  if (decision.kind === 'unarchive') {
-    return decision;
-  }
   if (
     decision.kind === 'agent' &&
-    (decision.action === 'implement-next-task' || decision.action === 'classify-comments')
+    (decision.action === 'implement-next-task' ||
+      decision.action === 'classify-comments' ||
+      decision.action === 'unarchive')
   ) {
     return decision;
   }

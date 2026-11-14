@@ -66,12 +66,12 @@ A settlement given the open list SHALL NOT read that list again. It SHALL use th
 
 ### Requirement: Open pull request conversations are one query
 
-When a poll reads the conversation of more than one open pull request, it SHALL read those conversations in one GraphQL query and SHALL NOT send one REST query per pull request. A further query SHALL be sent only when one query cannot hold every pull request. One open pull request SHALL stay one REST read. A query that fails SHALL NOT be taken as an empty conversation.
+When a poll reads the conversation of more than one open pull request, it SHALL read those conversations in one GraphQL query and SHALL NOT send one REST query per pull request. Each number in that query SHALL be selected as a pullRequest. A further query SHALL be sent only when one query cannot hold every pull request. One open pull request SHALL stay one REST read. A query that fails SHALL NOT be taken as an empty conversation.
 
 #### Scenario: Two conversations are one query
 
 - **WHEN** a poll reads two open pull request conversations
-- **THEN** one GraphQL query returns both and no REST comment read is sent
+- **THEN** one GraphQL query returns both, each number selected as a pullRequest, and no REST comment read is sent
 
 #### Scenario: One conversation stays one read
 

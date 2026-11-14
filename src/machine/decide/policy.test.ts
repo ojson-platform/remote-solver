@@ -28,6 +28,15 @@ import {
   yard,
 } from '../../window/__tests__/window.harness.ts';
 
+function acceptStep(decision: Decision, action: 'archive' | 'unarchive'): void {
+  assert.equal(decision.kind, 'agent');
+  if (decision.kind !== 'agent') {
+    return;
+  }
+  assert.equal(decision.action, action);
+  assert.equal(decision.skill, 'accept');
+}
+
 function change(over: Partial<ChangeView> = {}): ChangeView {
   return {
     proposal: false,
@@ -707,8 +716,8 @@ function archivedIssue9Files(): FileSource {
 test('An open pull request on tasking is restored', () => {
   const record = issue(9, ['sdd:tasking']);
   const decision = judged(record, [], [openPull], archivedOpen);
-  assert.equal(decision.kind, 'unarchive');
-  if (decision.kind === 'unarchive') {
+  acceptStep(decision, 'unarchive');
+  if (decision.kind === 'agent') {
     assert.equal(decision.phase, 'tasking');
   }
   assert.notEqual(decision.kind, 'done');
@@ -725,7 +734,7 @@ test('A proposed gate restores before it moves', () => {
   const record = issue(9, ['sdd:proposed', 'sdd:proposing']);
   const walked = settled(record, [], [openPull], archivedOpen);
   assert.deepEqual(walked.transitions, []);
-  assert.equal(walked.decision.kind, 'unarchive');
+  acceptStep(walked.decision, 'unarchive');
   const moved = judged(record, [], [openPull], {...archivedOpen, archived: false});
   assert.equal(moved.kind, 'advance');
   if (moved.kind === 'advance') {
@@ -752,7 +761,7 @@ test('Checked tasks and an open pull request stay', () => {
 test('An open pull request stays on the board when every task is checked', () => {
   const record = issue(9, ['sdd:tasking'], {state: 'OPEN'});
   const decision = judged(record, [], [openPull], archivedOpen);
-  assert.equal(decision.kind, 'unarchive');
+  acceptStep(decision, 'unarchive');
   assert.notEqual(decision.kind, 'done');
   const walked = settled(record, [], [openPull], archivedOpen);
   assert.notEqual(walked.decision.kind, 'done');
@@ -764,12 +773,7 @@ test('An open pull request stays on the board when every task is checked', () =>
 spec('finished-cycle', () => {
   requirement('A finished cycle leaves the board', () => {
     scenario('The machine does not restore that change and does not start another step', () => {
-      const decision = judged(
-        issue(9, ['sdd:tasking']),
-        [],
-        [mergedPull],
-        finishedChange,
-      );
+      const decision = judged(issue(9, ['sdd:tasking']), [], [mergedPull], finishedChange);
       assert.deepEqual(decision, {kind: 'done', issue: '9', reason: 'finished cycle'});
       const walked = settled(issue(9, ['sdd:tasking']), [], [mergedPull], finishedChange);
       assert.equal(walked.decision.kind, 'done');
@@ -820,14 +824,14 @@ spec('finished-cycle', () => {
     scenario('An open pull request on tasking is restored', () => {
       const record = issue(9, ['sdd:tasking']);
       const decision = judged(record, [], [openPull], archivedOpen);
-      assert.equal(decision.kind, 'unarchive');
+      acceptStep(decision, 'unarchive');
       assert.notEqual(decision.kind, 'done');
     });
     scenario('A proposed gate restores before it moves', () => {
       const record = issue(9, ['sdd:proposed', 'sdd:proposing']);
       const walked = settled(record, [], [openPull], archivedOpen);
       assert.deepEqual(walked.transitions, []);
-      assert.equal(walked.decision.kind, 'unarchive');
+      acceptStep(walked.decision, 'unarchive');
       const moved = judged(record, [], [openPull], {...archivedOpen, archived: false});
       assert.equal(moved.kind, 'advance');
       if (moved.kind === 'advance') {
@@ -869,7 +873,7 @@ spec('finished-cycle', () => {
     scenario('An open pull request stays on the board when every task is checked', async () => {
       const record = issue(9, ['sdd:tasking'], {state: 'OPEN'});
       const decision = judged(record, [], [openPull], archivedOpen);
-      assert.equal(decision.kind, 'unarchive');
+      acceptStep(decision, 'unarchive');
       assert.notEqual(decision.kind, 'done');
       const {tracker, review} = memoryPorts({
         user: MANAGER,
@@ -959,7 +963,10 @@ spec('artifact', () => {
       if (decision.kind === 'advance') {
         assert.equal(decision.to, 'tasking');
       }
-      assert.notEqual(decision.kind === 'agent' ? decision.action : decision.kind, 'implement-next-task');
+      assert.notEqual(
+        decision.kind === 'agent' ? decision.action : decision.kind,
+        'implement-next-task',
+      );
     });
     scenario('A live scenario with no card returns implementing to tasking', () => {
       const decision = judged(
@@ -1012,10 +1019,11 @@ spec('artifact', () => {
         [pull(9)],
         change({...named, openTasks: 0}),
       );
-      assert.equal(decision.kind, 'archive');
+      acceptStep(decision, 'archive');
     });
     scenario('A task card records the delta revision and the scenario title', () => {
-      const specText = '## ADDED Requirements\n\n#### Scenario: The remark stays\n\n- **THEN** it stays\n';
+      const specText =
+        '## ADDED Requirements\n\n#### Scenario: The remark stays\n\n- **THEN** it stays\n';
       const source: FileSource = {
         exists: rel =>
           rel.endsWith('proposal.md') ||
@@ -1064,7 +1072,8 @@ spec('artifact', () => {
           }
           return '';
         },
-        list: rel => (rel.endsWith('specs') ? ['openspec/changes/issue-1/specs/remark/spec.md'] : []),
+        list: rel =>
+          rel.endsWith('specs') ? ['openspec/changes/issue-1/specs/remark/spec.md'] : [],
       };
       const view = readChange('1', source);
       assert.ok(view.slicedScenarios.includes(title));

@@ -1294,7 +1294,7 @@ export function githubAdapters(
       for (let index = 0; index < ids.length; index += chunk) {
         const slice = ids.slice(index, index + chunk);
         const aliases = slice
-          .map(id => `p${id}:issue(number:${id}){comments(first:100){nodes{body author{login}}}}`)
+          .map(id => `p${id}:pullRequest(number:${id}){comments(first:100){nodes{body author{login}}}}`)
           .join(' ');
         const query = `query($owner:String!,$name:String!){repository(owner:$owner,name:$name){${aliases}}}`;
         const raw = JSON.parse(

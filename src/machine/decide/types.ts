@@ -21,10 +21,7 @@ export type Decision =
   | ({kind: 'done'; issue: string | null; reason: string} & LabelFix)
   /** `comment` is posted on the issue after the move. */
   | ({kind: 'advance'; issue: string; to: Phase; reason: string; comment?: string} & LabelFix)
-  | ({kind: 'merge'; issue: string; pull: string; reason: string} & LabelFix)
-  /** The machine folds the change. The same effect as a merge: perform, then read again. */
-  | ({kind: 'archive'; issue: string; phase: Phase; pr: string; reason: string} & LabelFix)
-  | ({kind: 'unarchive'; issue: string; phase: Phase; reason: string} & LabelFix);
+  | ({kind: 'merge'; issue: string; pull: string; reason: string} & LabelFix);
 
 /** The review gate a person closes: `from` is the writing phase, `to` the gate phase. */
 export type Gate = {artifact: string; from: Phase; to: Phase};

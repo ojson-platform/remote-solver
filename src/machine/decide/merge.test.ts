@@ -38,6 +38,10 @@ spec('merge', () => {
         [pull(9)],
         change({archived: true, design: true, tasks: true}),
       );
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.skill, 'accept');
+      }
       assert.equal(action(decision), 'unarchive');
     });
     scenario('An archived change is restored before an unlabeled thread', () => {
@@ -94,6 +98,10 @@ spec('merge', () => {
   requirement('Accepting archives before it merges', () => {
     scenario('Accepting archives a change that is still open', () => {
       const decision = onDisk(issue(1, ['sdd:accepting']), [], [pull(9)], change({proposal: true}));
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.skill, 'accept');
+      }
       assert.equal(action(decision), 'archive');
     });
     scenario('Accepting with no pull request does not archive', () => {

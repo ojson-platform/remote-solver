@@ -10,34 +10,55 @@ export function effectSignature(part: {phase: string; action: string; reason: st
 }
 
 /** The comment a tracker can carry. The null-byte signature is split onto three lines. */
+export const REFUSAL_ASK = 'A comment on this issue runs this step again.';
+
 export function refusalBody(signature: string): string {
   const [phase = '', action = '', ...rest] = signature.split('\0');
-  return ['sdd:refused', phase, action, rest.join('\0')].join('\n');
+  return ['sdd:refused', phase, action, rest.join('\0'), REFUSAL_ASK].join('\n');
 }
 
 type Refusal = {phase: string; action: string; reason: string; note: string};
 
-/** The latest `sdd:refused`. A person comment does not clear it. The reason is one line; the note is the rest. */
+/** The latest `sdd:refused`. A later person comment releases it. The reason is one line; the note is the rest. */
 function refusalFrom(notes: readonly IssueNote[]): Refusal | null {
   for (let index = notes.length - 1; index >= 0; index -= 1) {
-    const note = notes[index];
-    const lines = note.body
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line !== '');
-    const head = lines[0]?.startsWith(ROBOT_MARK)
-      ? lines[0].slice(ROBOT_MARK.length).trim()
-      : lines[0];
-    if (head === 'sdd:refused') {
-      return {
-        phase: lines[1] ?? '',
-        action: lines[2] ?? '',
-        reason: lines[3] ?? '',
-        note: lines.slice(4).join('\n'),
-      };
+    const lines = commentLines(notes[index]);
+    if (lines[0] !== 'sdd:refused') {
+      continue;
     }
+    const rest = lines.slice(4).filter(line => line !== REFUSAL_ASK);
+    return {
+      phase: lines[1] ?? '',
+      action: lines[2] ?? '',
+      reason: lines[3] ?? '',
+      note: rest.join('\n'),
+    };
   }
   return null;
+}
+
+/** A person comment after `sdd:refused` releases that hold. */
+export function personReleasedRefusal(notes: readonly IssueNote[]): boolean {
+  let refusedAt = -1;
+  for (let index = 0; index < notes.length; index += 1) {
+    if (commentLines(notes[index])[0] === 'sdd:refused') {
+      refusedAt = index;
+    }
+  }
+  if (refusedAt < 0) {
+    return false;
+  }
+  return notes.slice(refusedAt + 1).some(note => note.manager === true);
+}
+
+function commentLines(note: IssueNote): string[] {
+  return note.body
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line !== '')
+    .map((line, index) =>
+      index === 0 && line.startsWith(ROBOT_MARK) ? line.slice(ROBOT_MARK.length).trim() : line,
+    );
 }
 
 /** `threads on <layer>` whose layer has no open thread. Any other refusal stays. */
@@ -80,11 +101,7 @@ export function blockRepeated(
   const effect =
     decision.kind === 'agent'
       ? {phase: decision.phase, action: decision.action, reason: decision.reason}
-      : decision.kind === 'archive'
-        ? {phase: decision.phase, action: 'archive', reason: decision.reason}
-        : decision.kind === 'unarchive'
-          ? {phase: decision.phase, action: 'unarchive', reason: decision.reason}
-          : null;
+      : null;
   if (!effect || refused !== effectSignature(effect)) {
     return decision;
   }

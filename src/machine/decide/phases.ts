@@ -249,13 +249,13 @@ function acceptPhase(read: PhaseRead): Decision {
     if (slice) {
       return {kind: 'wait', issue: issue.key, reason: slice};
     }
-    return {
-      kind: 'archive',
-      issue: issue.key,
+    return agent(
+      issue.key,
+      'archive',
       phase,
-      pr: pr ? String(pr.id) : String(merged[0].id),
-      reason: 'archive the change',
-    };
+      pr ? String(pr.id) : String(merged[0].id),
+      'archive the change',
+    );
   }
   return mergeOrWait(issue.key, pr, merged, autoMerge);
 }

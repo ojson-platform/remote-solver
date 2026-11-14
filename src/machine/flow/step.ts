@@ -4,18 +4,19 @@ import type {FileSource, IssueRecord, Openspec, Review, Tracker} from '../port.t
 import type {QueueConfig} from '../spy/service-config.ts';
 
 import {readChange} from '../change/change.ts';
-import {addedDiffLine, changedInDiff, foldChange, restoreChange} from '../change/fold.ts';
+import {addedDiffLine, changedInDiff} from '../change/fold.ts';
 import {acceptGateWithheld} from '../decide/ahead.ts';
 import {
   cycleRecord,
   decide,
   effectSignature,
   postRefusal,
+  personReleasedRefusal,
   refusalBody,
   spentThreadRefusal,
 } from '../decide/policy.ts';
 import {askComment, gateAsk, openWait} from '../phase/labels.ts';
-import {labelsAfterAdvance} from '../phase/phase.ts';
+import {labelsAfterAdvance, type Phase} from '../phase/phase.ts';
 import {queueOf} from '../spy/queues.ts';
 import {sameService} from '../spy/service-config.ts';
 import {ownCycle, pullSnapshots} from '../spy/snapshot.ts';
@@ -59,14 +60,11 @@ type IssueRead = {
   tip?: string;
   pulls?: PullSnapshot[];
   issues?: IssueRecord[];
-  /** Perform merge, archive, and unarchive, then read the issue again. */
+  /** Perform a merge, then read the issue again. Archive and unarchive are the accept step. */
   perform?: boolean;
   checkout?: () => Promise<string>;
   readTip?: () => Promise<string | undefined>;
-  /** Replaces the archive command. Tests use this; the poll uses `foldChange`. */
-  fold?: (root: string, key: string) => void;
-  restore?: (root: string, key: string) => void;
-  /** The OpenSpec binary. The poll supplies the adapter; a replaced `fold` does not need it. */
+  /** The OpenSpec binary. The accept step's verb runs it. The poll does not. */
   openspec?: Openspec;
   /** This checkout. A foreign `service` waits before any label write. */
   root?: string;
@@ -168,14 +166,12 @@ async function writeAdvance(
   return {stop: decision};
 }
 
-/** Merge, archive, and unarchive drop the cached read so the next step sees the new tip. */
+/** A merge drops the cached read so the next step sees the new tip. The accept step folds. */
 async function performEffect(
   key: string,
   options: IssueRead,
   decision: Decision,
-  view: ChangeView,
   cache: WalkCache,
-  pulls: PullSnapshot[],
 ): Promise<StepResult> {
   if (decision.kind === 'merge') {
     if (!options.review) {
@@ -183,18 +179,6 @@ async function performEffect(
     }
     await options.review.merge(decision.pull);
     return {again: await reread(options, cache)};
-  }
-  if ((decision.kind === 'archive' || decision.kind === 'unarchive') && options.checkout) {
-    const folded = await foldEffect(key, options, decision, view, pulls);
-    if ('stop' in folded) {
-      return folded;
-    }
-    if (folded.wrote && decision.kind === 'unarchive') {
-      return {stop: decision};
-    }
-    if (folded.wrote) {
-      return {again: await reread(options, cache)};
-    }
   }
   return {stop: decision};
 }
@@ -256,70 +240,59 @@ async function openSpecThread(
   return true;
 }
 
-async function foldEffect(
-  key: string,
-  options: IssueRead,
-  decision: Extract<Decision, {kind: 'archive' | 'unarchive'}>,
-  view: ChangeView,
-  pulls: PullSnapshot[],
-): Promise<{stop: Decision} | {wrote: true}> {
-  const dir = await options.checkout?.();
-  if (!dir) {
-    return {stop: decision};
+/** What `sdd fold` and `sdd unfold` report when the command refuses. The poll does not fold. */
+export async function reportFoldFailure(input: {
+  key: string;
+  tracker: Tracker;
+  review?: Review;
+  files: FileSource;
+  capabilities: readonly string[];
+  dir: string;
+  action: 'archive' | 'unarchive';
+  phase: Phase;
+  pr: string;
+  reason: string;
+  error: unknown;
+}): Promise<Decision> {
+  const text = input.error instanceof Error ? input.error.message : 'fold failed';
+  const baseline = emptyBaselineWait(text, input.capabilities);
+  if (baseline) {
+    return {kind: 'wait', issue: input.key, reason: baseline};
   }
-  try {
-    if (decision.kind === 'archive') {
-      if (options.fold) {
-        options.fold(dir, key);
-      } else if (options.openspec) {
-        foldChange(dir, key, options.openspec());
-      } else {
-        throw new Error('openspec executable is missing');
-      }
-    } else {
-      (options.restore ?? restoreChange)(dir, key);
-    }
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : 'fold failed';
-    const baseline = emptyBaselineWait(reason, view.capabilities);
-    if (baseline) {
-      return {stop: {kind: 'wait', issue: key, reason: baseline}};
-    }
-    const shown = `archive refused: ${reason}`;
-    if (decision.kind === 'archive' && options.review) {
-      const range = await options.review.range(decision.pr);
-      const capability = refusedSpecIds(reason).find(id =>
-        changedInDiff(
-          dir,
-          range.base ?? '',
-          range.head,
-          `openspec/changes/issue-${key}/specs/${id}/spec.md`,
-        ),
+  const shown = `archive refused: ${text}`;
+  if (input.action === 'archive' && input.review && input.pr !== '') {
+    const pulls = await pullSnapshots(input.review, input.key, input.files);
+    const range = await input.review.range(input.pr);
+    const capability = refusedSpecIds(text).find(id =>
+      changedInDiff(
+        input.dir,
+        range.base ?? '',
+        range.head,
+        `openspec/changes/issue-${input.key}/specs/${id}/spec.md`,
+      ),
+    );
+    const repeated = capability !== undefined && commandAlreadyThreaded(pulls, input.pr, text);
+    if (capability && !repeated) {
+      const opened = await openSpecThread(
+        input.key,
+        input.dir,
+        input.pr,
+        capability,
+        text,
+        input.review,
       );
-      const repeated = capability !== undefined && commandAlreadyThreaded(pulls, decision.pr, reason);
-      if (capability && !repeated) {
-        const opened = await openSpecThread(
-          key,
-          dir,
-          decision.pr,
-          capability,
-          reason,
-          options.review,
-        );
-        if (opened) {
-          return {stop: {kind: 'wait', issue: key, reason: shown}};
-        }
+      if (opened) {
+        return {kind: 'wait', issue: input.key, reason: shown};
       }
     }
-    const signature = effectSignature({
-      phase: decision.phase,
-      action: decision.kind,
-      reason: decision.reason,
-    });
-    await postRefusal(options.tracker, key, `${refusalBody(signature)}\n${shown}`);
-    return {stop: {kind: 'wait', issue: key, reason: shown}};
   }
-  return {wrote: true};
+  const signature = effectSignature({
+    phase: input.phase,
+    action: input.action,
+    reason: input.reason,
+  });
+  await postRefusal(input.tracker, input.key, `${refusalBody(signature)}\n${shown}`);
+  return {kind: 'wait', issue: input.key, reason: shown};
 }
 
 /** Read the issue, write the label move, then either stop or ask for another step. */
@@ -342,6 +315,11 @@ async function stepIssue(key: string, options: IssueRead, cache: WalkCache): Pro
   const loaded =
     cache.pulls ?? (options.review ? await pullSnapshots(options.review, key, options.files) : []);
   let notes = record.labels.includes('sdd:refused') ? await options.tracker.comments(key) : [];
+  if (personReleasedRefusal(notes)) {
+    await options.tracker.editLabels(key, [], ['sdd:refused']);
+    notes = [];
+    record.labels = record.labels.filter(name => name !== 'sdd:refused');
+  }
   const layers = loaded.filter(pull => pull.state === 'OPEN').flatMap(pull => pull.review.layers);
   if (loaded.some(pull => pull.state === 'OPEN') && spentThreadRefusal(notes, layers)) {
     await options.tracker.editLabels(key, [], ['sdd:refused']);
@@ -380,7 +358,7 @@ async function stepIssue(key: string, options: IssueRead, cache: WalkCache): Pro
   if (!options.perform) {
     return {stop: decision};
   }
-  return performEffect(key, options, decision, view, cache, loaded);
+  return performEffect(key, options, decision, cache);
 }
 
 /** One effect, written, then the issue is read again. Twelve effects is the stop. */

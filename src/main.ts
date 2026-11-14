@@ -3,7 +3,7 @@ import path from 'node:path';
 import {solverRoot, turn, type Machine} from './adapters/compose.ts';
 import {tryHoldIssue} from './adapters/runtime/lock.ts';
 import {claimChat, clearChat} from './adapters/runtime/session.ts';
-import {githubPauseRemaining, reportGithubError} from './adapters/tracker/github.ts';
+import {ghErrorLine, githubPauseRemaining, reportGithubError} from './adapters/tracker/github.ts';
 import {packageLinks} from './adapters/vcs/vcs.ts';
 import {effectSignature, postRefusal, refusalBody, type Decision} from './machine/decide/policy.ts';
 import {performCycle} from './machine/flow/flow.ts';
@@ -16,8 +16,8 @@ import {loadCycle, type CycleSnapshot} from './machine/spy/snapshot.ts';
 // Spy: poll the tracker and run up to --parallel issues in this process. Each
 // issue's agent runs in the worktree sandcastle keeps for branch sdd/<key>.
 //
-// The machine archives the change, then waits for a person to merge the pull
-// request. sdd:auto-merge rebases it in the same turn and closes the issue.
+// The accept step archives the change. The next poll waits for a person to merge
+// the pull request. sdd:auto-merge merges it on that poll and closes the issue.
 // Once the pull request is merged, the machine sets sdd:accepted and closes the issue.
 //
 // From the service repository:
@@ -165,6 +165,30 @@ function say(watch: SpyWatch | undefined, line: string): void {
   watch?.onReport?.(line);
 }
 
+/** One poll's decision, including a step that does not start. */
+function decisionLine(decision: Decision): string {
+  const key = decision.issue === null ? 'poll' : `#${decision.issue}`;
+  if (decision.kind === 'agent') {
+    return `${key} ${decision.phase} → ${decision.action}: ${decision.reason}`;
+  }
+  if (decision.kind === 'advance') {
+    return `${key} advance → ${decision.to}: ${decision.reason}`;
+  }
+  if (decision.kind === 'merge') {
+    return `${key} merge #${decision.pull}: ${decision.reason}`;
+  }
+  return `${key} ${decision.kind}: ${decision.reason}`;
+}
+
+/** Say a line once until its text changes. `slot` keeps one poll fact. */
+function sayOnce(state: State, watch: SpyWatch | undefined, slot: string, line: string): State {
+  if (state.reported[slot] === line) {
+    return state;
+  }
+  say(watch, line);
+  return {...state, reported: {...state.reported, [slot]: line}};
+}
+
 export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Promise<void> {
   const parallel = flag(argv, '--parallel', 2);
   const intervalMs = flag(argv, '--interval', 20) * 1000;
@@ -194,9 +218,14 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
     if (watch?.signal?.aborted) {
       return;
     }
-    if (githubPauseRemaining() === 0) {
+    const pauseMs = githubPauseRemaining();
+    if (pauseMs === 0) {
+      if (state.reported.pause) {
+        state = {...state, reported: {...state.reported, pause: ''}};
+      }
       try {
         const readId = watch?.beginRead?.();
+        say(watch, 'Poll reading');
         const snapshot = await loadCycle(
           box.tracker,
           box.review,
@@ -204,6 +233,7 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
           box.config.queues,
           key => contentFiles(box.vcs, key),
           key => box.vcs.tipMessage?.(key) ?? Promise.resolve(''),
+          line => say(watch, line),
         );
         const decisions = await performCycle(
           snapshot,
@@ -226,6 +256,16 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
         );
         const turned = tick(state, decisions, parallel);
         state = turned.state;
+        const settled = decisions.map(decisionLine).join('; ');
+        state = sayOnce(state, watch, 'poll', `Poll settled ${settled || 'no decisions'}`);
+        for (const decision of turned.held) {
+          state = sayOnce(
+            state,
+            watch,
+            `held:${decision.issue}`,
+            `#${decision.issue} held ${decision.phase} → ${decision.action}: ${decision.reason}`,
+          );
+        }
         watch?.onHeld?.(turned.held.map(item => ({issue: item.issue, action: item.action})));
         for (const decision of decisions) {
           if (decision.issue !== null) {
@@ -237,7 +277,10 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
         }
         for (const decision of turned.start) {
           watch?.onDecision?.(decision.issue, decision);
-          say(watch, `#${decision.issue} start ${decision.phase} → ${decision.action}`);
+          say(
+            watch,
+            `#${decision.issue} start ${decision.phase} → ${decision.action}: ${decision.reason}`,
+          );
           watch?.onTurn?.(decision.issue, {
             issue: decision.issue,
             phase: decision.phase,
@@ -269,8 +312,16 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
         watch?.onCycle?.(snapshot, readId);
       } catch (error) {
         reportGithubError(error);
+        state = sayOnce(state, watch, 'poll', `Poll failed: ${ghErrorLine(error)}`);
         watch?.onCycle?.();
       }
+    } else {
+      state = sayOnce(
+        state,
+        watch,
+        'pause',
+        `Poll waiting ${Math.ceil(pauseMs / 1000)}s for GitHub`,
+      );
     }
 
     await new Promise<void>(resolve => {

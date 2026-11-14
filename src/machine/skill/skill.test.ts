@@ -227,6 +227,20 @@ test('a code fix hands off before the commit, and verify reads the THEN first', 
   assert.ok(then !== -1 && code !== -1 && then < code);
 });
 
+test('the final review treats a broken design sentence as a return', () => {
+  const review = readFileSync(
+    path.join(import.meta.dirname, '..', '..', '..', '.agents/skills/sdd-final-review/SKILL.md'),
+    'utf8',
+  );
+  assert.match(review, /design approach and its rejected list/);
+  const design = review.indexOf('**Design.**');
+  const named = review.indexOf('A test with no scenario is a finding when the design lens names it');
+  assert.ok(design !== -1 && named !== -1 && design < named);
+  assert.match(review, /spans more than one source line/);
+  assert.match(review, /compare each covered line with that value/);
+  assert.match(review, /A design sentence the diff breaks is a return/);
+});
+
 test('the chat files point at the sdd script', () => {
   const skill = readFileSync(path.join(flow, 'SKILL.md'), 'utf8');
   const context = readFileSync(path.join(flow, 'CONTEXT.md'), 'utf8');

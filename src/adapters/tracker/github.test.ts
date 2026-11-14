@@ -1550,7 +1550,10 @@ spec('github-read', () => {
       const notes = (key: string) => snapshot.pulls.get(key)?.[0]?.reading?.notes.map(note => note.body);
       assert.deepEqual(notes('1'), ['left']);
       assert.deepEqual(notes('2'), ['right']);
+      const query = calls.find(call => call.includes('comments(first:100)')) ?? '';
       assert.equal(calls.filter(call => call.includes('comments(first:100)')).length, 1);
+      assert.match(query, /p11:pullRequest\(number:11\)/);
+      assert.match(query, /p12:pullRequest\(number:12\)/);
       assert.equal(calls.filter(call => call.includes('/comments?per_page=100')).length, 0);
     });
 

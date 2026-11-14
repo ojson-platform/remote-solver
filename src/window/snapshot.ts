@@ -555,10 +555,7 @@ export function offerContinue(input: {
   }
   const decision = input.decision;
   if (
-    decision?.kind === 'agent' ||
-    decision?.kind === 'archive' ||
-    decision?.kind === 'unarchive' ||
-    decision?.kind === 'merge'
+    decision?.kind === 'agent' || decision?.kind === 'merge'
   ) {
     return false;
   }

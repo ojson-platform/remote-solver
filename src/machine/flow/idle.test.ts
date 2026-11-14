@@ -50,10 +50,11 @@ spec('idle', () => {
       assert.match(refusal.body, /implementing/);
       assert.match(refusal.body, /implement-next-task/);
       assert.match(refusal.body, /next open task/);
+      assert.match(refusal.body, /A comment on this issue runs this step again/);
       await driveIssue(box, '8');
       assert.deepEqual(seen, ['implement-next-task']);
     });
-    scenario('A person comment leaves the refusal', async () => {
+    scenario('A person comment starts the effect', async () => {
       const root = mkdtempSync(path.join(tmpdir(), 'sdd-person-'));
       const seen: string[] = [];
       const runtime: Runtime = {
@@ -105,7 +106,7 @@ spec('idle', () => {
       assert.equal(first.code, 0);
       person('8', 'please continue');
       await driveIssue(box, '8');
-      assert.deepEqual(seen, ['implement-next-task']);
+      assert.deepEqual(seen, ['implement-next-task', 'implement-next-task']);
     });
     scenario('Removing the label starts the effect again', async () => {
       const root = mkdtempSync(path.join(tmpdir(), 'sdd-clear-'));

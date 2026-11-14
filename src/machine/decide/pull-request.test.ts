@@ -47,7 +47,11 @@ spec('pull-request', () => {
         change({tasks: true, openTasks: 1}),
         asFolded(row),
       );
-      assert.equal(decision.kind, 'unarchive');
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'unarchive');
+        assert.equal(decision.skill, 'accept');
+      }
     });
     scenario('An unlabeled thread is classified while two pull requests are open', () => {
       const decision = decide(

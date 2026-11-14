@@ -25,6 +25,20 @@ The accept step SHALL fold a delta into its baseline with `openspec archive issu
 - **WHEN** the accept step archives a delta that renames one requirement, removes a second, modifies the renamed requirement, and adds a third
 - **THEN** the baseline has the renamed requirement as the delta states it, omits the old name and the removed requirement, does not contain prose from the removal, and shows the added requirement after the requirements that stayed
 
+### Requirement: The poll starts the accept step
+
+On accepting, a change that is not archived SHALL start the accept step. The action SHALL be `archive` and the skill SHALL be `accept`. The poll SHALL NOT fold. On a phase before accepting, a folded change SHALL start the accept step. The action SHALL be `unarchive` and the skill SHALL be `accept`. The poll SHALL NOT revert.
+
+#### Scenario: Accepting starts the accept step
+
+- **WHEN** the phase is `accepting`, a pull request is open, and the change is not archived
+- **THEN** the decision is the accept step with action `archive`, and the poll does not fold
+
+#### Scenario: A phase before accepting starts the accept step to restore
+
+- **WHEN** the phase is before `accepting` and the tip is the archive commit
+- **THEN** the decision is the accept step with action `unarchive`, and the poll does not revert
+
 ### Requirement: One commit holds the fold
 
 The accept step SHALL record, in one commit, the folded baseline and the move of the change into `openspec/changes/archive/issue-<key>/`.

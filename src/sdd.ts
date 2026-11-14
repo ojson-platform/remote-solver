@@ -1,4 +1,3 @@
-
 import {spawnSync} from 'node:child_process';
 import {mkdirSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
@@ -7,9 +6,16 @@ import {solverRoot, turn, type Machine} from './adapters/compose.ts';
 import {openMachine} from './adapters/load.ts';
 import {packageLinks} from './adapters/vcs/vcs.ts';
 import {readChange} from './machine/change/change.ts';
+import {foldChange, restoreChange} from './machine/change/fold.ts';
 import {changeDir} from './machine/change/naming.ts';
-import {accept as acceptGate, cycleRecord, publishChoice, type Decision} from './machine/decide/policy.ts';
+import {
+  accept as acceptGate,
+  cycleRecord,
+  publishChoice,
+  type Decision,
+} from './machine/decide/policy.ts';
 import {applyLabels, pick, resolveCycle, serviceWait} from './machine/flow/flow.ts';
+import {reportFoldFailure} from './machine/flow/step.ts';
 import {proveCodeFix} from './machine/mark/code-fix.ts';
 import {postFocusComment, validateFocusBody} from './machine/mark/focus.ts';
 import {focusMarkerLine} from './machine/mark/marker.ts';
@@ -17,16 +23,29 @@ import {parseMarker} from './machine/mark/marker.ts';
 import {updateMirror} from './machine/mark/mirror.ts';
 import {openItemLayer, threadsReport, type OpenItemFile} from './machine/mark/review.ts';
 import {askComment, openWait, setPhase, setWait} from './machine/phase/labels.ts';
-import {GATE_EVENTS, labelsAfterAdvance, PHASES, type Phase} from './machine/phase/phase.ts';
-import {contentFiles, type IssueLinkKind, type Review, type Tracker, type Vcs} from './machine/port.ts';
+import {
+  GATE_EVENTS,
+  labelsAfterAdvance,
+  PHASES,
+  phaseOf,
+  type Phase,
+} from './machine/phase/phase.ts';
+import {
+  contentFiles,
+  type IssueLinkKind,
+  type Review,
+  type Tracker,
+  type Vcs,
+} from './machine/port.ts';
 import {queueOf} from './machine/spy/queues.ts';
 import {resolveServiceRoot} from './machine/spy/service-config.ts';
-import {loadCycle} from './machine/spy/snapshot.ts';
+import {loadCycle, pullSnapshots} from './machine/spy/snapshot.ts';
 import {workingTree} from './window/change-files.ts';
 
 // Verbs the skills call. The GitHub and git adapters sit behind them.
 //   sdd plan
 //   sdd set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key>
+//   sdd fold <key> | unfold <key>
 //   sdd publish <key> "<pull title>"
 //   sdd checks <pull>
 //   sdd threads <pull> [--layer <layer>] [--unmarked]
@@ -52,7 +71,7 @@ function need(value: string | undefined, usage: string): string {
 }
 
 const usage =
-  'Usage: sdd plan | step <key> [--auto-plan] [--auto-spec] [--auto-design] | worktree <key> | assign <key> | set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key> | publish <key> "<title>" | focus <key> "<body>" | link <key> <kind> <other> | checks <pull> | threads <pull> [--layer <layer>] [--unmarked] | thread open|reply|say|resolve ... | thread fix <key> <pull> <thread>|--conversation | mirror <key> <Layer> <text>';
+  'Usage: sdd plan | step <key> [--auto-plan] [--auto-spec] [--auto-design] | worktree <key> | assign <key> | set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key> | fold <key> | unfold <key> | publish <key> "<title>" | focus <key> "<body>" | link <key> <kind> <other> | checks <pull> | threads <pull> [--layer <layer>] [--unmarked] | thread open|reply|say|resolve ... | thread fix <key> <pull> <thread>|--conversation | mirror <key> <Layer> <text>';
 
 const LINK_KINDS = new Set<IssueLinkKind>(['parent', 'blocks', 'blocked-by', 'depends-on']);
 
@@ -108,9 +127,7 @@ export function threadsArgs(
 }
 
 /** `link <key> <kind> <other>`. */
-export function linkArgs(
-  rest: string[],
-): {key: string; kind: IssueLinkKind; other: string} | null {
+export function linkArgs(rest: string[]): {key: string; kind: IssueLinkKind; other: string} | null {
   const [key, kind, other] = rest;
   if (!key || !kind || !other || key.startsWith('-')) {
     return null;
@@ -257,6 +274,8 @@ const verbs: Record<string, Verb> = {
   wait,
   unwait,
   accept,
+  fold: foldCommand,
+  unfold: unfoldCommand,
   publish: publishCommand,
   focus: focusCommand,
   checks,
@@ -409,6 +428,66 @@ async function accept(box: Machine, rest: string[]): Promise<void> {
   const login = await box.tracker.login();
   await box.tracker.comment(key, `sdd:accept ${decision.reason} by @${login}`);
   console.log(`#${key}: ${decision.reason}`);
+}
+
+/** The accept step's fold. The poll does not run this. A refusal is the command text on stderr. */
+async function foldCommand(box: Machine, rest: string[]): Promise<void> {
+  const key = oneKey(rest);
+  try {
+    foldChange(process.cwd(), key, box.openspec());
+  } catch (error) {
+    await reportArchiveVerb(box, key, 'archive', 'archive the change', error);
+    fail(error instanceof Error ? error.message : 'fold failed');
+  }
+}
+
+/** The accept step's revert of the archive commit. The poll does not run this. */
+async function unfoldCommand(box: Machine, rest: string[]): Promise<void> {
+  const key = oneKey(rest);
+  try {
+    restoreChange(process.cwd(), key);
+  } catch (error) {
+    await reportArchiveVerb(box, key, 'unarchive', 'return the delta to the change', error);
+    fail(error instanceof Error ? error.message : 'unfold failed');
+  }
+}
+
+function oneKey(rest: string[]): string {
+  const key = need(rest[0], usage);
+  if (rest.length !== 1) {
+    fail(usage);
+  }
+  return key;
+}
+
+async function reportArchiveVerb(
+  box: Machine,
+  key: string,
+  action: 'archive' | 'unarchive',
+  reason: string,
+  error: unknown,
+): Promise<void> {
+  try {
+    const record = await box.tracker.issue(key);
+    const files = box.vcs.filesAt(key);
+    const pulls = await pullSnapshots(box.review, key, files);
+    const open = pulls.find(item => item.state === 'OPEN');
+    await reportFoldFailure({
+      key,
+      tracker: box.tracker,
+      review: box.review,
+      files,
+      capabilities: readChange(key, files).capabilities,
+      dir: process.cwd(),
+      action,
+      phase: phaseOf(record.labels) ?? 'accepting',
+      pr: open ? String(open.id) : '',
+      reason,
+      error,
+    });
+  } catch (reportError) {
+    console.error(reportError instanceof Error ? reportError.message : 'fold report failed');
+  }
 }
 
 async function publishCommand(box: Machine, rest: string[]): Promise<void> {

@@ -159,6 +159,12 @@ Wait only for a blocker. The review of a published proposal, spec, or design is 
 
 Run `node scripts/sdd.mjs worktree <key>` and work in the directory it prints. A branch is checked out in one place, so an older checkout of the same branch has to be removed before this issue can run. A dirty checkout is reused as it is. The spy and a chat driving one issue do not share a checkout.
 
+## Archive
+
+`node scripts/sdd.mjs fold <issue>` runs `openspec archive issue-<issue> --yes`, moves the dated directory to `openspec/changes/archive/issue-<issue>/`, sets Purpose on a spec the command created, runs `openspec validate --all --strict --no-interactive`, and commits. The commit body contains a line `Sdd-Archive: issue-<issue>`. The verb does not post a focus comment. A non-zero exit is the command text. Do not run `openspec archive` yourself.
+
+`node scripts/sdd.mjs unfold <issue>` reverts the tip whose body contains a line `Sdd-Archive: issue-<issue>`. The revert is the new tip. Its body contains a line `#<issue>` and does not contain `Sdd-Archive: issue-<issue>`. When the tip has no such line, the verb exits non-zero and does not revert an earlier commit.
+
 ## Issue mirror
 
 Keep the author's text. Replace only the block between `<!-- sdd:begin -->`

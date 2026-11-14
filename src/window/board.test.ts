@@ -1995,7 +1995,15 @@ spec('board', () => {
     scenario('Unarchive is not only on accepting', () => {
       const plaque = plaqueLines({
         station: 'specifying',
-        decision: {kind: 'unarchive', issue: '1', phase: 'specifying', reason: 'return the delta to the change'},
+        decision: {
+          kind: 'agent',
+          issue: '1',
+          action: 'unarchive',
+          skill: 'accept',
+          phase: 'specifying',
+          pr: '',
+          reason: 'return the delta to the change',
+        },
       });
       assert.deepEqual(plaque.lines, ['Возвращаю дельту из архива']);
     });

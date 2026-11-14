@@ -1,33 +1,28 @@
 <!--
-sdd-absorbed: c5bde098fa94699f
+sdd-absorbed: 254d92efc244adbb
 -->
 
 # Spec Delta
 
 ## Purpose
 
-Plan and Design render as one markdown document, and a click opens the remark draft on the source line that place came from. A source line is not wrapped as its own markdown document. The painted place is not a diff row.
+Plan and Design render the source as one markdown document, and a click opens the remark draft on the source line that place came from. A source line is not parsed as its own markdown document. A `##` line stays the section heading and a `###` line stays the smaller heading, a run of blank lines stays one gap, and with no pull request the line is not a comment target. The painted place is not a diff row.
 
 ## ADDED Requirements
 
 ### Requirement: The document renders as one markdown document
 
-Plan and Design SHALL render the source as one markdown document. Headings, lists, emphasis, links, and code SHALL render in that document. A source line SHALL NOT be wrapped as its own markdown document. A line of code inside a fenced code block SHALL render inside `<code>`. The opening fence marker SHALL NOT render inside `<code>`. A blank line inside a fenced code block SHALL be one `span.gap` and SHALL NOT render as an empty `<code>`.
+Plan and Design SHALL render the source as one markdown document. Headings, lists, emphasis, links, and code SHALL render in that document. A source line SHALL NOT be parsed as its own markdown document.
 
 #### Scenario: Plan and Design render the source as one markdown document
 
 - **WHEN** the caller opens Plan on a source that contains a heading, a list, emphasis, a link, and code, and then opens Design on that same source
 - **THEN** Plan shows one markdown document in which that heading, list, emphasis, link, and code are rendered, and Design shows one markdown document in which those same parts are rendered
 
-#### Scenario: A source line is not wrapped as its own markdown document
+#### Scenario: A source line is not parsed as its own markdown document
 
 - **WHEN** the caller opens Plan on a source of several lines and then opens Design on that same source
-- **THEN** on each surface those lines render inside the one document, and no source line is wrapped as its own markdown document
-
-#### Scenario: A line of code renders inside code, the opening fence marker does not, and the blank line is one span.gap
-
-- **WHEN** the caller opens Plan on a source that contains a fenced code block with an opening fence marker, a blank line, and a line of code, and then opens Design on that same source
-- **THEN** on each surface that line of code renders inside `<code>`, the opening fence marker does not render inside `<code>`, and the blank line is one `span.gap` and not an empty `<code>`
+- **THEN** on each surface those lines render inside the one document, and no source line is parsed as its own markdown document
 
 ### Requirement: The line stays a comment target
 
@@ -35,7 +30,7 @@ The source line a rendered place came from SHALL stay a comment target.
 
 #### Scenario: The line stays a comment target
 
-- **WHEN** the caller opens Plan or Design and a place is painted from a source line
+- **WHEN** the caller opens Plan or Design while a pull request is open
 - **THEN** that source line is a comment target
 
 ### Requirement: A click opens the remark draft on that line
@@ -53,8 +48,8 @@ The painted place on Plan and Design SHALL NOT be a diff row.
 
 #### Scenario: There is no diff row
 
-- **WHEN** the caller opens Plan or Design and a place is painted from the source
-- **THEN** that painted place is not a diff row
+- **WHEN** the caller opens Plan or Design
+- **THEN** the painted place is not a diff row
 
 ### Requirement: PlanLines stays the leaf
 
@@ -71,7 +66,7 @@ The painted place on Plan and Design SHALL NOT be a diff row.
 
 #### Scenario: data-line is the source line with trailing space removed and stays the draft key
 
-- **WHEN** Plan paints a source line that ends with trailing space
+- **WHEN** the caller opens Plan or Design on a source line that ends with trailing space
 - **THEN** `data-line` is that source line with the trailing space removed, and the draft key is that same value
 
 ### Requirement: data-path is proposal.md or design.md under the change read path
@@ -83,14 +78,14 @@ On Plan and Design, `data-path` SHALL be `proposal.md` or `design.md` under the 
 - **WHEN** the caller opens Plan and then opens Design
 - **THEN** on Plan `data-path` is `proposal.md` under the change read path, and on Design `data-path` is `design.md` under the change read path
 
-### Requirement: data-at is the source line number the rendered place came from
+### Requirement: data-at is the source line number sectionsOf already assigns
 
-`data-at` SHALL be the source line number the rendered place came from.
+`data-at` SHALL be the source line number `sectionsOf` already assigns.
 
-#### Scenario: data-at is the source line number the rendered place came from
+#### Scenario: data-at is the source line number sectionsOf already assigns
 
-- **WHEN** a place is painted from a source line
-- **THEN** `data-at` is that source line's number
+- **WHEN** the caller opens Plan on a source line and then opens Design on that same source
+- **THEN** on each surface `data-at` is the source line number `sectionsOf` already assigns
 
 ### Requirement: data-side is right
 
@@ -98,7 +93,7 @@ On Plan and Design, `data-path` SHALL be `proposal.md` or `design.md` under the 
 
 #### Scenario: data-side is right
 
-- **WHEN** Plan or Design paints a source line
+- **WHEN** the caller opens Plan or Design
 - **THEN** `data-side` is `right`
 
 ### Requirement: LineNote and posted line comments stay on that path and line
@@ -119,14 +114,41 @@ On Design, `model.design.questions` SHALL be passed only for Open questions. Eve
 - **WHEN** the caller opens Design, Open questions is present, and another section contains a checkbox
 - **THEN** `model.design.questions` is passed only for Open questions, the other section passes an empty list, and that checkbox stays a line comment
 
-### Requirement: With no pull request, the document is not a comment target
+### Requirement: A level-two heading stays the section h3, not a button
 
-With no pull request, a place in the rendered document SHALL NOT be a comment target.
+A `##` line SHALL stay the section `h3` and SHALL NOT be a button.
 
-#### Scenario: With no pull request, the document is not a comment target
+#### Scenario: A level-two heading stays the section h3, not a button
 
-- **WHEN** the caller opens Plan or Design and there is no pull request
-- **THEN** a place in the rendered document is not a comment target
+- **WHEN** the caller opens Plan on a source that contains a `##` line and then opens Design on that same source
+- **THEN** on each surface that line is the section `h3` and is not a button
+
+### Requirement: A level-three heading stays the h4 from partsOf, not a button
+
+A `###` line SHALL stay the `h4` from `partsOf` and SHALL NOT be a button.
+
+#### Scenario: A level-three heading stays the h4 from partsOf, not a button
+
+- **WHEN** the caller opens Plan on a source that contains a `###` line and then opens Design on that same source
+- **THEN** on each surface that line is the `h4` from `partsOf` and is not a button
+
+### Requirement: A run of blank lines stays one span.gap
+
+A run of blank lines SHALL stay one `span.gap`.
+
+#### Scenario: A run of blank lines stays one span.gap
+
+- **WHEN** the caller opens Plan on a source that contains a run of blank lines and then opens Design on that same source
+- **THEN** on each surface that run is one `span.gap`
+
+### Requirement: With no pull request, the line stays a p.line and is not a comment target
+
+With no pull request, the line SHALL stay a `p.line` and SHALL NOT be a comment target.
+
+#### Scenario: With no pull request, the line stays a p.line and is not a comment target
+
+- **WHEN** the caller opens Plan and then opens Design and there is no pull request
+- **THEN** on each surface the line is a `p.line` and is not a comment target
 
 ### Requirement: The phase foot stays outside the document
 

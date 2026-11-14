@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {createElement} from 'react';
+import {Fragment, createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {changeDir} from '../machine/change/naming.ts';
 
 import {App} from './client/app.tsx';
+import {paintSourceDocument} from './client/source-line.tsx';
 import {draftsAfterClick} from './page.ts';
 import {
   MANAGER,
@@ -113,6 +114,13 @@ spec('source-line', () => {
         );
       },
     );
+
+    scenario('Every covered line of a fenced code block renders inside code', () => {
+      const painted = paintSourceDocument(['```fence', '', 'x']);
+      assert.match(renderToStaticMarkup(createElement(Fragment, null, painted[0].paint)), /<code>```fence<\/code>/);
+      assert.match(renderToStaticMarkup(createElement(Fragment, null, painted[1].paint)), /<code><\/code>/);
+      assert.match(renderToStaticMarkup(createElement(Fragment, null, painted[2].paint)), /<code>x<\/code>/);
+    });
 
     scenario('A source line is not wrapped as its own markdown document', async () => {
       const renderer = readFileSync(new URL('./client/source-line.tsx', import.meta.url), 'utf8');

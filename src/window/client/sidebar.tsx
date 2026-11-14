@@ -513,8 +513,7 @@ function PlanLines({
     const draft = drafts.find(item => item.line === lineKey);
     const path = `${root}/${file}`;
     const painted = documentPaint[index];
-    const at =
-      painted?.placeAt !== undefined ? lines[painted.placeAt - 1]?.line ?? line.line : line.line;
+    const at = line.line;
     out.push(
       <span key={index}>
         <button

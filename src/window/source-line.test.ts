@@ -245,6 +245,30 @@ spec('source-line', () => {
         },
       );
     });
+
+    scenario('data-at follows each spine line of a place that spans several source lines', async () => {
+      const continuation = 'continuation';
+      const proposal = ['## Scope', '', '### Body', '', '- item **one**', continuation, ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'proposing', {openPullRequests: 1})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', proposal);
+          await openIssue(page);
+          const at = sourceLineNumber(proposal, continuation);
+          const button = lineButton(await pageHtml(page.url), continuation);
+          assert.match(button, new RegExp(`data-at="${at}"`));
+        },
+      );
+    });
+
+    scenario('data-at is read from the spine line, not remark placeAt', () => {
+      const sidebar = readFileSync(new URL('./client/sidebar.tsx', import.meta.url), 'utf8');
+      assert.doesNotMatch(sidebar, /placeAt - 1/);
+      assert.match(sidebar, /const at = line\.line;/);
+    });
   });
 
   requirement('data-side is right', () => {

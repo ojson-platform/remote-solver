@@ -6,13 +6,13 @@ sdd-absorbed: 254d92efc244adbb
 
 ## Purpose
 
-Plan and Design render the source as one markdown document, and a click opens the remark draft on the source line that place came from. A source line is not parsed as its own markdown document. A `##` line stays the section heading and a `###` line stays the smaller heading, a run of blank lines stays one gap, and with no pull request the line is not a comment target. The painted place is not a diff row.
+Plan and Design render the source as one markdown document, and a click opens the remark draft on the source line that place came from. A source line is not parsed as its own markdown document. A covered line shows the node's value, and a line the value does not contain does not show the raw source. A `##` line stays the section heading and a `###` line stays the smaller heading, a run of blank lines stays one gap, and with no pull request the line is not a comment target. The painted place is not a diff row.
 
 ## ADDED Requirements
 
 ### Requirement: The document renders as one markdown document
 
-Plan and Design SHALL render the source as one markdown document. Headings, lists, emphasis, links, and code SHALL render in that document. A source line SHALL NOT be parsed as its own markdown document.
+Plan and Design SHALL render the source as one markdown document. Headings, lists, emphasis, links, and code SHALL render in that document. A source line SHALL NOT be parsed as its own markdown document. A covered line SHALL show the node's value. A line the value does not contain SHALL NOT show the raw source.
 
 #### Scenario: Plan and Design render the source as one markdown document
 
@@ -23,6 +23,11 @@ Plan and Design SHALL render the source as one markdown document. Headings, list
 
 - **WHEN** the caller opens Plan on a source of several lines and then opens Design on that same source
 - **THEN** on each surface those lines render inside the one document, and no source line is parsed as its own markdown document
+
+#### Scenario: A covered line shows the node's value
+
+- **WHEN** the caller opens Plan on a source that contains a closed fenced code block whose body is `const x = 1`, and then opens Design on that same source
+- **THEN** on each surface that body line shows the node's value `const x = 1`, and the opening marker line and the closing marker line do not show the raw source
 
 ### Requirement: The line stays a comment target
 

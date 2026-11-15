@@ -6,7 +6,7 @@ sdd-absorbed: 254d92efc244adbb
 
 ## Purpose
 
-Plan and Design render the source as one markdown document, and a click opens the remark draft on the source line that place came from. A source line is not parsed as its own markdown document. A covered line shows the node's value, and a line the value does not contain does not show the raw source. A `##` line stays the section heading and a `###` line stays the smaller heading, a run of blank lines that no node covers stays one gap, a blank line the value contains stays the slice of that value, and with no pull request the line is not a comment target. The painted place is not a diff row.
+Plan and Design render the source as one markdown document, and a click opens the remark draft on the source line that place came from. A source line is not parsed as its own markdown document. A covered line shows the node's value, and a line the value does not contain does not show the raw source. On an indented code block that spans several source lines, the first covered line shows the node's value and each later covered line shows that line's slice of the value. The opening marker line and the closing marker line of a closed fenced code block do not show the raw source. A `##` line stays the section heading and a `###` line stays the smaller heading, a run of blank lines that no node covers stays one gap, a blank line the value contains stays the slice of that value, and with no pull request the line is not a comment target. The painted place is not a diff row.
 
 ## ADDED Requirements
 
@@ -26,8 +26,8 @@ Plan and Design SHALL render the source as one markdown document. Headings, list
 
 #### Scenario: A covered line shows the node's value
 
-- **WHEN** the caller opens Plan on a source that contains a closed fenced code block whose body is `const x = 1`, and then opens Design on that same source
-- **THEN** on each surface that body line shows the node's value `const x = 1`, and the opening marker line and the closing marker line do not show the raw source
+- **WHEN** the caller opens Plan on a source that contains an indented code block spanning several source lines, whose raw indented first line is not in the node value, and a closed fenced code block, and then opens Design on that same source
+- **THEN** on each surface the first covered line of that indented block shows the node's value and does not show the raw indented source, each later covered line shows that line's slice of the value and does not show the previous line slice of the value, a line the value does not contain does not show the raw source, and the opening marker line and the closing marker line of the closed fenced code block do not show the raw source
 
 ### Requirement: The line stays a comment target
 

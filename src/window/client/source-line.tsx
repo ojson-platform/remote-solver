@@ -165,11 +165,11 @@ function paintBlockSlice(
   if (!block.position) {
     return undefined;
   }
-  if (block.type === 'code') {
-    return <code>{rawLine.trimEnd()}</code>;
-  }
   if (!lineInPlace(block.position, line)) {
     return undefined;
+  }
+  if (block.type === 'code') {
+    return <code>{rawLine.trimEnd()}</code>;
   }
   const phrasing = phrasingOnSourceLine(phrasingFromBlock(block), line, rawLine);
   if (block.type === 'listItem' && line === block.position.start.line) {

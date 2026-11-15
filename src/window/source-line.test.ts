@@ -115,11 +115,34 @@ spec('source-line', () => {
       },
     );
 
-    scenario('Every covered line of a fenced code block renders inside code', () => {
-      const painted = paintSourceDocument(['```fence', '', 'x']);
-      assert.match(renderToStaticMarkup(createElement(Fragment, null, painted[0].paint)), /<code>```fence<\/code>/);
-      assert.match(renderToStaticMarkup(createElement(Fragment, null, painted[1].paint)), /<code><\/code>/);
-      assert.match(renderToStaticMarkup(createElement(Fragment, null, painted[2].paint)), /<code>x<\/code>/);
+    scenario('Every covered line of a fenced code block renders inside code', async () => {
+      const renderer = readFileSync(new URL('./client/source-line.tsx', import.meta.url), 'utf8');
+      const slice = renderer.slice(renderer.indexOf('function paintBlockSlice'), renderer.indexOf('function paintOneLine'));
+      const covered = slice.indexOf('lineInPlace(block.position, line)');
+      const code = slice.indexOf("block.type === 'code'");
+      assert.ok(covered >= 0 && code >= 0 && covered < code);
+
+      const unclosed = paintSourceDocument(['```fence', '', 'x']);
+      assert.match(renderToStaticMarkup(createElement(Fragment, null, unclosed[0].paint)), /<code>```fence<\/code>/);
+      assert.match(renderToStaticMarkup(createElement(Fragment, null, unclosed[1].paint)), /<code><\/code>/);
+      assert.match(renderToStaticMarkup(createElement(Fragment, null, unclosed[2].paint)), /<code>x<\/code>/);
+
+      const proposal = ['## Scope', '', '```js', 'const x = 1', '```', ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'proposing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', proposal);
+          await openIssue(page);
+          const plan = docOf(spineOf(await pageHtml(page.url), KEY, 'Plan'));
+          assert.match(lineButton(plan, '```js'), /<code>```js<\/code>/);
+          assert.match(lineButton(plan, 'const x = 1'), /<code>const x = 1<\/code>/);
+          assert.match(lineButton(plan, '```'), /<code>```<\/code>/);
+          assert.equal(plan.includes('<span class="gap"/>'), false);
+        },
+      );
     });
 
     scenario('Each covered line of a block paints only that line slice', async () => {

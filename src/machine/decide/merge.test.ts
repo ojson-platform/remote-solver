@@ -223,6 +223,7 @@ spec('merge', () => {
       assert.equal(decision.kind, 'wait');
       if (decision.kind === 'wait') {
         assert.match(decision.reason, /wait for merge of PR #9/);
+        assert.equal(decision.ask, 'Merge pull request #9.');
       }
     });
     scenario('Accepted waits while the pull request is open', () => {

@@ -55,7 +55,12 @@ export function mergeOrWait(
         reason: `wait for green checks before merge of PR #${pr.id}`,
       };
     }
-    return {kind: 'wait', issue: issueKey, reason: `wait for merge of PR #${pr.id}`};
+    return {
+      kind: 'wait',
+      issue: issueKey,
+      reason: `wait for merge of PR #${pr.id}`,
+      ask: `Merge pull request #${pr.id}.`,
+    };
   }
   if (!pr) {
     return {kind: 'wait', issue: issueKey, reason: 'accepted needs a merged pull request'};

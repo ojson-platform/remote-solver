@@ -233,6 +233,7 @@ spec('marker', () => {
         kind: 'wait',
         issue: '1',
         reason: 'wait for merge of PR #9',
+        ask: 'Merge pull request #9.',
       });
     });
     scenario('A later fixed clears the conversation layer', () => {

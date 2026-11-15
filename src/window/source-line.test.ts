@@ -500,19 +500,33 @@ spec('source-line', () => {
   requirement('A level-two heading stays the section h3, not a button', () => {
     scenario('A level-two heading stays the section h3, not a button', async () => {
       const proposal = ['## Scope', '', 'Текст.', '', '## Outcome', '', 'Готово.', ''].join('\n');
+      const design = ['## Approach', '', 'Описание.', '', '## Open decisions', '', 'Решено.', ''].join('\n');
       await hosted(
         {
           login: () => MANAGER,
-          tickets: () => [held(KEY, 'proposing', {openPullRequests: 1, pull: '91'})],
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
         },
         async (page, _window, paths) => {
           writeChange(paths.arcadia, KEY, 'proposal.md', proposal);
+          writeChange(paths.arcadia, KEY, 'design.md', design);
           await openIssue(page);
-          const plan = spineOf(await pageHtml(page.url), KEY, 'Plan');
-          assert.match(plan, /<h3>Scope<\/h3>/);
-          assert.match(plan, /<h3>Outcome<\/h3>/);
-          assert.equal(plan.includes('data-line="## Scope"'), false);
-          assert.equal(plan.includes('data-line="## Outcome"'), false);
+          const html = await pageHtml(page.url);
+          for (const [layer, surface] of [
+            ['Plan', spineOf(html, KEY, 'Plan')],
+            ['Design', spineOf(html, KEY, 'Design')],
+          ] as const) {
+            if (layer === 'Plan') {
+              assert.match(surface, /<h3>Scope<\/h3>/);
+              assert.match(surface, /<h3>Outcome<\/h3>/);
+              assert.equal(surface.includes('data-line="## Scope"'), false);
+              assert.equal(surface.includes('data-line="## Outcome"'), false);
+            } else {
+              assert.match(surface, /<h3>Approach<\/h3>/);
+              assert.match(surface, /<h3>Open decisions<\/h3>/);
+              assert.equal(surface.includes('data-line="## Approach"'), false);
+              assert.equal(surface.includes('data-line="## Open decisions"'), false);
+            }
+          }
         },
       );
     });
@@ -520,20 +534,27 @@ spec('source-line', () => {
 
   requirement('A level-three heading stays the h4 from partsOf, not a button', () => {
     scenario('A level-three heading stays the h4 from partsOf, not a button', async () => {
-      const proposal = ['## Scope', '', '### Detail', '', 'Строка.', ''].join('\n');
+      const proposal = ['## Scope', '', '### Detail', '', 'Строка плана.', ''].join('\n');
+      const design = ['## Approach', '', '### Detail', '', 'Строка дизайна.', ''].join('\n');
       await hosted(
         {
           login: () => MANAGER,
-          tickets: () => [held(KEY, 'proposing', {openPullRequests: 1, pull: '91'})],
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
         },
         async (page, _window, paths) => {
           writeChange(paths.arcadia, KEY, 'proposal.md', proposal);
+          writeChange(paths.arcadia, KEY, 'design.md', design);
           await openIssue(page);
-          const plan = docOf(spineOf(await pageHtml(page.url), KEY, 'Plan'));
-          assert.match(plan, /<h4>Detail<\/h4>/);
-          assert.equal(plan.includes('data-line="### Detail"'), false);
-          const button = lineButton(plan, 'Строка.');
-          assert.match(button, /^<button\b/);
+          const html = await pageHtml(page.url);
+          for (const [layer, line] of [
+            ['Plan', 'Строка плана.'],
+            ['Design', 'Строка дизайна.'],
+          ] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            assert.match(doc, /<h4>Detail<\/h4>/);
+            assert.equal(doc.includes('data-line="### Detail"'), false);
+            assert.match(lineButton(doc, line), /^<button\b/);
+          }
         },
       );
     });

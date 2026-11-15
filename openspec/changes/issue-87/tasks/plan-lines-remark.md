@@ -3,13 +3,13 @@
 - There is no diff row
 - LineNote and posted line comments stay on that path and line
 
-sdd-delta: dbe3f0857eea4c29
+sdd-delta: 75ac05ecfd157b54
 
 ## Source
 
-In `src/window/client/sidebar.tsx`, `PlanLines` keeps the rendered place in the one document as the comment target when a pull request is present. With no pull request the place is not a comment target (the no-PR shape is finished in the chrome slice). It still paints `LineNote` and posted line comments on the path and line from `data-path` and `data-at`. The painted place is not a diff row. The comment target is not a button around a private document for that line.
+In `src/window/client/sidebar.tsx`, `PlanLines` keeps the rendered place in the one document as the comment target when a pull request is present. With no pull request the place is not a comment target (the no-PR shape is finished in the chrome slice). It matches an open question against the raw line, paints `LineNote`, and paints posted line comments on that path and `data-at`. The painted place is not a diff row. The comment target is not a button around a private document for that line.
 
-In `src/window/client/main.tsx`, the document click listener still opens the remark draft from the place's `data-line`. When the click is on a comment target it prevents the default, so an anchor in the place does not navigate and the draft still opens.
+In `src/window/client/main.tsx`, the document click listener still opens the remark draft from the place's `data-line`. The listener reads `data-line` from the innermost target under the click, so the draft opens on the source line that place came from and does not open on another painted source line. When the click is on a comment target it prevents the default, so an anchor in the place does not navigate and the draft still opens.
 
 Assume the one markdown document and the data attributes from the markdown slice. Leave Design Open-questions checkboxes, `##`/`###` section chrome, no-PR-only behavior, and phase foot placement to later slices.
 

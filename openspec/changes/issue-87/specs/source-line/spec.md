@@ -6,7 +6,7 @@ sdd-absorbed: 254d92efc244adbb
 
 ## Purpose
 
-Plan and Design render the source as one markdown document, and a click opens the remark draft on the source line that place came from. A source line is not parsed as its own markdown document. A covered line shows the node's value, and a line the value does not contain does not show the raw source. A `##` line stays the section heading and a `###` line stays the smaller heading, a run of blank lines stays one gap, and with no pull request the line is not a comment target. The painted place is not a diff row.
+Plan and Design render the source as one markdown document, and a click opens the remark draft on the source line that place came from. A source line is not parsed as its own markdown document. A covered line shows the node's value, and a line the value does not contain does not show the raw source. A `##` line stays the section heading and a `###` line stays the smaller heading, a run of blank lines that no node covers stays one gap, a blank line the value contains stays the slice of that value, and with no pull request the line is not a comment target. The painted place is not a diff row.
 
 ## ADDED Requirements
 
@@ -139,12 +139,17 @@ A `###` line SHALL stay the `h4` from `partsOf` and SHALL NOT be a button.
 
 ### Requirement: A run of blank lines stays one span.gap
 
-A run of blank lines SHALL stay one `span.gap`.
+A run of blank lines that no node covers SHALL stay one `span.gap`. A blank line that a code node covers SHALL stay the slice of that value, because the value contains that empty line, and SHALL stay a comment target.
 
 #### Scenario: A run of blank lines stays one span.gap
 
-- **WHEN** the caller opens Plan on a source that contains a run of blank lines and then opens Design on that same source
+- **WHEN** the caller opens Plan on a source that contains a run of blank lines that no node covers, and then opens Design on that same source
 - **THEN** on each surface that run is one `span.gap`
+
+#### Scenario: A covered blank line stays the slice of the value
+
+- **WHEN** the caller opens Plan on a source that contains a fenced code block with a blank line inside it, and then opens Design on that same source
+- **THEN** on each surface that covered blank line stays the slice of the value and is a comment target, and it is not one `span.gap`
 
 ### Requirement: With no pull request, the line stays a p.line and is not a comment target
 

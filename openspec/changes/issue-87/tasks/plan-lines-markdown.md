@@ -1,12 +1,13 @@
 - Plan and Design render the source as one markdown document
-- A source line is not wrapped as its own markdown document
+- A source line is not parsed as its own markdown document
 - PlanLines stays the leaf
 - data-line is the source line with trailing space removed and stays the draft key
 - data-path is proposal.md or design.md under the change read path
-- data-at is the source line number the rendered place came from
+- data-at is the source line number sectionsOf already assigns
 - data-side is right
+- A run of blank lines stays one span.gap
 
-sdd-delta: e878d73e50f8c514
+sdd-delta: e152f3b5f3ec6c90
 
 ## Source
 
@@ -20,7 +21,7 @@ Seams (no child issues): one-document render vs `PlanLines` data attributes and 
 
 ## Proof
 
-`src/window/source-line.test.ts` observes Plan and Design in the sidebar: the source renders as one markdown document, a source line is not wrapped as its own markdown document, `PlanLines` stays the leaf with the four data attributes on the rendered place, and blank runs collapse to one `span.gap`.
+`src/window/source-line.test.ts` observes Plan and Design in the sidebar: the source renders as one markdown document, a source line is not parsed as its own markdown document, `PlanLines` stays the leaf with the four data attributes on the rendered place, and a run of blank lines is one `span.gap`.
 
 - **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --reporter=default src/window/source-line.test.ts`
 - **Once** after that command exits 0: `pnpm test`; then `pnpm run test:types`

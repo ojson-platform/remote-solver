@@ -1,8 +1,8 @@
 - On Design, model.design.questions is passed only for Open questions, and a checkbox outside Open questions stays a line comment
-- A ## line stays the section h3, not a button
-- A ### line stays the h4 from partsOf, not a button
+- A level-two heading stays the section h3, not a button
+- A level-three heading stays the h4 from partsOf, not a button
 
-sdd-delta: e878d73e50f8c514
+sdd-delta: e152f3b5f3ec6c90
 
 ## Source
 

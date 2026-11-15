@@ -179,6 +179,34 @@ spec('source-line', () => {
       );
     });
 
+    scenario("A covered line shows the node's value", async () => {
+      const source = ['## Scope', '', '```js', 'const x = 1', '```', ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', source);
+          writeChange(paths.arcadia, KEY, 'design.md', source);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            const body = lineButton(doc, 'const x = 1');
+            assert.match(body, /<code>const x = 1<\/code>/);
+            assert.equal(body.includes('const x = 1</button>'), false);
+            const open = lineButton(doc, '```js');
+            assert.match(open, /<code>```js<\/code>/);
+            assert.equal(open.includes('```js</button>'), false);
+            const close = lineButton(doc, '```');
+            assert.match(close, /<code>```<\/code>/);
+            assert.equal(close.includes('```</button>'), false);
+          }
+        },
+      );
+    });
+
     scenario('A source line is not parsed as its own markdown document', async () => {
       const renderer = readFileSync(new URL('./client/source-line.tsx', import.meta.url), 'utf8');
       assert.equal(renderer.includes('@mdx-js/mdx'), false);
@@ -573,6 +601,41 @@ spec('source-line', () => {
   });
 
   requirement('A run of blank lines stays one span.gap', () => {
+    scenario('A covered blank line stays the slice of the value', async () => {
+      const source = ['## Scope', '```js', 'before', '', 'after', '```'].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', source);
+          writeChange(paths.arcadia, KEY, 'design.md', source);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          const lines = source.split('\n');
+          const openFence = lines.indexOf('```js');
+          const closeFence = lines.lastIndexOf('```');
+          const fenceBlank =
+            lines.findIndex((line, index) => line === '' && index > openFence && index < closeFence) + 1;
+          assert.ok(fenceBlank > 0);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            const marker = `data-at="${fenceBlank}"`;
+            const atPos = doc.indexOf(marker);
+            assert.ok(atPos >= 0, marker);
+            const start = doc.lastIndexOf('<button', atPos);
+            const button = doc.slice(start, doc.indexOf('</button>', atPos) + '</button>'.length);
+            assert.match(button, /^<button\b[^>]*class="[^"]*\bline\b/);
+            assert.match(button, /<code><\/code>/);
+            const fence = doc.slice(doc.indexOf('```js'), doc.indexOf('after'));
+            assert.equal(fence.includes('class="gap"'), false);
+            assert.equal(doc.match(/<span class="gap"/g)?.length ?? 0, 0);
+          }
+        },
+      );
+    });
+
     scenario('A run of blank lines stays one span.gap', async () => {
       const gapDesign = ['## Approach', '', 'Первая.', '', '', '', 'Вторая.', ''].join('\n');
       await hosted(

@@ -489,7 +489,9 @@ function PlanLines({
   let gap = false;
   const out: ReactNode[] = [];
   lines.forEach((line, index) => {
-    if (line.text.trim() === '') {
+    const painted = documentPaint[index];
+    const covered = painted?.placeAt !== undefined;
+    if (line.text.trim() === '' && !covered) {
       if (!gap) {
         out.push(<span className="gap" key={`gap-${index}`} />);
       }
@@ -512,7 +514,6 @@ function PlanLines({
     }
     const draft = drafts.find(item => item.line === lineKey);
     const path = `${root}/${file}`;
-    const painted = documentPaint[index];
     const at = line.line;
     out.push(
       <span key={index}>

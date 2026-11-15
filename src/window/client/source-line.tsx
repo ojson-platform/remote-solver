@@ -157,9 +157,34 @@ function phrasingOnSourceLine(children: PhrasingContent[], line: number, rawLine
   return out;
 }
 
-function fencedCodeLineText(block: BlockContent & {type: 'code'}, line: number, rawLine: string): string {
+function codeBlockOpensWithFence(texts: readonly string[], block: BlockContent & {type: 'code'}): boolean {
+  const start = block.position?.start.line;
+  if (!start) {
+    return false;
+  }
+  return /^```/.test(texts[start - 1]?.trim() ?? '');
+}
+
+function codeLineText(
+  block: BlockContent & {type: 'code'},
+  line: number,
+  rawLine: string,
+  texts: readonly string[],
+): string {
   const valueLines = block.value.split('\n');
-  const index = line - block.position!.start.line - 1;
+  const start = block.position!.start.line;
+  const fenced = codeBlockOpensWithFence(texts, block);
+  if (fenced) {
+    if (/^```/.test(rawLine.trim())) {
+      return rawLine.trimEnd();
+    }
+    const index = line - start - 1;
+    if (index >= 0 && index < valueLines.length) {
+      return valueLines[index] ?? rawLine;
+    }
+    return rawLine;
+  }
+  const index = line - start;
   if (index >= 0 && index < valueLines.length) {
     return valueLines[index] ?? rawLine;
   }
@@ -170,6 +195,7 @@ function paintBlockSlice(
   block: BlockContent | ListItem,
   line: number,
   rawLine: string,
+  texts: readonly string[],
 ): ReactNode | undefined {
   if (!block.position) {
     return undefined;
@@ -178,7 +204,7 @@ function paintBlockSlice(
     return undefined;
   }
   if (block.type === 'code') {
-    return <code>{fencedCodeLineText(block, line, rawLine)}</code>;
+    return <code>{codeLineText(block, line, rawLine, texts)}</code>;
   }
   const phrasing = phrasingOnSourceLine(phrasingFromBlock(block), line, rawLine);
   if (block.type === 'listItem' && line === block.position.start.line) {
@@ -198,12 +224,12 @@ function paintBlockSlice(
   return phrasingChildren(phrasing);
 }
 
-function paintOneLine(tree: Root, lineIndex: number, rawLine: string): PaintedSourceLine {
+function paintOneLine(tree: Root, lineIndex: number, rawLine: string, texts: readonly string[]): PaintedSourceLine {
   const lineNum = lineIndex + 1;
   const block = blockCoveringLine(tree, lineNum);
   if (block?.position && lineInPlace(block.position, lineNum)) {
     return {
-      paint: paintBlockSlice(block, lineNum, rawLine),
+      paint: paintBlockSlice(block, lineNum, rawLine, texts),
       placeAt: lineNum,
     };
   }
@@ -222,5 +248,5 @@ function paintOneLine(tree: Root, lineIndex: number, rawLine: string): PaintedSo
 export function paintSourceDocument(texts: readonly string[]): PaintedSourceLine[] {
   const source = texts.join('\n');
   const tree = remark().parse(source) as Root;
-  return texts.map((text, index) => paintOneLine(tree, index, text));
+  return texts.map((text, index) => paintOneLine(tree, index, text, texts));
 }

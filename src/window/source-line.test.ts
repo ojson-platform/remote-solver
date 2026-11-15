@@ -180,7 +180,17 @@ spec('source-line', () => {
     });
 
     scenario("A covered line shows the node's value", async () => {
-      const source = ['## Scope', '', '```js', 'const x = 1', '```', ''].join('\n');
+      const source = [
+        '## Scope',
+        '',
+        '    indented-first',
+        '    indented-second',
+        '',
+        '```js',
+        'const x = 1',
+        '```',
+        '',
+      ].join('\n');
       await hosted(
         {
           login: () => MANAGER,
@@ -193,6 +203,12 @@ spec('source-line', () => {
           const html = await pageHtml(page.url);
           for (const layer of ['Plan', 'Design'] as const) {
             const doc = docOf(spineOf(html, KEY, layer));
+            const indentedFirst = lineButton(doc, '    indented-first');
+            assert.match(indentedFirst, /<code>indented-first<\/code>/);
+            assert.equal(indentedFirst.includes('<code>    indented-first</code>'), false);
+            const indentedSecond = lineButton(doc, '    indented-second');
+            assert.match(indentedSecond, /<code>indented-second<\/code>/);
+            assert.equal(indentedSecond.includes('indented-first'), false);
             const body = lineButton(doc, 'const x = 1');
             assert.match(body, /<code>const x = 1<\/code>/);
             assert.equal(body.includes('const x = 1</button>'), false);

@@ -127,7 +127,18 @@ spec('source-line', () => {
       assert.match(renderToStaticMarkup(createElement(Fragment, null, unclosed[1].paint)), /<code><\/code>/);
       assert.match(renderToStaticMarkup(createElement(Fragment, null, unclosed[2].paint)), /<code>x<\/code>/);
 
-      const proposal = ['## Scope', '', '```js', 'const x = 1', '```', ''].join('\n');
+      const trailing = paintSourceDocument(['```', 'line  ', '```']);
+      assert.match(
+        renderToStaticMarkup(createElement(Fragment, null, trailing[1].paint)),
+        /<code>line  <\/code>/,
+      );
+      const indented = paintSourceDocument(['```', '  indented', '```']);
+      assert.match(
+        renderToStaticMarkup(createElement(Fragment, null, indented[1].paint)),
+        /<code>  indented<\/code>/,
+      );
+
+      const proposal = ['## Scope', '', '```js', 'const x = 1', '  indented', '```', ''].join('\n');
       await hosted(
         {
           login: () => MANAGER,
@@ -139,6 +150,7 @@ spec('source-line', () => {
           const plan = docOf(spineOf(await pageHtml(page.url), KEY, 'Plan'));
           assert.match(lineButton(plan, '```js'), /<code>```js<\/code>/);
           assert.match(lineButton(plan, 'const x = 1'), /<code>const x = 1<\/code>/);
+          assert.match(lineButton(plan, '  indented'), /<code>  indented<\/code>/);
           assert.match(lineButton(plan, '```'), /<code>```<\/code>/);
           assert.equal(plan.includes('<span class="gap"/>'), false);
         },

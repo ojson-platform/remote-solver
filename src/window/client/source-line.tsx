@@ -157,6 +157,15 @@ function phrasingOnSourceLine(children: PhrasingContent[], line: number, rawLine
   return out;
 }
 
+function fencedCodeLineText(block: BlockContent & {type: 'code'}, line: number, rawLine: string): string {
+  const valueLines = block.value.split('\n');
+  const index = line - block.position!.start.line - 1;
+  if (index >= 0 && index < valueLines.length) {
+    return valueLines[index] ?? rawLine;
+  }
+  return rawLine;
+}
+
 function paintBlockSlice(
   block: BlockContent | ListItem,
   line: number,
@@ -169,7 +178,7 @@ function paintBlockSlice(
     return undefined;
   }
   if (block.type === 'code') {
-    return <code>{rawLine.trimEnd()}</code>;
+    return <code>{fencedCodeLineText(block, line, rawLine)}</code>;
   }
   const phrasing = phrasingOnSourceLine(phrasingFromBlock(block), line, rawLine);
   if (block.type === 'listItem' && line === block.position.start.line) {

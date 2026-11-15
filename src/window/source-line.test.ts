@@ -167,7 +167,7 @@ spec('source-line', () => {
       );
     });
 
-    scenario('A source line is not wrapped as its own markdown document', async () => {
+    scenario('A source line is not parsed as its own markdown document', async () => {
       const renderer = readFileSync(new URL('./client/source-line.tsx', import.meta.url), 'utf8');
       assert.equal(renderer.includes('@mdx-js/mdx'), false);
       assert.equal(renderer.includes('evaluateSync'), false);
@@ -175,15 +175,20 @@ spec('source-line', () => {
       await hosted(
         {
           login: () => MANAGER,
-          tickets: () => [held(KEY, 'proposing', {openPullRequests: 1})],
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1})],
         },
         async (page, _window, paths) => {
           writeChange(paths.arcadia, KEY, 'proposal.md', MARKDOWN_PROPOSAL);
+          writeChange(paths.arcadia, KEY, 'design.md', MARKDOWN_DESIGN);
           await openIssue(page);
-          const doc = docOf(spineOf(await pageHtml(page.url), KEY, 'Plan'));
-          const buttons = doc.match(/<button[^>]*class="[^"]*line/g) ?? [];
-          for (const button of buttons) {
-            assert.equal(button.includes('<div class="doc">'), false);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            const buttons = doc.match(/<button[^>]*class="[^"]*line/g) ?? [];
+            for (const button of buttons) {
+              assert.equal(button.includes('<div class="doc">'), false);
+            }
+            assert.ok(buttons.length > 0);
           }
         },
       );
@@ -251,20 +256,27 @@ spec('source-line', () => {
     });
   });
 
-  requirement('data-at is the source line number the rendered place came from', () => {
-    scenario('data-at is the source line number the rendered place came from', async () => {
-      const line = 'Пункт с *курсивом*.';
+  requirement('data-at is the source line number sectionsOf already assigns', () => {
+    scenario('data-at is the source line number sectionsOf already assigns', async () => {
+      const proposalLine = '- list item';
       await hosted(
         {
           login: () => MANAGER,
           tickets: () => [held(KEY, 'designing', {openPullRequests: 1})],
         },
         async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', MARKDOWN_PROPOSAL);
           writeChange(paths.arcadia, KEY, 'design.md', MARKDOWN_DESIGN);
           await openIssue(page);
-          const at = sourceLineNumber(MARKDOWN_DESIGN, line);
-          const button = lineButton(await pageHtml(page.url), line.trimEnd());
-          assert.match(button, new RegExp(`data-at="${at}"`));
+          const html = await pageHtml(page.url);
+          const planAt = sourceLineNumber(MARKDOWN_PROPOSAL, proposalLine);
+          assert.match(lineButton(docOf(spineOf(html, KEY, 'Plan')), proposalLine), new RegExp(`data-at="${planAt}"`));
+          const designLine = 'Пункт с *курсивом*.';
+          const designAt = sourceLineNumber(MARKDOWN_DESIGN, designLine);
+          assert.match(
+            lineButton(docOf(spineOf(html, KEY, 'Design')), designLine.trimEnd()),
+            new RegExp(`data-at="${designAt}"`),
+          );
         },
       );
     });
@@ -485,8 +497,8 @@ spec('source-line', () => {
     );
   });
 
-  requirement('A ## line stays the section h3, not a button', () => {
-    scenario('A ## line stays the section h3, not a button', async () => {
+  requirement('A level-two heading stays the section h3, not a button', () => {
+    scenario('A level-two heading stays the section h3, not a button', async () => {
       const proposal = ['## Scope', '', 'Текст.', '', '## Outcome', '', 'Готово.', ''].join('\n');
       await hosted(
         {
@@ -506,8 +518,8 @@ spec('source-line', () => {
     });
   });
 
-  requirement('A ### line stays the h4 from partsOf, not a button', () => {
-    scenario('A ### line stays the h4 from partsOf, not a button', async () => {
+  requirement('A level-three heading stays the h4 from partsOf, not a button', () => {
+    scenario('A level-three heading stays the h4 from partsOf, not a button', async () => {
       const proposal = ['## Scope', '', '### Detail', '', 'Строка.', ''].join('\n');
       await hosted(
         {
@@ -529,24 +541,29 @@ spec('source-line', () => {
 
   requirement('A run of blank lines stays one span.gap', () => {
     scenario('A run of blank lines stays one span.gap', async () => {
+      const gapDesign = ['## Approach', '', 'Первая.', '', '', '', 'Вторая.', ''].join('\n');
       await hosted(
         {
           login: () => MANAGER,
-          tickets: () => [held(KEY, 'proposing', {openPullRequests: 1})],
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1})],
         },
         async (page, _window, paths) => {
           writeChange(paths.arcadia, KEY, 'proposal.md', GAP_PROPOSAL);
+          writeChange(paths.arcadia, KEY, 'design.md', gapDesign);
           await openIssue(page);
-          const doc = docOf(spineOf(await pageHtml(page.url), KEY, 'Plan'));
-          const gaps = doc.match(/<span class="gap"/g) ?? [];
-          assert.equal(gaps.length, 1);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            const gaps = doc.match(/<span class="gap"/g) ?? [];
+            assert.equal(gaps.length, 1);
+          }
         },
       );
     });
   });
 
-  requirement('With no pull request, the document is not a comment target', () => {
-    scenario('With no pull request, the document is not a comment target', async () => {
+  requirement('With no pull request, the line stays a p.line and is not a comment target', () => {
+    scenario('With no pull request, the line stays a p.line and is not a comment target', async () => {
       const proposal = ['## Scope', '', 'Строка **bold**.', ''].join('\n');
       const design = ['## Approach', '', 'Пункт *курсив*.', ''].join('\n');
       await hosted(

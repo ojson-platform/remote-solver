@@ -42,6 +42,12 @@ function listMarker(line: string): string {
   return matched?.[1] ?? '';
 }
 
+function lineContentAfterListMarker(line: string): string {
+  const body = sourceLineBody(line);
+  const matched = /^(\s*(?:[-*+]|\d+\.)\s+)([\s\S]*)$/.exec(body);
+  return matched?.[2] ?? body;
+}
+
 function sourceLineBody(line: string): string {
   const indent = /^(\s*)/.exec(line)?.[1] ?? '';
   let rest = line.slice(indent.length);
@@ -215,8 +221,7 @@ function linkReferenceLeadOnLine(node: LinkReference, line: number, rawLine: str
   if (!sliced || sliced.type !== 'text') {
     return undefined;
   }
-  const lead = rawLine.startsWith('[') ? '[' : '';
-  return {type: 'text', value: `${lead}${sliced.value}`, position: text.position};
+  return sliced;
 }
 
 function phrasingOnSourceLine(
@@ -266,7 +271,7 @@ function fenceTrimmed(rawLine: string): string {
 }
 
 function opensWithFenceOnLine(rawLine: string): boolean {
-  return opensWithFence(sourceLineBody(rawLine));
+  return opensWithFence(lineContentAfterListMarker(rawLine));
 }
 
 function fenceMarkerRun(rawLine: string): string | undefined {
@@ -297,7 +302,7 @@ function codeBlockOpensWithFence(texts: readonly string[], block: BlockContent &
     return false;
   }
   const raw = texts[start - 1] ?? '';
-  const content = sourceLineBody(raw);
+  const content = lineContentAfterListMarker(raw);
   if (!opensWithFence(content)) {
     return false;
   }
@@ -311,7 +316,7 @@ function codeBlockClosesWithFence(texts: readonly string[], block: BlockContent 
   if (!start || !end) {
     return false;
   }
-  const openLength = fenceMarkerLength(texts[start - 1] ?? '');
+  const openLength = fenceMarkerLength(lineContentAfterListMarker(texts[start - 1] ?? ''));
   for (let line = start + 1; line <= end; line += 1) {
     if (closesFenceAt(texts[line - 1] ?? '', openLength)) {
       return true;
@@ -330,7 +335,7 @@ function codeLineText(
   const start = block.position!.start.line;
   const fenced = codeBlockOpensWithFence(texts, block);
   const closedFence = fenced && codeBlockClosesWithFence(texts, block);
-  const openLength = fenceMarkerLength(texts[start - 1] ?? '');
+  const openLength = fenceMarkerLength(lineContentAfterListMarker(texts[start - 1] ?? ''));
   if (fenced) {
     if (line === start && opensWithFenceOnLine(rawLine)) {
       return '';

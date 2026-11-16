@@ -155,6 +155,16 @@ spec('source-line', () => {
         /<code>  indented<\/code>/,
       );
 
+      const listFence = paintSourceDocument(['- ```js', '  line', '  indent', '```']);
+      assert.match(renderToStaticMarkup(createElement(Fragment, null, listFence[0].paint)), /<code><\/code>/);
+      assert.match(renderToStaticMarkup(createElement(Fragment, null, listFence[1].paint)), /<code>line<\/code>/);
+      assert.match(renderToStaticMarkup(createElement(Fragment, null, listFence[2].paint)), /<code>indent<\/code>/);
+      assert.doesNotMatch(
+        renderToStaticMarkup(createElement(Fragment, null, listFence[1].paint)),
+        /  line/,
+      );
+      assert.match(renderToStaticMarkup(createElement(Fragment, null, listFence[3].paint)), /<code><\/code>/);
+
       const proposal = ['## Scope', '', '```js', 'const x = 1', '  indented', '```', ''].join('\n');
       await hosted(
         {
@@ -452,7 +462,8 @@ spec('source-line', () => {
           for (const layer of ['Plan', 'Design'] as const) {
             const doc = docOf(spineOf(html, KEY, layer));
             const first = lineButton(doc, '[long');
-            assert.match(first, /\[long/);
+            const firstInner = first.slice(first.indexOf('>') + 1, first.lastIndexOf('</button>'));
+            assert.equal(firstInner, 'long');
             assert.doesNotMatch(first, /<code><\/code>/);
             const second = lineButton(doc, 'label][ref]');
             assert.match(second, /label/);

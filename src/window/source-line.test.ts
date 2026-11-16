@@ -117,7 +117,9 @@ spec('source-line', () => {
             assert.match(plan, /<em>em<\/em>/);
             assert.match(plan, /<code>inline<\/code>/);
             assert.match(plan, /<a href="https:\/\/example\.com">link<\/a>/);
-            assert.match(plan, /<code>```fence<\/code>/);
+            const fenceOpen = lineButton(plan, '```fence');
+            assert.match(fenceOpen, /<code><\/code>/);
+            assert.equal(fenceOpen.includes('<code>```fence</code>'), false);
 
             const design = docOf(spineOf(html, KEY, 'Design'));
             assert.match(design, /<em>курсивом<\/em>/);
@@ -134,7 +136,11 @@ spec('source-line', () => {
       assert.ok(covered >= 0 && code >= 0 && covered < code);
 
       const unclosed = paintSourceDocument(['```fence', '', 'x']);
-      assert.match(renderToStaticMarkup(createElement(Fragment, null, unclosed[0].paint)), /<code>```fence<\/code>/);
+      assert.match(renderToStaticMarkup(createElement(Fragment, null, unclosed[0].paint)), /<code><\/code>/);
+      assert.doesNotMatch(
+        renderToStaticMarkup(createElement(Fragment, null, unclosed[0].paint)),
+        /```fence/,
+      );
       assert.match(renderToStaticMarkup(createElement(Fragment, null, unclosed[1].paint)), /<code><\/code>/);
       assert.match(renderToStaticMarkup(createElement(Fragment, null, unclosed[2].paint)), /<code>x<\/code>/);
 
@@ -235,6 +241,63 @@ spec('source-line', () => {
             assert.match(quoteAlpha, /<code>alpha<\/code>/);
             assert.doesNotMatch(quoteAlpha, /<code>&gt; alpha<\/code>/);
             assert.doesNotMatch(quoteAlpha, /<code>> alpha<\/code>/);
+          }
+        },
+      );
+    });
+
+    scenario('A closed tilde fence shows that line slice and not the raw marker', async () => {
+      const source = ['## Scope', '', '~~~', 'alpha', 'beta', '~~~', ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', source);
+          writeChange(paths.arcadia, KEY, 'design.md', source);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            const alpha = lineButton(doc, 'alpha');
+            assert.match(alpha, /<code>alpha<\/code>/);
+            assert.equal(alpha.includes('beta'), false);
+            const beta = lineButton(doc, 'beta');
+            assert.match(beta, /<code>beta<\/code>/);
+            assert.equal(beta.includes('alpha'), false);
+            const closeAt = source.split('\n').lastIndexOf('~~~') + 1;
+            const closeMarker = doc.match(
+              new RegExp(
+                `<button[^>]*data-at="${closeAt}"[^>]*>[\\s\\S]*?</button>`,
+              ),
+            )?.[0];
+            assert.ok(closeMarker);
+            assert.match(closeMarker!, /<code><\/code>/);
+            assert.equal(closeMarker!.includes('<code>~~~</code>'), false);
+          }
+        },
+      );
+    });
+
+    scenario('An unclosed fence line the value does not contain does not show the raw source', async () => {
+      const source = ['## Scope', '', '```fence', '', 'x', ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', source);
+          writeChange(paths.arcadia, KEY, 'design.md', source);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            const open = lineButton(doc, '```fence');
+            assert.match(open, /<code><\/code>/);
+            assert.equal(open.includes('<code>```fence</code>'), false);
+            assert.match(lineButton(doc, 'x'), /<code>x<\/code>/);
           }
         },
       );

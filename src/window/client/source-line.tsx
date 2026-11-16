@@ -188,12 +188,24 @@ function phrasingOnSourceLine(children: PhrasingContent[], line: number, rawLine
   return out;
 }
 
+function fenceTrimmed(rawLine: string): string {
+  return sourceLineBody(rawLine).trim();
+}
+
+function opensWithFence(rawLine: string): boolean {
+  return /^(`{3,}|~{3,})/.test(fenceTrimmed(rawLine));
+}
+
+function closesWithFenceOnly(rawLine: string): boolean {
+  return /^(`{3,}|~{3,})\s*$/.test(fenceTrimmed(rawLine));
+}
+
 function codeBlockOpensWithFence(texts: readonly string[], block: BlockContent & {type: 'code'}): boolean {
   const start = block.position?.start.line;
   if (!start) {
     return false;
   }
-  return /^```/.test(sourceLineBody(texts[start - 1] ?? '').trim());
+  return opensWithFence(texts[start - 1] ?? '');
 }
 
 function codeBlockClosesWithFence(texts: readonly string[], block: BlockContent & {type: 'code'}): boolean {
@@ -203,7 +215,7 @@ function codeBlockClosesWithFence(texts: readonly string[], block: BlockContent 
     return false;
   }
   for (let line = start + 1; line <= end; line += 1) {
-    if (/^```/.test(sourceLineBody(texts[line - 1] ?? '').trim())) {
+    if (closesWithFenceOnly(texts[line - 1] ?? '')) {
       return true;
     }
   }
@@ -220,8 +232,11 @@ function codeLineText(
   const start = block.position!.start.line;
   const fenced = codeBlockOpensWithFence(texts, block);
   const closedFence = fenced && codeBlockClosesWithFence(texts, block);
-  if (closedFence) {
-    if (/^```/.test(sourceLineBody(rawLine).trim())) {
+  if (fenced) {
+    if (line === start && opensWithFence(rawLine)) {
+      return '';
+    }
+    if (closedFence && closesWithFenceOnly(rawLine)) {
       return '';
     }
     const index = line - start - 1;
@@ -229,16 +244,6 @@ function codeLineText(
       return valueLines[index] ?? '';
     }
     return '';
-  }
-  if (fenced) {
-    if (/^```/.test(sourceLineBody(rawLine).trim())) {
-      return sourceLineBody(rawLine).trimEnd();
-    }
-    const index = line - start - 1;
-    if (index >= 0 && index < valueLines.length) {
-      return valueLines[index] ?? sourceLineBody(rawLine);
-    }
-    return sourceLineBody(rawLine);
   }
   const index = line - start;
   if (index >= 0 && index < valueLines.length) {

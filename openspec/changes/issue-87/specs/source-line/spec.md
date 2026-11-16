@@ -16,8 +16,8 @@ Plan and Design SHALL render the source as one markdown document. Headings, list
 
 #### Scenario: Plan and Design render the source as one markdown document
 
-- **WHEN** the caller opens Plan on a source that contains a heading, a list, emphasis, a link, and code, and then opens Design on that same source
-- **THEN** Plan shows one markdown document in which that heading, list, emphasis, link, and code are rendered, and Design shows one markdown document in which those same parts are rendered
+- **WHEN** the caller opens Plan on a source that contains a heading, a list with a nested list item, a code block inside a list item, emphasis, a link, and code, and then opens Design on that same source
+- **THEN** Plan shows one markdown document in which that heading, list, emphasis, link, and code are rendered, and Design shows one markdown document in which those same parts are rendered, a covered line shows the node value, the nested list item shows the node's value so the inner text appears, the code block inside the list item shows the node's value so the code value appears, and neither covered line is painted empty
 
 #### Scenario: A source line is not parsed as its own markdown document
 

@@ -1,4 +1,4 @@
-sdd-absorbed: cc0c1b3a1aebe027
+sdd-absorbed: 5a67b1e76b7c3ca4
 
 - [x] `plan-lines-markdown` Plan and Design render the source as one markdown document; A source line is not parsed as its own markdown document; A covered line shows the node's value; PlanLines stays the leaf; data-line is the source line with trailing space removed and stays the draft key; data-path is proposal.md or design.md under the change read path; data-at is the source line number sectionsOf already assigns; data-side is right; A run of blank lines stays one span.gap; A covered blank line stays the slice of the value
 - [x] `plan-lines-remark` The line stays a comment target; A click opens the remark draft on the source line; There is no diff row; LineNote and posted line comments stay on that path and line

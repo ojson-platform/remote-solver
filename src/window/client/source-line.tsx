@@ -1,6 +1,6 @@
 import type {ReactNode} from 'react';
 
-import type {BlockContent, ListItem, PhrasingContent, Root} from 'mdast';
+import type {BlockContent, Definition, LinkReference, ListItem, PhrasingContent, Root} from 'mdast';
 
 type SourcePosition = NonNullable<Root['position']>;
 
@@ -47,15 +47,27 @@ function sourceLineBody(line: string): string {
   return matched ? `${matched[1]}${matched[2]}` : line;
 }
 
-function blockSpan(item: BlockContent | ListItem): number {
+function blockSpan(item: CoveredBlock): number {
   const position = item.position!;
   return placeEndLine(position) - position.start.line;
 }
 
-const blockPriority = ['code', 'listItem', 'paragraph', 'heading'] as const;
+type CoveredBlock = BlockContent | ListItem | Definition;
 
-function blockCoveringLine(tree: Root, line: number): BlockContent | ListItem | undefined {
-  let hits: (BlockContent | ListItem)[] = [];
+const blockPriority = ['code', 'definition', 'listItem', 'paragraph', 'heading'] as const;
+
+function definitionsOf(tree: Root): Map<string, string> {
+  const out = new Map<string, string>();
+  visit(tree, node => {
+    if (node.type === 'definition') {
+      out.set(node.identifier, node.url);
+    }
+  });
+  return out;
+}
+
+function blockCoveringLine(tree: Root, line: number): CoveredBlock | undefined {
+  let hits: CoveredBlock[] = [];
   visit(tree, node => {
     if (!('position' in node) || !node.position || !lineInPlace(node.position, line)) {
       return;
@@ -64,15 +76,16 @@ function blockCoveringLine(tree: Root, line: number): BlockContent | ListItem | 
       node.type === 'listItem' ||
       node.type === 'heading' ||
       node.type === 'code' ||
-      node.type === 'paragraph'
+      node.type === 'paragraph' ||
+      node.type === 'definition'
     ) {
-      hits.push(node as BlockContent | ListItem);
+      hits.push(node as CoveredBlock);
     }
   });
   if (hits.some(item => item.type === 'listItem')) {
     hits = hits.filter(item => item.type !== 'paragraph');
   }
-  let best: BlockContent | ListItem | undefined;
+  let best: CoveredBlock | undefined;
   for (const hit of hits) {
     if (!best) {
       best = hit;
@@ -96,22 +109,42 @@ function blockCoveringLine(tree: Root, line: number): BlockContent | ListItem | 
   return best;
 }
 
-function phrasingNode(node: PhrasingContent, key: number): ReactNode {
+function phrasingNode(
+  node: PhrasingContent,
+  key: number,
+  definitions: ReadonlyMap<string, string>,
+): ReactNode {
   switch (node.type) {
     case 'text':
       return node.value;
     case 'emphasis':
-      return <em key={key}>{node.children.map((child, index) => phrasingNode(child, index))}</em>;
+      return (
+        <em key={key}>
+          {node.children.map((child, index) => phrasingNode(child, index, definitions))}
+        </em>
+      );
     case 'strong':
-      return <strong key={key}>{node.children.map((child, index) => phrasingNode(child, index))}</strong>;
+      return (
+        <strong key={key}>
+          {node.children.map((child, index) => phrasingNode(child, index, definitions))}
+        </strong>
+      );
     case 'inlineCode':
       return <code key={key}>{node.value}</code>;
     case 'link':
       return (
         <a key={key} href={node.url}>
-          {node.children.map((child, index) => phrasingNode(child, index))}
+          {node.children.map((child, index) => phrasingNode(child, index, definitions))}
         </a>
       );
+    case 'linkReference': {
+      const href = definitions.get(node.identifier) ?? '';
+      return (
+        <a key={key} href={href}>
+          {node.children.map((child, index) => phrasingNode(child, index, definitions))}
+        </a>
+      );
+    }
     case 'delete':
     case 'break':
       return null;
@@ -120,13 +153,13 @@ function phrasingNode(node: PhrasingContent, key: number): ReactNode {
   }
 }
 
-function phrasingChildren(children: PhrasingContent[]): ReactNode {
+function phrasingChildren(children: PhrasingContent[], definitions: ReadonlyMap<string, string>): ReactNode {
   return children.map((child, index) => (
-    <Fragment key={index}>{phrasingNode(child, index)}</Fragment>
+    <Fragment key={index}>{phrasingNode(child, index, definitions)}</Fragment>
   ));
 }
 
-function phrasingFromBlock(block: BlockContent | ListItem): PhrasingContent[] {
+function phrasingFromBlock(block: CoveredBlock): PhrasingContent[] {
   switch (block.type) {
     case 'listItem': {
       const phrasing: PhrasingContent[] = [];
@@ -140,6 +173,8 @@ function phrasingFromBlock(block: BlockContent | ListItem): PhrasingContent[] {
     case 'heading':
     case 'paragraph':
       return block.children;
+    case 'definition':
+      return [];
     default:
       return [];
   }
@@ -163,7 +198,29 @@ function textOnSourceLine(node: PhrasingContent & {type: 'text'}, line: number, 
   return slice ? {type: 'text', value: slice, position} : undefined;
 }
 
-function phrasingOnSourceLine(children: PhrasingContent[], line: number, rawLine: string): PhrasingContent[] {
+function linkReferenceLeadOnLine(node: LinkReference, line: number, rawLine: string): PhrasingContent | undefined {
+  const position = node.position;
+  if (!position || line !== position.start.line || line === position.end.line) {
+    return undefined;
+  }
+  const text = node.children.find(item => item.type === 'text');
+  if (!text || text.type !== 'text') {
+    return undefined;
+  }
+  const sliced = textOnSourceLine(text, line, rawLine);
+  if (!sliced || sliced.type !== 'text') {
+    return undefined;
+  }
+  const lead = rawLine.startsWith('[') ? '[' : '';
+  return {type: 'text', value: `${lead}${sliced.value}`, position: text.position};
+}
+
+function phrasingOnSourceLine(
+  children: PhrasingContent[],
+  line: number,
+  rawLine: string,
+  definitions: ReadonlyMap<string, string>,
+): PhrasingContent[] {
   const out: PhrasingContent[] = [];
   for (const child of children) {
     if (child.type === 'text') {
@@ -176,8 +233,20 @@ function phrasingOnSourceLine(children: PhrasingContent[], line: number, rawLine
     if (!child.position || !lineInPlace(child.position, line)) {
       continue;
     }
+    if (child.type === 'linkReference') {
+      const lead = linkReferenceLeadOnLine(child, line, rawLine);
+      if (lead) {
+        out.push(lead);
+        continue;
+      }
+      const nested = phrasingOnSourceLine(child.children as PhrasingContent[], line, rawLine, definitions);
+      if (nested.length) {
+        out.push({...child, children: nested});
+      }
+      continue;
+    }
     if (child.type === 'emphasis' || child.type === 'strong' || child.type === 'link') {
-      const nested = phrasingOnSourceLine(child.children as PhrasingContent[], line, rawLine);
+      const nested = phrasingOnSourceLine(child.children as PhrasingContent[], line, rawLine, definitions);
       if (nested.length) {
         out.push({...child, children: nested} as PhrasingContent);
       }
@@ -192,12 +261,26 @@ function fenceTrimmed(rawLine: string): string {
   return sourceLineBody(rawLine).trim();
 }
 
-function opensWithFence(rawLine: string): boolean {
-  return /^(`{3,}|~{3,})/.test(fenceTrimmed(rawLine));
+function fenceMarkerRun(rawLine: string): string | undefined {
+  const trimmed = fenceTrimmed(rawLine);
+  return /^(`+|~+)/.exec(trimmed)?.[1];
 }
 
-function closesWithFenceOnly(rawLine: string): boolean {
-  return /^(`{3,}|~{3,})\s*$/.test(fenceTrimmed(rawLine));
+function fenceMarkerLength(rawLine: string): number {
+  return fenceMarkerRun(rawLine)?.length ?? 0;
+}
+
+function opensWithFence(rawLine: string): boolean {
+  return fenceMarkerLength(rawLine) >= 3;
+}
+
+function closesFenceAt(rawLine: string, openLength: number): boolean {
+  const trimmed = fenceTrimmed(rawLine);
+  const run = fenceMarkerRun(rawLine);
+  if (!run || run.length < openLength) {
+    return false;
+  }
+  return trimmed.slice(run.length).trim() === '';
 }
 
 function codeBlockOpensWithFence(texts: readonly string[], block: BlockContent & {type: 'code'}): boolean {
@@ -205,7 +288,12 @@ function codeBlockOpensWithFence(texts: readonly string[], block: BlockContent &
   if (!start) {
     return false;
   }
-  return opensWithFence(texts[start - 1] ?? '');
+  const raw = texts[start - 1] ?? '';
+  if (!opensWithFence(raw)) {
+    return false;
+  }
+  const indent = /^(\s*)/.exec(raw)?.[1] ?? '';
+  return indent.length <= 3;
 }
 
 function codeBlockClosesWithFence(texts: readonly string[], block: BlockContent & {type: 'code'}): boolean {
@@ -214,8 +302,9 @@ function codeBlockClosesWithFence(texts: readonly string[], block: BlockContent 
   if (!start || !end) {
     return false;
   }
+  const openLength = fenceMarkerLength(texts[start - 1] ?? '');
   for (let line = start + 1; line <= end; line += 1) {
-    if (closesWithFenceOnly(texts[line - 1] ?? '')) {
+    if (closesFenceAt(texts[line - 1] ?? '', openLength)) {
       return true;
     }
   }
@@ -232,11 +321,12 @@ function codeLineText(
   const start = block.position!.start.line;
   const fenced = codeBlockOpensWithFence(texts, block);
   const closedFence = fenced && codeBlockClosesWithFence(texts, block);
+  const openLength = fenceMarkerLength(texts[start - 1] ?? '');
   if (fenced) {
     if (line === start && opensWithFence(rawLine)) {
       return '';
     }
-    if (closedFence && closesWithFenceOnly(rawLine)) {
+    if (closedFence && closesFenceAt(rawLine, openLength)) {
       return '';
     }
     const index = line - start - 1;
@@ -253,10 +343,11 @@ function codeLineText(
 }
 
 function paintBlockSlice(
-  block: BlockContent | ListItem,
+  block: CoveredBlock,
   line: number,
   rawLine: string,
   texts: readonly string[],
+  definitions: ReadonlyMap<string, string>,
 ): ReactNode | undefined {
   if (!block.position) {
     return undefined;
@@ -264,15 +355,18 @@ function paintBlockSlice(
   if (!lineInPlace(block.position, line)) {
     return undefined;
   }
+  if (block.type === 'definition') {
+    return undefined;
+  }
   if (block.type === 'code') {
     return <code>{codeLineText(block, line, rawLine, texts)}</code>;
   }
-  const phrasing = phrasingOnSourceLine(phrasingFromBlock(block), line, rawLine);
+  const phrasing = phrasingOnSourceLine(phrasingFromBlock(block), line, rawLine, definitions);
   if (block.type === 'listItem' && line === block.position.start.line) {
     return (
       <span>
         {listMarker(rawLine)}
-        {phrasingChildren(phrasing)}
+        {phrasingChildren(phrasing, definitions)}
       </span>
     );
   }
@@ -280,17 +374,23 @@ function paintBlockSlice(
     return undefined;
   }
   if (block.type === 'heading') {
-    return <span>{phrasingChildren(phrasing)}</span>;
+    return <span>{phrasingChildren(phrasing, definitions)}</span>;
   }
-  return phrasingChildren(phrasing);
+  return phrasingChildren(phrasing, definitions);
 }
 
-function paintOneLine(tree: Root, lineIndex: number, rawLine: string, texts: readonly string[]): PaintedSourceLine {
+function paintOneLine(
+  tree: Root,
+  lineIndex: number,
+  rawLine: string,
+  texts: readonly string[],
+  definitions: ReadonlyMap<string, string>,
+): PaintedSourceLine {
   const lineNum = lineIndex + 1;
   const block = blockCoveringLine(tree, lineNum);
   if (block?.position && lineInPlace(block.position, lineNum)) {
     return {
-      paint: paintBlockSlice(block, lineNum, rawLine, texts),
+      paint: paintBlockSlice(block, lineNum, rawLine, texts, definitions),
       placeAt: lineNum,
     };
   }
@@ -309,5 +409,6 @@ function paintOneLine(tree: Root, lineIndex: number, rawLine: string, texts: rea
 export function paintSourceDocument(texts: readonly string[]): PaintedSourceLine[] {
   const source = texts.join('\n');
   const tree = remark().parse(source) as Root;
-  return texts.map((text, index) => paintOneLine(tree, index, text, texts));
+  const definitions = definitionsOf(tree);
+  return texts.map((text, index) => paintOneLine(tree, index, text, texts, definitions));
 }

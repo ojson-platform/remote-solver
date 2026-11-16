@@ -303,6 +303,103 @@ spec('source-line', () => {
       );
     });
 
+    scenario('A link reference definition does not show the raw source', async () => {
+      const source = [
+        '## Scope',
+        '',
+        '[ref]: https://example.com',
+        '  "title"',
+        '',
+        'See [ref].',
+        '',
+      ].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', source);
+          writeChange(paths.arcadia, KEY, 'design.md', source);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            const def = lineButton(doc, '[ref]: https://example.com');
+            const defInner = def.slice(def.indexOf('>') + 1, def.lastIndexOf('</button>'));
+            assert.equal(defInner, '');
+            const title = lineButton(doc, '  "title"');
+            const titleInner = title.slice(title.indexOf('>') + 1, title.lastIndexOf('</button>'));
+            assert.equal(titleInner, '');
+            assert.match(lineButton(doc, 'See [ref].'), /<a[^>]*>ref<\/a>/);
+          }
+        },
+      );
+    });
+
+    scenario('A four-backtick fence line and a fence-shaped indented block show that line slice', async () => {
+      const source = [
+        '## Scope',
+        '',
+        '````',
+        '```',
+        '````',
+        '',
+        '    ```',
+        '    body',
+        '',
+      ].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', source);
+          writeChange(paths.arcadia, KEY, 'design.md', source);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            const inner = lineButton(doc, '```');
+            assert.match(inner, /<code>```<\/code>/);
+            assert.doesNotMatch(inner, /<code><\/code>/);
+            const indentedOpen = lineButton(doc, '    ```');
+            assert.match(indentedOpen, /<code>```<\/code>/);
+            const indentedBody = lineButton(doc, '    body');
+            assert.match(indentedBody, /<code>body<\/code>/);
+            assert.equal(indentedBody.includes('```'), false);
+          }
+        },
+      );
+    });
+
+    scenario('A reference link whose label spans two source lines shows the node value', async () => {
+      const source = ['## Scope', '', '[long', 'label][ref]', '', '[ref]: u', ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', source);
+          writeChange(paths.arcadia, KEY, 'design.md', source);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            const first = lineButton(doc, '[long');
+            assert.match(first, /\[long/);
+            assert.doesNotMatch(first, /<code><\/code>/);
+            const second = lineButton(doc, 'label][ref]');
+            assert.match(second, /label/);
+            assert.match(second, /<a[^>]*href="u"[^>]*>[\s\S]*label/);
+            assert.doesNotMatch(second, /<code><\/code>/);
+          }
+        },
+      );
+    });
+
     scenario('A source line is not parsed as its own markdown document', async () => {
       const renderer = readFileSync(new URL('./client/source-line.tsx', import.meta.url), 'utf8');
       assert.equal(renderer.includes('@mdx-js/mdx'), false);

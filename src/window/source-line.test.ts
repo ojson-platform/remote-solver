@@ -246,6 +246,69 @@ spec('source-line', () => {
       );
     });
 
+    scenario('A fenced code block set in a nested blockquote shows alpha and does not show the raw source', async () => {
+      const source = ['## Scope', '', '> > ```', '> > alpha', '> > ```', ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', source);
+          writeChange(paths.arcadia, KEY, 'design.md', source);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            const alpha = lineButton(doc, '> > alpha');
+            assert.match(alpha, /<code>alpha<\/code>/);
+            assert.doesNotMatch(alpha, /<code>&gt; alpha<\/code>/);
+            assert.doesNotMatch(alpha, /<code>> alpha<\/code>/);
+            const closeAt = source.split('\n').lastIndexOf('> > ```') + 1;
+            const closeMarker = doc.match(
+              new RegExp(`<button[^>]*data-at="${closeAt}"[^>]*>[\\s\\S]*?</button>`),
+            )?.[0];
+            assert.ok(closeMarker);
+            const closeInner = closeMarker!.slice(
+              closeMarker!.indexOf('>') + 1,
+              closeMarker!.lastIndexOf('</button>'),
+            );
+            assert.match(closeInner, /<code><\/code>/);
+            assert.equal(closeInner.includes('```'), false);
+            assert.equal(closeInner.includes('&gt;'), false);
+          }
+        },
+      );
+    });
+
+    scenario('An indented code block set in a blockquote shows the node value and each later line slice', async () => {
+      const source = ['## Scope', '', '>     ```', '>     body', '>     tail', ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', source);
+          writeChange(paths.arcadia, KEY, 'design.md', source);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            const open = lineButton(doc, '>     ```');
+            assert.match(open, /<code>```<\/code>/);
+            assert.doesNotMatch(open, /<code><\/code>/);
+            const body = lineButton(doc, '>     body');
+            assert.match(body, /<code>body<\/code>/);
+            assert.equal(body.includes('```'), false);
+            const tail = lineButton(doc, '>     tail');
+            assert.match(tail, /<code>tail<\/code>/);
+            assert.equal(tail.includes('body'), false);
+          }
+        },
+      );
+    });
+
     scenario('A closed tilde fence shows that line slice and not the raw marker', async () => {
       const source = ['## Scope', '', '~~~', 'alpha', 'beta', '~~~', ''].join('\n');
       await hosted(

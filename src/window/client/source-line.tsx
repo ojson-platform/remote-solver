@@ -43,8 +43,12 @@ function listMarker(line: string): string {
 }
 
 function sourceLineBody(line: string): string {
-  const matched = /^(\s*)>\s?(.*)$/.exec(line);
-  return matched ? `${matched[1]}${matched[2]}` : line;
+  const indent = /^(\s*)/.exec(line)?.[1] ?? '';
+  let rest = line.slice(indent.length);
+  while (/^>\s?/.test(rest)) {
+    rest = rest.replace(/^>\s?/, '');
+  }
+  return `${indent}${rest}`;
 }
 
 function blockSpan(item: CoveredBlock): number {
@@ -261,6 +265,10 @@ function fenceTrimmed(rawLine: string): string {
   return sourceLineBody(rawLine).trim();
 }
 
+function opensWithFenceOnLine(rawLine: string): boolean {
+  return opensWithFence(sourceLineBody(rawLine));
+}
+
 function fenceMarkerRun(rawLine: string): string | undefined {
   const trimmed = fenceTrimmed(rawLine);
   return /^(`+|~+)/.exec(trimmed)?.[1];
@@ -289,10 +297,11 @@ function codeBlockOpensWithFence(texts: readonly string[], block: BlockContent &
     return false;
   }
   const raw = texts[start - 1] ?? '';
-  if (!opensWithFence(raw)) {
+  const content = sourceLineBody(raw);
+  if (!opensWithFence(content)) {
     return false;
   }
-  const indent = /^(\s*)/.exec(raw)?.[1] ?? '';
+  const indent = /^(\s*)/.exec(content)?.[1] ?? '';
   return indent.length <= 3;
 }
 
@@ -323,7 +332,7 @@ function codeLineText(
   const closedFence = fenced && codeBlockClosesWithFence(texts, block);
   const openLength = fenceMarkerLength(texts[start - 1] ?? '');
   if (fenced) {
-    if (line === start && opensWithFence(rawLine)) {
+    if (line === start && opensWithFenceOnLine(rawLine)) {
       return '';
     }
     if (closedFence && closesFenceAt(rawLine, openLength)) {

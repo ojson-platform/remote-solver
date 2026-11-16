@@ -62,6 +62,18 @@ spec('baseline', () => {
     });
   });
 
+  requirement('An open spec thread is answered before an unjudged Added id', () => {
+    scenario('An open spec thread waits out an unjudged Added id', () => {
+      const decision = decide(
+        issue(1, ['sdd:specifying']),
+        [],
+        [pull(9, {review: {unanswered: false, rollback: 'specifying', layers: ['spec']}})],
+        change({proposal: true, unjudged: ['cache-first']}),
+      );
+      assert.equal(action(decision), 'improve-specs');
+    });
+  });
+
   requirement('An Added shelf is published before the delta', () => {
     scenario('An unjudged Added id is restored before the delta', () => {
       const source: FileSource = {

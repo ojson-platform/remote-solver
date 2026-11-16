@@ -1,4 +1,4 @@
-import type {ChangeView} from '../change/change.ts';
+import {cardGap, type ChangeView} from '../change/change.ts';
 import type {IssueRecord} from '../port.ts';
 import type {CycleRecord, Decision, PullSnapshot} from './types.ts';
 
@@ -79,14 +79,34 @@ export function decideAhead(read: AheadRead): Decision | null {
     );
   }
 
-  // Two open pull requests keep the open task only after unarchive and after
-  // an unlabeled thread.
-  if (open.length > 1 && phase === 'implementing' && change.tasks && change.openTasks > 0) {
+  // An earlier-phase thread moves before two pull requests start the open task.
+  // `out` is not in the map, so it does not move the phase. On verifying the
+  // checks must already be red or green; pending does not roll back.
+  const back = feedback.rollback;
+  const checksKnown = pr?.checks === 'red' || pr?.checks === 'green';
+  if (back && phaseRank(back) < phaseRank(phase) && (phase !== 'verifying' || checksKnown)) {
+    return {
+      kind: 'advance',
+      issue: issue.key,
+      to: back,
+      reason: 'review thread sent the change back',
+    };
+  }
+
+  // Two open pull requests keep the open task only after unarchive, an
+  // unlabeled thread, an earlier-phase thread, and a card that still matches.
+  if (
+    open.length > 1 &&
+    phase === 'implementing' &&
+    change.tasks &&
+    change.openTasks > 0 &&
+    !cardGap(change)
+  ) {
     return agent(issue.key, 'implement-next-task', phase, String(open[0].id), taskReason(change));
   }
 
-  // Conflict is its own move. A marker that points at an earlier phase does
-  // not run in the same decision, or the two advances trade labels.
+  // Conflict is its own move. It stays after the open task when two pull
+  // requests are open, so one conflict does not cancel that task.
   const conflicted = open.find(item => item.conflict);
   if (conflicted) {
     if (phase === 'implementing') {
@@ -103,20 +123,6 @@ export function decideAhead(read: AheadRead): Decision | null {
       issue: issue.key,
       to: 'implementing',
       reason: 'pull request conflicts with the base',
-    };
-  }
-
-  // `out` is not in the map, so it does not move the phase. On verifying the
-  // checks must already be red or green; pending does not roll back.
-  // A classified marker moves before a held review gate (ADR-0028).
-  const back = feedback.rollback;
-  const checksKnown = pr?.checks === 'red' || pr?.checks === 'green';
-  if (back && phaseRank(back) < phaseRank(phase) && (phase !== 'verifying' || checksKnown)) {
-    return {
-      kind: 'advance',
-      issue: issue.key,
-      to: back,
-      reason: 'review thread sent the change back',
     };
   }
 
@@ -188,6 +194,9 @@ function specShelf(
   }
   // The plan does not read the checkout. Added is a published shelf only after ## Shelf lists it.
   if (!change.delta && change.unjudged.length) {
+    if (pr?.review?.layers.includes('spec')) {
+      return null;
+    }
     return agent(
       key,
       'restore-baseline',

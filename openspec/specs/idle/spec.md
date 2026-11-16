@@ -122,6 +122,22 @@ When a skill run produces no commit and the issue worktree has uncommitted paths
 - **WHEN** the open task id is `one` and the run commits nothing on a clean worktree
 - **THEN** the refusal contains `next open task one`
 
+### Requirement: An unmarked thread is not an empty run
+
+When a skill run produces no commit and opens a thread that carries no layer marker, the machine SHALL NOT post `sdd:refused`. The same drive SHALL classify that thread.
+
+A layer marker only on the conversation SHALL NOT post `sdd:refused`. When an open task remains, the next drive SHALL run that task again.
+
+#### Scenario: A new unmarked thread does not refuse the run
+
+- **WHEN** a run opens a thread with no layer marker and commits nothing
+- **THEN** the issue has no `sdd:refused` and that drive classifies the thread
+
+#### Scenario: A conversation layer marker does not refuse the run
+
+- **WHEN** a run adds a conversation layer marker, commits nothing, and an open task remains
+- **THEN** that run does not post `sdd:refused`, and the next drive starts the open task
+
 ### Requirement: A closed thread releases the refusal
 
 When `sdd:refused` holds a reason `threads on <layer>` and an open pull request of this issue has no open thread of that layer, the machine SHALL remove the label before it decides. The refusal comment SHALL stay. The decision SHALL NOT be that held effect.

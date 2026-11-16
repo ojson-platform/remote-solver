@@ -511,6 +511,7 @@ function openCycle(
     waiting: surface.waiting?.(row.key) === true,
     refused: surface.refused?.(row.key) === true,
     repair: view.repair === row.key,
+    running: screen?.activity?.kind === 'running' || surface.running(row.key),
     decision,
     accept: layers.some(item => item.act === 'accept'),
   });
@@ -541,10 +542,12 @@ export function offerContinue(input: {
   waiting: boolean;
   refused?: boolean;
   repair: boolean;
+  /** A worker is on this issue. The step owns the page, so the label does not offer Continue. */
+  running?: boolean;
   decision?: Decision;
   accept: boolean;
 }): boolean {
-  if (input.repair) {
+  if (input.repair || input.running) {
     return false;
   }
   if (input.refused && refusalHold(input.decision)) {

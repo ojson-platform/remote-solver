@@ -91,6 +91,44 @@ spec('pull-request', () => {
     });
   });
 
+  requirement('An earlier thread and a card gap come before two pull requests', () => {
+    scenario('An earlier-phase thread moves while two pull requests are open', () => {
+      const decision = decide(
+        issue(1, ['sdd:implementing']),
+        [],
+        [
+          pull(3, {review: {unanswered: false, rollback: 'specifying', layers: ['spec']}}),
+          pull(4),
+        ],
+        change({tasks: true, openTasks: 1}),
+      );
+      assert.equal(decision.kind, 'advance');
+      if (decision.kind === 'advance') {
+        assert.equal(decision.to, 'specifying');
+      }
+    });
+    scenario('A card gap returns to tasking while two pull requests are open', () => {
+      const decision = decide(
+        issue(1, ['sdd:implementing']),
+        [],
+        [pull(3), pull(4)],
+        change({
+          tasks: true,
+          openTasks: 1,
+          specsRevision: 'aaa',
+          cardRevision: 'aaa',
+          deltaScenarios: ['The remark stays'],
+          cardScenarios: [],
+        }),
+      );
+      assert.equal(decision.kind, 'advance');
+      if (decision.kind === 'advance') {
+        assert.equal(decision.to, 'tasking');
+        assert.equal(decision.reason, 'no card for The remark stays');
+      }
+    });
+  });
+
   requirement('None creates a pull request, one is reused', () => {
     scenario('No open pull request is created with the given title', async () => {
       const titles: string[] = [];

@@ -99,6 +99,12 @@ When the item is then closed, the machine SHALL post the review ask.
 - **WHEN** a person sets `specified` and the proposal names no capability
 - **THEN** the phase becomes `designing` and the issue comment is `sdd:accept specifying → designing`
 
+#### Scenario: Proposed over an open question stays, then asks
+
+- **WHEN** a person sets `proposed` and the proposal has an open question
+- **THEN** the machine drops `proposed`, the phase is `proposing`, and it waits on the open question
+- **AND** after that question is closed, the machine posts the proposal ask
+
 #### Scenario: Designed over an open decision stays, then asks
 
 - **WHEN** a person sets `designed` and the design has an open decision

@@ -45,6 +45,20 @@ When more than one open pull request belongs to the issue, the machine SHALL wai
 - **WHEN** `implementing` has an open task and one of two open pull requests conflicts with the base
 - **THEN** the machine runs that task and does not rebase
 
+### Requirement: An earlier thread and a card gap come before two pull requests
+
+An earlier-phase thread SHALL move the phase before an open task on two pull requests. A card gap SHALL return to `tasking` before that task.
+
+#### Scenario: An earlier-phase thread moves while two pull requests are open
+
+- **WHEN** `implementing` has an open task, two open pull requests belong to the issue, and a thread marks `spec`
+- **THEN** the machine moves the issue to `specifying` and does not run the task
+
+#### Scenario: A card gap returns to tasking while two pull requests are open
+
+- **WHEN** `implementing` has an open task, two open pull requests belong to the issue, and a delta scenario is named on no card
+- **THEN** the machine returns to `tasking` and does not run the task
+
 ### Requirement: None creates a pull request, one is reused
 
 `publish` on a clean tree SHALL push the issue branch. With no open pull request it SHALL open one using the given title. With one open pull request it SHALL keep that pull request and SHALL NOT open another. The title links a pull request to the issue only when it starts with `#<key>:` or `#<key> `.

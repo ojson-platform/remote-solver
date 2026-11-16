@@ -191,6 +191,18 @@ async function reread(options: IssueRead, cache: WalkCache): Promise<WalkCache> 
   };
 }
 
+/** A fold that names a baseline it conflicts with. The id is that spec's directory. */
+function conflictSpec(text: string): string | null {
+  if (!/conflict/i.test(text)) {
+    return null;
+  }
+  return (
+    text.match(/openspec\/specs\/([A-Za-z0-9._-]+)\/spec\.md/)?.[1] ??
+    text.match(/spec\/([A-Za-z0-9._-]+)/)?.[1] ??
+    null
+  );
+}
+
 /** Capability ids named by `spec/<capability>` before the command's rule text. */
 function refusedSpecIds(text: string): string[] {
   const head = text.split(':')[0] ?? '';
@@ -258,6 +270,20 @@ export async function reportFoldFailure(input: {
   const baseline = emptyBaselineWait(text, input.capabilities);
   if (baseline) {
     return {kind: 'wait', issue: input.key, reason: baseline};
+  }
+  const conflict = conflictSpec(text);
+  if (input.action === 'archive' && conflict && input.review && input.pr !== '') {
+    const opened = await openSpecThread(
+      input.key,
+      input.dir,
+      input.pr,
+      conflict,
+      text,
+      input.review,
+    );
+    if (opened) {
+      return {kind: 'wait', issue: input.key, reason: `archive conflict: ${text}`};
+    }
   }
   const shown = `archive refused: ${text}`;
   if (input.action === 'archive' && input.review && input.pr !== '') {

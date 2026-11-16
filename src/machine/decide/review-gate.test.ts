@@ -233,6 +233,26 @@ spec('review-gate', () => {
       );
       assert.match(moved.transitions[0]?.comment ?? '', /sdd:accept specifying → designing/);
     });
+    scenario('Proposed over an open question stays, then asks', () => {
+      const open = change({proposal: true, openQuestions: 1});
+      const reverted = settle(issue(1, ['sdd:cycle', 'sdd:proposed']), [], [pull(9)], open);
+      assert.deepEqual(
+        reverted.transitions.map(step => step.to),
+        [],
+      );
+      assert.ok(reverted.labels.includes('sdd:proposing'));
+      assert.equal(reverted.labels.includes('sdd:proposed'), false);
+      assert.equal(reverted.decision.kind, 'wait');
+      const closed = settle(issue(1, reverted.labels), [], [pull(9)], change({proposal: true}));
+      assert.equal(closed.decision.kind, 'wait');
+      if (closed.decision.kind === 'wait') {
+        assert.deepEqual(closed.decision.gate, {
+          artifact: 'proposal',
+          from: 'proposing',
+          to: 'proposed',
+        });
+      }
+    });
     scenario('Designed over an open decision stays, then asks', () => {
       const open = change({proposal: true, delta: true, design: true, openDecisions: 1});
       const reverted = settle(issue(1, ['sdd:cycle', 'sdd:designed']), [], [pull(9)], open);

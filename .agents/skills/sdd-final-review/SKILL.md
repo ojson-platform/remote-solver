@@ -76,9 +76,9 @@ No returns: the review is done.
 
 State each return as four fields:
 
-- lens: `code`, `spec`, `task`, or `kept`
+- lens: `code`, `spec`, `task`, or `kept`. When no scenario names the promise, the lens is `spec`.
 - promise: the sentence that breaks, quoted from the issue, the design, the spec, the interface, the baseline, or the ADR
-- where: the file in the diff
+- where: the file in the diff. When no scenario names the promise, `where` is the delta spec that should name it.
 - gap: what is wrong, in one or two sentences
 
 State each leave as the lens and one sentence.

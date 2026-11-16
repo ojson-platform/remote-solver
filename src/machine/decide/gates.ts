@@ -33,7 +33,8 @@ export function stampBehind(phase: Phase, change: ChangeView): string | null {
     phase === 'designing' &&
     change.design &&
     change.specsRevision !== '' &&
-    change.designStamp !== change.specsRevision
+    change.designStamp !== change.specsRevision &&
+    (change.delta || change.capabilities.length > 0)
   ) {
     return 'the spec revision is not the stamp';
   }

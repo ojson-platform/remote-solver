@@ -2,7 +2,8 @@ import {existsSync, readdirSync, statSync} from 'node:fs';
 import path from 'node:path';
 
 import {runtimeMachine, type RuntimeMachine} from '../../machine.ts';
-import {cardScenarioNames, deltaScenarioNames} from '../../machine/change/text.ts';
+import {readChange} from '../../machine/change/read.ts';
+import {cardGap, cardScenarioNames, deltaScenarioNames} from '../../machine/change/text.ts';
 import {workingTree} from '../../window/change-files.ts';
 
 const heading = '## Upstream';
@@ -169,7 +170,12 @@ export function upstreamBlock(
     const stamp = machine.absorbedStamp(text);
     const block =
       stamp !== '' && stamp === revision ? matched(file) : folded(file, stamp, revision, input);
-    return skill === 'tasks' ? `${block}\n\nThe delta revision is \`${deltaRevision}\`.` : block;
+    if (skill !== 'tasks') {
+      return block;
+    }
+    const gap = cardGap(readChange(key, workingTree(cwd)));
+    const cut = gap ? `\n\n${gap}. Cut that card in this run. Do not Publish.` : '';
+    return `${block}\n\nThe delta revision is \`${deltaRevision}\`.${cut}`;
   } catch {
     return unreadable();
   }

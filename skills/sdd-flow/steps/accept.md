@@ -30,4 +30,4 @@ Folds the delta into the baseline on the same PR, by `CONTEXT.md` § Delta. A pe
 ## Stop
 
 - Publish. Archive: when the checks are green, a person merges the pull request, or `sdd:auto-merge` is set and the machine merges. Unarchive: the machine runs again.
-- The fold conflicts with a baseline already on the base branch of this run, or would leave a baseline with no requirement: Wait with which baseline conflicts.
+- The fold conflicts with a baseline already on the base branch of this run: the verb opens one thread on that change's delta spec. The first line is `sdd:layer=spec → specifying`. It does not post `sdd:refused`. A baseline that would have no requirement: Wait naming that baseline, and do not set `sdd:refused`.

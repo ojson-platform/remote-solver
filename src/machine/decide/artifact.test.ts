@@ -11,6 +11,7 @@ import type {AgentRun} from '../../adapters/runtime/agent.ts';
 import {launcherRuntime} from '../../cli.ts';
 import {decide} from './policy.ts';
 import type {Vcs} from '../port.ts';
+import {contentRevision} from '../change/stamp.ts';
 import {action, change, issue, pull, ready} from '../__tests__/harness.ts';
 
 const runAgent = vi.hoisted(() => vi.fn(async (_run: AgentRun) => ({text: ''})));
@@ -68,6 +69,25 @@ spec('artifact', () => {
         assert.deepEqual(decision.gate, {artifact: 'spec', from: 'specifying', to: 'specified'});
       }
     });
+    scenario('Designing without an open pull request waits', () => {
+      const decision = decide(issue(1, ['sdd:designing']), [], [], change({proposal: true, design: true}));
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.equal(decision.reason, 'no open pull request');
+      }
+    });
+    scenario('Tasking without an open pull request waits', () => {
+      const decision = decide(
+        issue(1, ['sdd:tasking']),
+        [],
+        [],
+        change({proposal: true, delta: true, design: true, tasks: true}),
+      );
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.equal(decision.reason, 'no open pull request');
+      }
+    });
     scenario('Specifying with no named capability and no pull request waits', () => {
       const decision = decide(issue(1, ['sdd:specifying']), [], [], change({proposal: true}));
       assert.equal(decision.kind, 'wait');
@@ -103,6 +123,20 @@ spec('artifact', () => {
         issue: '1',
         to: 'specifying',
         reason: 'delta spec is missing',
+      });
+    });
+    scenario('Tasking without a design returns to designing', () => {
+      const decision = decide(
+        issue(1, ['sdd:tasking']),
+        [],
+        [pull(9)],
+        change({proposal: true, delta: true, tasks: true}),
+      );
+      assert.deepEqual(decision, {
+        kind: 'advance',
+        issue: '1',
+        to: 'designing',
+        reason: 'design.md is missing',
       });
     });
     scenario('Designing with no named capability stays without a delta', () => {
@@ -192,6 +226,26 @@ spec('artifact', () => {
       assert.match(text, /^# \n\n\n\nThe issue has no description\.$/m);
       assert.equal(text.includes('# Issue'), false);
       assert.match(text, /Do not search the repository for this issue/);
+    });
+  });
+
+  requirement('An empty specs revision does not restart design', () => {
+    scenario('An empty specs revision does not restart design', () => {
+      const decision = decide(
+        issue(1, ['sdd:designing']),
+        [],
+        [pull(9)],
+        change({
+          proposal: true,
+          design: true,
+          specsRevision: contentRevision([]),
+          designStamp: 'not-the-empty-revision',
+        }),
+      );
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.deepEqual(decision.gate, {artifact: 'design', from: 'designing', to: 'designed'});
+      }
     });
   });
 });

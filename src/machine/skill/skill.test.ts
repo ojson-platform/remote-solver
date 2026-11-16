@@ -217,10 +217,12 @@ test('a code fix hands off before the commit, and verify reads the THEN first', 
   const handed = fix.indexOf('behavior the named scenarios do not describe');
   const commit = fix.indexOf('One commit per thread');
   assert.ok(handed !== -1 && commit !== -1 && handed < commit);
+  assert.match(fix, /whose `scenario` title this change's delta names/);
   assert.match(fix, /fails on that commit's parent and passes on HEAD/);
+  assert.match(fix, /neighboring check in the same file does not either/);
   assert.match(
     readFileSync(path.join(flow, 'CONTEXT.md'), 'utf8'),
-    /fails on that commit's parent and passes on HEAD/,
+    /whose `scenario` title this change's delta names[\s\S]*fails on that commit's parent and passes on HEAD/,
   );
   const then = verify.indexOf("read that scenario's THEN");
   const code = verify.indexOf('Hand-off (`CONTEXT.md`) to `code`');
@@ -239,6 +241,16 @@ test('the final review treats a broken design sentence as a return', () => {
   assert.match(review, /spans more than one source line/);
   assert.match(review, /compare each covered line with that value/);
   assert.match(review, /A design sentence the diff breaks is a return/);
+  assert.match(review, /When no scenario names the promise, the lens is `spec`/);
+  assert.match(review, /`where` is the delta spec that should name it/);
+  const designStep = readFileSync(path.join(stepsDir, 'design.md'), 'utf8');
+  const unnamed = designStep.indexOf('names an observation no scenario names is a Hand-off');
+  const publishWhenNamed = designStep.indexOf('Publish (`CONTEXT.md`) only when every such sentence is named by a scenario');
+  assert.ok(unnamed !== -1 && publishWhenNamed !== -1 && unnamed < publishWhenNamed);
+  assert.match(
+    readFileSync(path.join(stepsDir, 'pr-comments.md'), 'utf8'),
+    /observation no scenario names is `spec`/,
+  );
 });
 
 test('the chat files point at the sdd script', () => {

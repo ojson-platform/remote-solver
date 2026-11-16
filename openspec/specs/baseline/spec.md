@@ -56,3 +56,12 @@ A Modified id with no baseline SHALL still be restored when a delta and a spec t
 
 - **WHEN** the phase is `specifying`, a delta file exists, and an Added id is not listed under `## Shelf`
 - **THEN** the machine does not restore that shelf
+
+### Requirement: An open spec thread is answered before an unjudged Added id
+
+An open spec thread SHALL be answered before an Added id missing from `## Shelf` is restored, while no delta file exists.
+
+#### Scenario: An open spec thread waits out an unjudged Added id
+
+- **WHEN** the phase is `specifying`, no delta file exists, an Added id is not listed under `## Shelf`, and a spec thread is open
+- **THEN** the machine answers that thread and does not restore the shelf

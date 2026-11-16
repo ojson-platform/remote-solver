@@ -552,6 +552,7 @@ test('a green archived pull request waits for a person to merge, and sdd:auto-me
     kind: 'wait',
     issue: '1',
     reason: 'wait for merge of PR #9',
+    ask: 'Merge pull request #9.',
   });
   assert.deepEqual(judged(issue(1, ['sdd:accepting', 'sdd:auto-merge']), [], [green], ready), {
     kind: 'merge',
@@ -563,6 +564,7 @@ test('a green archived pull request waits for a person to merge, and sdd:auto-me
     kind: 'wait',
     issue: '1',
     reason: 'wait for merge of PR #9',
+    ask: 'Merge pull request #9.',
   });
   assert.deepEqual(judged(issue(1, ['sdd:accepting']), [], [pull(9, {state: 'MERGED'})], ready), {
     kind: 'done',
@@ -942,6 +944,55 @@ spec('finished-cycle', () => {
 });
 
 spec('artifact', () => {
+  requirement('A card gap on tasking is cut before a child', () => {
+    scenario('A card gap on tasking starts tasks before children', () => {
+      const parent = issue(1, ['sdd:tasking']);
+      const child = issue(2, ['sdd:cycle', 'sdd:specifying'], {parent: '1'});
+      const decision = decide(
+        parent,
+        [parent, child],
+        [pull(9)],
+        change({
+          proposal: true,
+          delta: true,
+          design: true,
+          tasks: true,
+          specsRevision: 'aaa',
+          cardRevision: 'aaa',
+          deltaScenarios: ['The remark stays'],
+          cardScenarios: [],
+          tasksStamp: 'stamp',
+          tasksInputRevision: 'stamp',
+        }),
+      );
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'create-tasks');
+      }
+    });
+    scenario('Implementing without an open pull request waits', () => {
+      const decision = decide(
+        issue(1, ['sdd:implementing']),
+        [],
+        [],
+        change({tasks: true, openTasks: 1}),
+      );
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.equal(decision.reason, 'no open pull request');
+      }
+    });
+    scenario('Implementing without tasks returns to tasking', () => {
+      const decision = decide(issue(1, ['sdd:implementing']), [], [pull(9)], change({design: true}));
+      assert.deepEqual(decision, {
+        kind: 'advance',
+        issue: '1',
+        to: 'tasking',
+        reason: 'tasks.md is missing',
+      });
+    });
+  });
+
   requirement('A task card names the delta it was cut from', () => {
     const named = {
       tasks: true,

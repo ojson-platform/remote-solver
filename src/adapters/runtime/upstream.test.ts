@@ -134,6 +134,41 @@ spec('artifact', () => {
       assert.match(upstream, /- The draft stays/);
     });
 
+  });
+
+  requirement('A matching tasks stamp names a card gap', () => {
+    scenario('A matching tasks stamp names the card gap', async () => {
+      const root = repo();
+      const dir = 'openspec/changes/issue-6';
+      const specText = [
+        '## ADDED Requirements',
+        '',
+        '### Requirement: Hold',
+        '',
+        '#### Scenario: The draft stays',
+        '',
+        '- **WHEN** the person records',
+        '- **THEN** the draft stays',
+        '',
+      ].join('\n');
+      const specPath = `${dir}/specs/hold/spec.md`;
+      const designPath = `${dir}/design.md`;
+      const designText = '# design\n';
+      const revision = contentRevision([
+        {path: specPath, text: specText},
+        {path: designPath, text: designText},
+      ]);
+      write(root, designPath, designText);
+      write(root, specPath, specText);
+      write(root, `${dir}/tasks.md`, `# tasks\nsdd-absorbed: ${revision}\n`);
+      const upstream = await promptOf(root, 'tasks', 'tasking');
+      assert.match(upstream, /matches the input revision/);
+      assert.match(upstream, /the delta revision is not the card/);
+      assert.match(upstream, /Do not Publish/);
+    });
+  });
+
+  requirement('The writing prompt carries the input revision', () => {
     scenario('A tasks run whose stamp matches names the delta revision', async () => {
       const root = repo();
       const dir = 'openspec/changes/issue-6';

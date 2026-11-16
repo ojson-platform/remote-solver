@@ -302,7 +302,12 @@ test('resolveIssue closes an accepted issue once the pull request is merged', as
     change: change({archived: true}),
     tip: foldedTip('424242'),
   });
-  assert.deepEqual(held, {kind: 'wait', issue: '424242', reason: 'wait for merge of PR #9'});
+  assert.deepEqual(held, {
+    kind: 'wait',
+    issue: '424242',
+    reason: 'wait for merge of PR #9',
+    ask: 'Merge pull request #9.',
+  });
   assert.equal(
     green.calls.some(call => call.startsWith('close:')),
     false,
@@ -713,6 +718,114 @@ spec('spec-archive', () => {
       } finally {
         rmSync(box.root, {recursive: true, force: true});
       }
+    });
+  });
+
+  requirement('A baseline conflict returns to specifying', () => {
+    scenario('A baseline conflict opens a spec thread', async () => {
+      const said = 'conflict with openspec/specs/board/spec.md';
+      const box = specDiffCheckout('3', 'board');
+      try {
+        const {tracker, review} = memoryPorts({
+          issues: [acceptingIssue('3')],
+          pulls: {'3': [{id: '9', title: '#3: title', state: 'OPEN'}]},
+          ranges: {'9': {head: box.head, base: box.base}},
+        });
+        let opened: {path?: string; body?: string} | undefined;
+        const openThread = review.openThread.bind(review);
+        review.openThread = async (pull, target) => {
+          opened = target;
+          return openThread(pull, target);
+        };
+        const decision = await refuseFold(
+          {
+            tracker,
+            review,
+            files: {exists: () => false, read: () => '', list: () => []},
+            change: change({proposal: true, capabilities: ['board']}),
+            checkout: async () => box.root,
+          },
+          new Error(said),
+        );
+        assert.equal(decision.kind, 'wait');
+        const notes = await tracker.comments('3');
+        assert.equal(
+          notes.some(note => note.body.includes('sdd:refused')),
+          false,
+        );
+        assert.equal(opened?.path, 'openspec/changes/issue-3/specs/board/spec.md');
+        assert.match(opened?.body ?? '', /^sdd:layer=spec → specifying\n/);
+        const next = memoryPorts({
+          issues: [acceptingIssue('3')],
+          pulls: {'3': [{id: '9', title: '#3: title', state: 'OPEN'}]},
+          threadList: {
+            '9': [threadOn('board', `sdd:layer=spec → specifying\n${said}`, false)],
+          },
+        });
+        const again = await performIssue('3', {
+          tracker: next.tracker,
+          review: next.review,
+          files: {exists: () => false, read: () => '', list: () => []},
+          queues: [{name: 'Sandcastle'}],
+          change: change({proposal: true, capabilities: ['board']}),
+          tip: '',
+          checkout: async () => box.root,
+        });
+        assert.equal(again.kind, 'advance');
+        if (again.kind === 'advance') {
+          assert.equal(again.to, 'specifying');
+        }
+      } finally {
+        rmSync(box.root, {recursive: true, force: true});
+      }
+    });
+  });
+
+  requirement('Unfold refuses a tip that is not the archive commit', () => {
+    scenario('Unfold refuses a tip that is not the archive commit', async () => {
+      const {tracker, review} = memoryPorts({
+        issues: [
+          {
+            key: '9',
+            title: '#9: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['Sandcastle', 'sdd:cycle', 'sdd:tasking'],
+          },
+        ],
+        pulls: {'9': [{id: '37', title: '#9: title', state: 'OPEN'}]},
+      });
+      const files = {exists: () => false, read: () => '', list: () => []};
+      const decision = await reportFoldFailure({
+        key: '9',
+        tracker,
+        review,
+        files,
+        capabilities: [],
+        dir: '/tmp/unused',
+        action: 'unarchive',
+        phase: 'tasking',
+        pr: '37',
+        reason: 'return the delta to the change',
+        error: new Error('tip has no Sdd-Archive line'),
+      });
+      assert.equal(decision.kind, 'wait');
+      const notes = await tracker.comments('9');
+      const refusal = notes.find(note => note.body.includes('sdd:refused'));
+      assert.ok(refusal);
+      assert.match(refusal.body, /unarchive/);
+      assert.match(refusal.body, /return the delta to the change/);
+      assert.ok((await tracker.labels('9')).includes('sdd:refused'));
+      const again = await performIssue('9', {
+        tracker,
+        review,
+        files,
+        queues: [{name: 'Sandcastle'}],
+        change: change({archived: true, proposal: true, design: true, tasks: true}),
+        tip: foldedTip('9'),
+        checkout: async () => '/tmp/unused',
+      });
+      assert.notEqual(again.kind === 'agent' ? again.action : again.kind, 'unarchive');
     });
   });
 });

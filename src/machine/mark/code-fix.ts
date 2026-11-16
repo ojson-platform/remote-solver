@@ -1,5 +1,5 @@
 import {spawn, spawnSync} from 'node:child_process';
-import {existsSync} from 'node:fs';
+import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 
 /** A path vitest collects. A helper under `__tests__` is not a test. */
@@ -30,18 +30,25 @@ export function parseNameStatus(raw: string): DiffEntry[] {
   return entries;
 }
 
-export function vitestArguments(root: string, files: string[]): {bin: string; args: string[]} {
+export function vitestArguments(
+  root: string,
+  files: string[],
+  titles: readonly string[] = [],
+): {bin: string; args: string[]} {
   const args = ['--run', '--reporter=default'];
   if (existsSync(path.join(root, 'vitest.config.mjs'))) {
     args.push('--config', 'vitest.config.mjs');
+  }
+  if (titles.length > 0) {
+    args.push('-t', titles.map(title => title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'));
   }
   args.push(...files);
   return {bin: path.join(root, 'node_modules', '.bin', 'vitest'), args};
 }
 
-/** Runs the changed test files. A non-zero status is a red run. */
-export function runVitest(root: string, files: string[]): Promise<number> {
-  const {bin, args} = vitestArguments(root, files);
+/** Runs the changed test files. A non-zero status is a red run. Titles limit the run to those scenarios. */
+export function runVitest(root: string, files: string[], titles: readonly string[] = []): Promise<number> {
+  const {bin, args} = vitestArguments(root, files, titles);
   if (!existsSync(bin)) {
     throw new Error(`vitest is not installed at ${bin}`);
   }
@@ -111,13 +118,54 @@ function restoreHead(root: string, entries: DiffEntry[]): void {
   }
 }
 
+/** Scenario titles a test file names with `scenario('...')`. */
+export function scenarioTitles(text: string): string[] {
+  return [...text.matchAll(/scenario\(\s*['"]([^'"]+)['"]/g)].flatMap(match => (match[1] ? [match[1]] : []));
+}
+
+/** Scenario titles this change's delta names. Archived changes do not count. */
+export function deltaScenarioTitles(root: string): Set<string> {
+  const listed = gitOk(root, ['ls-files', '--', 'openspec/changes']);
+  const titles = new Set<string>();
+  for (const file of listed.split('\n')) {
+    if (!file.endsWith('/spec.md') || !file.includes('/specs/') || file.includes('/archive/')) {
+      continue;
+    }
+    const text = readFileSync(path.join(root, file), 'utf8');
+    for (const match of text.matchAll(/^#### Scenario:\s*(.+?)\s*$/gm)) {
+      if (match[1]) {
+        titles.add(match[1]);
+      }
+    }
+  }
+  return titles;
+}
+
 /**
- * Refuses unless a test the HEAD commit changes fails against that commit's
- * first parent and passes on HEAD. Restores the worktree either way.
+ * Scenario titles the changed tests name that this change's delta also names.
+ * A title the delta does not name is dropped.
+ */
+export function proofTitles(root: string, tests: readonly string[]): string[] {
+  const delta = deltaScenarioTitles(root);
+  const named = new Set<string>();
+  for (const file of tests) {
+    for (const title of scenarioTitles(readFileSync(path.join(root, file), 'utf8'))) {
+      if (delta.has(title)) {
+        named.add(title);
+      }
+    }
+  }
+  return [...named].sort();
+}
+
+/**
+ * Refuses unless a delta scenario the HEAD commit changes fails against that
+ * commit's first parent and passes on HEAD. A scenario the delta does not name
+ * does not count. Restores the worktree either way.
  */
 export async function proveCodeFix(
   root: string,
-  run: (root: string, files: string[]) => Promise<number> = runVitest,
+  run: (root: string, files: string[], titles: readonly string[]) => Promise<number> = runVitest,
 ): Promise<void> {
   if (gitOk(root, ['status', '--porcelain']).trim()) {
     throw new Error('the worktree is dirty: Publish, then thread fix.');
@@ -132,13 +180,19 @@ export async function proveCodeFix(
       'the answering commit changes no test. Add a test that fails on the parent, or hand the thread off to spec.',
     );
   }
+  const titles = proofTitles(root, tests);
+  if (titles.length === 0) {
+    throw new Error(
+      "the answering test's scenario is not in the delta. Hand the thread off to spec.",
+    );
+  }
   const sources = entries.filter(entry => !isTestPath(entry.path));
   for (const entry of sources) {
     toParent(root, entry);
   }
   let parentStatus: number;
   try {
-    parentStatus = await run(root, tests);
+    parentStatus = await run(root, tests, titles);
   } finally {
     restoreHead(root, sources);
   }
@@ -147,7 +201,7 @@ export async function proveCodeFix(
       'a test the answering commit changes passes on the parent. It does not show the remark. Add a test that fails on the parent, or hand the thread off to spec.',
     );
   }
-  if ((await run(root, tests)) !== 0) {
+  if ((await run(root, tests, titles)) !== 0) {
     throw new Error('a test the answering commit changes fails on HEAD.');
   }
 }

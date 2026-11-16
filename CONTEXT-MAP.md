@@ -3,7 +3,7 @@
 ## Contexts
 
 - [SDLC machine](./CONTEXT.md): the shared language of one cycle
-- [Machine](./src/machine/CONTEXT.md): what the machine concludes about a cycle. Its subjects are `decide`, `flow`, `change`, `phase`, `mark`, `spy`, and `skill`
+- [Machine](./src/machine/CONTEXT.md): what the machine concludes about a cycle. Its subjects are `decide`, `flow`, `change`, `phase`, `mark`, `spy`, and `skill`. The poll order and the seams are [POLL.md](./src/machine/decide/POLL.md)
 - [Reviewer](./src/reviewer/CONTEXT.md): the accepting pass that can stand in for a person
 - [Adapters](./src/adapters/CONTEXT.md): the outsides the machine talks to
 - [Window](./src/window/CONTEXT.md): the face the window draws. Look: [FACE.md](./src/window/FACE.md)

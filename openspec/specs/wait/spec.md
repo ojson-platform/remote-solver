@@ -45,12 +45,17 @@ When the label `sdd:refused` is on and the open page is that refusal, Continue S
 
 ### Requirement: Continue clears only the label
 
-Continue SHALL remove `wait-human` and SHALL NOT check that the ask was fulfilled. The control SHALL be absent while acceptance is offered, while the settled decision is an agent, and while the checkout repair is open.
+Continue SHALL remove `wait-human` and SHALL NOT check that the ask was fulfilled. The control SHALL be absent while a worker is running on the issue, while acceptance is offered, while the settled decision is an agent, and while the checkout repair is open.
 
 #### Scenario: Continue removes the label
 
 - **WHEN** the issue carries `wait-human` and the open row offers Continue
 - **THEN** the label is removed and the phase stays
+
+#### Scenario: Continue is absent while a worker is running
+
+- **WHEN** the issue carries `wait-human` and a worker is running on the issue
+- **THEN** the open row has no Continue control
 
 #### Scenario: Continue is absent beside acceptance
 

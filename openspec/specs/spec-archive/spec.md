@@ -189,3 +189,21 @@ When a thread already carries that same command text, validate refusing with it 
 
 - **WHEN** a resolved thread already carries that command text and validate refuses with it again
 - **THEN** the machine waits with what the command said, posts `sdd:refused`, and does not open a thread
+
+### Requirement: A baseline conflict returns to specifying
+
+When the fold reports a conflict with a baseline, the machine SHALL open one thread on that change's delta spec. The first line SHALL be `sdd:layer=spec → specifying`. It SHALL NOT post `sdd:refused`. The next poll SHALL move the issue to `specifying`.
+
+#### Scenario: A baseline conflict opens a spec thread
+
+- **WHEN** the fold reports a conflict with `openspec/specs/board/spec.md` and the pull request changes that change's delta spec
+- **THEN** one thread starts with `sdd:layer=spec → specifying`, no `sdd:refused` is posted, and the next poll moves the issue to `specifying`
+
+### Requirement: Unfold refuses a tip that is not the archive commit
+
+When unfold sees a tip with no `Sdd-Archive` line, the machine SHALL post `sdd:refused` for that phase, action `unarchive`, and reason `return the delta to the change`. The next poll SHALL NOT run that unarchive.
+
+#### Scenario: Unfold refuses a tip that is not the archive commit
+
+- **WHEN** unfold reports that the tip has no `Sdd-Archive` line
+- **THEN** the issue has `sdd:refused` for `unarchive` and `return the delta to the change`, and the next poll does not run unarchive

@@ -13,12 +13,23 @@ import {isTestPath, parseNameStatus, proveCodeFix, vitestArguments} from './code
 
 const whole = "export const place = 'whole';\n";
 const slice = "export const place = 'slice';\n";
+const PLACE = 'The place is the slice';
+const ORPHAN = 'Every covered line of a fenced code block renders inside code';
+const DELTA = 'openspec/changes/issue-7/specs/place/spec.md';
+
+function specFor(title: string): string {
+  return `### Requirement: Place\n\n#### Scenario: ${title}\n\n- **WHEN** the caller reads the place\n- **THEN** the place is the slice\n`;
+}
 
 function asserts(needle: string): string {
   return `import {readFileSync} from 'node:fs';
 const text = readFileSync(new URL('./place.ts', import.meta.url), 'utf8');
 if (!text.includes(${JSON.stringify(needle)})) process.exit(1);
 `;
+}
+
+function named(title: string, body: string): string {
+  return `// scenario(${JSON.stringify(title)})\n${body}`;
 }
 
 function git(root: string, args: string[]): string {
@@ -58,7 +69,7 @@ function repo(parent: Record<string, string>, head: Record<string, string>): str
   return root;
 }
 
-function nodeRun(root: string, files: string[]): Promise<number> {
+function nodeRun(root: string, files: string[], _titles?: readonly string[]): Promise<number> {
   for (const file of files) {
     const result = spawnSync(process.execPath, [file], {cwd: root, encoding: 'utf8'});
     if ((result.status ?? 1) !== 0) {
@@ -68,7 +79,10 @@ function nodeRun(root: string, files: string[]): Promise<number> {
   return Promise.resolve(0);
 }
 
-async function attempt(root: string): Promise<{calls: string[]; body: string; error: unknown}> {
+async function attempt(
+  root: string,
+  run: (root: string, files: string[], titles: readonly string[]) => Promise<number> = nodeRun,
+): Promise<{calls: string[]; body: string; error: unknown}> {
   const memory = memoryPorts({
     threadList: {
       '12': [
@@ -90,7 +104,7 @@ async function attempt(root: string): Promise<{calls: string[]; body: string; er
       {
         review: memory.review,
         vcs: {head: async () => head, published: async () => true},
-        prove: () => proveCodeFix(root, nodeRun),
+        prove: () => proveCodeFix(root, run),
       },
     );
     return {calls: memory.calls, body, error: undefined};
@@ -104,6 +118,11 @@ function assertOpen(calls: string[]): void {
   assert.equal(calls.includes('resolveThread'), false);
 }
 
+function assertHanded(calls: string[]): void {
+  assert.equal(calls.includes('resolveThread'), false);
+  assert.ok(calls.some(call => call.includes('sdd:layer=spec → specifying')));
+}
+
 function assertClean(root: string, source: string): void {
   assert.equal(git(root, ['status', '--porcelain']), '');
   assert.equal(readFileSync(path.join(root, 'place.ts'), 'utf8'), source);
@@ -111,8 +130,13 @@ function assertClean(root: string, source: string): void {
 
 test('an added source file comes back after the proof, and a dirty tree is left untouched', async () => {
   const root = repo(
-    {'readme.ts': whole},
-    {'readme.ts': whole, 'place.ts': slice, 'place.test.mjs': asserts('export const place')},
+    {'readme.ts': whole, [DELTA]: specFor(PLACE)},
+    {
+      'readme.ts': whole,
+      [DELTA]: specFor(PLACE),
+      'place.ts': slice,
+      'place.test.mjs': named(PLACE, asserts('export const place')),
+    },
   );
   try {
     await proveCodeFix(root, nodeRun);
@@ -144,13 +168,54 @@ test('a test path is the vitest file, and a rename is two paths', () => {
 });
 
 spec('marker', () => {
-  requirement('A code thread is fixed only when its new test fails on the parent', () => {
+  requirement('A refused proof hands the code thread to spec', () => {
     scenario('Fix refuses a code thread whose commit changes no test', async () => {
       const root = repo({'place.ts': whole}, {'place.ts': slice});
       try {
         const closed = await attempt(root);
         assert.match(String(closed.error), /changes no test/);
-        assertOpen(closed.calls);
+        assertHanded(closed.calls);
+        assertClean(root, slice);
+      } finally {
+        rmSync(root, {recursive: true, force: true});
+      }
+    });
+
+    scenario('Fix refuses a code thread whose scenario is not in the delta', async () => {
+      const root = repo(
+        {'place.ts': whole, [DELTA]: specFor(PLACE)},
+        {
+          'place.ts': slice,
+          [DELTA]: specFor(PLACE),
+          'place.test.mjs': named(ORPHAN, asserts("place = 'slice'")),
+        },
+      );
+      try {
+        const closed = await attempt(root, () => Promise.reject(new Error('the orphan scenario was run')));
+        assert.match(String(closed.error), /not in the delta/);
+        assertHanded(closed.calls);
+        assertClean(root, slice);
+      } finally {
+        rmSync(root, {recursive: true, force: true});
+      }
+    });
+
+    scenario('Fix refuses a code thread when a neighboring test is the one that fails', async () => {
+      const root = repo(
+        {'place.ts': slice, [DELTA]: specFor(PLACE)},
+        {
+          'place.ts': slice,
+          [DELTA]: specFor(PLACE),
+          'place.test.mjs': `${named(PLACE, asserts("place = 'slice'"))}\n${named(ORPHAN, asserts('missing'))}`,
+        },
+      );
+      try {
+        const closed = await attempt(root, (_root, _files, titles) => {
+          assert.deepEqual([...titles], [PLACE]);
+          return Promise.resolve(0);
+        });
+        assert.match(String(closed.error), /passes on the parent/);
+        assertHanded(closed.calls);
         assertClean(root, slice);
       } finally {
         rmSync(root, {recursive: true, force: true});
@@ -159,23 +224,29 @@ spec('marker', () => {
 
     scenario('Fix refuses a code thread whose new test passes on the parent', async () => {
       const root = repo(
-        {'place.ts': whole, 'place.test.mjs': asserts('export const place')},
-        {'place.ts': slice, 'place.test.mjs': `// moved\n${asserts('export const place')}`},
+        {'place.ts': whole, [DELTA]: specFor(PLACE), 'place.test.mjs': named(PLACE, asserts('export const place'))},
+        {
+          'place.ts': slice,
+          [DELTA]: specFor(PLACE),
+          'place.test.mjs': named(PLACE, `// moved\n${asserts('export const place')}`),
+        },
       );
       try {
         const closed = await attempt(root);
         assert.match(String(closed.error), /passes on the parent/);
-        assertOpen(closed.calls);
+        assertHanded(closed.calls);
         assertClean(root, slice);
       } finally {
         rmSync(root, {recursive: true, force: true});
       }
     });
+  });
 
+  requirement('A code thread is fixed only when its new test fails on the parent', () => {
     scenario('Fix refuses a code thread whose new test fails on HEAD', async () => {
       const root = repo(
-        {'place.ts': whole},
-        {'place.ts': slice, 'place.test.mjs': asserts('missing')},
+        {'place.ts': whole, [DELTA]: specFor(PLACE)},
+        {'place.ts': slice, [DELTA]: specFor(PLACE), 'place.test.mjs': named(PLACE, asserts('missing'))},
       );
       try {
         const closed = await attempt(root);
@@ -189,8 +260,8 @@ spec('marker', () => {
 
     scenario('Fix closes a code thread after the new test fails on the parent', async () => {
       const root = repo(
-        {'place.ts': whole},
-        {'place.ts': slice, 'place.test.mjs': asserts("place = 'slice'")},
+        {'place.ts': whole, [DELTA]: specFor(PLACE)},
+        {'place.ts': slice, [DELTA]: specFor(PLACE), 'place.test.mjs': named(PLACE, asserts("place = 'slice'"))},
       );
       try {
         const closed = await attempt(root);

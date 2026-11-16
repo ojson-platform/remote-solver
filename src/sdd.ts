@@ -161,8 +161,9 @@ export function fixArgs(rest: string[]): {key: string; pull: string; thread: str
 /**
  * Replies `sdd:fixed <HEAD>` and resolves the thread, or answers the
  * conversation. Refuses while HEAD is not on the remote issue branch. A `code`
- * thread also refuses unless a test the answering commit changes fails on that
- * commit's parent and passes on HEAD. A thread whose latest reply is already
+ * thread also refuses unless a delta scenario the answering commit changes
+ * fails on that commit's parent and passes on HEAD. A scenario the delta does
+ * not name does not count. A thread whose latest reply is already
  * `sdd:fixed` is only resolved.
  */
 export async function fixThread(
@@ -200,7 +201,15 @@ export async function fixThread(
   }
   const marker = parseMarker(record.body);
   if (marker?.kind === 'layer' && marker.layer === 'code') {
-    await (deps.prove ?? proveCodeFix)(deps.root ?? process.cwd());
+    try {
+      await (deps.prove ?? proveCodeFix)(deps.root ?? process.cwd());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'thread fix refused';
+      if (/hand the thread off to spec/i.test(message)) {
+        await deps.review.reply(args.pull, record.comment, `sdd:layer=spec → specifying\n${message}`);
+      }
+      throw error;
+    }
   }
   if (marker?.kind !== 'fixed') {
     await deps.review.reply(args.pull, record.comment, body);

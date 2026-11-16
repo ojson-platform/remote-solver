@@ -96,6 +96,17 @@ export function holdOpenPulls(
   ) {
     return decision;
   }
+  if (decision.kind === 'advance' && decision.reason === 'review thread sent the change back') {
+    return decision;
+  }
+  if (
+    decision.kind === 'advance' &&
+    decision.to === 'tasking' &&
+    (decision.reason === 'the delta revision is not the card' ||
+      decision.reason.startsWith('no card for '))
+  ) {
+    return decision;
+  }
   if (
     decision.kind === 'wait' &&
     !decision.gate &&

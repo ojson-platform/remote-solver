@@ -220,24 +220,38 @@ The thread SHALL stay open.
 
 ### Requirement: A code thread is fixed only when its new test fails on the parent
 
-`thread fix` on an open `code` thread SHALL refuse, and SHALL NOT reply `fixed` and SHALL NOT resolve the thread, when the HEAD commit changes no test, when every test it changes passes on the first parent, or when such a test fails on HEAD. It SHALL reply `fixed` with that HEAD and resolve the thread when a test that commit changes fails on the first parent and passes on HEAD, and HEAD is the tip of the remote issue branch.
-
-#### Scenario: Fix refuses a code thread whose commit changes no test
-
-- **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, and the answering commit changes no test
-- **THEN** the command fails and the thread stays open
-
-#### Scenario: Fix refuses a code thread whose new test passes on the parent
-
-- **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, and every test the answering commit changes passes on that commit's parent
-- **THEN** the command fails and the thread stays open
+`thread fix` on an open `code` thread SHALL refuse, and SHALL NOT reply `fixed` or resolve it, when the commit changes no test, when no changed test has a `scenario` title the delta names, when every such test passes on the first parent, or when such a test fails on HEAD. It SHALL reply `fixed` with HEAD and resolve the thread when such a test fails on the first parent and passes on HEAD, and HEAD is the remote issue branch tip. A title the delta does not name SHALL NOT count.
 
 #### Scenario: Fix refuses a code thread whose new test fails on HEAD
 
-- **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, a test the answering commit changes fails on the parent, and that test fails on HEAD
+- **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, a delta scenario the answering commit changes fails on the parent, and that test fails on HEAD
 - **THEN** the command fails and the thread stays open
 
 #### Scenario: Fix closes a code thread after the new test fails on the parent
 
-- **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, and a test the answering commit changes fails on the parent and passes on HEAD
+- **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, and a delta scenario the answering commit changes fails on the parent and passes on HEAD
 - **THEN** the thread's reply is `fixed` with that HEAD and the thread is resolved
+
+### Requirement: A refused proof hands the code thread to spec
+
+When a `code` thread proof refuses and that refusal says to hand the thread off to spec, the command SHALL reply `sdd:layer=spec → specifying` and the refusal text, and SHALL NOT resolve the thread.
+
+#### Scenario: Fix refuses a code thread whose commit changes no test
+
+- **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, and the answering commit changes no test
+- **THEN** the command fails, the thread stays open, and the reply is `sdd:layer=spec → specifying`
+
+#### Scenario: Fix refuses a code thread whose scenario is not in the delta
+
+- **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, and the only `scenario` the answering commit changes is not named by this change's delta, and that test fails on the parent and passes on HEAD
+- **THEN** the command fails, the thread stays open, and the reply is `sdd:layer=spec → specifying`
+
+#### Scenario: Fix refuses a code thread when a neighboring test is the one that fails
+
+- **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, the commit changes two scenarios, the delta names one, that named test passes on the parent and on HEAD, and the other test fails on the parent and passes on HEAD
+- **THEN** the command fails, the thread stays open, and the reply is `sdd:layer=spec → specifying`
+
+#### Scenario: Fix refuses a code thread whose new test passes on the parent
+
+- **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, and every delta scenario the answering commit changes passes on that commit's parent
+- **THEN** the command fails, the thread stays open, and the reply is `sdd:layer=spec → specifying`

@@ -56,6 +56,7 @@ export type RunMarks = {
   waiting: boolean;
   comments: number;
   threads: readonly string[];
+  unmarked: readonly string[];
   spoken: readonly string[];
 };
 
@@ -72,11 +73,17 @@ export async function runMarks(
   const comments = await deps.tracker.comments(key);
   const open = (await deps.review.pulls(key)).filter(pull => pull.state === 'OPEN');
   const threads: string[] = [];
+  const unmarked: string[] = [];
   const spoken: string[] = [];
   if (open.length === 1 && open[0]) {
     for (const thread of await deps.review.threadList(open[0].id, read?.fresh ? {fresh: true} : undefined)) {
-      if (!thread.resolved && handedOff(thread.body)) {
+      if (thread.resolved) {
+        continue;
+      }
+      if (handedOff(thread.body)) {
         threads.push(thread.id);
+      } else if (markerOf(thread.body) === null) {
+        unmarked.push(thread.id);
       }
     }
     for (const comment of await deps.review.comments(open[0].id)) {
@@ -85,7 +92,13 @@ export async function runMarks(
       }
     }
   }
-  return {waiting: labels.includes('sdd:wait-human'), comments: comments.length, threads, spoken};
+  return {
+    waiting: labels.includes('sdd:wait-human'),
+    comments: comments.length,
+    threads,
+    unmarked,
+    spoken,
+  };
 }
 
 /**
@@ -97,9 +110,11 @@ export function observedSignal(commits: number, before: RunMarks, after: RunMark
     return 'Publish';
   }
   const knownThreads = new Set(before.threads);
+  const knownUnmarked = new Set(before.unmarked);
   const knownSpoken = new Set(before.spoken);
   const handed =
     after.threads.some(id => !knownThreads.has(id)) ||
+    after.unmarked.some(id => !knownUnmarked.has(id)) ||
     after.spoken.some(body => !knownSpoken.has(body));
   if (handed) {
     return 'Hand-off';

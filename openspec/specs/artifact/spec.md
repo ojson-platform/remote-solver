@@ -38,6 +38,16 @@ A baseline spec under `openspec/specs/` does not make the delta present.
 - **WHEN** the phase is `specifying`, the proposal names no capability, the change has no delta file, and one pull request is open
 - **THEN** the machine opens the spec review gate
 
+#### Scenario: Designing without an open pull request waits
+
+- **WHEN** the phase is `designing`, the design exists, and no pull request is open
+- **THEN** the machine waits and does not run the design skill
+
+#### Scenario: Tasking without an open pull request waits
+
+- **WHEN** the phase is `tasking`, the tasks exist, and no pull request is open
+- **THEN** the machine waits and does not run the tasks skill
+
 #### Scenario: Specifying with no named capability and no pull request waits
 
 - **WHEN** the phase is `specifying`, the proposal names no capability, and no pull request is open
@@ -73,6 +83,11 @@ Specifying is ready without a delta file when the proposal names no capability.
 
 - **WHEN** the phase is `designing`, the proposal names a capability, and the change has no delta file
 - **THEN** the machine moves the issue to `specifying`
+
+#### Scenario: Tasking without a design returns to designing
+
+- **WHEN** the phase is `tasking` and the change has no `design.md`
+- **THEN** the machine moves the issue to `designing`
 
 #### Scenario: Designing with no named capability stays without a delta
 
@@ -288,3 +303,40 @@ Zero open lines SHALL NOT by itself make the cut complete.
 
 - **WHEN** `accepting` is not archived and every delta scenario has a checked task line
 - **THEN** the machine archives the change
+
+### Requirement: A matching tasks stamp names a card gap
+
+When the tasks stamp matches and a card gap remains, the tasks prompt SHALL name that gap and SHALL say not to Publish.
+
+#### Scenario: A matching tasks stamp names the card gap
+
+- **WHEN** the tasks stamp matches the revision of the specs and the design, and a delta scenario is named on no card
+- **THEN** the tasks prompt names that gap and says not to Publish
+
+### Requirement: An empty specs revision does not restart design
+
+When the proposal names no capability and no delta file exists, a design stamp that is not the revision of no spec files SHALL NOT restart the design skill. The machine SHALL open the design review gate.
+
+#### Scenario: An empty specs revision does not restart design
+
+- **WHEN** the phase is `designing`, the proposal names no capability, the design exists, one pull request is open, the change has no delta file, and the design stamp is not the revision of no spec files
+- **THEN** the machine opens the design review gate and does not run the design skill
+
+### Requirement: A card gap on tasking is cut before a child
+
+On `tasking`, a card gap SHALL start the tasks skill before a child and before the advance. `implementing` with an open task and no pull request SHALL wait `no open pull request`. `implementing` SHALL return to `tasking` when `tasks.md` is missing.
+
+#### Scenario: A card gap on tasking starts tasks before children
+
+- **WHEN** `tasking` has tasks, the tasks stamp matches, a delta scenario is named on no card, and a child is still on `specifying`
+- **THEN** the machine runs the tasks skill and does not wait on that child
+
+#### Scenario: Implementing without an open pull request waits
+
+- **WHEN** `implementing` has an open task and no pull request is open
+- **THEN** the machine waits `no open pull request` and does not run the task
+
+#### Scenario: Implementing without tasks returns to tasking
+
+- **WHEN** `implementing` has no `tasks.md`
+- **THEN** the machine returns to `tasking`

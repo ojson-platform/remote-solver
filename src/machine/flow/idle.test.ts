@@ -542,6 +542,129 @@ spec('idle', () => {
     });
   });
 
+  requirement('An unmarked thread is not an empty run', () => {
+    scenario('A new unmarked thread does not refuse the run', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-unmarked-'));
+      const seen: string[] = [];
+      const threads: {resolved: boolean; body: string}[] = [];
+      const tasks = path.join('openspec', 'changes', 'issue-8', 'tasks.md');
+      const {tracker, review} = memoryPorts({
+        issues: [
+          {
+            key: '8',
+            title: '#8: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['remote-solver', 'sdd:cycle', 'sdd:implementing'],
+          },
+        ],
+        pulls: {8: [{id: '80', title: '#8: title', state: 'OPEN'}]},
+        threads: {80: threads},
+      });
+      const runtime: Runtime = {
+        async run(skill) {
+          seen.push(skill.action);
+          if (skill.action === 'implement-next-task') {
+            threads.push({resolved: false, body: 'the fence is still the marker'});
+          }
+          if (skill.action === 'classify-comments' && threads[0]) {
+            threads[0].body = 'sdd:layer=spec → specifying\nthe fence is still the marker';
+          }
+          return {commits: 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
+      };
+      const box = machine(root, {
+        config: {
+          queues: [{name: 'remote-solver'}],
+          base: 'master',
+          branchScope: 'sdd',
+          ignoreComments: [],
+        },
+        tracker,
+        review,
+        vcs: {
+          ...emptyVcs(),
+          filesAt: () => ({
+            exists: rel => rel === tasks,
+            read: rel => (rel === tasks ? '- [ ] one\n' : ''),
+            list: () => [],
+          }),
+        },
+        runtime,
+      });
+      const first = await driveIssue(box, '8');
+      assert.equal(first.code, 0);
+      assert.deepEqual(seen, ['implement-next-task', 'classify-comments']);
+      const notes = await tracker.comments('8');
+      assert.equal(
+        notes.some(note => note.body.includes('sdd:refused')),
+        false,
+      );
+      assert.equal((await tracker.labels('8')).includes('sdd:refused'), false);
+      assert.equal((await tracker.labels('8')).includes('sdd:specifying'), true);
+    });
+    scenario('A conversation layer marker does not refuse the run', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-spoken-'));
+      const seen: string[] = [];
+      const comments: {body: string}[] = [];
+      const tasks = path.join('openspec', 'changes', 'issue-8', 'tasks.md');
+      const {tracker, review} = memoryPorts({
+        issues: [
+          {
+            key: '8',
+            title: '#8: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['remote-solver', 'sdd:cycle', 'sdd:implementing'],
+          },
+        ],
+        pulls: {8: [{id: '80', title: '#8: title', state: 'OPEN'}]},
+        comments: {80: comments},
+      });
+      const runtime: Runtime = {
+        async run(skill) {
+          seen.push(skill.action);
+          comments.push({body: 'sdd:layer=code → implementing'});
+          return {commits: 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
+      };
+      const box = machine(root, {
+        config: {
+          queues: [{name: 'remote-solver'}],
+          base: 'master',
+          branchScope: 'sdd',
+          ignoreComments: [],
+        },
+        tracker,
+        review,
+        vcs: {
+          ...emptyVcs(),
+          filesAt: () => ({
+            exists: rel => rel === tasks,
+            read: rel => (rel === tasks ? '- [ ] one\n' : ''),
+            list: () => [],
+          }),
+        },
+        runtime,
+      });
+      const first = await driveIssue(box, '8');
+      assert.equal(first.code, 0);
+      const notes = await tracker.comments('8');
+      assert.equal(
+        notes.some(note => note.body.includes('sdd:refused')),
+        false,
+      );
+      await driveIssue(box, '8');
+      assert.deepEqual(seen, ['implement-next-task', 'implement-next-task']);
+    });
+  });
+
   requirement('A closed thread releases the refusal', () => {
     scenario('A closed code thread releases the refusal', async () => {
       const row = {

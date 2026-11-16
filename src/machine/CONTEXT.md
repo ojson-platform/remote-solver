@@ -1,6 +1,6 @@
 # Machine
 
-What the machine concludes about a cycle: which phase it is in, which skill to start, or who it is waiting on. Shared words — cycle, phase, gate, change, spy, layer, marker, thread, signal, hand-off — stay in the root glossary.
+What the machine concludes about a cycle: which phase it is in, which skill to start, or who it is waiting on. Shared words — cycle, phase, gate, change, spy, layer, marker, thread, signal, hand-off — stay in the root glossary. The order of one poll and the seams between steps are [decide/POLL.md](./decide/POLL.md).
 
 ## Language
 

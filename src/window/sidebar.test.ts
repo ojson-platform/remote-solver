@@ -2039,6 +2039,35 @@ spec('wait', () => {
         },
       );
     });
+    scenario('Continue is absent while a worker is running', async () => {
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [
+            held('1', 'tasking', {
+              labels: ['sdd:cycle', 'sdd:tasking', 'sdd:wait-human'],
+            }),
+          ],
+          leading: () => true,
+          turn: () => ({phase: 'tasking', action: 'create-tasks'}),
+          screen: () => ({
+            station: 'tasking',
+            activity: {kind: 'running', phase: 'tasking', action: 'create-tasks'},
+          }),
+        },
+        async (page, window) => {
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const html = await pageHtml(page.url);
+          assert.match(html, /Пишу задачи/);
+          assert.equal(bandOf(html, '1').includes('Продолжить'), false);
+        },
+      );
+    });
     scenario('Continue is absent beside acceptance', async () => {
       await hosted(
         {

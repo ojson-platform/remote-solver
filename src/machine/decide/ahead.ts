@@ -79,34 +79,27 @@ export function decideAhead(read: AheadRead): Decision | null {
     );
   }
 
-  // An earlier-phase thread moves before two pull requests start the open task.
-  // `out` is not in the map, so it does not move the phase. On verifying the
-  // checks must already be red or green; pending does not roll back.
   const back = feedback.rollback;
   const checksKnown = pr?.checks === 'red' || pr?.checks === 'green';
-  if (back && phaseRank(back) < phaseRank(phase) && (phase !== 'verifying' || checksKnown)) {
-    return {
-      kind: 'advance',
-      issue: issue.key,
-      to: back,
-      reason: 'review thread sent the change back',
-    };
-  }
+  const earlierPhase =
+    back && phaseRank(back) < phaseRank(phase) && (phase !== 'verifying' || checksKnown);
 
   // Two open pull requests keep the open task only after unarchive, an
-  // unlabeled thread, an earlier-phase thread, and a card that still matches.
+  // unlabeled thread, and a card that still matches. Conflict and rollback
+  // stay after this row so a marker does not cancel that task.
   if (
     open.length > 1 &&
     phase === 'implementing' &&
     change.tasks &&
     change.openTasks > 0 &&
-    !cardGap(change)
+    !cardGap(change) &&
+    !earlierPhase
   ) {
     return agent(issue.key, 'implement-next-task', phase, String(open[0].id), taskReason(change));
   }
 
-  // Conflict is its own move. It stays after the open task when two pull
-  // requests are open, so one conflict does not cancel that task.
+  // Conflict is its own move. It stays before rollback so a marker does not
+  // undo a return to implementing for a rebase.
   const conflicted = open.find(item => item.conflict);
   if (conflicted) {
     if (phase === 'implementing') {
@@ -123,6 +116,18 @@ export function decideAhead(read: AheadRead): Decision | null {
       issue: issue.key,
       to: 'implementing',
       reason: 'pull request conflicts with the base',
+    };
+  }
+
+  // An earlier-phase thread moves after conflict. `out` is not in the map, so
+  // it does not move the phase. On verifying the checks must already be red or
+  // green; pending does not roll back.
+  if (earlierPhase) {
+    return {
+      kind: 'advance',
+      issue: issue.key,
+      to: back,
+      reason: 'review thread sent the change back',
     };
   }
 

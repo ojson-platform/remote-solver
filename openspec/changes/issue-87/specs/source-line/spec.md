@@ -26,8 +26,8 @@ Plan and Design SHALL render the source as one markdown document. Headings, list
 
 #### Scenario: A covered line shows the node's value
 
-- **WHEN** the caller opens Plan on a source that contains an indented code block spanning several source lines, whose raw indented first line is not in the node value, and a closed fenced code block, and then opens Design on that same source
-- **THEN** on each surface the first covered line of that indented block shows the node's value and does not show the raw indented source, each later covered line shows that line's slice of the value and does not show the previous line slice of the value, a line the value does not contain does not show the raw source, and the opening marker line and the closing marker line of the closed fenced code block do not show the raw source
+- **WHEN** the caller opens Plan on a source that contains an indented code block spanning several source lines, whose raw indented first line is not in the node value, a closed fenced code block whose opening and closing marker text is not in the node value, and a fenced block set in a blockquote whose later covered line has the raw source "> alpha" while the node value is only "alpha", and then opens Design on that same source
+- **THEN** on each surface a covered line shows the node value, a line the value does not contain does not show the raw source, the first covered line of that indented block shows the node's value and does not show the raw indented source, each later covered line shows that line's slice of the value and does not show the previous line slice of the value, the opening marker line and the closing marker line are not painted as the raw fence, and the later covered line of the fenced block set in the blockquote shows "alpha" and does not show the raw source "> alpha"
 
 ### Requirement: The line stays a comment target
 

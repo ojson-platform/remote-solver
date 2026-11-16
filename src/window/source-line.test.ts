@@ -72,6 +72,8 @@ const MARKDOWN_PROPOSAL = [
   '# Leaf heading',
   '#### Deep heading',
   '- list item',
+  '- > alpha',
+  '  beta',
   '  - nested inner',
   '- **bold**, *em*, `inline`, and [link](https://example.com)',
   '  ```',
@@ -111,6 +113,18 @@ spec('source-line', () => {
             assert.match(plan, /<span[^>]*>Leaf heading<\/span>/);
             assert.match(plan, /<span[^>]*>Deep heading<\/span>/);
             assert.match(plan, /<span[^>]*>- list item<\/span>/);
+            const listQuoteAlpha = lineButton(plan, '- > alpha');
+            const listQuoteAlphaInner = listQuoteAlpha.slice(
+              listQuoteAlpha.indexOf('>') + 1,
+              listQuoteAlpha.lastIndexOf('</button>'),
+            );
+            assert.match(listQuoteAlphaInner, /<span>- alpha<\/span>/);
+            const listQuoteBeta = lineButton(plan, '  beta');
+            const listQuoteBetaInner = listQuoteBeta.slice(
+              listQuoteBeta.indexOf('>') + 1,
+              listQuoteBeta.lastIndexOf('</button>'),
+            );
+            assert.equal(listQuoteBetaInner, 'beta');
             assert.match(plan, /<span>\s*- nested inner<\/span>/);
             assert.match(plan, /<code>list code<\/code>/);
             assert.match(plan, /<strong>bold<\/strong>/);

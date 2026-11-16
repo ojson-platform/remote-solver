@@ -177,6 +177,13 @@ function phrasingFromBlock(block: CoveredBlock): PhrasingContent[] {
         if (child.type === 'paragraph') {
           phrasing.push(...child.children);
         }
+        if (child.type === 'blockquote') {
+          for (const nested of child.children) {
+            if (nested.type === 'paragraph') {
+              phrasing.push(...nested.children);
+            }
+          }
+        }
       }
       return phrasing;
     }

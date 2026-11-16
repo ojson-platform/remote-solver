@@ -305,6 +305,37 @@ spec('source-line', () => {
       );
     });
 
+    scenario(
+      'An indented code block set in a blockquote inside a list item shows the node value and each later line slice',
+      async () => {
+        const source = ['## Scope', '', '- item', '  >     ```', '  >     body', '  >     tail', ''].join('\n');
+        await hosted(
+          {
+            login: () => MANAGER,
+            tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+          },
+          async (page, _window, paths) => {
+            writeChange(paths.arcadia, KEY, 'proposal.md', source);
+            writeChange(paths.arcadia, KEY, 'design.md', source);
+            await openIssue(page);
+            const html = await pageHtml(page.url);
+            for (const layer of ['Plan', 'Design'] as const) {
+              const doc = docOf(spineOf(html, KEY, layer));
+              const open = lineButton(doc, '  >     ```');
+              assert.match(open, /<code>```<\/code>/);
+              assert.doesNotMatch(open, /<code><\/code>/);
+              const body = lineButton(doc, '  >     body');
+              assert.match(body, /<code>body<\/code>/);
+              assert.equal(body.includes('```'), false);
+              const tail = lineButton(doc, '  >     tail');
+              assert.match(tail, /<code>tail<\/code>/);
+              assert.equal(tail.includes('body'), false);
+            }
+          },
+        );
+      },
+    );
+
     scenario('An indented code block set in a blockquote shows the node value and each later line slice', async () => {
       const source = ['## Scope', '', '>     ```', '>     body', '>     tail', ''].join('\n');
       await hosted(
@@ -384,6 +415,64 @@ spec('source-line', () => {
           },
         );
       }
+    });
+
+    scenario('An unclosed fence nested in a list shows the node value and does not show the raw source', async () => {
+      const source = ['## Scope', '', '- item', '  ```fence', '', '  x', ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', source);
+          writeChange(paths.arcadia, KEY, 'design.md', source);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            const open = lineButton(doc, '  ```fence');
+            assert.match(open, /<code><\/code>/);
+            assert.equal(open.includes('<code>```fence</code>'), false);
+            const blank = lineButton(doc, '');
+            const blankInner = blank.slice(blank.indexOf('>') + 1, blank.lastIndexOf('</button>'));
+            assert.match(blankInner, /<code><\/code>/);
+            assert.equal(blankInner.includes('x'), false);
+            const body = lineButton(doc, '  x');
+            assert.match(body, /<code>x<\/code>/);
+            assert.doesNotMatch(body, /<code>\s+x<\/code>/);
+          }
+        },
+      );
+    });
+
+    scenario('An unclosed fence nested in a list shows the node value and does not show the raw source', async () => {
+      const source = ['## Scope', '', '- item', '  ```fence', '', '  x', ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', source);
+          writeChange(paths.arcadia, KEY, 'design.md', source);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            const open = lineButton(doc, '  ```fence');
+            assert.match(open, /<code><\/code>/);
+            assert.equal(open.includes('<code>```fence</code>'), false);
+            const blank = lineButton(doc, '');
+            const blankInner = blank.slice(blank.indexOf('>') + 1, blank.lastIndexOf('</button>'));
+            assert.match(blankInner, /<code><\/code>/);
+            assert.equal(blankInner.includes('x'), false);
+            const body = lineButton(doc, '  x');
+            assert.match(body, /<code>x<\/code>/);
+            assert.doesNotMatch(body, /<code>\s+x<\/code>/);
+          }
+        },
+      );
     });
 
     scenario('An unclosed fence line the value does not contain does not show the raw source', async () => {

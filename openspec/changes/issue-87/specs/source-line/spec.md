@@ -12,7 +12,7 @@ Plan and Design render the source as one markdown document, and a click opens th
 
 ### Requirement: The document renders as one markdown document
 
-Plan and Design SHALL render the source as one markdown document. Headings, lists, emphasis, links, and code SHALL render in that document. A source line SHALL NOT be parsed as its own markdown document. A covered line SHALL show the node's value. A line the value does not contain SHALL NOT show the raw source. The opening marker line and the closing marker line of a closed fenced code block SHALL NOT show the raw source, and each later covered line SHALL show that line slice of the value. An unclosed fence nested in a list, whose code value is a blank line followed by x, SHALL show the node value on that blank line and SHALL NOT paint that blank line as x, and the later line SHALL show the node value and SHALL NOT show the raw indented source.
+Plan and Design SHALL render the source as one markdown document. Headings, lists, emphasis, links, and code SHALL render in that document. A source line SHALL NOT be parsed as its own markdown document. A covered line SHALL show the node's value. A line the value does not contain SHALL NOT show the raw source. The opening marker line and the closing marker line of a closed fenced code block SHALL NOT show the raw source, and each later covered line SHALL show that line slice of the value.
 
 #### Scenario: Plan and Design render the source as one markdown document
 

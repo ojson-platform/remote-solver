@@ -9,7 +9,7 @@
 - A run of blank lines stays one span.gap
 - A covered blank line stays the slice of the value
 
-sdd-delta: 35e5e8fc15e0fb44
+sdd-delta: 8842a8fd6bfb09ab
 
 ## Source
 

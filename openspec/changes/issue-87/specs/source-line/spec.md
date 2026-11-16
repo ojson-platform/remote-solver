@@ -6,13 +6,13 @@ sdd-absorbed: 254d92efc244adbb
 
 ## Purpose
 
-Plan and Design render the source as one markdown document, and a click opens the remark draft on the source line that place came from. A source line is not parsed as its own markdown document. A covered line shows the node's value, and a line the value does not contain does not show the raw source. On an unclosed fence whose opening line is the raw marker ```fence and whose node value is a blank line followed by x, that opening line does not show the raw source. On an indented code block that spans several source lines, the first covered line shows the node's value and each later covered line shows that line's slice of the value. On a closed tilde fence spanning several source lines, the line alpha shows that line slice of the value and does not show beta, and the closing ~~~ line does not show the raw marker, which is not in the value. The opening marker line and the closing marker line of a closed fenced code block do not show the raw source, and each later covered line shows that line slice of the value. A `##` line stays the section heading and a `###` line stays the smaller heading, a run of blank lines that no node covers stays one gap, a blank line the value contains stays the slice of that value, and with no pull request the line is not a comment target. The painted place is not a diff row.
+Plan and Design render the source as one markdown document, and a click opens the remark draft on the source line that place came from. A source line is not parsed as its own markdown document. A covered line shows the node's value, and a line the value does not contain does not show the raw source. A link reference definition covering three source lines does not show the raw source on those lines when the definition url and title do not contain it. On an unclosed fence whose opening line is the raw marker ```fence and whose node value is a blank line followed by x, that opening line does not show the raw source. On an indented code block that spans several source lines, the first covered line shows the node's value and each later covered line shows that line's slice of the value. On a closed tilde fence spanning several source lines, the line alpha shows that line slice of the value and does not show beta, and the closing ~~~ line does not show the raw marker, which is not in the value. The opening marker line and the closing marker line of a closed fenced code block do not show the raw source, and each later covered line shows that line slice of the value. A `##` line stays the section heading and a `###` line stays the smaller heading, a run of blank lines that no node covers stays one gap, a blank line the value contains stays the slice of that value, and with no pull request the line is not a comment target. The painted place is not a diff row.
 
 ## ADDED Requirements
 
 ### Requirement: The document renders as one markdown document
 
-Plan and Design SHALL render the source as one markdown document. Headings, lists, emphasis, links, and code SHALL render in that document. A source line SHALL NOT be parsed as its own markdown document. A covered line SHALL show the node's value. A line the value does not contain SHALL NOT show the raw source. The opening marker line and the closing marker line of a closed fenced code block SHALL NOT show the raw source, and each later covered line SHALL show that line slice of the value.
+Plan and Design SHALL render the source as one markdown document. Headings, lists, emphasis, links, and code SHALL render in that document. A source line SHALL NOT be parsed as its own markdown document. A covered line SHALL show the node's value. A line the value does not contain SHALL NOT show the raw source. A link reference definition that covers three source lines SHALL NOT show the raw source on those lines when the definition url and title do not contain that raw source. The opening marker line and the closing marker line of a closed fenced code block SHALL NOT show the raw source, and each later covered line SHALL show that line slice of the value.
 
 #### Scenario: Plan and Design render the source as one markdown document
 
@@ -38,6 +38,11 @@ Plan and Design SHALL render the source as one markdown document. Headings, list
 
 - **WHEN** the caller opens Plan on an unclosed fence whose opening line is the raw marker ```fence, that marker is not in the node value, and the node value is a blank line followed by x, and then opens Design on that same source
 - **THEN** on each surface that line does not show the raw source
+
+#### Scenario: A link reference definition does not show the raw source
+
+- **WHEN** the caller opens Plan on a link reference definition that covers three source lines, whose definition url and title do not contain the raw source of those lines, and then opens Design on that same source
+- **THEN** on each surface each of those lines does not show the raw source
 
 ### Requirement: The line stays a comment target
 

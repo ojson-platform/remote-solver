@@ -516,6 +516,37 @@ spec('source-line', () => {
     });
   });
 
+  requirement('A later line of tildes in a backtick fence shows that line slice', () => {
+    scenario('A closed backtick fence shows a later line of tildes as that line slice', async () => {
+      const source = ['## Scope', '', '```', '~~~', '```', ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', source);
+          writeChange(paths.arcadia, KEY, 'design.md', source);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            const open = lineButton(doc, '```');
+            assert.match(open, /<code><\/code>/);
+            const tildes = lineButton(doc, '~~~');
+            assert.match(tildes, /<code>~~~<\/code>/);
+            assert.doesNotMatch(tildes, /<code><\/code>/);
+            const close = doc.match(/<button[^>]*data-line="```"[^>]*>[\s\S]*?<\/button>/g);
+            assert.ok(close && close.length >= 2);
+            const closeMarker = close![close!.length - 1]!;
+            assert.match(closeMarker, /<code><\/code>/);
+            assert.equal(closeMarker.includes('<code>~~~</code>'), false);
+          }
+        },
+      );
+    });
+  });
+
   requirement('PlanLines stays the leaf', () => {
     scenario('PlanLines stays the leaf', async () => {
       const line = '- list item';

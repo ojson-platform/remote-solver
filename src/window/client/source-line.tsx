@@ -294,13 +294,38 @@ function opensWithFence(rawLine: string): boolean {
   return fenceMarkerLength(rawLine) >= 3;
 }
 
-function closesFenceAt(rawLine: string, openLength: number): boolean {
+function fenceMarkerChar(rawLine: string): '`' | '~' | undefined {
+  const run = fenceMarkerRun(rawLine);
+  if (!run) {
+    return undefined;
+  }
+  return run[0] === '~' ? '~' : '`';
+}
+
+function closesFenceAt(rawLine: string, openLength: number, openChar: '`' | '~'): boolean {
   const trimmed = fenceTrimmed(rawLine);
   const run = fenceMarkerRun(rawLine);
-  if (!run || run.length < openLength) {
+  if (!run || run.length < openLength || run[0] !== openChar) {
     return false;
   }
   return trimmed.slice(run.length).trim() === '';
+}
+
+function openFenceOnBlock(
+  texts: readonly string[],
+  block: BlockContent & {type: 'code'},
+): {length: number; char: '`' | '~'} | undefined {
+  const start = block.position?.start.line;
+  if (!start) {
+    return undefined;
+  }
+  const content = lineContentAfterListMarker(texts[start - 1] ?? '');
+  const run = fenceMarkerRun(content);
+  const char = fenceMarkerChar(content);
+  if (!run || !char || run.length < 3) {
+    return undefined;
+  }
+  return {length: run.length, char};
 }
 
 function codeBlockOpensWithFence(texts: readonly string[], block: BlockContent & {type: 'code'}): boolean {
@@ -320,12 +345,12 @@ function codeBlockOpensWithFence(texts: readonly string[], block: BlockContent &
 function codeBlockClosesWithFence(texts: readonly string[], block: BlockContent & {type: 'code'}): boolean {
   const start = block.position?.start.line;
   const end = block.position?.end.line;
-  if (!start || !end) {
+  const open = openFenceOnBlock(texts, block);
+  if (!start || !end || !open) {
     return false;
   }
-  const openLength = fenceMarkerLength(lineContentAfterListMarker(texts[start - 1] ?? ''));
   for (let line = start + 1; line <= end; line += 1) {
-    if (closesFenceAt(texts[line - 1] ?? '', openLength)) {
+    if (closesFenceAt(texts[line - 1] ?? '', open.length, open.char)) {
       return true;
     }
   }
@@ -342,12 +367,12 @@ function codeLineText(
   const start = block.position!.start.line;
   const fenced = codeBlockOpensWithFence(texts, block);
   const closedFence = fenced && codeBlockClosesWithFence(texts, block);
-  const openLength = fenceMarkerLength(lineContentAfterListMarker(texts[start - 1] ?? ''));
+  const open = openFenceOnBlock(texts, block);
   if (fenced) {
     if (line === start && opensWithFenceOnLine(rawLine)) {
       return '';
     }
-    if (closedFence && closesFenceAt(rawLine, openLength)) {
+    if (closedFence && open && closesFenceAt(rawLine, open.length, open.char)) {
       return '';
     }
     const index = line - start - 1;

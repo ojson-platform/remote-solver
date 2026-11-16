@@ -39,15 +39,18 @@ function sourceLineNumber(body: string, needle: string): number {
   return index + 1;
 }
 
-function lineButton(html: string, line: string): string {
+function lineButton(html: string, line: string, nth = 0): string {
   const escaped = line
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
   const marker = `data-line="${escaped}"`;
-  const at = html.indexOf(marker);
-  assert.ok(at >= 0, marker);
+  let at = -1;
+  for (let seen = 0; seen <= nth; seen += 1) {
+    at = html.indexOf(marker, at + 1);
+    assert.ok(at >= 0, marker);
+  }
   const start = html.lastIndexOf('<button', at);
   return html.slice(start, html.indexOf('</button>', at) + '</button>'.length);
 }
@@ -337,7 +340,18 @@ spec('source-line', () => {
     );
 
     scenario('An indented code block set in a blockquote shows the node value and each later line slice', async () => {
-      const source = ['## Scope', '', '>     ```', '>     body', '>     tail', ''].join('\n');
+      const source = [
+        '## Scope',
+        '',
+        '>     ```',
+        '>     body',
+        '>     tail',
+        '',
+        '>     ```',
+        '>     closed',
+        '>     ```',
+        '',
+      ].join('\n');
       await hosted(
         {
           login: () => MANAGER,
@@ -359,6 +373,15 @@ spec('source-line', () => {
             const tail = lineButton(doc, '>     tail');
             assert.match(tail, /<code>tail<\/code>/);
             assert.equal(tail.includes('body'), false);
+            const closedOpen = lineButton(doc, '>     ```', 1);
+            assert.match(closedOpen, /<code>```<\/code>/);
+            assert.doesNotMatch(closedOpen, /<code><\/code>/);
+            const closedBody = lineButton(doc, '>     closed');
+            assert.match(closedBody, /<code>closed<\/code>/);
+            assert.equal(closedBody.includes('```'), false);
+            const closedEnd = lineButton(doc, '>     ```', 2);
+            assert.match(closedEnd, /<code>```<\/code>/);
+            assert.doesNotMatch(closedEnd, /<code><\/code>/);
           }
         },
       );
@@ -543,6 +566,10 @@ spec('source-line', () => {
         '    ```',
         '    body',
         '',
+        '    ```',
+        '    closed',
+        '    ```',
+        '',
       ].join('\n');
       await hosted(
         {
@@ -564,6 +591,15 @@ spec('source-line', () => {
             const indentedBody = lineButton(doc, '    body');
             assert.match(indentedBody, /<code>body<\/code>/);
             assert.equal(indentedBody.includes('```'), false);
+            const closedOpen = lineButton(doc, '    ```', 1);
+            assert.match(closedOpen, /<code>```<\/code>/);
+            assert.doesNotMatch(closedOpen, /<code><\/code>/);
+            const closedBody = lineButton(doc, '    closed');
+            assert.match(closedBody, /<code>closed<\/code>/);
+            assert.equal(closedBody.includes('```'), false);
+            const closedEnd = lineButton(doc, '    ```', 2);
+            assert.match(closedEnd, /<code>```<\/code>/);
+            assert.doesNotMatch(closedEnd, /<code><\/code>/);
           }
         },
       );

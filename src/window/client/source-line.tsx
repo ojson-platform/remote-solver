@@ -328,6 +328,19 @@ function openFenceOnBlock(
   return {length: run.length, char};
 }
 
+function codeBlockValueOpensWithFence(
+  block: BlockContent & {type: 'code'},
+  openLength: number,
+  openChar: '`' | '~',
+): boolean {
+  const first = (block.value.split('\n')[0] ?? '').trim();
+  const run = /^(`+|~+)/.exec(first)?.[1];
+  if (!run || run[0] !== openChar || run.length < openLength) {
+    return false;
+  }
+  return true;
+}
+
 function codeBlockOpensWithFence(texts: readonly string[], block: BlockContent & {type: 'code'}): boolean {
   const start = block.position?.start.line;
   if (!start) {
@@ -338,11 +351,15 @@ function codeBlockOpensWithFence(texts: readonly string[], block: BlockContent &
   if (!opensWithFence(content)) {
     return false;
   }
+  const open = openFenceOnBlock(texts, block);
+  if (!open) {
+    return false;
+  }
   const indent = /^(\s*)/.exec(content)?.[1] ?? '';
   if (indent.length <= 3) {
     return true;
   }
-  return codeBlockClosesWithFence(texts, block);
+  return !codeBlockValueOpensWithFence(block, open.length, open.char);
 }
 
 function codeBlockClosesWithFence(texts: readonly string[], block: BlockContent & {type: 'code'}): boolean {

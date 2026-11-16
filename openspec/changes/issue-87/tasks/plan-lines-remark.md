@@ -3,7 +3,7 @@
 - There is no diff row
 - LineNote and posted line comments stay on that path and line
 
-sdd-delta: 75ac05ecfd157b54
+sdd-delta: 35e5e8fc15e0fb44
 
 ## Source
 

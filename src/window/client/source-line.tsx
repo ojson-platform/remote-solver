@@ -42,8 +42,20 @@ function listMarker(line: string): string {
   return matched?.[1] ?? '';
 }
 
+function sourceLineBody(line: string): string {
+  const matched = /^(\s*)>\s?(.*)$/.exec(line);
+  return matched ? `${matched[1]}${matched[2]}` : line;
+}
+
+function blockSpan(item: BlockContent | ListItem): number {
+  const position = item.position!;
+  return placeEndLine(position) - position.start.line;
+}
+
+const blockPriority = ['code', 'listItem', 'paragraph', 'heading'] as const;
+
 function blockCoveringLine(tree: Root, line: number): BlockContent | ListItem | undefined {
-  const hits: (BlockContent | ListItem)[] = [];
+  let hits: (BlockContent | ListItem)[] = [];
   visit(tree, node => {
     if (!('position' in node) || !node.position || !lineInPlace(node.position, line)) {
       return;
@@ -57,12 +69,31 @@ function blockCoveringLine(tree: Root, line: number): BlockContent | ListItem | 
       hits.push(node as BlockContent | ListItem);
     }
   });
-  return (
-    hits.find(item => item.type === 'listItem') ??
-    hits.find(item => item.type === 'heading') ??
-    hits.find(item => item.type === 'code') ??
-    hits.find(item => item.type === 'paragraph')
-  );
+  if (hits.some(item => item.type === 'listItem')) {
+    hits = hits.filter(item => item.type !== 'paragraph');
+  }
+  let best: BlockContent | ListItem | undefined;
+  for (const hit of hits) {
+    if (!best) {
+      best = hit;
+      continue;
+    }
+    const span = blockSpan(hit);
+    const bestSpan = blockSpan(best);
+    if (span < bestSpan) {
+      best = hit;
+      continue;
+    }
+    if (span > bestSpan) {
+      continue;
+    }
+    const hitPriority = blockPriority.indexOf(hit.type as (typeof blockPriority)[number]);
+    const bestPriority = blockPriority.indexOf(best.type as (typeof blockPriority)[number]);
+    if (hitPriority >= 0 && (bestPriority < 0 || hitPriority < bestPriority)) {
+      best = hit;
+    }
+  }
+  return best;
 }
 
 function phrasingNode(node: PhrasingContent, key: number): ReactNode {
@@ -125,7 +156,7 @@ function textOnSourceLine(node: PhrasingContent & {type: 'text'}, line: number, 
   const parts = node.value.split('\n');
   const index = line - position.start.line;
   if (index < 0 || index >= parts.length) {
-    const trimmed = rawLine.trimEnd();
+    const trimmed = sourceLineBody(rawLine).trimEnd();
     return trimmed ? {type: 'text', value: trimmed, position} : undefined;
   }
   const slice = parts[index] ?? '';
@@ -162,7 +193,21 @@ function codeBlockOpensWithFence(texts: readonly string[], block: BlockContent &
   if (!start) {
     return false;
   }
-  return /^```/.test(texts[start - 1]?.trim() ?? '');
+  return /^```/.test(sourceLineBody(texts[start - 1] ?? '').trim());
+}
+
+function codeBlockClosesWithFence(texts: readonly string[], block: BlockContent & {type: 'code'}): boolean {
+  const start = block.position?.start.line;
+  const end = block.position?.end.line;
+  if (!start || !end) {
+    return false;
+  }
+  for (let line = start + 1; line <= end; line += 1) {
+    if (/^```/.test(sourceLineBody(texts[line - 1] ?? '').trim())) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function codeLineText(
@@ -174,21 +219,32 @@ function codeLineText(
   const valueLines = block.value.split('\n');
   const start = block.position!.start.line;
   const fenced = codeBlockOpensWithFence(texts, block);
-  if (fenced) {
-    if (/^```/.test(rawLine.trim())) {
-      return rawLine.trimEnd();
+  const closedFence = fenced && codeBlockClosesWithFence(texts, block);
+  if (closedFence) {
+    if (/^```/.test(sourceLineBody(rawLine).trim())) {
+      return '';
     }
     const index = line - start - 1;
     if (index >= 0 && index < valueLines.length) {
-      return valueLines[index] ?? rawLine;
+      return valueLines[index] ?? '';
     }
-    return rawLine;
+    return '';
+  }
+  if (fenced) {
+    if (/^```/.test(sourceLineBody(rawLine).trim())) {
+      return sourceLineBody(rawLine).trimEnd();
+    }
+    const index = line - start - 1;
+    if (index >= 0 && index < valueLines.length) {
+      return valueLines[index] ?? sourceLineBody(rawLine);
+    }
+    return sourceLineBody(rawLine);
   }
   const index = line - start;
   if (index >= 0 && index < valueLines.length) {
-    return valueLines[index] ?? rawLine;
+    return valueLines[index] ?? sourceLineBody(rawLine);
   }
-  return rawLine;
+  return sourceLineBody(rawLine);
 }
 
 function paintBlockSlice(

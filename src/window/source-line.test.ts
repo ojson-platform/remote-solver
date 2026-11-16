@@ -40,7 +40,12 @@ function sourceLineNumber(body: string, needle: string): number {
 }
 
 function lineButton(html: string, line: string): string {
-  const marker = `data-line="${line}"`;
+  const escaped = line
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  const marker = `data-line="${escaped}"`;
   const at = html.indexOf(marker);
   assert.ok(at >= 0, marker);
   const start = html.lastIndexOf('<button', at);
@@ -67,7 +72,11 @@ const MARKDOWN_PROPOSAL = [
   '# Leaf heading',
   '#### Deep heading',
   '- list item',
+  '  - nested inner',
   '- **bold**, *em*, `inline`, and [link](https://example.com)',
+  '  ```',
+  '  list code',
+  '  ```',
   '```fence',
   '',
 ].join('\n');
@@ -102,6 +111,8 @@ spec('source-line', () => {
             assert.match(plan, /<span[^>]*>Leaf heading<\/span>/);
             assert.match(plan, /<span[^>]*>Deep heading<\/span>/);
             assert.match(plan, /<span[^>]*>- list item<\/span>/);
+            assert.match(plan, /<span>\s*- nested inner<\/span>/);
+            assert.match(plan, /<code>list code<\/code>/);
             assert.match(plan, /<strong>bold<\/strong>/);
             assert.match(plan, /<em>em<\/em>/);
             assert.match(plan, /<code>inline<\/code>/);
@@ -148,10 +159,10 @@ spec('source-line', () => {
           writeChange(paths.arcadia, KEY, 'proposal.md', proposal);
           await openIssue(page);
           const plan = docOf(spineOf(await pageHtml(page.url), KEY, 'Plan'));
-          assert.match(lineButton(plan, '```js'), /<code>```js<\/code>/);
+          assert.match(lineButton(plan, '```js'), /<code><\/code>/);
           assert.match(lineButton(plan, 'const x = 1'), /<code>const x = 1<\/code>/);
           assert.match(lineButton(plan, '  indented'), /<code>  indented<\/code>/);
-          assert.match(lineButton(plan, '```'), /<code>```<\/code>/);
+          assert.match(lineButton(plan, '```'), /<code><\/code>/);
           assert.equal(plan.includes('<span class="gap"/>'), false);
         },
       );
@@ -190,6 +201,10 @@ spec('source-line', () => {
         'const x = 1',
         '```',
         '',
+        '> ```',
+        '> alpha',
+        '> ```',
+        '',
       ].join('\n');
       await hosted(
         {
@@ -213,11 +228,13 @@ spec('source-line', () => {
             assert.match(body, /<code>const x = 1<\/code>/);
             assert.equal(body.includes('const x = 1</button>'), false);
             const open = lineButton(doc, '```js');
-            assert.match(open, /<code>```js<\/code>/);
-            assert.equal(open.includes('```js</button>'), false);
+            assert.match(open, /<code><\/code>/);
             const close = lineButton(doc, '```');
-            assert.match(close, /<code>```<\/code>/);
-            assert.equal(close.includes('```</button>'), false);
+            assert.match(close, /<code><\/code>/);
+            const quoteAlpha = lineButton(doc, '> alpha');
+            assert.match(quoteAlpha, /<code>alpha<\/code>/);
+            assert.doesNotMatch(quoteAlpha, /<code>&gt; alpha<\/code>/);
+            assert.doesNotMatch(quoteAlpha, /<code>> alpha<\/code>/);
           }
         },
       );

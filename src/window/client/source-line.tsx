@@ -339,7 +339,10 @@ function codeBlockOpensWithFence(texts: readonly string[], block: BlockContent &
     return false;
   }
   const indent = /^(\s*)/.exec(content)?.[1] ?? '';
-  return indent.length <= 3;
+  if (indent.length <= 3) {
+    return true;
+  }
+  return codeBlockClosesWithFence(texts, block);
 }
 
 function codeBlockClosesWithFence(texts: readonly string[], block: BlockContent & {type: 'code'}): boolean {

@@ -334,37 +334,56 @@ spec('source-line', () => {
     });
 
     scenario('A closed tilde fence shows that line slice and not the raw marker', async () => {
-      const source = ['## Scope', '', '~~~', 'alpha', 'beta', '~~~', ''].join('\n');
-      await hosted(
+      const cases = [
         {
-          login: () => MANAGER,
-          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+          source: ['## Scope', '', '~~~', 'alpha', 'beta', '~~~', ''].join('\n'),
+          alphaKey: 'alpha',
+          betaKey: 'beta',
+          closeKey: '~~~',
         },
-        async (page, _window, paths) => {
-          writeChange(paths.arcadia, KEY, 'proposal.md', source);
-          writeChange(paths.arcadia, KEY, 'design.md', source);
-          await openIssue(page);
-          const html = await pageHtml(page.url);
-          for (const layer of ['Plan', 'Design'] as const) {
-            const doc = docOf(spineOf(html, KEY, layer));
-            const alpha = lineButton(doc, 'alpha');
-            assert.match(alpha, /<code>alpha<\/code>/);
-            assert.equal(alpha.includes('beta'), false);
-            const beta = lineButton(doc, 'beta');
-            assert.match(beta, /<code>beta<\/code>/);
-            assert.equal(beta.includes('alpha'), false);
-            const closeAt = source.split('\n').lastIndexOf('~~~') + 1;
-            const closeMarker = doc.match(
-              new RegExp(
-                `<button[^>]*data-at="${closeAt}"[^>]*>[\\s\\S]*?</button>`,
-              ),
-            )?.[0];
-            assert.ok(closeMarker);
-            assert.match(closeMarker!, /<code><\/code>/);
-            assert.equal(closeMarker!.includes('<code>~~~</code>'), false);
-          }
+        {
+          source: [
+            '## Scope',
+            '',
+            '- a',
+            '  - b',
+            '    ~~~',
+            '    alpha',
+            '    beta',
+            '    ~~~',
+            '',
+          ].join('\n'),
+          alphaKey: '    alpha',
+          betaKey: '    beta',
+          closeKey: '    ~~~',
         },
-      );
+      ];
+      for (const {source, alphaKey, betaKey, closeKey} of cases) {
+        await hosted(
+          {
+            login: () => MANAGER,
+            tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+          },
+          async (page, _window, paths) => {
+            writeChange(paths.arcadia, KEY, 'proposal.md', source);
+            writeChange(paths.arcadia, KEY, 'design.md', source);
+            await openIssue(page);
+            const html = await pageHtml(page.url);
+            for (const layer of ['Plan', 'Design'] as const) {
+              const doc = docOf(spineOf(html, KEY, layer));
+              const alpha = lineButton(doc, alphaKey);
+              assert.match(alpha, /<code>alpha<\/code>/);
+              assert.equal(alpha.includes('beta'), false);
+              const beta = lineButton(doc, betaKey);
+              assert.match(beta, /<code>beta<\/code>/);
+              assert.equal(beta.includes('alpha'), false);
+              const closeMarker = lineButton(doc, closeKey);
+              assert.match(closeMarker, /<code><\/code>/);
+              assert.equal(closeMarker.includes('<code>~~~</code>'), false);
+            }
+          },
+        );
+      }
     });
 
     scenario('An unclosed fence line the value does not contain does not show the raw source', async () => {

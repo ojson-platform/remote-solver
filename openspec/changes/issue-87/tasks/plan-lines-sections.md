@@ -2,7 +2,7 @@
 - A level-two heading stays the section h3, not a button
 - A level-three heading stays the h4 from partsOf, not a button
 
-sdd-delta: 1c36f4aec62a9231
+sdd-delta: d5d2a50a1173b5bf
 
 ## Source
 

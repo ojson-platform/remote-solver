@@ -17,7 +17,7 @@ The spec row SHALL render the line as markdown. A heading, a list, emphasis, a l
 
 ### Requirement: The line numbers and the fold bar stay
 
-On a changed spec, the row SHALL show a baseline number cell and a folded number cell, and a cell with no number SHALL be empty. On a spec with no addition and no deletion, the row SHALL show one line number. Rendering the line as markdown SHALL NOT remove those number cells. A code block in the line SHALL NOT show a line number for each of its visual lines, and the following row SHALL show the next line number. A fold of unchanged lines SHALL be a fold bar, and that bar SHALL NOT be the comment control.
+On a changed spec, the row SHALL show a baseline number cell and a folded number cell, and a cell with no number SHALL be empty. On a spec with no addition and no deletion, the row SHALL show one line number. Rendering the line as markdown SHALL NOT remove those number cells. A fence marker is a source line, and that line SHALL stay a row. The row SHALL keep its number cells, the fence marks SHALL NOT stay characters of the text, and the following row SHALL show the next line number. A code block in the line SHALL NOT show a line number for each of its visual lines, and the following row SHALL show the next line number. A fold of unchanged lines SHALL be a fold bar, and that bar SHALL NOT be the comment control.
 
 #### Scenario: A changed row keeps both number cells and the fold bar is separate
 
@@ -33,6 +33,11 @@ On a changed spec, the row SHALL show a baseline number cell and a folded number
 
 - **WHEN** the person opens Specify on a changed spec line that contains a code block, and the following line is another spec line
 - **THEN** that row shows a baseline number cell and a folded number cell, the code block does not show a line number for each of its visual lines, and the following row shows the next line number
+
+#### Scenario: A fence marker stays a row
+
+- **WHEN** the person opens Specify on a source line that is a fence marker, and the following line is the next source line
+- **THEN** that line stays a row, the row keeps its number cells, the fence marks do not stay characters of the text, and the following row shows the next line number
 
 ## REMOVED Requirements
 

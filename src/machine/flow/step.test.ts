@@ -137,38 +137,6 @@ spec('step', () => {
       assert.ok((await labels('2')).includes('sdd:implementing'));
       assert.equal(calls.includes('runtime'), false);
     });
-    scenario('Step prints the assembled step', async () => {
-      const root = mkdtempSync(path.join(tmpdir(), 'sdd-step-hook-'));
-      mkdirSync(path.join(root, 'openspec'), {recursive: true});
-      writeFileSync(
-        path.join(root, 'openspec', 'config.yaml'),
-        ['sdd:', '  hooks:', '    create-proposal:', '      before:', '        - svc line', ''].join('\n'),
-      );
-      try {
-        const {printed} = await runStep(
-          ['step', '1'],
-          [
-            {
-              ...planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposed']),
-              sddHooks: {'create-proposal': {before: 'cyc line'}},
-            },
-          ],
-          planFiles,
-          {},
-          [{name: 'Sandcastle'}],
-          undefined,
-          root,
-        );
-        assert.equal(printed.kind, 'agent');
-        const step = printed.step ?? '';
-        const service = step.indexOf('svc line');
-        const cycle = step.indexOf('cyc line');
-        const heading = step.indexOf('## Steps');
-        assert.ok(service >= 0 && service < cycle && cycle < heading);
-      } finally {
-        rmSync(root, {recursive: true, force: true});
-      }
-    });
     scenario('The printed decision names the queue and the base', async () => {
       const {printed} = await runStep(
         ['step', '1'],
@@ -356,6 +324,43 @@ spec('step', () => {
       assert.equal(readlinkSync(link), modules);
       await runWorktree(checkout, '1');
       assert.equal(readlinkSync(link), modules);
+    });
+  });
+});
+
+spec('hook', () => {
+  requirement('The prompt inserts service lines and then the cycle paragraph', () => {
+    scenario('Step prints the assembled step', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-step-hook-'));
+      mkdirSync(path.join(root, 'openspec'), {recursive: true});
+      writeFileSync(
+        path.join(root, 'openspec', 'config.yaml'),
+        ['sdd:', '  hooks:', '    create-proposal:', '      before:', '        - svc line', ''].join('\n'),
+      );
+      try {
+        const {printed} = await runStep(
+          ['step', '1'],
+          [
+            {
+              ...planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposed']),
+              sddHooks: {'create-proposal': {before: 'cyc line'}},
+            },
+          ],
+          planFiles,
+          {},
+          [{name: 'Sandcastle'}],
+          undefined,
+          root,
+        );
+        assert.equal(printed.kind, 'agent');
+        const step = printed.step ?? '';
+        const service = step.indexOf('svc line');
+        const cycle = step.indexOf('cyc line');
+        const heading = step.indexOf('## Steps');
+        assert.ok(service >= 0 && service < cycle && cycle < heading);
+      } finally {
+        rmSync(root, {recursive: true, force: true});
+      }
     });
   });
 });

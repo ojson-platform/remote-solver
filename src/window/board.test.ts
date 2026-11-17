@@ -4037,6 +4037,32 @@ spec('focus-pager', () => {
   });
 });
 
+spec('spec-row', () => {
+  requirement('The scenario name stays on the row', () => {
+    scenario('A scenario line carries its scenario name', async () => {
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          initIssueBranch(paths.arcadia);
+          window.chooseAgent('cursor');
+          assert.equal(
+            (await post(page.url, 'act', new URLSearchParams({act: 'open', key: '1'}).toString()))
+              .status,
+            200,
+          );
+          const side = bandOf(await pageHtml(page.url), '1');
+          for (const name of ['Первый', 'Второй'] as const) {
+            assert.match(
+              side,
+              new RegExp(`<div class="diff-row[^"]*"[^>]*data-scenario="${name}"`),
+            );
+          }
+        },
+      );
+    });
+  });
+});
+
 function initIssueBranch(arcadia: string): void {
   const checkout = path.join(arcadia, 'services', 'billing');
   git(checkout, ['init', '-b', 'master']);

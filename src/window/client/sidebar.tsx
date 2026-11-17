@@ -1213,12 +1213,10 @@ function DiffRow({
   const rowClass = `diff-row${plain ? ' plain' : ''} ${row.kind}`;
   if (!showButton) {
     return (
-      <div className={rowClass}>
+      <div className={rowClass} data-scenario={scene}>
         {numbers}
         <div className="diff-text">
-          <span className="line" data-scenario={scene}>
-            {body}
-          </span>
+          <span className="line">{body}</span>
         </div>
       </div>
     );

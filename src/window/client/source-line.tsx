@@ -299,6 +299,13 @@ function opensWithFence(rawLine: string): boolean {
   return fenceMarkerLength(rawLine) >= 3;
 }
 
+function isIndentedCodeBlockIndent(indent: string): boolean {
+  if (indent.includes('\t')) {
+    return true;
+  }
+  return indent.length >= 4;
+}
+
 function fenceMarkerChar(rawLine: string): '`' | '~' | undefined {
   const run = fenceMarkerRun(rawLine);
   if (!run) {
@@ -361,7 +368,7 @@ function codeBlockOpensWithFence(texts: readonly string[], block: BlockContent &
     return false;
   }
   const indent = /^(\s*)/.exec(content)?.[1] ?? '';
-  if (indent.length <= 3) {
+  if (!isIndentedCodeBlockIndent(indent)) {
     return true;
   }
   return !codeBlockValueOpensWithFence(block, open.length, open.char);

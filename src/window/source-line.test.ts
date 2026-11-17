@@ -556,6 +556,24 @@ spec('source-line', () => {
     });
 
     scenario('A four-backtick fence line and a fence-shaped indented block show that line slice', async () => {
+      const tabPaint = paintSourceDocument(['\t```', '\talpha', '\t```']);
+      assert.match(
+        renderToStaticMarkup(createElement(Fragment, null, tabPaint[0].paint)),
+        /<code>```<\/code>/,
+      );
+      assert.doesNotMatch(
+        renderToStaticMarkup(createElement(Fragment, null, tabPaint[0].paint)),
+        /<code><\/code>/,
+      );
+      assert.match(
+        renderToStaticMarkup(createElement(Fragment, null, tabPaint[1].paint)),
+        /<code>alpha<\/code>/,
+      );
+      assert.equal(
+        renderToStaticMarkup(createElement(Fragment, null, tabPaint[1].paint)).includes('```'),
+        false,
+      );
+
       const source = [
         '## Scope',
         '',
@@ -569,6 +587,10 @@ spec('source-line', () => {
         '    ```',
         '    closed',
         '    ```',
+        '',
+        '\t```',
+        '\talpha',
+        '\t```',
         '',
       ].join('\n');
       await hosted(
@@ -600,6 +622,12 @@ spec('source-line', () => {
             const closedEnd = lineButton(doc, '    ```', 2);
             assert.match(closedEnd, /<code>```<\/code>/);
             assert.doesNotMatch(closedEnd, /<code><\/code>/);
+            const tabOpen = lineButton(doc, '\t```');
+            assert.match(tabOpen, /<code>```<\/code>/);
+            assert.doesNotMatch(tabOpen, /<code><\/code>/);
+            const tabBody = lineButton(doc, '\talpha');
+            assert.match(tabBody, /<code>alpha<\/code>/);
+            assert.equal(tabBody.includes('```'), false);
           }
         },
       );

@@ -24,7 +24,7 @@ The spec row SHALL render the line as markdown. A heading, a list, emphasis, a l
 
 An added row SHALL carry the classes `diff-row` and `add`. A deleted row SHALL carry the classes `diff-row` and `del`. An unchanged row SHALL carry the classes `diff-row` and `ctx`. When the spec has no addition and no deletion, the row SHALL also carry the class `plain`.
 
-A changed span of a replaced line SHALL be `span.bit`. An unchanged span of that line SHALL NOT be `span.bit`. A line that has no changed span SHALL have no `span.bit`.
+A changed span of a replaced line SHALL be `span.bit`. An unchanged span of that line SHALL NOT be `span.bit`. A line that has no changed span SHALL have no `span.bit`. When the changed token of a replaced line is a marked word, the painted span of that line SHALL be `span.bit`.
 
 #### Scenario: Added, deleted, and unchanged rows keep their classes
 
@@ -35,6 +35,11 @@ A changed span of a replaced line SHALL be `span.bit`. An unchanged span of that
 
 - **WHEN** the person opens Specify on a replaced line and one span of that line changed
 - **THEN** that changed span is `span.bit`, and an unchanged span of that line is not `span.bit`
+
+#### Scenario: A changed marked word is marked on the painted span
+
+- **WHEN** the person opens Specify on a replaced line whose changed token is the marked word **бета**
+- **THEN** the painted span of that line is `span.bit`
 
 #### Scenario: A line with no changed span has no marked span
 

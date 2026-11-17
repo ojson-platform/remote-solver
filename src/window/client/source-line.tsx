@@ -268,6 +268,11 @@ function phrasingOnSourceLine(
       }
       continue;
     }
+    if (child.type === 'inlineCode') {
+      if (line !== placeEndLine(child.position)) {
+        continue;
+      }
+    }
     out.push(child);
   }
   return out;

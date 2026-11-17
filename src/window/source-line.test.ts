@@ -660,6 +660,58 @@ spec('source-line', () => {
     });
   });
 
+  requirement('A code span paints the whole value on the later line', () => {
+    scenario('A code span paints the whole value on the later line', async () => {
+      const source = ['## Scope', '', '`alpha', 'beta`', ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', source);
+          writeChange(paths.arcadia, KEY, 'design.md', source);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            const start = lineButton(doc, '`alpha');
+            const startInner = start.slice(start.indexOf('>') + 1, start.lastIndexOf('</button>'));
+            assert.equal(startInner.includes('<code>'), false);
+            const later = lineButton(doc, 'beta`');
+            assert.match(later, /<code>alpha[\s\S]*beta<\/code>/);
+            assert.match(later, /alpha/);
+          }
+        },
+      );
+    });
+
+    scenario('Each later covered line shows that line slice and not the previous line slice', async () => {
+      const source = ['## Scope', '', '```', 'alpha', 'beta', '```', ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', source);
+          writeChange(paths.arcadia, KEY, 'design.md', source);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            const alpha = lineButton(doc, 'alpha');
+            assert.match(alpha, /<code>alpha<\/code>/);
+            assert.equal(alpha.includes('beta'), false);
+            const beta = lineButton(doc, 'beta');
+            assert.match(beta, /<code>beta<\/code>/);
+            assert.equal(beta.includes('alpha'), false);
+          }
+        },
+      );
+    });
+  });
+
   requirement('A later line of tildes in a backtick fence shows that line slice', () => {
     scenario('A closed backtick fence shows a later line of tildes as that line slice', async () => {
       const source = ['## Scope', '', '```', '~~~', '```', ''].join('\n');

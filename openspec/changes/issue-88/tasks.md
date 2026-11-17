@@ -1,4 +1,4 @@
-sdd-absorbed: 08b28a0bd8b51c65
+sdd-absorbed: 20b626d3d88d59e0
 
 - [ ] `spec-row-markdown` A marked line renders as markdown
 - [ ] `spec-row-coloring` Added, deleted, and unchanged rows keep their classes; A changed span is marked; A line with no changed span has no marked span; An unchanged spec row is plain

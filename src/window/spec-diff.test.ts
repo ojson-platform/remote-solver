@@ -2084,6 +2084,59 @@ spec('spec-row', () => {
     });
   });
 
+  requirement('The comment control is the row', () => {
+    scenario('The row button is the comment control', async () => {
+      const {baseline, delta, newLine} = replacedLines();
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1, pull: '1'})],
+        },
+        async (page, window, paths) => {
+          const {html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const row = diffRowByLine(html, SPEC_ID, newLine);
+          assert.match(row, /<button[^>]*class="diff-row /);
+          assert.equal(row.includes('class="line"'), false);
+          assert.ok(row.includes(`data-line="${newLine}"`));
+        },
+      );
+    });
+    scenario('A row with no pull request is not a comment control', async () => {
+      const line = 'Текст.';
+      const lines = ['### Requirement: Чтение', '', line];
+      const baseline = specText(lines);
+      const delta = specText(['## MODIFIED Requirements', '', ...lines]);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const {html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const cap = capHtml(html, SPEC_ID);
+          assert.ok(cap.includes(line));
+          assert.equal([...cap.matchAll(/<button[^>]*class="diff-row /g)].length, 0);
+        },
+      );
+    });
+    scenario('A line with no text is not a comment control', async () => {
+      const lines = ['### Requirement: Чтение', '', 'Текст.'];
+      const baseline = specText(lines);
+      const delta = specText(['## MODIFIED Requirements', '', ...lines]);
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1, pull: '1'})],
+        },
+        async (page, window, paths) => {
+          const {shot, html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const flat = specView(shot, SPEC_ID).flat;
+          const commentLines = flat.filter(row => row.text.trim() !== '').length;
+          const cap = capHtml(html, SPEC_ID);
+          assert.equal([...cap.matchAll(/<button[^>]*class="diff-row /g)].length, commentLines);
+          assert.ok(flat.some(row => row.text === ''));
+        },
+      );
+    });
+  });
+
   requirement('The row renders the line as markdown', () => {
     scenario('A marked line renders as markdown', async () => {
       const markdownLines = [

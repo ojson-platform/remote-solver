@@ -26,7 +26,9 @@ The seams are the ones the window already draws. `SpecRows` paints `DiffRow` in 
 
 The spec row's line is that paint. `paintSourceDocument` takes one document. The diff has a baseline and a right-hand document, so each is painted with that function, and the row shows the paint of its own line. The paint of a code block stays in that one row: a code block in the line does not show a line number for each of its visual lines, and the following row shows the next line number. `DiffRow` does not grow a parser.
 
-Rejected: a second parser for the spec row.
+Rejected: a second parser for the spec row. Rejected: removing the number cells.
+
+A fence marker is a source line, and that line stays a row. The row keeps its number cells, the fence marks do not stay characters of the text, and the following row shows the next line number.
 
 The row keeps `diff-row` with `add`, `del`, or `ctx`, and `plain` when the spec has no addition and no deletion. A changed span stays `span.bit`. A line with no changed span has no `span.bit`. The comment control stays the row button and is not a `button.line`. `data-line` stays the line text. An anchored row keeps the file, the line, and side `right`. A changed row keeps both number cells, and an unchanged spec shows one line number. A code block in the line does not show a line number for each of its visual lines, and the following row shows the next line number. The fold bar stays separate from the row. `data-scenario` stays the scenario name. A click opens the remark draft. A row with no anchor still opens a draft and shows no posted line comment.
 
@@ -40,4 +42,4 @@ After merge the spec row is that paint. No flag and no follow-up step.
 
 ## Open decisions
 
-none
+- [x] Keep the number cells. A fence-marker line stays a row, so the following row shows the next line number. Removing the number cells is rejected.

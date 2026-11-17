@@ -6,7 +6,7 @@ import type {WindowSnapshot} from '../snapshot.ts';
 import type {GateStation, SidebarBlock} from '../types.ts';
 import type {LineDraft, OpenFold, SpecOpen} from './gesture.ts';
 
-import {Fragment} from 'react';
+import {Children, Fragment, cloneElement, isValidElement} from 'react';
 
 import {unchangedLabel} from '../spec-diff.ts';
 
@@ -1057,10 +1057,72 @@ function paintedRowBody(
   return line === undefined ? undefined : right[line - 1]?.paint;
 }
 
+function wrapChangedText(text: string, changed: readonly string[], key: string): ReactNode {
+  if (text === '' || changed.length === 0) {
+    return text;
+  }
+  let earliest: {at: number; needle: string} | undefined;
+  for (const needle of changed) {
+    const at = text.indexOf(needle);
+    if (at === -1) {
+      continue;
+    }
+    if (!earliest || at < earliest.at) {
+      earliest = {at, needle};
+    }
+  }
+  if (earliest === undefined) {
+    return text;
+  }
+  const before = text.slice(0, earliest.at);
+  const after = text.slice(earliest.at + earliest.needle.length);
+  return (
+    <Fragment key={key}>
+      {before === '' ? null : wrapChangedText(before, changed, `${key}-b`)}
+      <span className="bit">{earliest.needle}</span>
+      {after === '' ? null : wrapChangedText(after, changed, `${key}-a`)}
+    </Fragment>
+  );
+}
+
+function paintChangedBits(paint: ReactNode, changed: readonly string[]): ReactNode {
+  if (changed.length === 0) {
+    return paint;
+  }
+  const walk = (node: ReactNode, key: string): ReactNode => {
+    if (node === null || node === undefined || typeof node === 'boolean') {
+      return null;
+    }
+    if (typeof node === 'string' || typeof node === 'number') {
+      return wrapChangedText(String(node), changed, key);
+    }
+    if (Array.isArray(node)) {
+      return node.map((child, index) => (
+        <Fragment key={`${key}-${index}`}>{walk(child, `${key}-${index}`)}</Fragment>
+      ));
+    }
+    if (isValidElement(node)) {
+      const child = Children.map(
+        (node.props as {children?: ReactNode}).children,
+        (item, index) => walk(item, `${key}-${index}`),
+      );
+      return cloneElement(node, {key: node.key ?? key}, child);
+    }
+    return node;
+  };
+  return walk(paint, '0');
+}
+
 function lineBody(row: SpecRow, paint?: ReactNode): ReactNode {
   const bits = row.bits;
   if (bits === undefined) {
     return paint ?? row.text;
+  }
+  if (paint !== undefined) {
+    return paintChangedBits(
+      paint,
+      bits.filter(bit => bit.changed).map(bit => bit.text),
+    );
   }
   return bits.map((bit, index) => {
     if (!bit.changed) {

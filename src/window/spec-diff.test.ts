@@ -882,8 +882,8 @@ spec('spec-diff', () => {
           assert.deepEqual(numCells(addition).slice(0, 2), ['', right]);
           assert.match(deletion, /<span class="bit">Старый<\/span>/);
           assert.match(addition, /<span class="bit">Новый<\/span>/);
-          assert.match(deletion, /<span>текст<\/span>/);
-          assert.match(addition, /<span>текст<\/span>/);
+          assert.equal(deletion.includes('class="bit">текст'), false);
+          assert.equal(addition.includes('class="bit">текст'), false);
         },
       );
     });
@@ -1877,6 +1877,88 @@ spec('spec-diff', () => {
 });
 
 spec('spec-row', () => {
+  requirement('The row keeps addition and deletion coloring', () => {
+    scenario('Added, deleted, and unchanged rows keep their classes', async () => {
+      const unchanged = 'Контекст.';
+      const oldLine = 'Старый.';
+      const newLine = 'Новый.';
+      const baseline = specText(['### Requirement: Чтение', '', oldLine, unchanged]);
+      const delta = specText([
+        '## MODIFIED Requirements',
+        '',
+        '### Requirement: Чтение',
+        '',
+        newLine,
+        unchanged,
+      ]);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const {html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const cap = capHtml(html, SPEC_ID);
+          assert.match(cap, /class="diff-row [^"]*add/);
+          assert.match(cap, /class="diff-row [^"]*del/);
+          assert.match(cap, /class="diff-row [^"]*ctx/);
+          assert.equal(cap.includes('class="diff-row plain'), false);
+        },
+      );
+    });
+    scenario('A changed span is marked', async () => {
+      const oldLine = '**альфа** бета';
+      const newLine = '**альфа** гамма';
+      const baseline = specText(['### Requirement: Чтение', '', oldLine]);
+      const delta = specText(['## MODIFIED Requirements', '', '### Requirement: Чтение', '', newLine]);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const {html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const deletion = diffBlock(html, SPEC_ID, 'del', 'бета');
+          const addition = diffBlock(html, SPEC_ID, 'add', 'гамма');
+          assert.match(deletion, /<strong>альфа<\/strong>/);
+          assert.match(addition, /<strong>альфа<\/strong>/);
+          assert.match(deletion, /<span class="bit">бета<\/span>/);
+          assert.match(addition, /<span class="bit">гамма<\/span>/);
+          assert.equal(deletion.includes('class="bit">альфа'), false);
+          assert.equal(addition.includes('class="bit">альфа'), false);
+        },
+      );
+    });
+    scenario('A line with no changed span has no marked span', async () => {
+      const line = '**Полностью** новая.';
+      const baseline = specText(['### Requirement: Чтение']);
+      const delta = specText(['## MODIFIED Requirements', '', '### Requirement: Чтение', '', line]);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const {html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const addition = diffBlock(html, SPEC_ID, 'add', 'Полностью');
+          assert.equal(addition.includes('class="bit"'), false);
+          assert.match(addition, /<strong>Полностью<\/strong>/);
+        },
+      );
+    });
+    scenario('An unchanged spec row is plain', async () => {
+      const lines = ['### Requirement: Чтение', '', 'Текст.'];
+      const baseline = specText(lines);
+      const delta = specText(['## MODIFIED Requirements', '', ...lines]);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const {html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const cap = capHtml(html, SPEC_ID);
+          const rows = [...cap.matchAll(/class="(diff-row[^"]*)"/g)].map(match => match[1]);
+          assert.ok(rows.length > 0);
+          for (const rowClass of rows) {
+            assert.match(rowClass, /diff-row/);
+            assert.match(rowClass, /\bctx\b/);
+            assert.match(rowClass, /\bplain\b/);
+            assert.equal(/\b(add|del)\b/.test(rowClass), false);
+          }
+        },
+      );
+    });
+  });
+
   requirement('The row renders the line as markdown', () => {
     scenario('A marked line renders as markdown', async () => {
       const markdownLines = [

@@ -1,6 +1,8 @@
 import type {SpecEntry, SpecGap, SpecRow} from './spec-diff.ts';
 
 import assert from 'node:assert/strict';
+import {createElement} from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
 import {execFileSync} from 'node:child_process';
 import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -15,7 +17,9 @@ import {arcanumOpenThread} from '../adapters/tracker/arcanum.ts';
 import {activeDiff, changelist, fakeHttp, specPath} from '../adapters/tracker/__tests__/arcanum.harness.ts';
 import {githubAdapters} from '../adapters/tracker/github.ts';
 import {capIsOpen, foldsAfterSpec, revealFold, scenarioTarget} from './client/gesture.ts';
+import {App} from './client/app.tsx';
 import {renderWindow} from './client/render.ts';
+import {draftsAfterClick} from './page.ts';
 import {
   MANAGER,
   held,
@@ -2164,6 +2168,96 @@ spec('spec-row', () => {
           assert.match(cap, /<a href="https:\/\/example\.com">link<\/a>/);
           assert.equal(cap.includes('**bold**'), false);
           assert.equal(cap.includes('`inline`'), false);
+        },
+      );
+    });
+  });
+
+  requirement('A click opens the remark draft', () => {
+    scenario('A click opens the remark draft', async () => {
+      const {baseline, delta, newLine} = replacedLines();
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1, pull: '1'})],
+        },
+        async (page, window, paths) => {
+          const {shot} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const drafts = draftsAfterClick([], newLine);
+          assert.equal(drafts.length, 1);
+          assert.equal(drafts[0]?.line, newLine);
+          const html = renderToStaticMarkup(createElement(App, {snapshot: shot, drafts}));
+          const cap = capHtml(html, SPEC_ID);
+          const at = cap.indexOf(`data-line="${newLine}"`);
+          assert.ok(at >= 0);
+          const slice = cap.slice(at, at + 2000);
+          assert.match(slice, /class="line-note"/);
+          assert.match(slice, new RegExp(`name="line"[^>]*value="${newLine.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
+        },
+      );
+    });
+  });
+
+  requirement('An anchored row carries the file, the line, and the right side', () => {
+    scenario('An anchored row carries the file, the line, and the right side', async () => {
+      const {baseline, delta, newLine} = replacedLines();
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1, pull: '1'})],
+        },
+        async (page, window, paths) => {
+          const {shot, html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const added = specView(shot, SPEC_ID).flat.find(
+            row => row.kind === 'add' && row.text === newLine,
+          );
+          assert.ok(added?.anchor);
+          const row = diffRowByLine(html, SPEC_ID, newLine);
+          assert.equal(row.includes(`data-path="${DELTA_PATH}"`), true);
+          assert.equal(row.includes(`data-at="${added.anchor.line}"`), true);
+          assert.equal(row.includes('data-side="right"'), true);
+        },
+      );
+    });
+  });
+
+  requirement('A row with no anchor still opens a draft and shows no posted line comment', () => {
+    scenario('A row with no anchor opens a draft and shows no posted line comment', async () => {
+      const {baseline, delta, oldLine, newLine} = replacedLines();
+      const at = sourceLine(delta, newLine);
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1, pull: '1'})],
+          review: () => ({
+            threads: [
+              {
+                marker: null,
+                file: DELTA_PATH,
+                line: at,
+                lines: ['на якорной строке'],
+                comments: ['на якорной строке'],
+              },
+            ],
+          }),
+        },
+        async (page, window, paths) => {
+          const {shot} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const deleted = specView(shot, SPEC_ID).flat.find(
+            row => row.kind === 'del' && row.text === oldLine,
+          );
+          assert.ok(deleted);
+          assert.equal(deleted.anchor, undefined);
+          const drafts = draftsAfterClick([], oldLine);
+          const html = renderToStaticMarkup(createElement(App, {snapshot: shot, drafts}));
+          const cap = capHtml(html, SPEC_ID);
+          const row = diffRowByLine(html, SPEC_ID, oldLine);
+          const atLine = cap.indexOf(row);
+          assert.ok(atLine >= 0);
+          const afterRow = cap.slice(atLine + row.length, cap.indexOf('<button', atLine + row.length));
+          assert.match(afterRow, /class="line-note"/);
+          assert.equal(afterRow.includes('class="posted-comment"'), false);
+          assert.equal(row.includes('data-path='), false);
         },
       );
     });

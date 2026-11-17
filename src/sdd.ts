@@ -37,6 +37,7 @@ import {
   type Tracker,
   type Vcs,
 } from './machine/port.ts';
+import {assembledStep} from './machine/skill/hook.ts';
 import {queueOf} from './machine/spy/queues.ts';
 import {resolveServiceRoot} from './machine/spy/service-config.ts';
 import {loadCycle, pullSnapshots} from './machine/spy/snapshot.ts';
@@ -350,18 +351,44 @@ async function step(box: Machine, rest: string[]): Promise<void> {
 }
 
 /** `queue` is the queue of the issue being driven. The prompt placeholder `QUEUE` is the first configured queue, the one a new child issue is filed in. */
-function printStep(decision: Decision, box: Machine, labels: readonly string[]): void {
+async function printStep(decision: Decision, box: Machine, labels: readonly string[]): Promise<void> {
+  const step = decision.kind === 'agent' ? await agentStep(box, decision) : '';
   console.log(
     JSON.stringify(
       {
         ...decision,
         queue: queueOf(labels, box.config.queues)?.name ?? box.config.queues[0].name,
         base: box.config.base,
+        ...(step === '' ? {} : {step}),
       },
       null,
       2,
     ),
   );
+}
+
+/** The checkout the agent will edit. Hooks are read there, then from the named service. */
+async function agentStep(
+  box: Machine,
+  decision: Extract<Decision, {kind: 'agent'}>,
+): Promise<string> {
+  const record = await box.tracker.issue(decision.issue);
+  const checkout = box.vcs.prepare
+    ? await box.vcs.prepare(decision.issue, {
+        worktreesDir: SESSION_WORKTREES,
+        links: packageLinks(solverRoot()),
+      })
+    : box.root;
+  const declared = (record.service ?? '').trim();
+  const serviceRoot =
+    declared === '' ? checkout : path.isAbsolute(declared) ? declared : path.join(checkout, declared);
+  return assembledStep({
+    solverRoot: solverRoot(),
+    skill: decision.skill,
+    action: decision.action,
+    serviceRoot,
+    sddHooks: record.sddHooks,
+  });
 }
 
 async function worktree(box: Machine, rest: string[]): Promise<void> {

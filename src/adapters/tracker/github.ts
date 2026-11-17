@@ -650,6 +650,7 @@ type RawIssue = {
   labels?: {name: string}[];
   assignees?: {login: string}[];
   pull_request?: unknown;
+  comments?: number;
 };
 
 const PULL_VIEW_FIELDS = 'statusCheckRollup,state,headRefOid,baseRefOid,mergeable';
@@ -721,6 +722,7 @@ function asRecord(issue: RawIssue, links: IssueLinks, sddHooks?: unknown): Issue
     assignee: issue.assignees?.[0]?.login ?? '',
     service: '',
     ...(sddHooks !== undefined ? {sddHooks} : {}),
+    ...(typeof issue.comments === 'number' ? {commentCount: issue.comments} : {}),
     parent: links.parent,
     dependsOn: [...links.dependsOn],
     blockedBy: [...links.blockedBy],
@@ -828,6 +830,23 @@ export function githubAdapters(
       user = (await run(['api', 'user', '--jq', '.login'])).trim();
     }
     return user;
+  };
+  type CommentPage = {body?: string; user?: {login?: string}};
+  const commentPage = 100;
+  const readCommentPages = async (issue: string): Promise<CommentPage[]> => {
+    const out: CommentPage[] = [];
+    for (let page = 1; ; page += 1) {
+      const raw = JSON.parse(
+        await run([
+          'api',
+          `repos/${repoSlug()}/issues/${issue}/comments?per_page=${commentPage}&page=${page}`,
+        ]),
+      ) as CommentPage[];
+      out.push(...raw);
+      if (raw.length < commentPage) {
+        return out;
+      }
+    }
   };
   const readIssue = async (key: string): Promise<RawIssue> =>
     JSON.parse(
@@ -1023,9 +1042,7 @@ export function githubAdapters(
       await run(['issue', 'comment', key, '--repo', repoSlug(), '--body', commentBody(body, machine)]);
     },
     async comments(key) {
-      const raw = JSON.parse(
-        await run(['api', `repos/${repoSlug()}/issues/${key}/comments?per_page=100`]),
-      ) as {body?: string; user?: {login?: string}}[];
+      const raw = await readCommentPages(key);
       return raw.map(comment =>
         machine.readComment(comment.body ?? '', comment.user?.login ?? '', ignored),
       );
@@ -1211,9 +1228,7 @@ export function githubAdapters(
   }
 
   async function readConversation(pull: string): Promise<{body: string; robot: boolean}[]> {
-    const comments = JSON.parse(
-      await run(['api', `repos/${repoSlug()}/issues/${pull}/comments?per_page=100`]),
-    ) as {user?: {login?: string}; body?: string}[];
+    const comments = await readCommentPages(pull);
     return comments.map(comment => conversationRow({body: comment.body, author: {login: comment.user?.login}}));
   }
 

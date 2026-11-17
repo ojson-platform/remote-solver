@@ -43,7 +43,7 @@ A verification boundary with no command SHALL be a hand-off to `design`. A scena
 
 ### Requirement: Verify hands a failure to the layer that owns it
 
-The verify step SHALL write no files. A THEN that names the behavior SHALL be a hand-off to `code`. A validate failure that names a spec file SHALL be a hand-off to `spec`. No test line SHALL be `sdd:note` and a Wait. Infrastructure only SHALL be a Wait.
+The verify step SHALL write no files. A THEN that names the behavior SHALL be a hand-off to `code`. A coverage line `missing`, `near`, or `outside` that names a delta scenario SHALL be a hand-off to `code` on the test file for that spec, and SHALL NOT Wait. A validate failure that names a spec file SHALL be a hand-off to `spec`. No test line SHALL be `sdd:note` and a Wait. Infrastructure only SHALL be a Wait.
 
 #### Scenario: A failure that names behavior hands off to code
 
@@ -54,6 +54,11 @@ The verify step SHALL write no files. A THEN that names the behavior SHALL be a 
 
 - **WHEN** validate names a spec file
 - **THEN** the verify step hands that file to `spec`
+
+#### Scenario: A missing scenario test returns to code
+
+- **WHEN** a check log has a coverage line `missing`, `near`, or `outside` that names a delta scenario
+- **THEN** the verify step hands that line to `code` on the test file for that spec and does not Wait
 
 #### Scenario: No test line is a note and a wait
 
@@ -93,6 +98,17 @@ The classify step SHALL reply `sdd:layer=<layer> → <phase>` and SHALL leave th
 
 - **WHEN** the reply is `out`
 - **THEN** the step opens an issue and resolves the thread
+
+### Requirement: A named promise stays on the file's layer
+
+A remark that quotes a promise a scenario already states SHALL take the layer of the file it sits on, even when the example is new. `spec` SHALL remain only a promise no scenario states.
+
+A code repair of that remark SHALL write the existing scenario's test red, then the source, and SHALL keep the scenario title the delta already names. It SHALL hand off to `spec` only when no scenario states the promise.
+
+#### Scenario: A new example of a named promise stays code
+
+- **WHEN** a remark on source quotes a promise a scenario already states, and the example is not named in that scenario
+- **THEN** classification replies `code`, and the code repair writes that scenario's test red then the source, keeping the delta's scenario title
 
 ### Requirement: Design writes the question it cannot close
 

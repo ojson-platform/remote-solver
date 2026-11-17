@@ -222,6 +222,7 @@ What a step leaves, and the poll that takes it. The step text lives in `skills/s
 | Specify finds the capability list, the problem, the scope, or the last requirement of a baseline wrong | Hand-off to `proposal`. The spec files stay. The next poll reads that marker | `step-handoff` / Specify hands the capability list to proposal |
 | A failing log's THEN names the behavior | Hand-off to `code`. The verify step writes no files. While the checks stay red the next poll moves to that phase | `step-handoff` / A failure that names behavior hands off to code. `verifying` / Red checks with a code marker return to implementing |
 | Validate names a spec file | Hand-off to `spec` | `step-handoff` / A validate failure that names a spec file hands off to spec |
+| A coverage line `missing`, `near`, or `outside` names a delta scenario | Hand-off to `code` on that spec's test. The next poll writes the test. This is not a Wait | `step-handoff` / A missing scenario test returns to code |
 | A failure has no test line | `sdd:note` and Wait | `step-handoff` / No test line is a note and a wait |
 | The failures are infrastructure only | Wait | `step-handoff` / Infrastructure only waits |
 | The proposal names no capability and no delta file exists, and the design stamp is not the empty specs revision | The design review gate. The design skill does not run | `artifact` / An empty specs revision does not restart design |

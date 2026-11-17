@@ -1,16 +1,17 @@
 ---
 name: sdd-flow
 description: >
-  Drives one issue in this chat until the machine waits. The machine names
-  the skill; this chat runs it. Start with /sdd-flow <key>, optionally
-  auto-plan, auto-spec, and auto-design.
+  Drives one issue in this chat until the machine waits or the issue is done.
+  The machine names the skill; this chat runs it. Start with /sdd-flow <key>,
+  optionally auto-plan, auto-spec, and auto-design. A later message in this
+  chat continues the same issue.
 short_description: Drives one issue through the SDD cycle until the machine waits.
 mode: judgment
 ---
 
 # sdd-flow
 
-One chat, one issue. `/sdd-flow <key>` starts it. Words `auto-plan`, `auto-spec`, and `auto-design` on that invocation are the issue labels `sdd:auto-plan`, `sdd:auto-spec`, and `sdd:auto-design`. A later `/sdd-flow <key>` starts or switches issues. The next message in this chat continues the same issue. This skill does not wake itself.
+One chat, one issue, until `step` prints `done`. `/sdd-flow <key>` starts it. Words `auto-plan`, `auto-spec`, and `auto-design` on that invocation are the issue labels `sdd:auto-plan`, `sdd:auto-spec`, and `sdd:auto-design`. A later `/sdd-flow <key>` starts or switches issues. The next message in this chat continues the same issue. Do not ask for `/sdd-flow` again.
 
 Do not run `remote-solver issue`. Do not choose a skill from the phase. `step` names it.
 
@@ -29,16 +30,27 @@ The issue's service directory, when set, names where the specs live. A value tha
 
 ## Act
 
-- `agent`: run `node scripts/sdd.mjs worktree <key>`. The printed path is the cwd for every edit and commit in this issue. Open `steps/<name>.md` for the printed action. The printed decision's `queue` and `base` are the queue label and the base branch for the issue being driven in that step. A new child issue uses the first queue under `sdd.queues` in `openspec/config.yaml`, not the printed `queue`. A commit was made: run `node scripts/sdd.mjs step <key>` again and follow Act. No commit: stop and say that the action made no commit.
-- `wait` or `done`: stop and say the reason.
+`step` already applies a mechanical phase move and a merge the label allows. Act does not apply them again.
+
+- `agent`: run `node scripts/sdd.mjs worktree <key>`. The printed path is the cwd for every edit and commit in this issue. The printed decision's `step` is the action text, with this service's hooks. Follow that text. Do not open the step file. The printed decision's `queue` and `base` are the queue label and the base branch for the issue being driven in that step. A new child issue uses the first queue under `sdd.queues` in `openspec/config.yaml`, not the printed `queue`. When the step ends in Publish or Hand-off, run `node scripts/sdd.mjs step <key>` again and follow Act. When the step ends in Wait, run `node scripts/sdd.mjs step <key>` once more and follow Act. When the step leaves no Publish, no Hand-off, and no Wait, stop.
+- `advance`: run `node scripts/sdd.mjs step <key>` again and follow Act.
+- `wait` or `done`: stop.
+
+## Stop
+
+When Act stops, write one message in the language of this chat. Say what this run finished. Say why it stopped. Name the files that matter for this stop as links the person can open. The printed reason is a fact in that message, not the whole message. Do not reuse a fixed wording.
 
 ## The next message
 
-Agreement (`ok`, `accept`, `/sdd-flow ok`, `/sdd-flow accept`, «план ок», «спека ок», «дизайн ок») when the printed decision has `gate`: run `node scripts/sdd.mjs accept <key>`, then Act from a fresh `step`.
+This session is still the skill.
+
+Agreement is a sentence that accepts the current stop and asks to go on. `ok`, `accept`, `/sdd-flow ok`, `/sdd-flow accept`, «план ок», «спека ок», and «дизайн ок» are examples, not the whole set.
+
+Agreement when the printed decision has `gate`: run `node scripts/sdd.mjs accept <key>`, then Act from a fresh `step`.
 
 Agreement when the reason is `assigned to <login>`: run `node scripts/sdd.mjs assign <key>`, then Start again.
 
-Any other wait: say the reason. Leave it in place.
+Agreement after a stop with no signal: run `node scripts/sdd.mjs step <key>` again and follow Act.
 
 A request to change the artifact: edit it in the worktree, publish (`CONTEXT.md` § Publish), run `node scripts/sdd.mjs unwait <key>`, then Act from a fresh `step`.
 

@@ -137,7 +137,7 @@ Rebase `sdd/<issue>` onto the pull request base. Edit only files git marks confl
 
 The work the run found belongs to another layer: `thread open <pull> <file> <line> 'sdd:layer=<layer> → <phase> <cause>'` on the line of the pushed head that shows it, `<layer>` and `<phase>` from § Layers. An existing thread that turns out to belong to another layer takes the same line as a `thread reply` instead, and stays open. Then end the run. The machine moves the phase on the next poll; the skill of that layer fixes the thread. A remark that asks the cycle to do nothing is `sdd:note <cause>` and moves nothing. A remark that asks this phase to do something is a thread of this phase's layer, including when it names no line. A phase with no row in § Layers does not invent `code`. A thread on an unchecked item under Open decisions or Open questions stays that file's layer until the item is checked. A hand-off from that item is a new thread, after the check.
 
-A failing log is one signal. No test line: `sdd:note <cause>` and Wait. A test name whose THEN does not name that behavior: one Hand-off to `spec`. A THEN that names it: Hand-off to `code` on that file.
+A failing log is one signal. No test line: `sdd:note <cause>` and Wait. A coverage line `missing|near|outside` that names a delta scenario is a Hand-off to `code` on the test file for that spec, not the note. A test name whose THEN does not name that behavior: one Hand-off to `spec`. A THEN that names it: Hand-off to `code` on that file.
 
 ## Publish
 

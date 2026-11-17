@@ -1499,6 +1499,88 @@ spec('github-read', () => {
 });
 
 spec('github-read', () => {
+  requirement('A comment past the first page is still read', () => {
+    scenario('A later wait sits past the first hundred', async () => {
+      const calls: string[] = [];
+      const first = Array.from({length: 100}, (_, index) => ({
+        body: index === 99 ? '🤖 sdd:wait-human\nPublish rejected the push.\n' : `note ${index}`,
+        user: {login: 'ada'},
+      }));
+      const {tracker} = githubAdapters({
+        run: async args => {
+          const text = args.join(' ');
+          calls.push(text);
+          if (text.includes('/issues/87/comments') && text.includes('page=2')) {
+            return JSON.stringify([
+              {body: '🤖 sdd:wait-human\nMerge pull request #91.\n', user: {login: 'ada'}},
+            ]);
+          }
+          if (text.includes('/issues/87/comments')) {
+            return JSON.stringify(first);
+          }
+          throw new Error(text);
+        },
+      });
+      const notes = await tracker.comments('87');
+      assert.equal(notes.at(-1)?.body, '🤖 sdd:wait-human\nMerge pull request #91.\n');
+      assert.equal(calls.filter(call => call.includes('/issues/87/comments')).length, 2);
+    });
+
+    scenario('A full conversation page is followed by the next', async () => {
+      const calls: string[] = [];
+      const first = Array.from({length: 100}, () => ({body: 'old', user: {login: 'ada'}}));
+      const {review} = githubAdapters({
+        run: async args => {
+          const text = args.join(' ');
+          calls.push(text);
+          if (text.includes('/issues/91/comments') && text.includes('page=2')) {
+            return JSON.stringify([{body: 'later', user: {login: 'ada'}}]);
+          }
+          if (text.includes('/issues/91/comments')) {
+            return JSON.stringify(first);
+          }
+          throw new Error(text);
+        },
+      });
+      const notes = await review.comments('91');
+      assert.equal(notes.at(-1)?.body, 'later');
+      assert.equal(calls.filter(call => call.includes('page=2')).length, 1);
+    });
+  });
+});
+
+spec('github-read', () => {
+  requirement('An unchanged comment count skips the comment read', () => {
+    scenario('The open list carries the comment count', async () => {
+      const {tracker} = githubAdapters({
+        run: async args => {
+          const graph = answerGithubGraphql(args);
+          if (graph !== undefined) {
+            return graph;
+          }
+          if (args.join(' ').includes('/issues?state=open')) {
+            return JSON.stringify([
+              {
+                number: 87,
+                title: 't',
+                body: '',
+                state: 'open',
+                labels: [{name: 'sdd:cycle'}],
+                assignees: [],
+                comments: 115,
+              },
+            ]);
+          }
+          throw new Error(args.join(' '));
+        },
+      });
+      const open = await tracker.listOpen();
+      assert.equal(open[0]?.commentCount, 115);
+    });
+  });
+});
+
+spec('github-read', () => {
   requirement('Open pull request conversations are one query', () => {
     scenario('Two conversations are one query', async () => {
       const calls: string[] = [];

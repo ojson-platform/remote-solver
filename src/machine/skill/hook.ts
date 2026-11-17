@@ -176,6 +176,30 @@ function place(file: string, heading: string, before: string, after: string): st
  * The step file with this action's service paragraphs and then its cycle paragraph.
  * `before` and `after` are the only points that enter. Another action does not.
  */
+/** The step file with this action's hooks. The board and `step` both print this text. */
+export function assembledStep(
+  input: {
+    solverRoot: string;
+    skill: string;
+    action: string;
+    serviceRoot: string;
+    sddHooks?: unknown;
+  },
+  mix: (
+    file: string,
+    action: string,
+    serviceHooks: unknown,
+    sddHooks: unknown,
+  ) => string = stepPrompt,
+  hooks: (serviceRoot: string) => unknown = serviceHookDoc,
+): string {
+  const stepFile = path.join(input.solverRoot, 'skills/sdd-flow/steps', `${input.skill}.md`);
+  if (!existsSync(stepFile)) {
+    return '';
+  }
+  return mix(readFileSync(stepFile, 'utf8'), input.action, hooks(input.serviceRoot), input.sddHooks);
+}
+
 export function stepPrompt(
   file: string,
   action: string,

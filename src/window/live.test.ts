@@ -446,6 +446,124 @@ spec('live-focus-page', () => {
   });
 });
 
+function focusBody(window: {sidebar(): readonly {kind: string; body?: string}[]}): string {
+  const block = window.sidebar().find(item => item.kind === 'focus');
+  return block?.body ?? '';
+}
+
+spec('github-read', () => {
+  requirement('An unchanged comment count skips the comment read', () => {
+    scenario('The same count keeps the comments', async () => {
+      const staged = yard();
+      staged.cycle.commentCount = 1;
+      let reads = 0;
+      staged.tracker.comments = async () => {
+        reads += 1;
+        return [{body: 'sdd:focus:accept\nАрхив лежит.\n'}];
+      };
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        await live.refresh();
+        assert.equal(live.window.openCard('6'), true);
+        assert.match(focusBody(live.window), /Архив лежит/);
+        assert.equal(reads, 1);
+        await live.refresh();
+        assert.equal(reads, 1);
+        assert.match(focusBody(live.window), /Архив лежит/);
+      } finally {
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('A new comment is read', async () => {
+      const staged = yard();
+      staged.cycle.commentCount = 1;
+      let reads = 0;
+      staged.tracker.comments = async () => {
+        reads += 1;
+        if (staged.cycle.commentCount === 1) {
+          return [{body: 'sdd:focus:code\nСтарое.\n'}];
+        }
+        return [{body: 'sdd:focus:code\nСтарое.\n'}, {body: 'sdd:focus:accept\nНовое.\n'}];
+      };
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        await live.refresh();
+        assert.equal(live.window.openCard('6'), true);
+        assert.equal(reads, 1);
+        staged.cycle.commentCount = 2;
+        await live.refresh();
+        assert.equal(reads, 2);
+        assert.match(focusBody(live.window), /Новое/);
+      } finally {
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('No comments is an empty list', async () => {
+      const staged = yard();
+      staged.cycle.commentCount = 0;
+      let reads = 0;
+      staged.tracker.comments = async () => {
+        reads += 1;
+        return [{body: 'sdd:focus:accept\nНе должно приехать.\n'}];
+      };
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        await live.refresh();
+        assert.equal(live.window.openCard('6'), true);
+        assert.equal(reads, 0);
+        assert.equal(focusBody(live.window), '');
+      } finally {
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+
+    scenario('A list without a count still reads the comments', async () => {
+      const staged = yard();
+      let reads = 0;
+      staged.tracker.comments = async () => {
+        reads += 1;
+        return [{body: 'sdd:focus:code\nДержится.\n'}];
+      };
+      const live = openLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        await live.refresh();
+        assert.equal(live.window.openCard('6'), true);
+        await live.refresh();
+        assert.equal(reads, 2);
+        assert.match(focusBody(live.window), /Держится/);
+      } finally {
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+  });
+});
+
 spec('github-read', () => {
   requirement('The cycle field is read for one issue', () => {
     scenario('Opening a card reads only that field', async () => {

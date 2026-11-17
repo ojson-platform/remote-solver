@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, writeFileSync} from 'node:fs';
+import {existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 
@@ -27,18 +27,26 @@ function proposalFiles(key: string): FileSource {
 
 async function runStep(
   argv: string[],
-  issues: {key: string; title: string; body: string; state: string; labels: string[]}[],
+  issues: {
+    key: string;
+    title: string;
+    body: string;
+    state: string;
+    labels: string[];
+    sddHooks?: unknown;
+  }[],
   filesAt: (key: string) => FileSource,
   pulls: Record<string, {id: string; title: string; state: string}[]> = {},
   queues: {name: string}[] = [{name: 'Sandcastle'}],
   base?: string,
-): Promise<{printed: Decision; labels: (key: string) => Promise<string[]>; calls: string[]}> {
+  root = process.cwd(),
+): Promise<{printed: Decision & {step?: string}; labels: (key: string) => Promise<string[]>; calls: string[]}> {
   const {tracker, review, calls} = memoryPorts({
     issues,
     pulls,
     checks: {'9': {checks: 'green'}},
   });
-  const box = machine(process.cwd(), {
+  const box = machine(root, {
     config: base === undefined ? {queues} : {queues, base},
     tracker,
     review,
@@ -128,6 +136,38 @@ spec('step', () => {
       }
       assert.ok((await labels('2')).includes('sdd:implementing'));
       assert.equal(calls.includes('runtime'), false);
+    });
+    scenario('Step prints the assembled step', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-step-hook-'));
+      mkdirSync(path.join(root, 'openspec'), {recursive: true});
+      writeFileSync(
+        path.join(root, 'openspec', 'config.yaml'),
+        ['sdd:', '  hooks:', '    create-proposal:', '      before:', '        - svc line', ''].join('\n'),
+      );
+      try {
+        const {printed} = await runStep(
+          ['step', '1'],
+          [
+            {
+              ...planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposed']),
+              sddHooks: {'create-proposal': {before: 'cyc line'}},
+            },
+          ],
+          planFiles,
+          {},
+          [{name: 'Sandcastle'}],
+          undefined,
+          root,
+        );
+        assert.equal(printed.kind, 'agent');
+        const step = printed.step ?? '';
+        const service = step.indexOf('svc line');
+        const cycle = step.indexOf('cyc line');
+        const heading = step.indexOf('## Steps');
+        assert.ok(service >= 0 && service < cycle && cycle < heading);
+      } finally {
+        rmSync(root, {recursive: true, force: true});
+      }
     });
     scenario('The printed decision names the queue and the base', async () => {
       const {printed} = await runStep(

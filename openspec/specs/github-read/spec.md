@@ -266,3 +266,46 @@ A thread read SHALL request the first comment and the last comment on each threa
 
 - **WHEN** threads were read, the latest reply changes, and the same pull is read again as fresh before the minute ends
 - **THEN** the fresh read returns the new reply and the next ordinary read returns that reply
+
+### Requirement: A comment past the first page is still read
+
+An issue comment read and the one REST read of a pull request conversation SHALL return every comment, oldest first. A page of 100 comments SHALL be followed by the next page. A shorter page SHALL end the read.
+
+#### Scenario: A later wait sits past the first hundred
+
+- **WHEN** an issue has one hundred comments and a later `sdd:wait-human` comment
+- **THEN** the comment read returns that later comment after the first hundred
+
+#### Scenario: A full conversation page is followed by the next
+
+- **WHEN** one pull request conversation fills the first page and the next page has one comment
+- **THEN** the conversation read returns that later comment and requests the next page
+
+### Requirement: An unchanged comment count skips the comment read
+
+The open list SHALL carry an issue's comment count when GitHub sends it. The board's refresh SHALL read that issue's comments when it has not read them, and when the count differs from the list it holds. The same count SHALL keep that list and SHALL NOT read the comments again. A count of zero SHALL be an empty list and SHALL NOT be read. A list that omits the count SHALL still read the comments.
+
+#### Scenario: The open list carries the comment count
+
+- **WHEN** the open list reports a comment count for an issue
+- **THEN** that issue's record carries the count
+
+#### Scenario: The same count keeps the comments
+
+- **WHEN** the board has read an issue's comments and the next list reports the same comment count
+- **THEN** those comments stay and are not read again
+
+#### Scenario: A new comment is read
+
+- **WHEN** the next list reports a larger comment count
+- **THEN** the comments are read again and the new comment is shown
+
+#### Scenario: No comments is an empty list
+
+- **WHEN** the list reports a comment count of zero
+- **THEN** the comments are empty and are not read
+
+#### Scenario: A list without a count still reads the comments
+
+- **WHEN** the list omits the comment count
+- **THEN** the comments are read again

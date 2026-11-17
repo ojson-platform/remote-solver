@@ -51,6 +51,14 @@ spec('step-handoff', () => {
     scenario('A validate failure that names a spec file hands off to spec', () => {
       assert.match(step('verify.md'), /Hand-off to `spec` per file/);
     });
+    scenario('A missing scenario test returns to code', () => {
+      const body = step('verify.md');
+      assert.match(
+        body,
+        /When that line names a delta scenario, Hand-off to `code` on the test file for that spec/,
+      );
+      assert.match(body, /The cause is the line\. Do not Wait/);
+    });
     scenario('No test line is a note and a wait', () => {
       assert.match(step('verify.md'), /No test line is § Hand-off: `sdd:note` and Wait/);
     });
@@ -83,6 +91,24 @@ spec('step-handoff', () => {
     });
     scenario('An out reply resolves the thread', () => {
       assert.match(step('pr-comments.md'), /`out`: open the issue, then `thread resolve` yourself/);
+    });
+  });
+
+  requirement('A named promise stays on the file\'s layer', () => {
+    scenario('A new example of a named promise stays code', () => {
+      const comments = step('pr-comments.md');
+      assert.match(
+        comments,
+        /A remark that quotes a promise a scenario already states takes the layer of the file it sits on, even when the example is new/,
+      );
+      assert.match(comments, /`spec` remains only a promise no scenario states/);
+      const fix = step('fix.md');
+      assert.match(
+        fix,
+        /A new example of a promise a scenario already states is that scenario\. Write that scenario's test red, then the source/,
+      );
+      assert.match(fix, /The test keeps the scenario title the delta already names/);
+      assert.match(fix, /Hand-off to `spec` only when no scenario states the promise/);
     });
   });
 

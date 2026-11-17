@@ -1,12 +1,13 @@
 import type {Runtime, RuntimeAsk, RuntimeMachine, SkillMode, SkillRun, Vcs} from '../../machine.ts';
 
 
-import {existsSync, mkdirSync, readFileSync, symlinkSync} from 'node:fs';
+import {existsSync, mkdirSync, symlinkSync} from 'node:fs';
 import path from 'node:path';
 
 import {cursor, type AgentStreamEvent} from '@ai-hero/sandcastle';
 
 import {runtimeMachine} from '../../machine.ts';
+import {assembledStep} from '../../machine/skill/hook.ts';
 import {linkCommand as checkoutLinks, packageLinks} from '../vcs/vcs.ts';
 
 import {runAgent} from './agent.ts';
@@ -149,8 +150,18 @@ export function agentRuntime(config: AgentRuntimeConfig): Runtime {
           : dir;
       const before = await config.vcs.tip(skill.key);
       ensureServiceEnv(config.root, config.solverRoot);
-      const stepFile = path.join(config.solverRoot, 'skills/sdd-flow/steps', `${skill.skill}.md`);
-      const stepText = existsSync(stepFile) ? readFileSync(stepFile, 'utf8') : '';
+      const stepText = assembledStep(
+        {
+          solverRoot: config.solverRoot,
+          skill: skill.skill,
+          action: skill.action,
+          serviceRoot,
+          sddHooks: skill.sddHooks,
+        },
+        (file, action, serviceHooks, sddHooks) =>
+          machine.stepPrompt(file, action, serviceHooks, sddHooks),
+        serviceRoot => machine.serviceHookDoc(serviceRoot),
+      );
       const answer = await runAgent({
         cwd: dir,
         hostCwd: config.root,
@@ -167,9 +178,7 @@ export function agentRuntime(config: AgentRuntimeConfig): Runtime {
           BASE: config.prBase,
           ISSUE_TEXT: issueText(skill.issue?.title ?? '', skill.issue?.body ?? ''),
           UPSTREAM: tasksLinks(upstreamBlock(dir, skill.skill, skill.key, machine), skill),
-          STEP: stepText
-            ? machine.stepPrompt(stepText, skill.action, machine.serviceHookDoc(serviceRoot), skill.sddHooks)
-            : '',
+          STEP: stepText,
         },
         logPath: agentLogPath(
           config.root,

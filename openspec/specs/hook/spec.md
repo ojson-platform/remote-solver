@@ -88,6 +88,11 @@ In a file that has `## Steps`, `before` SHALL stand immediately before that head
 - **WHEN** the cycle field has an `archive.before` paragraph and the step is `unarchive`
 - **THEN** the `unarchive` prompt does not contain that paragraph
 
+#### Scenario: Step prints the assembled step
+
+- **WHEN** `step` runs for an agent action and the service names a `before` paragraph for that action, and the cycle field names a paragraph for the same point
+- **THEN** the printed decision's `step` contains the service paragraph, then the cycle paragraph, then the step file
+
 #### Scenario: Without Steps the anchor is the action section
 
 - **WHEN** the file has no `## Steps` and the action section is `## archive`

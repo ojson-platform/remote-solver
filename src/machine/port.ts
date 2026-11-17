@@ -31,6 +31,11 @@ export type IssueRecord = {
   dependsOn: IssueKey[];
   blockedBy: IssueKey[];
   blocks: IssueKey[];
+  /**
+   * Number of issue comments the host reported with the issue.
+   * Absent when the host did not report it.
+   */
+  commentCount?: number;
 };
 
 export type IssueLinkKind = 'parent' | 'blocks' | 'blocked-by' | 'depends-on';

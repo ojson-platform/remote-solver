@@ -502,12 +502,21 @@ export function openLiveBoard(options: LiveBoardOptions) {
     issue: IssueRecord,
     pulls: Map<string, string>,
     reading: Map<string, WindowReview>,
+    previous?: WindowTicket,
   ): Promise<WindowTicket> {
     const ticket = ticketFrom(issue, repo, services.get(issue.key));
     let comments: {body: string; manager?: boolean}[] | undefined;
     let open: Pull[] = [];
     try {
-      comments = await tracker.comments(issue.key);
+      const count = issue.commentCount;
+      const held = previous?.comments;
+      if (count === 0) {
+        comments = [];
+      } else if (count !== undefined && held !== undefined && held.length === count) {
+        comments = [...held];
+      } else {
+        comments = await tracker.comments(issue.key);
+      }
       open = (await review.pulls(issue.key)).filter(pull => pull.state === 'OPEN');
     } catch (error) {
       logProblem(error);
@@ -690,7 +699,8 @@ export function openLiveBoard(options: LiveBoardOptions) {
       if (!issue.labels.includes('sdd:cycle')) {
         continue;
       }
-      tickets.push(keptHooks(await oneTicket(issue, nextPulls, nextReviews), prior.get(issue.key)));
+      const previous = prior.get(issue.key);
+      tickets.push(keptHooks(await oneTicket(issue, nextPulls, nextReviews, previous), previous));
     }
     const opened = openedKey();
     if (gen !== generation) {

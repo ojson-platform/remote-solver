@@ -12,14 +12,14 @@ Classifies red PR checks. Writes no files and makes no commits. The result is a 
 ## Steps
 
 1. `checks <pull>`, then read the failed job logs.
-2. For each check failure: an implementation defect, a coverage gap, infrastructure, or an OpenSpec validate failure. When the failing test name contains a delta scenario title, read that scenario's THEN before the hand-off. The name contains the title because `scenario(title)` calls `it(title)`. A coverage line `missing|near|outside` is not a test name. The card's `Trace:` line does not print the title.
+2. For each check failure: an implementation defect, a coverage gap, infrastructure, or an OpenSpec validate failure. When the failing test name contains a delta scenario title, read that scenario's THEN before the hand-off. The name contains the title because `scenario(title)` calls `it(title)`. A coverage line `missing|near|outside` is not a test name. When that line names a delta scenario, Hand-off to `code` on the test file for that spec. The cause is the line. Do not Wait. The card's `Trace:` line does not print the title.
 3. The failing log is § Hand-off (`CONTEXT.md`). Hand-off (`CONTEXT.md`) to `code` on the file the failure points at when the THEN names the behavior. This step writes no files.
 4. An OpenSpec validate failure names spec files in the log: one Hand-off to `spec` per file, on that file, with the validator line as the cause. A validate failure that names no file is infrastructure.
 5. No test line is § Hand-off: `sdd:note` and Wait.
 
 ## Check
 
-- Every failure with a test line has a thread with a cause. No test line is `sdd:note` and Wait
+- Every failure with a test line has a thread with a cause. A coverage line that names a delta scenario has a `code` thread. No test line is `sdd:note` and Wait
 - The spec is unchanged
 
 ## Stop

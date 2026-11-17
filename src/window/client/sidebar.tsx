@@ -15,7 +15,7 @@ import {BusyEdge} from './busy.tsx';
 import {ActForm, Hidden} from './forms.tsx';
 import {capIsOpen, layerHasFold, linkFocusProseParts, type FocusProsePart} from './gesture.ts';
 import {ChevronBack, ChevronForward, Cross, Pill, SendMark} from './marks.tsx';
-import {paintSourceDocument} from './source-line.tsx';
+import {type PaintedSourceLine, paintSourceDocument} from './source-line.tsx';
 
 function codeLine(line: string, places: Record<string, string>): ReactNode {
   const matched = /^(\s*)Code(\s+)(\S.*)$/.exec(line);
@@ -1013,10 +1013,54 @@ function scenarioOf(text: string): string | undefined {
   return name;
 }
 
-function lineBody(row: SpecRow): ReactNode {
+function flattenSpecRows(entries: readonly SpecEntry[]): SpecRow[] {
+  const out: SpecRow[] = [];
+  for (const entry of entries) {
+    if (entry.kind === 'gap') {
+      out.push(...entry.hidden);
+      continue;
+    }
+    out.push(entry);
+  }
+  return out;
+}
+
+function specSideLines(flat: readonly SpecRow[], side: 'left' | 'right'): string[] {
+  const field = side === 'left' ? 'left' : 'right';
+  let max = 0;
+  for (const row of flat) {
+    const line = row[field];
+    if (line !== undefined && line > max) {
+      max = line;
+    }
+  }
+  const texts = Array.from({length: max}, () => '');
+  for (const row of flat) {
+    const line = row[field];
+    if (line !== undefined) {
+      texts[line - 1] = row.text;
+    }
+  }
+  return texts;
+}
+
+function paintedRowBody(
+  row: SpecRow,
+  left: readonly PaintedSourceLine[],
+  right: readonly PaintedSourceLine[],
+): ReactNode | undefined {
+  if (row.kind === 'del') {
+    const line = row.left;
+    return line === undefined ? undefined : left[line - 1]?.paint;
+  }
+  const line = row.right;
+  return line === undefined ? undefined : right[line - 1]?.paint;
+}
+
+function lineBody(row: SpecRow, paint?: ReactNode): ReactNode {
   const bits = row.bits;
   if (bits === undefined) {
-    return row.text;
+    return paint ?? row.text;
   }
   return bits.map((bit, index) => {
     if (!bit.changed) {
@@ -1067,6 +1111,8 @@ function DiffRow({
   keyName,
   blocks,
   plain = false,
+  leftPaint,
+  rightPaint,
 }: {
   row: SpecRow;
   pull: boolean;
@@ -1074,12 +1120,14 @@ function DiffRow({
   keyName: string;
   blocks: readonly SidebarBlock[];
   plain?: boolean;
+  leftPaint: readonly PaintedSourceLine[];
+  rightPaint: readonly PaintedSourceLine[];
 }): ReactNode {
   const scene = scenarioOf(row.text);
   const anchor = noteAnchor(row);
   const showButton = pull && row.text.trim() !== '';
   const draft = drafts.find(item => item.line === row.text);
-  const body = lineBody(row);
+  const body = lineBody(row, paintedRowBody(row, leftPaint, rightPaint));
   const note =
     showButton && draft !== undefined ? (
       <LineNote
@@ -1157,6 +1205,9 @@ function SpecRows({
 }): ReactNode {
   const open = gaps.find(item => item.id === id)?.open ?? [];
   const plain = specIsPlain(rows);
+  const flat = flattenSpecRows(rows);
+  const leftPaint = paintSourceDocument(specSideLines(flat, 'left'));
+  const rightPaint = paintSourceDocument(specSideLines(flat, 'right'));
   return rows.map((entry, index) => {
     if (entry.kind !== 'gap') {
       return (
@@ -1168,6 +1219,8 @@ function SpecRows({
           keyName={keyName}
           blocks={blocks}
           plain={plain}
+          leftPaint={leftPaint}
+          rightPaint={rightPaint}
         />
       );
     }
@@ -1187,6 +1240,8 @@ function SpecRows({
                 keyName={keyName}
                 blocks={blocks}
                 plain={plain}
+                leftPaint={leftPaint}
+                rightPaint={rightPaint}
               />
             ))
           : null}

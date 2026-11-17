@@ -1876,6 +1876,40 @@ spec('spec-diff', () => {
   });
 });
 
+spec('spec-row', () => {
+  requirement('The row renders the line as markdown', () => {
+    scenario('A marked line renders as markdown', async () => {
+      const markdownLines = [
+        '### Requirement: Markdown',
+        '',
+        '# Leaf heading',
+        '- list item',
+        '**bold**, *em*, `inline`, and [link](https://example.com)',
+      ];
+      const baseline = specText(markdownLines);
+      const delta = specText(['## MODIFIED Requirements', '', ...markdownLines]);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const {html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const cap = capHtml(html, SPEC_ID);
+          assert.match(cap, /<span[^>]*>Requirement: Markdown<\/span>/);
+          assert.equal(cap.includes('### Requirement: Markdown'), false);
+          assert.match(cap, /<span[^>]*>Leaf heading<\/span>/);
+          assert.equal(cap.includes('# Leaf heading'), false);
+          assert.match(cap, /<span[^>]*>- list item<\/span>/);
+          assert.match(cap, /<strong>bold<\/strong>/);
+          assert.match(cap, /<em>em<\/em>/);
+          assert.match(cap, /<code>inline<\/code>/);
+          assert.match(cap, /<a href="https:\/\/example\.com">link<\/a>/);
+          assert.equal(cap.includes('**bold**'), false);
+          assert.equal(cap.includes('`inline`'), false);
+        },
+      );
+    });
+  });
+});
+
 spec('spec-archive', () => {
   requirement('One commit holds the fold', () => {
     scenario('The machine, the window, review, and unarchive keep reading archive/issue-<key>', () => {

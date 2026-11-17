@@ -753,10 +753,21 @@ function assertBadge(html: string, id: string, badge: string | undefined): void 
 }
 
 function diffBlock(html: string, id: string, kind: string, text: string): string {
-  const chunks = capHtml(html, id).split('<div class="diff-row ').slice(1);
+  const cap = capHtml(html, id);
+  const chunks = cap.split(/<(?:div|button) class="diff-row /).slice(1);
   const found = chunks.find(chunk => chunk.startsWith(kind) && chunk.includes(text));
   assert.ok(found, `${kind} ${text}`);
   return found;
+}
+
+function diffRowByLine(html: string, id: string, line: string): string {
+  const cap = capHtml(html, id);
+  const marker = `data-line="${line}"`;
+  const at = cap.indexOf(marker);
+  assert.ok(at >= 0, marker);
+  const start = cap.lastIndexOf('<button', at);
+  assert.ok(start >= 0, line);
+  return cap.slice(start, cap.indexOf('</button>', at) + '</button>'.length);
 }
 
 function numCells(block: string): string[] {
@@ -1954,6 +1965,120 @@ spec('spec-row', () => {
             assert.match(rowClass, /\bplain\b/);
             assert.equal(/\b(add|del)\b/.test(rowClass), false);
           }
+        },
+      );
+    });
+  });
+
+  requirement('The line numbers and the fold bar stay', () => {
+    scenario('A changed row keeps both number cells and the fold bar is separate', async () => {
+      const between = ['u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10'];
+      const baseline = specText(['### Requirement: Чтение', 'head-old', ...between, 'tail-old']);
+      const delta = specText([
+        '## MODIFIED Requirements',
+        '',
+        '### Requirement: Чтение',
+        'head-new',
+        ...between,
+        'tail-new',
+      ]);
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1, pull: '1'})],
+        },
+        async (page, window, paths) => {
+          const {html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const cap = capHtml(html, SPEC_ID);
+          assert.match(cap, /<button[^>]*class="fold-bar"/);
+          const headNew = diffRowByLine(html, SPEC_ID, 'head-new');
+          const tailNew = diffRowByLine(html, SPEC_ID, 'tail-new');
+          assert.equal(numCells(headNew).length, 2);
+          assert.equal(numCells(tailNew).length, 2);
+          assert.equal(cap.includes('class="fold-bar diff-row'), false);
+        },
+      );
+    });
+    scenario('An unchanged spec shows one line number', async () => {
+      const lines = ['### Requirement: Чтение', '', 'Текст.'];
+      const baseline = specText(lines);
+      const delta = specText(['## MODIFIED Requirements', '', ...lines]);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const {html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const rows = [...capHtml(html, SPEC_ID).matchAll(/<(div|button) class="diff-row[^"]*"[\s\S]*?<\/\1>/g)];
+          assert.ok(rows.length > 0);
+          for (const row of rows) {
+            assert.equal([...(row[0].matchAll(/<span class="num">/g))].length, 1);
+          }
+        },
+      );
+    });
+    scenario('A code block keeps the line numbers in sequence', async () => {
+      const codeBody = ['```', 'alpha', 'beta', '```'];
+      const after = 'Следующая строка.';
+      const baseline = specText(['### Requirement: Чтение', '', ...codeBody, after]);
+      const delta = specText([
+        '## MODIFIED Requirements',
+        '',
+        '### Requirement: Чтение',
+        '',
+        ...codeBody,
+        'Следующая строка изменена.',
+      ]);
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1, pull: '1'})],
+        },
+        async (page, window, paths) => {
+          const {shot, html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const flat = specView(shot, SPEC_ID).flat;
+          const after = flat.find(row => row.text === 'Следующая строка изменена.');
+          assert.equal(after?.kind, 'add');
+          assert.equal(after?.right, 7);
+          const afterRow = diffRowByLine(html, SPEC_ID, 'Следующая строка изменена.');
+          assert.deepEqual(numCells(afterRow).slice(0, 2), ['', '7']);
+          const alphaRow = diffRowByLine(html, SPEC_ID, 'alpha');
+          assert.deepEqual(numCells(alphaRow).slice(0, 2), ['4', '4']);
+          const innerNums = [...alphaRow.matchAll(/<code>[\s\S]*?<span class="num">/g)];
+          assert.equal(innerNums.length, 0);
+        },
+      );
+    });
+    scenario('A fence marker stays a row', async () => {
+      const fenceOpen = '```js';
+      const after = 'const x = 1;';
+      const baseline = specText(['### Requirement: Чтение', '', fenceOpen, after]);
+      const delta = specText([
+        '## MODIFIED Requirements',
+        '',
+        '### Requirement: Чтение',
+        '',
+        fenceOpen,
+        'const y = 2;',
+      ]);
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1, pull: '1'})],
+        },
+        async (page, window, paths) => {
+          const {shot, html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const fence = specView(shot, SPEC_ID).flat.find(row => row.text === fenceOpen);
+          assert.ok(fence);
+          assert.equal(fence.right, 3);
+          const fenceRow = diffRowByLine(html, SPEC_ID, fenceOpen);
+          assert.deepEqual(numCells(fenceRow).slice(0, 2), ['3', '3']);
+          const fenceBody = fenceRow.split('class="diff-text"')[1] ?? '';
+          assert.equal(fenceBody.includes('```js'), false);
+          assert.match(fenceRow, /<code><\/code>/);
+          const next = specView(shot, SPEC_ID).flat.find(row => row.text === 'const y = 2;');
+          assert.equal(next?.kind, 'add');
+          assert.equal(next?.right, 4);
+          const nextRow = diffRowByLine(html, SPEC_ID, 'const y = 2;');
+          assert.deepEqual(numCells(nextRow).slice(0, 2), ['', '4']);
         },
       );
     });

@@ -203,6 +203,28 @@ test('a resume on this host passes the chat id and does not copy the session fil
 });
 
 spec('agent-run', () => {
+  requirement('A result stops a process that stays up', () => {
+    scenario('A process that stays up after a result is stopped', async () => {
+      const dir = mkdtempSync(path.join(tmpdir(), 'sdd-agent-'));
+      const bin = script(dir, 'echo "text done"\necho result\nsleep 30');
+      const started = Date.now();
+      const answer = await runAgent({
+        cwd: dir,
+        hostCwd: dir,
+        provider: provider(bin),
+        name: 'step',
+        promptFile: writePrompt(dir),
+        promptArgs: {},
+        logPath: path.join(dir, 'agent.log'),
+        idleTimeoutSeconds: 10,
+      });
+      const elapsed = Date.now() - started;
+      assert.equal(answer.text, 'done');
+      assert.ok(elapsed >= 1000, `grace returned in ${elapsed}ms`);
+      assert.ok(elapsed < 8000, `grace waited ${elapsed}ms`);
+    });
+  });
+
   requirement('A process left behind by the agent run is killed while the run continues', () => {
     scenario('A grandchild is killed after its parent exits', async () => {
       const dir = mkdtempSync(path.join(tmpdir(), 'sdd-agent-'));

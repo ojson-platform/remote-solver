@@ -14,3 +14,12 @@ While an agent run is in progress, the run SHALL remember the processes it start
 
 - **WHEN** an agent run starts a sleeper under a short-lived parent and the agent keeps running
 - **THEN** the sleeper is killed while that run is still in progress
+
+### Requirement: A result stops a process that stays up
+
+When the agent prints a result and the process does not exit, the run SHALL stop that process within a few seconds and SHALL return the result.
+
+#### Scenario: A process that stays up after a result is stopped
+
+- **WHEN** the agent prints a result and then sleeps
+- **THEN** the run returns that result without waiting out the sleep

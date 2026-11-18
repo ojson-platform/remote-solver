@@ -26,7 +26,7 @@ export type AgentRun = {
   forkSession?: boolean;
   /** Seconds of stdout silence before the run is rejected. Default 600. */
   idleTimeoutSeconds?: number;
-  /** Milliseconds to wait after a result event before stopping a process that will not exit. Default 60_000. */
+  /** Milliseconds to wait after a result event before stopping a process that will not exit. Default 2_000. */
   resultGraceMs?: number;
   /** How often to reap a process the run started after its parent exits. Default 1000. */
   reapIntervalMs?: number;
@@ -237,7 +237,7 @@ export async function runAgent(run: AgentRun): Promise<AgentResult> {
     run.provider,
     run.logPath,
     (run.idleTimeoutSeconds ?? 600) * 1000,
-    run.resultGraceMs ?? 60_000,
+    run.resultGraceMs ?? 2_000,
     run.reapIntervalMs ?? 1000,
     run.onSession,
   );

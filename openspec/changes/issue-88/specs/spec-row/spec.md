@@ -6,7 +6,7 @@ sdd-absorbed: 96b2f4da17722595
 
 ### Requirement: The row renders the line as markdown
 
-The spec row SHALL render the line as markdown. A heading, a list, emphasis, a link, and code in that line SHALL render as markdown, and their marks SHALL NOT stay characters of the text. When a code span's position spans two source lines, the row SHALL show the paint of its own line. A line the value does not contain SHALL NOT show the raw source.
+The spec row SHALL render the line as markdown. A heading, a list, emphasis, a link, and code in that line SHALL render as markdown, and their marks SHALL NOT stay characters of the text. When a code span's position spans two source lines, the row SHALL show the paint of its own line. A line the value does not contain SHALL NOT show the raw source. When that span has gamma delta on the first source line and epsilon on the next, and the node value is gamma delta followed by epsilon and does not contain the first covered line, the first row SHALL show the paint of its own line and SHALL NOT show the raw source of the first covered line, and the next row SHALL show the paint of its own line and SHALL NOT show the raw source of that line.
 
 #### Scenario: A marked line renders as markdown
 
@@ -15,8 +15,8 @@ The spec row SHALL render the line as markdown. A heading, a list, emphasis, a l
 
 #### Scenario: A code span across two source lines shows the paint of its own line
 
-- **WHEN** the person opens Specify on a code span whose position spans two source lines and whose value is alpha then beta, and that value does not contain the first covered line
-- **THEN** the row shows the paint of its own line, and a line the value does not contain does not show the raw source
+- **WHEN** the person opens Specify on a code span whose position spans two source lines, with gamma delta on the first source line and epsilon on the next, the node value is gamma delta followed by epsilon, and that value does not contain the first covered line
+- **THEN** the first row shows the paint of its own line and does not show the raw source of the first covered line, the next row shows the paint of its own line and does not show the raw source of that line, and a line the value does not contain does not show the raw source
 
 ## MODIFIED Requirements
 

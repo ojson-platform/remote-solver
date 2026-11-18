@@ -1,6 +1,6 @@
 sdd-absorbed: decd9c2f09265c3d
 
-- [ ] `spec-row-markdown` A marked line renders as markdown; A code span across two source lines shows the paint of its own line
+- [x] `spec-row-markdown` A marked line renders as markdown; A code span across two source lines shows the paint of its own line
 - [ ] `spec-row-coloring` Added, deleted, and unchanged rows keep their classes; A changed span is marked; A changed marked word is marked on the painted span; A line with no changed span has no marked span; An unchanged spec row is plain
 - [x] `spec-row-line-numbers` A changed row keeps both number cells and the fold bar is separate; An unchanged spec shows one line number; A code block keeps the line numbers in sequence; A fence marker stays a row
 - [x] `spec-row-comment-control` The row button is the comment control; A row with no pull request is not a comment control; A line with no text is not a comment control

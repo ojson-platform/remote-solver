@@ -2171,6 +2171,27 @@ spec('spec-row', () => {
         },
       );
     });
+    scenario('A code span across two source lines shows the paint of its own line', async () => {
+      const codeSpanLines = ['`alpha', 'beta`'];
+      const baseline = specText(['### Requirement: Чтение', '', ...codeSpanLines]);
+      const delta = specText(['## MODIFIED Requirements', '', '### Requirement: Чтение', '', ...codeSpanLines]);
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held('1', 'specifying', {openPullRequests: 1, pull: '1'})],
+        },
+        async (page, window, paths) => {
+          const {html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const startRow = diffRowByLine(html, SPEC_ID, '`alpha');
+          const startBody = startRow.split('class="diff-text"')[1] ?? '';
+          assert.equal(startBody.includes('<code>'), false);
+          assert.equal(startBody.includes('beta'), false);
+          const laterRow = diffRowByLine(html, SPEC_ID, 'beta`');
+          assert.match(laterRow, /<code>alpha[\s\S]*beta<\/code>/);
+          assert.equal(laterRow.includes('`alpha'), false);
+        },
+      );
+    });
   });
 
   requirement('A click opens the remark draft', () => {

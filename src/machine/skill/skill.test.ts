@@ -111,7 +111,7 @@ test('design.md Approach: paragraph rules live once in skills/sdd-flow/CONTEXT.m
     'sdd:focus:spec':
       /promise is new|existing promise changed|scenario without which|spec does not make/s,
     'sdd:focus:design':
-      /behavior lives|alternative was rejected|deliberately not built|behavior is observed/s,
+      /person sees on the screen|alternative was rejected|deliberately not built|where on the screen to look/s,
     'sdd:focus:tasks':
       /order a person would notice|waits on another/s,
     'sdd:focus:code':
@@ -128,11 +128,18 @@ test('design.md Approach: paragraph rules live once in skills/sdd-flow/CONTEXT.m
     /Russian.*short|prose is Russian|Russian, short/s,
     'shared prose rules',
   );
+  assert.match(publish, /what a person sees/, 'shared screen sentence');
+  assert.match(publish, /does not become a metaphor/, 'shared metaphor rule');
+  assert.match(publish, /not a test file/, 'shared place to look');
   for (const [step, marker] of Object.entries(FOCUS_STEP_MARKERS)) {
     const body = readFileSync(path.join(stepsDir, `${step}.md`), 'utf8');
     assert.match(body, /Publish \(`CONTEXT\.md`\)/, step);
     assert.match(body, new RegExp(`focus with marker \`${marker}\``, 'i'), step);
-    assert.doesNotMatch(body, /reader of the ticket|promise is new|behavior lives/, step);
+    assert.doesNotMatch(
+      body,
+      /reader of the ticket|promise is new|behavior lives|person sees on the screen/,
+      step,
+    );
   }
   const accept = readFileSync(path.join(stepsDir, 'accept.md'), 'utf8');
   assert.match(accept, /Publish \(`CONTEXT\.md`\)/);
@@ -251,6 +258,16 @@ test('the final review treats a broken design sentence as a return', () => {
     readFileSync(path.join(stepsDir, 'pr-comments.md'), 'utf8'),
     /observation no scenario names is `spec`/,
   );
+});
+
+test('a long command keeps the command status, not a pipe', () => {
+  const context = readFileSync(path.join(flow, 'CONTEXT.md'), 'utf8');
+  const implement = readFileSync(path.join(stepsDir, 'implement.md'), 'utf8');
+  assert.match(context, /Redirect its output to a file and remember its status/);
+  assert.match(context, /Do not pipe the command into `tail` or `head`/);
+  assert.match(context, /`missing`, `near`, `outside`, or `spec coverage has gaps`/);
+  assert.match(context, /Do not run the command again to see another slice of the same output/);
+  assert.match(implement, /Keep each command's own status, as § Once says/);
 });
 
 test('the chat files point at the sdd script', () => {

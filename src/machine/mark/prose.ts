@@ -40,10 +40,10 @@ const MARKER_SHAPE: Record<FocusMarkerLine, {need: RegExp[]; maxParas: number}> 
   },
   'sdd:focus:design': {
     need: [
-      /жив|behavior lives/i,
+      /видит|видно|показывает|на экране|person sees/i,
       /отверг|rejected/i,
       /не стро|deliberately not/i,
-      /наблюд|observed/i,
+      /смотреть|панел|строк|боков|where on the screen/i,
     ],
     maxParas: 2,
   },
@@ -76,6 +76,13 @@ const FURTHER_PARA = /отказ|refused|слаб|weak|слабое место|�
 const LOOK_AT = /смотреть|look at/i;
 const ARCHIVE_COUNT = /\d+[^\n]{0,40}(?:capabilit|сценари|тест)|сколько\s+(?:способност|сценари|тест)|how many capabilities/i;
 const WEAK_SPOT_SENTENCE = /слабое\s+место/i;
+const METAPHOR = /краск|живёт в /i;
+const TEST_FILE = /\.test\.tsx?\b/;
+const STACKED_DECISION = [
+  /отверг|отказал|rejected|refused/i,
+  /не стро|не дела|deliberately not/i,
+  /смотреть|наблюд|observed/i,
+];
 
 /** Clean visit: one paragraph, or plan with open questions as the only second paragraph. */
 function isCleanPhaseVisit(
@@ -97,6 +104,36 @@ function isCleanPhaseVisit(
 function markerContentOk(marker: FocusMarkerLine, prose: string): boolean {
   const shape = MARKER_SHAPE[marker];
   return shape.need.every(re => re.test(prose));
+}
+
+function openingSentence(prose: string): string {
+  const flat = prose.replace(/\n+/g, ' ').trim();
+  const match = flat.match(/^([\s\S]*?[.!?])(?:\s|$)/);
+  return (match?.[1] ?? '').trim();
+}
+
+/** The first sentence is what a person sees. One sentence holds one decision. */
+function screenSentence(prose: string): string | undefined {
+  const sentence = openingSentence(prose);
+  const firstWord = sentence.replace(/^[`«"]+/, '').split(/\s+/)[0] ?? '';
+  if (/^[A-Za-z][A-Za-z0-9_.-]*$/.test(firstWord)) {
+    return 'first sentence says what a person sees';
+  }
+  const cyrillicWords = sentence.split(/\s+/).filter(word => CYRILLIC.test(word));
+  if (cyrillicWords.length < 4) {
+    return 'first sentence says what a person sees';
+  }
+  const sentences = prose
+    .replace(/\n+/g, ' ')
+    .split(/(?<=[.!?])\s+/)
+    .map(part => part.trim())
+    .filter(part => part.length > 0);
+  for (const part of sentences) {
+    if (STACKED_DECISION.filter(re => re.test(part)).length > 1) {
+      return 'one sentence holds one decision';
+    }
+  }
+  return undefined;
 }
 
 /** A remark visit names the commit. A token is not that sentence. */
@@ -129,6 +166,12 @@ export function validateFocusBody(body: string): string | undefined {
   }
   if (!CYRILLIC.test(prose)) {
     return 'prose must be Russian';
+  }
+  if (METAPHOR.test(prose)) {
+    return 'prose uses a screen word, not a metaphor';
+  }
+  if (TEST_FILE.test(prose)) {
+    return 'prose points at the screen, not a test file';
   }
   if (prose.length > 900) {
     return 'prose must stay short';
@@ -167,7 +210,7 @@ export function validateFocusBody(body: string): string | undefined {
     if (paras.length === 3 && !LOOK_AT.test(paras[2] ?? '')) {
       return 'last paragraph must say what to look at';
     }
-    return undefined;
+    return screenSentence(prose);
   }
   if (marker === 'sdd:focus:plan') {
     const hasPointer = /\d+\s+открыт|open questions/i.test(prose);
@@ -190,7 +233,7 @@ export function validateFocusBody(body: string): string | undefined {
       return 'further paragraph must be refusal, open questions, or weak check';
     }
   }
-  return undefined;
+  return screenSentence(prose);
 }
 
 /** First sentence of focus prose through `.`, `!`, or `?`, or the first line when none appear. */

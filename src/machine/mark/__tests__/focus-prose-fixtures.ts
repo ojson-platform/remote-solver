@@ -7,7 +7,7 @@ export const FOCUS_BODIES = {
   spec:
     'sdd:focus:spec\nНовое обещание — проза фазы; изменено обещание о комментарии на issue. Без сценария «The prose is Russian, short, and has no headings» решение непонятно. Обещание про пагинацию комментариев issue не даём.\n',
   design:
-    'sdd:focus:design\nПоведение живёт в focus.ts и шагах skills; отвергли генерацию текста из diff. Окно не переписывает прозу — сознательно не строим. Наблюдаем в focus.test.ts и окне.\n',
+    'sdd:focus:design\nСтрока Specify в боковой панели показывает код целиком на закрывающей строке. Отвергли показ сырого исходника. Plan и тело задачи сознательно не строим. Смотреть на этой строке в боковой панели.\n',
   tasks:
     'sdd:focus:tasks\nСначала маркеры, затем правила Publish, затем проза комментария; слайс window-focus-display ждёт focus-prose-comment.\n',
   code:
@@ -27,5 +27,5 @@ export const FOCUS_BODIES = {
   specRefusalSecond:
     'sdd:focus:spec\nНовое обещание — проза; изменено обещание о маркере. Сценарий «The prose is Russian» без него непонятен. Пагинацию не даём.\n\nОтказались включать пагинацию комментариев в этот PR.\n',
   designClean:
-    'sdd:focus:design\nПоведение живёт в focus.ts; отвергли ledger в комментарии. Окно не переписывает — сознательно не строим. Наблюдаем в focus.test.ts.\n',
+    'sdd:focus:design\nНа экране строка Specify показывает уже нарисованное слово. Отвергли сырой исходник. Окно сознательно не строит правку файла. Смотреть на строке Specify.\n',
 } as const;

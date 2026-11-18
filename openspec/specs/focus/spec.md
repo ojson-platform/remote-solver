@@ -249,7 +249,7 @@ On a published proposal the second paragraph SHALL appear only for open question
 
 A published delta spec SHALL say which promise is new and which existing promise changed, SHALL name the scenario without which the decision cannot be understood, and SHALL name a promise the issue asked for that the spec does not make.
 
-A published design SHALL say where the behavior lives and which alternative was rejected, what is deliberately not built, and where the behavior is observed.
+A published design SHALL say what the person sees on the screen, which alternative was rejected, what is deliberately not built, and where on the screen to look.
 
 The slices of published tasks SHALL be in the order a person would notice them.
 
@@ -335,10 +335,10 @@ A last paragraph SHALL appear only when something remains to look at, and it SHA
 - **WHEN** a new promise, an existing promise that changed, the scenario without which the decision cannot be understood, and a promise the issue asked for that the spec does not make are already visible, together with a promise the spec does make as the limit that can replace that promise the spec does not make
 - **THEN** a published delta spec says which promise is new and which existing promise changed, names the scenario without which the decision cannot be understood, and names a promise the issue asked for that the spec does not make
 
-#### Scenario: A published design says where the behavior lives and which alternative was rejected, what is deliberately not built, and where the behavior is observed
+#### Scenario: A published design says what the person sees on the screen, which alternative was rejected, what is deliberately not built, and where on the screen to look
 
-- **WHEN** where the behavior lives, the rejected alternative, what is deliberately not built, and where the behavior is observed are already visible, together with the rejected alternative standing in for where the behavior lives as the limit that can replace that place
-- **THEN** a published design says where the behavior lives and which alternative was rejected, what is deliberately not built, and where the behavior is observed
+- **WHEN** what the person sees on the screen, the rejected alternative, what is deliberately not built, and where on the screen to look are already visible, together with the rejected alternative standing in for that place on the screen as the limit that can replace that place
+- **THEN** a published design says what the person sees on the screen, which alternative was rejected, what is deliberately not built, and where on the screen to look
 
 #### Scenario: The slices are in the order a person would notice them
 
@@ -379,3 +379,32 @@ A last paragraph SHALL appear only when something remains to look at, and it SHA
 
 - **WHEN** something that remains to look at and what to look at are already visible, together with a visit where nothing remains to look at as the limit that can replace that last paragraph
 - **THEN** a last paragraph appears only when something remains to look at, and it says what to look at
+
+### Requirement: Every focus speaks in screen words
+
+Every focus prose SHALL say what a person sees. The first sentence SHALL be that answer and SHALL hold one decision. A code name SHALL follow the plain words and SHALL NOT be the point of the sentence. A refusal, what is deliberately not built, and where to look SHALL be their own sentences. An implementation word SHALL NOT become a metaphor. Where to look SHALL be a place on the screen and SHALL NOT be a test file. These rules SHALL hold for every focus, including the whole pull request.
+
+#### Scenario: The first sentence says what a person sees
+
+- **WHEN** a design focus starts with what the person sees on the Specify row, rejects raw source in its own sentence, and points at that row
+- **THEN** the prose is accepted
+
+#### Scenario: The first sentence holds one decision
+
+- **WHEN** the first sentence states a refusal and what is not built
+- **THEN** the prose is refused
+
+#### Scenario: A code name is not the point of the sentence
+
+- **WHEN** the first sentence starts with a code name
+- **THEN** the prose is refused
+
+#### Scenario: An implementation word does not become a metaphor
+
+- **WHEN** the prose says the behavior lives in the paint
+- **THEN** the prose is refused
+
+#### Scenario: Where to look is a place on the screen
+
+- **WHEN** the prose names a test file as where to look
+- **THEN** the prose is refused

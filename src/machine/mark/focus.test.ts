@@ -329,7 +329,7 @@ spec('focus', () => {
       });
       assert.equal(validateFocusBody(posted[0] ?? ''), undefined);
       assert.match(message, /posted/);
-      assert.match(focusProse(posted[0] ?? '') ?? '', /жив|focus/i);
+      assert.match(focusProse(posted[0] ?? '') ?? '', /показывает|на экране/i);
     });
 
     scenario('Something weak or that must be looked at is said too', async () => {
@@ -451,14 +451,14 @@ spec('focus', () => {
     );
 
     scenario(
-      'A published design says where the behavior lives and which alternative was rejected, what is deliberately not built, and where the behavior is observed',
+      'A published design says what the person sees on the screen, which alternative was rejected, what is deliberately not built, and where on the screen to look',
       async () => {
         const {posted} = await runPostFocus(FOCUS_BODIES.design, {files: [file('design.md')]});
         const prose = focusProse(posted[0] ?? '') ?? '';
-        assert.match(prose, /жив|focus/i);
+        assert.match(prose, /показывает|на экране/i);
         assert.match(prose, /отверг/i);
         assert.match(prose, /не стро/i);
-        assert.match(prose, /наблюд/i);
+        assert.match(prose, /смотреть|панел|строк/i);
       },
     );
 
@@ -530,7 +530,7 @@ spec('focus', () => {
       );
       assert.equal(
         validateFocusBody(
-          'sdd:focus:design\nПоведение по-прежнему живёт в focus.ts; поправили имя наблюдаемого файла.\n\nЗамечание про имя файла — поправили путь.\n',
+          'sdd:focus:design\nСтрока Specify по-прежнему показывает слово на экране. Поправили место, куда смотреть.\n\nЗамечание про имя файла — поправили путь.\n',
         ),
         undefined,
       );
@@ -611,6 +611,48 @@ spec('focus', () => {
         {body: 'manager note', manager: true},
       ];
       assert.equal(focusPlaque(comments), 'Task slice prose.\n');
+    });
+  });
+
+  requirement('Every focus speaks in screen words', () => {
+    scenario('The first sentence says what a person sees', () => {
+      assert.equal(validateFocusBody(FOCUS_BODIES.design), undefined);
+    });
+
+    scenario('The first sentence holds one decision', () => {
+      assert.equal(
+        validateFocusBody(
+          'sdd:focus:design\nСтрока Specify показывает слово, отвергли сырой исходник и сознательно не строим правку файла в том же предложении. Смотреть на строке Specify.\n',
+        ),
+        'one sentence holds one decision',
+      );
+    });
+
+    scenario('A code name is not the point of the sentence', () => {
+      assert.equal(
+        validateFocusBody(
+          'sdd:focus:design\nspan.bit показывает пометку на уже нарисованном слове строки. Отвергли сырой исходник. Тело задачи не строим. Смотреть на строке Specify.\n',
+        ),
+        'first sentence says what a person sees',
+      );
+    });
+
+    scenario('An implementation word does not become a metaphor', () => {
+      assert.equal(
+        validateFocusBody(
+          'sdd:focus:design\nПоведение живёт в краске общей строки и показывает слово. Отвергли сырой исходник. Тело задачи не строим. Смотреть на строке Specify.\n',
+        ),
+        'prose uses a screen word, not a metaphor',
+      );
+    });
+
+    scenario('Where to look is a place on the screen', () => {
+      assert.equal(
+        validateFocusBody(
+          'sdd:focus:design\nСтрока Specify показывает слово на экране. Отвергли сырой исходник. Тело задачи не строим. Смотреть в spec-diff.test.ts.\n',
+        ),
+        'prose points at the screen, not a test file',
+      );
     });
   });
 

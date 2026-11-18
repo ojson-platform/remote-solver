@@ -690,7 +690,10 @@ function text(res: ServerResponse, status: number, body: string): void {
 }
 
 function json(res: ServerResponse, body: unknown): void {
-  res.writeHead(200, {'content-type': 'application/json; charset=utf-8'});
+  res.writeHead(200, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+  });
   res.end(JSON.stringify(body));
 }
 

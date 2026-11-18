@@ -1183,6 +1183,38 @@ spec('board-command', () => {
     });
   });
 
+  requirement('A repeated snapshot read is not stored', () => {
+    scenario('The same snapshot URL returns the current rows', async () => {
+      const staged = yard();
+      const page = await serveLiveBoard({
+        homePath: staged.homePath,
+        repo: 'acme/billing',
+        tracker: staged.tracker,
+        review: staged.review,
+        githubRoot: staged.github,
+      });
+      try {
+        const url = new URL('/snapshot?have=held', page.url);
+        const first = await fetch(url);
+        assert.equal(first.status, 200);
+        assert.equal(first.headers.get('cache-control'), 'no-store');
+        const body = (await first.json()) as WindowSnapshot;
+        assert.ok(body.rows.some(row => row.key === '6'));
+        staged.cycle.labels = staged.cycle.labels.filter(label => label !== 'sdd:cycle');
+        await page.refresh();
+        const second = await fetch(url);
+        assert.equal(second.headers.get('cache-control'), 'no-store');
+        const next = (await second.json()) as WindowSnapshot;
+        assert.equal(next.rows.some(row => row.key === '6'), false);
+        const client = await (await fetch(new URL('/client.js', page.url))).text();
+        assert.match(client, /cache:\s*"no-store"/);
+      } finally {
+        await page.close();
+        rmSync(staged.dir, {recursive: true, force: true});
+      }
+    });
+  });
+
   requirement('A late read does not replace a newer one', () => {
     scenario('A slow refresh keeps the newer labels', async () => {
       const staged = yard();

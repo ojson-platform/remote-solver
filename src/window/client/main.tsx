@@ -424,7 +424,7 @@ function keptLayer(memory: Memory, next: WindowSnapshot): SpineLayer | '' | unde
 }
 
 async function readSnapshot(revision: string | undefined): Promise<WindowSnapshot> {
-  const response = await fetch(snapshotPath(revision));
+  const response = await fetch(snapshotPath(revision), {cache: 'no-store'});
   return response.json() as Promise<WindowSnapshot>;
 }
 

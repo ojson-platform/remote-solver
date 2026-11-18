@@ -262,6 +262,15 @@ When the command is given `--port`, the page SHALL listen on `127.0.0.1` at that
 - **WHEN** the named port is already in use
 - **THEN** the board does not start
 
+### Requirement: A repeated snapshot read is not stored
+
+`GET /snapshot` SHALL send `Cache-Control: no-store`. The client's snapshot read SHALL ask the browser not to reuse a stored response. A later read of the same URL SHALL return the tickets the board holds now.
+
+#### Scenario: The same snapshot URL returns the current rows
+
+- **WHEN** a client has read `/snapshot?have=<revision>` and a cycle then leaves the open list
+- **THEN** the next read of that same URL has `Cache-Control: no-store` and does not include that cycle
+
 ### Requirement: A late read does not replace a newer one
 
 A tracker read SHALL take its number when the read starts. A read that finishes after a newer read SHALL NOT replace that newer read's labels or branch text.

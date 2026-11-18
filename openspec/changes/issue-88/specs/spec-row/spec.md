@@ -6,12 +6,12 @@ sdd-absorbed: 96b2f4da17722595
 
 ### Requirement: The row renders the line as markdown
 
-The spec row SHALL render the line as markdown. A heading, a list, emphasis, a link, and code in that line SHALL render as markdown, and their marks SHALL NOT stay characters of the text. When a code span's position spans two source lines, the row SHALL show the paint of its own line. A line the value does not contain SHALL NOT show the raw source. When that span has gamma delta on the first source line and epsilon on the next, and the node value is gamma delta followed by epsilon and does not contain the first covered line, the first row SHALL show the paint of its own line and SHALL NOT show the raw source of the first covered line, and the next row SHALL show the paint of its own line and SHALL NOT show the raw source of that line.
+The spec row SHALL render the line as markdown. A heading, a list, emphasis, a link, and code in that line SHALL render as markdown, and their marks SHALL NOT stay characters of the text. When a code span's position spans two source lines, the row SHALL show the paint of its own line. A line the value does not contain SHALL NOT show the raw source.
 
 #### Scenario: A marked line renders as markdown
 
-- **WHEN** the person opens Specify on a spec line that contains a heading, a list, emphasis, a link, and code
-- **THEN** the row renders that heading, that list, that emphasis, that link, and that code as markdown, and those marks do not stay characters of the text
+- **WHEN** the person opens Specify on a heading line, a list line, and a line that contains emphasis, a link, and code
+- **THEN** the row renders that heading, that list, that emphasis, that link, and that code as markdown, the list row does not show the characters `- list item`, and the heading mark, the list mark, the emphasis marks, the link marks, and the code marks do not stay characters of the text
 
 #### Scenario: A code span across two source lines shows the paint of its own line
 

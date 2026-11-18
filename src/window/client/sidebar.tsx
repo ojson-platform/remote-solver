@@ -1044,6 +1044,16 @@ function specSideLines(flat: readonly SpecRow[], side: 'left' | 'right'): string
   return texts;
 }
 
+function paintForSpecRow(painted: PaintedSourceLine | undefined): ReactNode | undefined {
+  if (painted === undefined) {
+    return undefined;
+  }
+  if (painted.placeAt !== undefined && painted.paint === undefined) {
+    return '';
+  }
+  return painted.paint;
+}
+
 function paintedRowBody(
   row: SpecRow,
   left: readonly PaintedSourceLine[],
@@ -1051,10 +1061,10 @@ function paintedRowBody(
 ): ReactNode | undefined {
   if (row.kind === 'del') {
     const line = row.left;
-    return line === undefined ? undefined : left[line - 1]?.paint;
+    return line === undefined ? undefined : paintForSpecRow(left[line - 1]);
   }
   const line = row.right;
-  return line === undefined ? undefined : right[line - 1]?.paint;
+  return line === undefined ? undefined : paintForSpecRow(right[line - 1]);
 }
 
 function nodeText(node: ReactNode): string {
@@ -1309,8 +1319,9 @@ function SpecRows({
   const open = gaps.find(item => item.id === id)?.open ?? [];
   const plain = specIsPlain(rows);
   const flat = flattenSpecRows(rows);
-  const leftPaint = paintSourceDocument(specSideLines(flat, 'left'));
-  const rightPaint = paintSourceDocument(specSideLines(flat, 'right'));
+  const specPaint = {listTextOnly: true} as const;
+  const leftPaint = paintSourceDocument(specSideLines(flat, 'left'), specPaint);
+  const rightPaint = paintSourceDocument(specSideLines(flat, 'right'), specPaint);
   return rows.map((entry, index) => {
     if (entry.kind !== 'gap') {
       return (

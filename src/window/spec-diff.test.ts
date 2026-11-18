@@ -2179,7 +2179,8 @@ spec('spec-row', () => {
           assert.equal(cap.includes('### Requirement: Markdown'), false);
           assert.match(cap, /<span[^>]*>Leaf heading<\/span>/);
           assert.equal(cap.includes('# Leaf heading'), false);
-          assert.match(cap, /<span[^>]*>- list item<\/span>/);
+          assert.match(cap, /<span[^>]*>list item<\/span>/);
+          assert.equal(cap.includes('- list item'), false);
           assert.match(cap, /<strong>bold<\/strong>/);
           assert.match(cap, /<em>em<\/em>/);
           assert.match(cap, /<code>inline<\/code>/);
@@ -2204,6 +2205,7 @@ spec('spec-row', () => {
           const startBody = startRow.split('class="diff-text"')[1] ?? '';
           assert.equal(startBody.includes('<code>'), false);
           assert.equal(startBody.includes('beta'), false);
+          assert.equal(startBody.includes('`alpha'), false);
           const laterRow = diffRowByLine(html, SPEC_ID, 'beta`');
           assert.match(laterRow, /<code>alpha[\s\S]*beta<\/code>/);
           assert.equal(laterRow.includes('`alpha'), false);

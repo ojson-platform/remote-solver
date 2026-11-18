@@ -19,6 +19,11 @@ export type PaintedSourceLine = {
   hide?: boolean;
 };
 
+export type PaintSourceOptions = {
+  /** List rows show item body only, without source list marker characters. */
+  listTextOnly?: boolean;
+};
+
 function placeEndLine(position: SourcePosition): number {
   return position.end.column === 1 ? position.end.line - 1 : position.end.line;
 }
@@ -445,6 +450,7 @@ function paintBlockSlice(
   rawLine: string,
   texts: readonly string[],
   definitions: ReadonlyMap<string, string>,
+  options?: PaintSourceOptions,
 ): ReactNode | undefined {
   if (!block.position) {
     return undefined;
@@ -459,6 +465,11 @@ function paintBlockSlice(
     return <code>{codeLineText(block, line, rawLine, texts)}</code>;
   }
   const phrasing = phrasingOnSourceLine(phrasingFromBlock(block), line, rawLine, definitions);
+  if (block.type === 'listItem' && line === block.position.start.line) {
+    if (options?.listTextOnly) {
+      return phrasing.length === 0 ? undefined : phrasingChildren(phrasing, definitions);
+    }
+  }
   if (block.type === 'tableRow') {
     return (
       <span>
@@ -501,6 +512,7 @@ function paintOneLine(
   rawLine: string,
   texts: readonly string[],
   definitions: ReadonlyMap<string, string>,
+  options?: PaintSourceOptions,
 ): PaintedSourceLine {
   const lineNum = lineIndex + 1;
   const block = blockCoveringLine(tree, lineNum);
@@ -517,7 +529,7 @@ function paintOneLine(
   }
   if (block?.position && lineInPlace(block.position, lineNum)) {
     return {
-      paint: paintBlockSlice(block, lineNum, rawLine, texts, definitions),
+      paint: paintBlockSlice(block, lineNum, rawLine, texts, definitions, options),
       placeAt: lineNum,
     };
   }
@@ -533,9 +545,12 @@ function paintOneLine(
 }
 
 /** The spine lines of one document, painted as nodes in that single markdown document. */
-export function paintSourceDocument(texts: readonly string[]): PaintedSourceLine[] {
+export function paintSourceDocument(
+  texts: readonly string[],
+  options?: PaintSourceOptions,
+): PaintedSourceLine[] {
   const source = texts.join('\n');
   const tree = remark().use(remarkGfm).parse(source) as Root;
   const definitions = definitionsOf(tree);
-  return texts.map((text, index) => paintOneLine(tree, index, text, texts, definitions));
+  return texts.map((text, index) => paintOneLine(tree, index, text, texts, definitions, options));
 }

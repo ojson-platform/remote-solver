@@ -2,7 +2,7 @@
 - An anchored row carries the file, the line, and the right side
 - A row with no anchor opens a draft and shows no posted line comment
 
-sdd-delta: d4d385d183f05da8
+sdd-delta: 3943a98f4b1fa6c6
 
 ## Source
 

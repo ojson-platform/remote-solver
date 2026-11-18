@@ -3,7 +3,7 @@
 - A code block keeps the line numbers in sequence
 - A fence marker stays a row
 
-sdd-delta: d4d385d183f05da8
+sdd-delta: 3943a98f4b1fa6c6
 
 ## Source
 

@@ -24,7 +24,7 @@ The spec row SHALL render the line as markdown. A heading, a list, emphasis, a l
 
 An added row SHALL carry the classes `diff-row` and `add`. A deleted row SHALL carry the classes `diff-row` and `del`. An unchanged row SHALL carry the classes `diff-row` and `ctx`. When the spec has no addition and no deletion, the row SHALL also carry the class `plain`.
 
-A changed span of a replaced line SHALL be `span.bit`. An unchanged span of that line SHALL NOT be `span.bit`. A line that has no changed span SHALL have no `span.bit`. When the changed token of a replaced line is a marked word, the painted span of that line SHALL be `span.bit`.
+A changed span of a replaced line SHALL be `span.bit`. An unchanged span of that line SHALL NOT be `span.bit`. A line that has no changed span SHALL have no `span.bit`.
 
 #### Scenario: Added, deleted, and unchanged rows keep their classes
 
@@ -110,7 +110,7 @@ A line that names a scenario SHALL carry `data-scenario` with that scenario name
 
 ### Requirement: The line numbers and the fold bar stay
 
-On a changed spec, the row SHALL show a baseline number cell and a folded number cell, and a cell with no number SHALL be empty. On a spec with no addition and no deletion, the row SHALL show one line number. Rendering the line as markdown SHALL NOT remove those number cells. A fence marker is a source line, and that line SHALL stay a row. The row SHALL keep its number cells, the fence marks SHALL NOT stay characters of the text, and the following row SHALL show the next line number. A code block in the line SHALL NOT show a line number for each of its visual lines, and the following row SHALL show the next line number. A fold of unchanged lines SHALL be a fold bar, and that bar SHALL NOT be the comment control.
+On a changed spec, the row SHALL show a baseline number cell and a folded number cell, and a cell with no number SHALL be empty. On a spec with no addition and no deletion, the row SHALL show one line number. Rendering the line as markdown SHALL NOT remove those number cells. A fold of unchanged lines SHALL be a fold bar, and that bar SHALL NOT be the comment control.
 
 #### Scenario: A changed row keeps both number cells and the fold bar is separate
 

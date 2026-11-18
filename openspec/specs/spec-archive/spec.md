@@ -39,6 +39,30 @@ On accepting, a change that is not archived SHALL start the accept step. The act
 - **WHEN** the phase is before `accepting` and the tip is the archive commit
 - **THEN** the decision is the accept step with action `unarchive`, and the poll does not revert
 
+### Requirement: A later commit keeps the archive directory
+
+The change stays archived while `openspec/changes/archive/issue-<key>/` is on the tip, including when the tip message has no `Sdd-Archive: issue-<key>` line. That tip SHALL NOT start archive and SHALL NOT start unarchive. On `accepting` or `accepted`, a merged pull request and no open pull request SHALL close the issue. Unarchive SHALL start only when the tip message carries that line and nothing is merged.
+
+#### Scenario: Accepting does not archive again
+
+- **WHEN** the phase is `accepting`, a pull request is open, the archive directory is on the tip, and the tip message has no `Sdd-Archive` line
+- **THEN** the machine waits for a person to merge and does not archive
+
+#### Scenario: Accepting closes after a later commit
+
+- **WHEN** the phase is `accepting`, the pull request is merged, the archive directory is on the tip, and the tip message has no `Sdd-Archive` line
+- **THEN** the machine closes the issue and does not archive again
+
+#### Scenario: Accepted closes after a later commit
+
+- **WHEN** the phase is `accepted`, the pull request is merged, the archive directory is on the tip, and the tip message has no `Sdd-Archive` line
+- **THEN** the machine closes the issue and does not archive again
+
+#### Scenario: A phase before accepting does not unarchive
+
+- **WHEN** the phase is `implementing`, a pull request is open, the archive directory is on the tip, and the tip message has no `Sdd-Archive` line
+- **THEN** the decision is not `unarchive`
+
 ### Requirement: One commit holds the fold
 
 The accept step SHALL record, in one commit, the folded baseline and the move of the change into `openspec/changes/archive/issue-<key>/`.

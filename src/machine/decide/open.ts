@@ -58,7 +58,7 @@ function decideOpen(
     phase,
     pr: open[0],
     merged: pulls.filter(pr => pr.state === 'MERGED'),
-    folded: record.folded,
+    archived: change.archived,
     autoMerge: record.autoMerge,
     hand: consent,
   });

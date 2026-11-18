@@ -18,7 +18,8 @@ export type PhaseRead = {
   phase: Phase;
   pr: PullSnapshot | undefined;
   merged: PullSnapshot[];
-  folded: boolean;
+  /** `openspec/changes/archive/issue-<key>/` is on the tip. The tip message is a separate fact. */
+  archived: boolean;
   autoMerge: boolean;
   hand: Hand;
 };
@@ -240,11 +241,11 @@ function verify(read: PhaseRead): Decision {
 }
 
 function acceptPhase(read: PhaseRead): Decision {
-  const {issue, change, phase, pr, merged, folded, autoMerge} = read;
+  const {issue, change, phase, pr, merged, archived, autoMerge} = read;
   if (!pr && merged.length === 0) {
     return {kind: 'wait', issue: issue.key, reason: NO_OPEN_PULL};
   }
-  if (!folded) {
+  if (!archived) {
     const slice = unslicedScenario(change);
     if (slice) {
       return {kind: 'wait', issue: issue.key, reason: slice};

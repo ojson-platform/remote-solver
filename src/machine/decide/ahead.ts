@@ -22,8 +22,8 @@ export type AheadRead = {
 
 /**
  * What is true for every phase before consent: cancellation, a finished
- * cycle, an archive sitting on the tip, unclassified threads, a rollback
- * marker, a conflict, and a spec that still has no baseline or shelf.
+ * cycle, an archive directory, the archive commit, unclassified threads,
+ * a rollback marker, a conflict, and a spec that still has no baseline or shelf.
  * Null means the phase itself may decide.
  */
 function taskReason(change: ChangeView): string {
@@ -39,11 +39,11 @@ export function decideAhead(read: AheadRead): Decision | null {
   if (!phase) {
     return {kind: 'advance', issue: issue.key, to: 'proposing', reason: 'enter the cycle'};
   }
-  if (finishedCycle(pulls, record.folded, phase)) {
+  if (finishedCycle(pulls, change.archived, phase)) {
     return linkWait(issue, issues) ?? {kind: 'done', issue: issue.key, reason: 'finished cycle'};
   }
   if (phase === 'accepted') {
-    if (!record.folded) {
+    if (!change.archived) {
       return {kind: 'wait', issue: issue.key, reason: 'the change is not archived'};
     }
     const acceptedMerged = pulls.filter(item => item.state === 'MERGED');

@@ -67,7 +67,7 @@ function change(over: Partial<ChangeView> = {}): ChangeView {
   };
 }
 
-/** Tests that pass `archived: true` mean the archive line, not the directory. */
+/** `archived: true` sets the directory and the tip line together. A directory without the line calls `decide` with no record. */
 function judged(
   row: IssueRecord,
   issues: IssueRecord[],
@@ -462,17 +462,49 @@ test('a green pull request with a marker rolls back', () => {
   });
 });
 
-test('an archive directory without the tip line is not folded', () => {
-  const decision = decide(
-    issue(1, ['sdd:accepted']),
-    [],
-    [pull(9, {state: 'MERGED'})],
-    change({archived: true}),
-  );
-  assert.equal(decision.kind, 'wait');
-  if (decision.kind === 'wait') {
-    assert.match(decision.reason, /not archived/);
-  }
+spec('spec-archive', () => {
+  requirement('A later commit keeps the archive directory', () => {
+    scenario('Accepting does not archive again', () => {
+      const decision = decide(
+        issue(1, ['sdd:accepting']),
+        [],
+        [pull(9, {checks: 'green'})],
+        change({archived: true}),
+      );
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.match(decision.reason, /wait for merge/);
+      }
+      assert.notEqual(decision.kind === 'agent' ? decision.action : decision.kind, 'archive');
+    });
+    scenario('Accepting closes after a later commit', () => {
+      const decision = decide(
+        issue(1, ['sdd:accepting']),
+        [],
+        [pull(9, {state: 'MERGED'})],
+        change({archived: true}),
+      );
+      assert.deepEqual(decision, {kind: 'done', issue: '1', reason: 'finished cycle'});
+    });
+    scenario('Accepted closes after a later commit', () => {
+      const decision = decide(
+        issue(1, ['sdd:accepted']),
+        [],
+        [pull(9, {state: 'MERGED'})],
+        change({archived: true}),
+      );
+      assert.deepEqual(decision, {kind: 'done', issue: '1', reason: 'finished cycle'});
+    });
+    scenario('A phase before accepting does not unarchive', () => {
+      const decision = decide(
+        issue(1, ['sdd:implementing']),
+        [],
+        [pull(9)],
+        change({archived: true, tasks: true, openTasks: 1, openTask: 'slice'}),
+      );
+      assert.notEqual(decision.kind === 'agent' ? decision.action : decision.kind, 'unarchive');
+    });
+  });
 });
 
 test('several open pull requests hold the phase line', () => {

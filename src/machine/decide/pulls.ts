@@ -19,16 +19,16 @@ export function publishChoice(
   return {ok: true, id: openIds[0] ?? null};
 }
 
-/** Archived with a merged pull request and none open: the cycle is finished. */
+/** The archive directory, a merged pull request, and none open: the cycle is finished. */
 export function finishedCycle(
   pulls: PullSnapshot[],
-  folded: boolean,
+  archived: boolean,
   phase: string | null,
 ): boolean {
   if (phase === 'cancelled') {
     return false;
   }
-  if (!folded) {
+  if (!archived) {
     return false;
   }
   if (pulls.some(pr => pr.state === 'OPEN')) {

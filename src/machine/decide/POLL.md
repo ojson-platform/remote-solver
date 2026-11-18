@@ -18,10 +18,10 @@ Judged before the phase. `decideAhead`.
 |---|---|---|
 | Phase `cancelled` | `done`, reason `cancelled` | The rest of this table, consent, the phase |
 | No phase label | `advance` to `proposing`, reason `enter the cycle` | The rest of this table, consent, the phase |
-| Archived, a merged pull request, none open | `done`, reason `finished cycle`, after any child or blocker wait | The rest of this table, consent, the phase |
-| Phase `accepted`, change not archived | `wait`, reason `the change is not archived` | The rest of this table, consent, the phase |
-| Phase `accepted`, change archived | Merge or wait for the open pull request. `auto-merge` is off on this path | The rest of this table, consent, the phase |
-| Phase before `accepting`, tip is the archive commit, nothing merged | `unarchive` | An unmarked thread, a conflict, the phase |
+| Archive directory on the tip, a merged pull request, none open. The tip message may omit `Sdd-Archive` | `done`, reason `finished cycle`, after any child or blocker wait | The rest of this table, consent, the phase |
+| Phase `accepted`, archive directory absent | `wait`, reason `the change is not archived` | The rest of this table, consent, the phase |
+| Phase `accepted`, archive directory on the tip | Merge or wait for the open pull request. `auto-merge` is off on this path | The rest of this table, consent, the phase |
+| Phase before `accepting`, tip message carries `Sdd-Archive`, nothing merged | `unarchive` | An unmarked thread, a conflict, the phase |
 | An open thread has no marker and is not pinned to an open item, or the last conversation comment is a person's and has no marker | `classify-comments`, reason `unclassified review threads` | Rollback, the phase skill, archive |
 | `implementing`, more than one open pull request, an open task, the card matches, and no earlier-phase thread | `implement-next-task` | Conflict and the phase's own writing rows |
 | A pull request conflicts with its base, phase is `implementing` | `fix-implementation`, reason `rebase onto the base` | Rollback, the phase |
@@ -32,7 +32,7 @@ Judged before the phase. `decideAhead`.
 | An open thread marks this phase's layer | That layer's action: `improve-proposal`, `improve-specs`, `improve-design`, `improve-tasks`, or `fix-implementation` | The phase's own writing skill |
 | `proposing`, `specifying`, or `designing`, and a thread counts for this phase | `wait`, reason `a thread on this phase is still open` | The review-gate ask |
 
-Scenarios: `phase` / A cycle with no phase enters proposing. `phase` / Cancelled ends the cycle. `finished-cycle` / Accepting closes a merged archived cycle. `merge` / An archived change is restored before an unlabeled thread. `marker` / An unlabeled thread is classified during implementing. `marker` / An unanswered conversation on accepting is classified before the merge. `pull-request` / Several open pull requests hold the phase line. `verifying` / A merge conflict returns to implementing for a rebase. `marker` / A spec marker during implementing moves to specifying. `marker` / The earliest of two layers wins. `baseline` / Specifying restores a missing baseline before the delta. `baseline` / A spec thread waits for the missing baseline. `baseline` / An unjudged Added id is restored before the delta. `baseline` / An Added id is not restored once a delta exists. `marker` / A design marker during a held design review improves the design. `phase-thread-accept` / An unmarked thread is classified instead of the ask.
+Scenarios: `phase` / A cycle with no phase enters proposing. `phase` / Cancelled ends the cycle. `finished-cycle` / Accepting closes a merged archived cycle. `spec-archive` / Accepting closes after a later commit. `spec-archive` / Accepted closes after a later commit. `spec-archive` / A phase before accepting does not unarchive. `merge` / An archived change is restored before an unlabeled thread. `marker` / An unlabeled thread is classified during implementing. `marker` / An unanswered conversation on accepting is classified before the merge. `pull-request` / Several open pull requests hold the phase line. `verifying` / A merge conflict returns to implementing for a rebase. `marker` / A spec marker during implementing moves to specifying. `marker` / The earliest of two layers wins. `baseline` / Specifying restores a missing baseline before the delta. `baseline` / A spec thread waits for the missing baseline. `baseline` / An unjudged Added id is restored before the delta. `baseline` / An Added id is not restored once a delta exists. `marker` / A design marker during a held design review improves the design. `phase-thread-accept` / An unmarked thread is classified instead of the ask.
 
 A thread on an unchecked Open decisions line is `design`. A thread on an unchecked Open questions line is `proposal`. The reply's marker does not replace that, except `fixed`. The thread is not unmarked. `marker` / An unmarked reply on an open decision is design. `marker` / A spec marker on an open decision stays on design.
 
@@ -142,14 +142,14 @@ A marker already moved the phase in the shared facts, before this table. Pending
 | When | Decision |
 |---|---|
 | No open pull request and nothing merged | `wait`, reason `no open pull request` |
-| Not archived, and a delta scenario has no task line | `wait` with that gap |
-| Not archived | `archive`, reason `archive the change` |
+| Archive directory absent, and a delta scenario has no task line | `wait` with that gap |
+| Archive directory absent | `archive`, reason `archive the change` |
 | Archived, one pull request is already merged, and another is still open | `wait`. Checks that are not green wait for green. Green checks wait for that open pull request. Does not merge, even when `sdd:auto-merge` is on |
 | Archived, nothing merged yet, and the checks are not green | `wait` for green checks |
 | Archived, nothing merged yet, checks green, `sdd:auto-merge` off | `wait` for the person to merge, one ask `Merge pull request #<id>.` |
 | Archived, nothing merged yet, checks green, `sdd:auto-merge` on, one open pull request | `merge` |
 
-`spec-archive` / Accepting starts the accept step. `artifact` / Accepting waits while a delta scenario has no task. `merge` / Accepting archives a change that is still open. `merge` / Auto-merge merges a green archived pull request. `merge` / Without auto-merge the person merges. `merge` / A merged pull request beside an open one stays open. `finished-cycle` / Accepting closes a merged archived cycle.
+`spec-archive` / Accepting starts the accept step. `spec-archive` / Accepting does not archive again. `artifact` / Accepting waits while a delta scenario has no task. `merge` / Accepting archives a change that is still open. `merge` / Auto-merge merges a green archived pull request. `merge` / Without auto-merge the person merges. `merge` / A merged pull request beside an open one stays open. `finished-cycle` / Accepting closes a merged archived cycle.
 
 Accepting does not wait for children. The link wait is on tasking, implementing, and verifying. A merged pull request and none open do not reach this table. The shared facts close the issue and do not set `accepted`. `finished-cycle` / Accepting closes.
 

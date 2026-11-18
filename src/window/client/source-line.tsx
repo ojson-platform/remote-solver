@@ -1,17 +1,22 @@
 import type {ReactNode} from 'react';
 
-import type {BlockContent, Definition, LinkReference, ListItem, PhrasingContent, Root} from 'mdast';
+import type {BlockContent, Definition, LinkReference, ListItem, PhrasingContent, Root, TableRow} from 'mdast';
 
 type SourcePosition = NonNullable<Root['position']>;
 
 import {Fragment} from 'react';
 import {remark} from 'remark';
+import remarkGfm from 'remark-gfm';
 import {visit} from 'unist-util-visit';
+
+import {Diagram} from './diagram.tsx';
 
 export type PaintedSourceLine = {
   paint: ReactNode | undefined;
   /** 1-based source line in this fragment that remark mapped this place onto */
   placeAt: number | undefined;
+  /** A later line of a mermaid fence. The opening line holds the diagram. */
+  hide?: boolean;
 };
 
 function placeEndLine(position: SourcePosition): number {
@@ -62,7 +67,7 @@ function blockSpan(item: CoveredBlock): number {
   return placeEndLine(position) - position.start.line;
 }
 
-type CoveredBlock = BlockContent | ListItem | Definition;
+type CoveredBlock = BlockContent | ListItem | Definition | TableRow;
 
 const blockPriority = ['code', 'definition', 'listItem', 'paragraph', 'heading'] as const;
 
@@ -87,7 +92,9 @@ function blockCoveringLine(tree: Root, line: number): CoveredBlock | undefined {
       node.type === 'heading' ||
       node.type === 'code' ||
       node.type === 'paragraph' ||
-      node.type === 'definition'
+      node.type === 'definition' ||
+      node.type === 'table' ||
+      node.type === 'tableRow'
     ) {
       hits.push(node as CoveredBlock);
     }
@@ -156,6 +163,13 @@ function phrasingNode(
       );
     }
     case 'delete':
+      return (
+        <del key={key}>
+          {node.children.map((child, index) => phrasingNode(child, index, definitions))}
+        </del>
+      );
+    case 'footnoteReference':
+      return <sup key={key}>{node.label ?? node.identifier}</sup>;
     case 'break':
       return null;
     default:
@@ -261,7 +275,12 @@ function phrasingOnSourceLine(
       }
       continue;
     }
-    if (child.type === 'emphasis' || child.type === 'strong' || child.type === 'link') {
+    if (
+      child.type === 'emphasis' ||
+      child.type === 'strong' ||
+      child.type === 'link' ||
+      child.type === 'delete'
+    ) {
       const nested = phrasingOnSourceLine(child.children as PhrasingContent[], line, rawLine, definitions);
       if (nested.length) {
         out.push({...child, children: nested} as PhrasingContent);
@@ -440,10 +459,29 @@ function paintBlockSlice(
     return <code>{codeLineText(block, line, rawLine, texts)}</code>;
   }
   const phrasing = phrasingOnSourceLine(phrasingFromBlock(block), line, rawLine, definitions);
-  if (block.type === 'listItem' && line === block.position.start.line) {
+  if (block.type === 'tableRow') {
     return (
       <span>
-        {listMarker(rawLine)}
+        {block.children.map((cell, index) => (
+          <span className="cell" key={index}>
+            {phrasingChildren(phrasingOnSourceLine(cell.children, line, rawLine, definitions), definitions)}
+          </span>
+        ))}
+      </span>
+    );
+  }
+  if (block.type === 'table') {
+    return undefined;
+  }
+  if (block.type === 'listItem' && line === block.position.start.line) {
+    const task = block.checked;
+    return (
+      <span>
+        {typeof task === 'boolean' ? (
+          <span className={task ? 'box is-on' : 'box'} data-checked={task ? 'true' : 'false'} />
+        ) : (
+          listMarker(rawLine)
+        )}
         {phrasingChildren(phrasing, definitions)}
       </span>
     );
@@ -466,6 +504,17 @@ function paintOneLine(
 ): PaintedSourceLine {
   const lineNum = lineIndex + 1;
   const block = blockCoveringLine(tree, lineNum);
+  if (
+    block?.type === 'code' &&
+    block.lang?.toLowerCase() === 'mermaid' &&
+    block.position &&
+    lineInPlace(block.position, lineNum)
+  ) {
+    if (lineNum === block.position.start.line) {
+      return {paint: <Diagram chart={block.value.replace(/\n$/, '')} />, placeAt: lineNum};
+    }
+    return {paint: undefined, placeAt: lineNum, hide: true};
+  }
   if (block?.position && lineInPlace(block.position, lineNum)) {
     return {
       paint: paintBlockSlice(block, lineNum, rawLine, texts, definitions),
@@ -486,7 +535,7 @@ function paintOneLine(
 /** The spine lines of one document, painted as nodes in that single markdown document. */
 export function paintSourceDocument(texts: readonly string[]): PaintedSourceLine[] {
   const source = texts.join('\n');
-  const tree = remark().parse(source) as Root;
+  const tree = remark().use(remarkGfm).parse(source) as Root;
   const definitions = definitionsOf(tree);
   return texts.map((text, index) => paintOneLine(tree, index, text, texts, definitions));
 }

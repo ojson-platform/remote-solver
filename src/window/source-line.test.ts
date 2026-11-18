@@ -1073,6 +1073,100 @@ spec('source-line', () => {
     );
   });
 
+  requirement('GitHub markdown renders in the document', () => {
+    scenario('Plan and Design render GitHub markdown', async () => {
+      const source = [
+        '## Approach',
+        '',
+        '- [x] done',
+        '- [ ] open',
+        'see ~~gone~~ now',
+        'see https://example.com/gfm now',
+        '',
+        '| h | i |',
+        '| - | - |',
+        '| a | b |',
+        '',
+        'See [^1].',
+        '',
+        '[^1]: the note',
+        '',
+      ].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', source);
+          writeChange(paths.arcadia, KEY, 'design.md', source);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            const inner = (line: string): string => {
+              const button = lineButton(doc, line);
+              return button.slice(button.indexOf('>') + 1, button.lastIndexOf('</button>'));
+            };
+            const done = inner('- [x] done');
+            assert.match(done, /data-checked="true"/);
+            assert.equal(done.includes('[x]'), false);
+            assert.match(done, /done/);
+            const open = inner('- [ ] open');
+            assert.match(open, /data-checked="false"/);
+            assert.equal(open.includes('[ ]'), false);
+            const struck = inner('see ~~gone~~ now');
+            assert.match(struck, /<del>gone<\/del>/);
+            assert.equal(struck.includes('~~'), false);
+            assert.match(inner('see https://example.com/gfm now'), /<a href="https:\/\/example.com\/gfm">/);
+            const head = inner('| h | i |');
+            assert.match(head, /class="cell"[^>]*>h<\/span>/);
+            assert.match(head, /class="cell"[^>]*>i<\/span>/);
+            assert.equal(head.includes('|'), false);
+            assert.equal(inner('| - | - |').includes('|'), false);
+            const row = inner('| a | b |');
+            assert.match(row, /class="cell"[^>]*>a<\/span>/);
+            assert.match(row, /class="cell"[^>]*>b<\/span>/);
+            const ref = inner('See [^1].');
+            assert.match(ref, /<sup>1<\/sup>/);
+            assert.equal(ref.includes('[^1]'), false);
+            const note = inner('[^1]: the note');
+            assert.match(note, /the note/);
+            assert.equal(note.includes('[^1]'), false);
+          }
+        },
+      );
+    });
+  });
+
+  requirement('A mermaid fence renders as one diagram', () => {
+    scenario('Plan and Design render a mermaid fence as one diagram', async () => {
+      const source = ['## Approach', '', '```mermaid', 'graph TD', '  A-->B', '```', ''].join('\n');
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'designing', {openPullRequests: 1, pull: '91'})],
+        },
+        async (page, _window, paths) => {
+          writeChange(paths.arcadia, KEY, 'proposal.md', source);
+          writeChange(paths.arcadia, KEY, 'design.md', source);
+          await openIssue(page);
+          const html = await pageHtml(page.url);
+          for (const layer of ['Plan', 'Design'] as const) {
+            const doc = docOf(spineOf(html, KEY, layer));
+            assert.equal(doc.match(/class="diagram"/g)?.length ?? 0, 1);
+            assert.match(doc, /data-chart="graph TD\n {2}A--&gt;B"/);
+            const visible = doc.replace(/ data-chart="[^"]*"/g, '').replace(/ data-line="[^"]*"/g, '');
+            assert.equal(visible.includes('graph TD'), false);
+            assert.equal(visible.includes('A-->B'), false);
+            assert.equal(visible.includes('A--&gt;B'), false);
+            assert.equal(visible.includes('```'), false);
+          }
+        },
+      );
+    });
+  });
+
   requirement('A level-two heading stays the section h3, not a button', () => {
     scenario('A level-two heading stays the section h3, not a button', async () => {
       const proposal = ['## Scope', '', 'Текст.', '', '## Outcome', '', 'Готово.', ''].join('\n');

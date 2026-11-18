@@ -724,6 +724,31 @@
   .spine .mark b, .spine .scene b { font-weight: 500; margin-right: 6px; }
   .spine .doc { display: flex; flex-direction: column; gap: 18px; }
   .spine .plan-section { display: flex; flex-direction: column; }
+  .spine .diagram { display: block; white-space: normal; }
+  .spine .diagram svg { max-width: 100%; height: auto; }
+  .spine button.line:has(.diagram) { white-space: normal; }
+  .spine .box {
+    display: inline-block;
+    width: 0.78em;
+    height: 0.78em;
+    margin-right: 0.4em;
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    vertical-align: -0.08em;
+    position: relative;
+  }
+  .spine .box.is-on::after {
+    content: "";
+    position: absolute;
+    left: 0.22em;
+    top: 0.02em;
+    width: 0.18em;
+    height: 0.38em;
+    border: solid currentColor;
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+  }
+  .spine .cell { display: inline-block; min-width: 2em; margin-right: 0.8em; }
   .spine .line {
     display: block;
     width: 100%;

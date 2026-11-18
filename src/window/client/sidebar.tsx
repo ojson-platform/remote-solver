@@ -490,6 +490,9 @@ function PlanLines({
   const out: ReactNode[] = [];
   lines.forEach((line, index) => {
     const painted = documentPaint[index];
+    if (painted?.hide) {
+      return;
+    }
     const covered = painted?.placeAt !== undefined;
     if (line.text.trim() === '' && !covered) {
       if (!gap) {

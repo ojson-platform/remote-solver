@@ -69,6 +69,24 @@ Plan and Design SHALL render the source as one markdown document. Headings, list
 - **WHEN** the caller opens Plan on a source that contains a reference link whose label spans two source lines, and then opens Design on that same source
 - **THEN** on each surface that link is rendered, and each of those covered lines shows the node value so the label is visible and neither line is painted empty
 
+### Requirement: GitHub markdown renders in the document
+
+Plan and Design SHALL render GitHub markdown in that same document. A task item SHALL show a checkbox and SHALL NOT show the bracket mark. Strikethrough SHALL render as deleted text. A bare URL SHALL render as a link. A table cell SHALL show its text, and the separator line SHALL NOT show the raw source. A footnote reference SHALL show its label, and the definition line SHALL show the note.
+
+#### Scenario: Plan and Design render GitHub markdown
+
+- **WHEN** the caller opens Plan on a source that contains a checked task item, an open task item, strikethrough, a bare URL, a table, and a footnote, and then opens Design on that same source
+- **THEN** on each surface the checked item shows a checked checkbox and does not show the bracket mark, the open item shows an open checkbox, strikethrough is deleted text, the bare URL is a link, each table cell shows its text, the separator line does not show the raw source, the footnote reference shows its label, and the definition line shows the note
+
+### Requirement: A mermaid fence renders as one diagram
+
+A fenced block whose info string is mermaid SHALL render as one diagram on Plan and Design. The diagram SHALL carry that chart. The source lines of the block SHALL NOT show the raw source.
+
+#### Scenario: Plan and Design render a mermaid fence as one diagram
+
+- **WHEN** the caller opens Plan on a mermaid fence whose chart names A and B, and then opens Design on that same source
+- **THEN** on each surface that fence is one diagram carrying that chart, and the source lines do not show the raw source
+
 ### Requirement: A code span paints the whole value on the later line
 
 A code span whose value is alpha on one source line and beta on the next SHALL paint the whole value on the later line, so that line shows alpha. Each later covered line SHALL show that line slice of the value and SHALL NOT show the previous line slice.

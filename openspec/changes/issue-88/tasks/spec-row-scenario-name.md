@@ -1,6 +1,6 @@
 - A scenario line carries its scenario name
 
-sdd-delta: 08b28a0bd8b51c65
+sdd-delta: fa4104ec6e28efde
 
 ## Source
 

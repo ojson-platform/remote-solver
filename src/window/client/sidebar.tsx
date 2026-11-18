@@ -1057,6 +1057,35 @@ function paintedRowBody(
   return line === undefined ? undefined : right[line - 1]?.paint;
 }
 
+function nodeText(node: ReactNode): string {
+  if (node === null || node === undefined || typeof node === 'boolean') {
+    return '';
+  }
+  if (typeof node === 'string' || typeof node === 'number') {
+    return String(node);
+  }
+  if (Array.isArray(node)) {
+    return node.map(nodeText).join('');
+  }
+  if (isValidElement(node)) {
+    return nodeText((node.props as {children?: ReactNode}).children);
+  }
+  return '';
+}
+
+function markdownTokenForPainted(tag: string | React.JSXElementConstructor<unknown>, text: string): string | undefined {
+  if (tag === 'strong') {
+    return `**${text}**`;
+  }
+  if (tag === 'em') {
+    return `*${text}*`;
+  }
+  if (tag === 'code') {
+    return `\`${text}\``;
+  }
+  return undefined;
+}
+
 function wrapChangedText(text: string, changed: readonly string[], key: string): ReactNode {
   if (text === '' || changed.length === 0) {
     return text;
@@ -1106,6 +1135,20 @@ function paintChangedBits(paint: ReactNode, changed: readonly string[]): ReactNo
         (node.props as {children?: ReactNode}).children,
         (item, index) => walk(item, `${key}-${index}`),
       );
+      const text = nodeText(child);
+      const token =
+        typeof node.type === 'string' ? markdownTokenForPainted(node.type, text) : undefined;
+      if (token !== undefined && changed.includes(token)) {
+        const inner = Children.map(
+          (node.props as {children?: ReactNode}).children,
+          (item, index) => walk(item, `${key}-${index}`),
+        );
+        return (
+          <span className="bit" key={node.key ?? key}>
+            {cloneElement(node, {}, inner)}
+          </span>
+        );
+      }
       return cloneElement(node, {key: node.key ?? key}, child);
     }
     return node;

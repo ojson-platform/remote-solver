@@ -1938,6 +1938,24 @@ spec('spec-row', () => {
         },
       );
     });
+    scenario('A changed marked word is marked on the painted span', async () => {
+      const oldLine = 'альфа **бета**';
+      const newLine = 'альфа **гамма**';
+      const baseline = specText(['### Requirement: Чтение', '', oldLine]);
+      const delta = specText(['## MODIFIED Requirements', '', '### Requirement: Чтение', '', newLine]);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const {html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const deletion = diffBlock(html, SPEC_ID, 'del', 'бета');
+          const addition = diffBlock(html, SPEC_ID, 'add', 'гамма');
+          assert.match(deletion, /<span class="bit"><strong>бета<\/strong><\/span>/);
+          assert.match(addition, /<span class="bit"><strong>гамма<\/strong><\/span>/);
+          assert.equal(deletion.includes('<strong><span class="bit">'), false);
+          assert.equal(addition.includes('<strong><span class="bit">'), false);
+        },
+      );
+    });
     scenario('A line with no changed span has no marked span', async () => {
       const line = '**Полностью** новая.';
       const baseline = specText(['### Requirement: Чтение']);

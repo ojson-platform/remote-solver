@@ -402,7 +402,8 @@ spec('spine', () => {
           const side = bandOf(html, '1');
           assert.match(side, /id="spine-Plan"/);
           assert.match(side, /Годность или список проблем/);
-          assert.match(side, /- \[ \] Писать ли имя проверки\?/);
+          assert.match(side, /<span class="box" data-checked="false"><\/span>[^<]*Писать ли имя проверки/);
+          assert.equal(side.includes('- [ ] Писать ли имя проверки?'), false);
           const codePick = side.match(/id="spine-Code"[^>]*/)?.[0] ?? '';
           assert.equal(codePick.includes('checked'), false);
           assert.equal(
@@ -641,7 +642,8 @@ spec('spine', () => {
           assert.match(side, /Один модуль/);
           assert.match(side, /Не показывать/);
           assert.match(side, /Отклонено: второй модуль/);
-          assert.match(side, /- \[ \] имя/);
+          assert.match(side, /<span class="box" data-checked="false"><\/span>имя/);
+          assert.equal(side.includes('- [ ] имя'), false);
           assert.equal(side.includes('До секции.'), false);
           assert.match(side, /<p class="line"/);
           assert.equal(side.includes(`data-path="${DESIGN_PATH}"`), false);

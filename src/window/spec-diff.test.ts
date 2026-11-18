@@ -1956,6 +1956,30 @@ spec('spec-row', () => {
         },
       );
     });
+    scenario('A changed link or underscore emphasis is marked on the painted span', async () => {
+      const oldLine = 'see [old](https://a.com) and _old_';
+      const newLine = 'see [new](https://a.com) and _new_';
+      const baseline = specText(['### Requirement: Чтение', '', oldLine]);
+      const delta = specText(['## MODIFIED Requirements', '', '### Requirement: Чтение', '', newLine]);
+      await hosted(
+        {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
+        async (page, window, paths) => {
+          const {html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
+          const deletion = diffBlock(html, SPEC_ID, 'del', 'old');
+          const addition = diffBlock(html, SPEC_ID, 'add', 'new');
+          assert.match(deletion, /<a href="https:\/\/a\.com">old<\/a>/);
+          assert.match(addition, /<a href="https:\/\/a\.com">new<\/a>/);
+          assert.match(deletion, /<span class="bit"><a href="https:\/\/a\.com">old<\/a><\/span>/);
+          assert.match(addition, /<span class="bit"><a href="https:\/\/a\.com">new<\/a><\/span>/);
+          assert.match(deletion, /<span class="bit"><em>old<\/em><\/span>/);
+          assert.match(addition, /<span class="bit"><em>new<\/em><\/span>/);
+          assert.equal(deletion.includes('<em><span class="bit">'), false);
+          assert.equal(addition.includes('<em><span class="bit">'), false);
+          assert.equal(deletion.includes('class="bit">see'), false);
+          assert.equal(addition.includes('class="bit">see'), false);
+        },
+      );
+    });
     scenario('A line with no changed span has no marked span', async () => {
       const line = '**Полностью** новая.';
       const baseline = specText(['### Requirement: Чтение']);

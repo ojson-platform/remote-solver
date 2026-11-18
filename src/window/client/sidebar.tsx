@@ -1083,17 +1083,24 @@ function nodeText(node: ReactNode): string {
   return '';
 }
 
-function markdownTokenForPainted(tag: string | React.JSXElementConstructor<unknown>, text: string): string | undefined {
+function markdownTokensForPainted(
+  tag: string,
+  text: string,
+  href?: string,
+): readonly string[] {
   if (tag === 'strong') {
-    return `**${text}**`;
+    return [`**${text}**`];
   }
   if (tag === 'em') {
-    return `*${text}*`;
+    return [`*${text}*`, `_${text}_`];
   }
   if (tag === 'code') {
-    return `\`${text}\``;
+    return [`\`${text}\``];
   }
-  return undefined;
+  if (tag === 'a' && href !== undefined) {
+    return [`[${text}](${href})`];
+  }
+  return [];
 }
 
 function wrapChangedText(text: string, changed: readonly string[], key: string): ReactNode {
@@ -1146,9 +1153,10 @@ function paintChangedBits(paint: ReactNode, changed: readonly string[]): ReactNo
         (item, index) => walk(item, `${key}-${index}`),
       );
       const text = nodeText(child);
-      const token =
-        typeof node.type === 'string' ? markdownTokenForPainted(node.type, text) : undefined;
-      if (token !== undefined && changed.includes(token)) {
+      const href = (node.props as {href?: string}).href;
+      const tokens =
+        typeof node.type === 'string' ? markdownTokensForPainted(node.type, text, href) : [];
+      if (tokens.some(token => changed.includes(token))) {
         const inner = Children.map(
           (node.props as {children?: ReactNode}).children,
           (item, index) => walk(item, `${key}-${index}`),

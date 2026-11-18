@@ -519,6 +519,20 @@ The plaque SHALL be a button on the station of the cycle's phase. A click SHALL 
 - **WHEN** code is on `implement-next-task`, tasks are `Done 2/6`, the open task id is `remark-field`, and the card reason says several pull requests
 - **THEN** the plaque shows `Done 2/6`, `remark-field`, and `Оставь один`
 
+### Requirement: A poll paints the phase it just wrote
+
+When one poll moves a cycle and starts a step, the board SHALL show that step's plaque on the phase this poll wrote. A cycle that the same poll closed SHALL leave the board. The reading taken at the start of the poll SHALL NOT leave the plaque on the earlier phase.
+
+#### Scenario: Archive stands on accepting
+
+- **WHEN** a cycle is on `verifying`, its checks are green, and the change is not archived
+- **THEN** the plaque says `Архивирую` and stands on `accepting`
+
+#### Scenario: A finished cycle leaves the board
+
+- **WHEN** a poll closes a cycle whose change is archived and whose pull request is merged
+- **THEN** the board no longer shows that cycle
+
 ### Requirement: A station door opens the port and does not write a phase
 
 A door SHALL stand where the artifact already exists, behind the plaque and ahead of it. The current station SHALL NOT draw a circle. The window SHALL read file presence the same way focus reads a layer, and SHALL NOT write `sdd:focus` or compose gap text.

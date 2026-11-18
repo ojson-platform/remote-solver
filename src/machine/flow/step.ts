@@ -50,6 +50,17 @@ async function closeIssue(tracker: Tracker, key: string, sentence: string): Prom
   await tracker.close(key, sentence);
 }
 
+/** The board paints this list. A cycle this step closed is no longer in it. */
+function dropIssue(issues: IssueRecord[] | undefined, key: string): void {
+  if (!issues) {
+    return;
+  }
+  const index = issues.findIndex(issue => issue.key === key);
+  if (index >= 0) {
+    issues.splice(index, 1);
+  }
+}
+
 type IssueRead = {
   tracker: Tracker;
   review?: Review;
@@ -151,6 +162,7 @@ async function writeAdvance(
         key,
         'SDLC accepted: the pull request is merged and the baseline is in trunk.',
       );
+      dropIssue(options.issues, key);
       return {stop: {kind: 'done', issue: key, reason: decision.reason}};
     }
     return null;
@@ -161,6 +173,7 @@ async function writeAdvance(
       key,
       'SDLC finished: the pull request is merged and the change is archived.',
     );
+    dropIssue(options.issues, key);
     return {stop: decision};
   }
   return {stop: decision};
@@ -358,6 +371,9 @@ async function stepIssue(key: string, options: IssueRead, cache: WalkCache): Pro
   const moved = nextLabels(record.labels, decision);
   await applyLabels(options.tracker, key, record.labels, moved);
   if (given) {
+    if (found) {
+      found.labels = moved;
+    }
     cache = {...cache, labels: moved};
   }
   if (decision.kind === 'advance' || decision.kind === 'done') {

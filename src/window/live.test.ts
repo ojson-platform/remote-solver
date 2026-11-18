@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import {rmSync} from 'node:fs';
+import {mkdirSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {test} from 'vitest';
 
@@ -8,7 +8,8 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {machine} from '../adapters/compose.ts';
 import {clearGithubPause, memoryPorts} from '../adapters/tracker/github.ts';
-import type {Runtime, Vcs} from '../machine/port.ts';
+import {archiveDir} from '../machine/change/naming.ts';
+import type {FileSource, Runtime, Vcs} from '../machine/port.ts';
 import type {ThreadTarget} from '../machine/port.ts';
 import type {CycleSnapshot} from '../machine/spy/snapshot.ts';
 import {
@@ -41,11 +42,15 @@ function twentyOneReadyCycles() {
   return memoryPorts({user: MANAGER, issues, pulls});
 }
 
-function spyMachine(ports: ReturnType<typeof memoryPorts>, runtime: Runtime) {
+function spyMachine(
+  ports: ReturnType<typeof memoryPorts>,
+  runtime: Runtime,
+  filesAt?: (key: string) => FileSource,
+) {
   const vcs: Vcs = {
     prepare: async () => '',
     tip: async () => 'abc',
-    filesAt: () => ({exists: () => false, read: () => '', list: () => []}),
+    filesAt: filesAt ?? (() => ({exists: () => false, read: () => '', list: () => []})),
     compare: async () => null,
     push: async () => {},
     head: async () => 'abc',
@@ -64,6 +69,70 @@ function spyMachine(ports: ReturnType<typeof memoryPorts>, runtime: Runtime) {
     vcs,
     runtime,
   });
+}
+
+function serviceCheckout(): string {
+  const github = path.join(tmpdir(), `live-poll-github-${Date.now()}`);
+  const checkout = path.join(github, 'acme', 'billing', 'openspec');
+  mkdirSync(checkout, {recursive: true});
+  writeFileSync(
+    path.join(checkout, 'config.yaml'),
+    ['sdd:', '  queues:', '    - name: remote-solver', ''].join('\n'),
+  );
+  return github;
+}
+
+async function paintedPoll(
+  box: ReturnType<typeof spyMachine>,
+  releaseRun?: () => void,
+  githubRoot?: string,
+) {
+  let pageNote: () => void = () => {};
+  const spy = createBoardSpyState(() => {
+    pageNote();
+  });
+  const page = await serveLiveBoard({
+    homePath: path.join(tmpdir(), `live-poll-${Date.now()}`),
+    repo: 'acme/billing',
+    tracker: box.tracker,
+    review: box.review,
+    ...(githubRoot ? {githubRoot} : {}),
+    leading: spy.leading,
+    turn: spy.turn,
+    decision: spy.decision,
+    screen: spy.screen,
+    desk: spy.desk,
+  });
+  pageNote = () => {
+    page.note();
+  };
+  const controller = new AbortController();
+  let resolveSeen: () => void = () => {};
+  const seen = new Promise<void>(resolve => {
+    resolveSeen = resolve;
+  });
+  const spyDone = watchSpy(
+    box,
+    {
+      ...spy.sink,
+      refresh: async () => {},
+      apply(snapshot) {
+        page.apply(snapshot);
+        resolveSeen();
+      },
+      beginRead: () => page.beginRead(),
+    },
+    controller.signal,
+  );
+  try {
+    await seen;
+    return await readSnapshot(page.url);
+  } finally {
+    controller.abort();
+    releaseRun?.();
+    await spyDone;
+    await page.close();
+  }
 }
 
 const idleRuntime: Runtime = {
@@ -450,6 +519,80 @@ function focusBody(window: {sidebar(): readonly {kind: string; body?: string}[]}
   const block = window.sidebar().find(item => item.kind === 'focus');
   return block?.body ?? '';
 }
+
+spec('board', () => {
+  requirement('A poll paints the phase it just wrote', () => {
+    scenario('Archive stands on accepting', async () => {
+      clearGithubPause();
+      const ports = memoryPorts({
+        user: MANAGER,
+        issues: [
+          {
+            key: '6',
+            title: 'Archive the change',
+            body: '',
+            state: 'OPEN',
+            labels: ['remote-solver', 'sdd:cycle', 'sdd:verifying'],
+            assignee: MANAGER,
+          },
+        ],
+        pulls: {'6': [{id: '9', title: 'Archive the change', state: 'OPEN'}]},
+        checks: {'9': {checks: 'green'}},
+      });
+      let releaseRun: () => void = () => {};
+      const running = new Promise<void>(resolve => {
+        releaseRun = resolve;
+      });
+      const box = spyMachine(ports, {
+        async run() {
+          await running;
+          return {commits: 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
+      });
+      const github = serviceCheckout();
+      try {
+        const shot = await paintedPoll(box, releaseRun, github);
+        const row = shot.rows.find(item => item.key === '6');
+        assert.ok(row);
+        assert.equal(row.station, 'accepting');
+        assert.deepEqual(row.plaque.lines, ['Архивирую']);
+      } finally {
+        rmSync(github, {recursive: true, force: true});
+      }
+    });
+
+    scenario('A finished cycle leaves the board', async () => {
+      clearGithubPause();
+      const ports = memoryPorts({
+        user: MANAGER,
+        issues: [
+          {
+            key: '6',
+            title: 'Finished',
+            body: '',
+            state: 'OPEN',
+            labels: ['remote-solver', 'sdd:cycle', 'sdd:verifying'],
+            assignee: MANAGER,
+          },
+        ],
+        pulls: {'6': [{id: '9', title: 'Finished', state: 'MERGED'}]},
+      });
+      const box = spyMachine(ports, idleRuntime, key => ({
+        exists: rel => rel === archiveDir(key),
+        read: () => '',
+        list: () => [],
+      }));
+      const shot = await paintedPoll(box);
+      assert.equal(
+        shot.rows.some(item => item.key === '6'),
+        false,
+      );
+    });
+  });
+});
 
 spec('github-read', () => {
   requirement('An unchanged comment count skips the comment read', () => {

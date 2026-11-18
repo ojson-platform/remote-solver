@@ -1,7 +1,7 @@
 - A marked line renders as markdown
 - A code span across two source lines shows the paint of its own line
 
-sdd-delta: fa4104ec6e28efde
+sdd-delta: d4d385d183f05da8
 
 ## Source
 

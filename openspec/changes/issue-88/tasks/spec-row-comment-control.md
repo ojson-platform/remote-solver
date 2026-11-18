@@ -2,7 +2,7 @@
 - A row with no pull request is not a comment control
 - A line with no text is not a comment control
 
-sdd-delta: fa4104ec6e28efde
+sdd-delta: d4d385d183f05da8
 
 ## Source
 

@@ -4,7 +4,7 @@
 - A line with no changed span has no marked span
 - An unchanged spec row is plain
 
-sdd-delta: fa4104ec6e28efde
+sdd-delta: d4d385d183f05da8
 
 ## Source
 

@@ -636,42 +636,48 @@ function TaskFile({
   }
   const path = `${root}/tasks/${task.id}.md`;
   const paint = (lines: SpineTask['sections'][number]['lines']): ReactNode[] => {
+    const documentPaint = paintSourceDocument(lines.map(item => item.text));
     const out: ReactNode[] = [];
     let gap = false;
-    for (const line of lines) {
-      if (line.text.trim() === '') {
+    lines.forEach((line, index) => {
+      const painted = documentPaint[index];
+      if (painted?.hide) {
+        return;
+      }
+      const covered = painted?.placeAt !== undefined;
+      if (line.text.trim() === '' && !covered) {
         if (!gap) {
           out.push(<span className="gap" key={line.line} />);
         }
         gap = true;
-        continue;
+        return;
       }
       gap = false;
-      const text = line.text.trimEnd();
+      const lineKey = line.text.trimEnd();
       if (!pull) {
         out.push(
           <p className="line" key={line.line}>
-            {text}
+            {painted?.paint}
           </p>,
         );
-        continue;
+        return;
       }
       out.push(
         <span key={line.line}>
           <button
             type="button"
             className="line"
-            data-line={text}
+            data-line={lineKey}
             data-path={path}
             data-at={line.line}
             data-side="right"
           >
-            {text}
+            {painted?.paint}
           </button>
           <PostedComments comments={commentsOnLine(blocks, path, line.line)} />
         </span>,
       );
-    }
+    });
     return out;
   };
   return (

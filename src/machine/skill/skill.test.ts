@@ -177,6 +177,8 @@ test('an existing artifact stays only when the upstream block says nothing chang
   assert.match(plan, /file existing is not a reason to leave that sentence|every caller-visible sentence/);
   assert.match(plan, /already replaced is not copied back/);
   assert.match(specify, /does not start from the result already visible/);
+  assert.match(specify, /behavior of another surface is absent is not a Scenario/);
+  assert.match(context, /behavior of another surface is absent is not a Scenario/);
   assert.match(tasks, /reopens that task's `- \[ \]`/);
   assert.match(design, /do not move `sdd-absorbed`/);
   assert.match(readFileSync(path.join(stepsDir, 'fix.md'), 'utf8'), /## Source` asks for behavior/);

@@ -92,7 +92,7 @@ The other files of `openspec/changes/issue-<issue>/`, with these headings exactl
 - `## Problem`: why, in the caller's words.
 - `## Outcome`: what the caller sees once the change lands.
 - `## Scope`, `## Out of scope`: what this change touches, and what it leaves to another id.
-- `## Constraints`: limits the solution keeps. A limit that names what the caller sees is a Scenario of this capability. Its WHEN is the caller's action. Its THEN is the check a wrong result would miss. The WHEN does not start from the result already visible.
+- `## Constraints`: limits the solution keeps. A limit that names what the caller sees is a Scenario of this capability. A limit whose only claim is that a behavior of another surface is absent is not a Scenario. The Scenario names what this surface shows. Its WHEN is the caller's action. Its THEN is the check a wrong result would miss. The WHEN does not start from the result already visible.
 - `## Capabilities`: `### Added` and `### Modified`, lines `- <id> <gist>`, ids by § Capability. Both lists empty means the change names no rule and needs no delta. A line under either list is a named capability. The machine requires a baseline for each `### Modified` id.
 - `## Open questions`: `- [ ]` items. The machine counts them.
 

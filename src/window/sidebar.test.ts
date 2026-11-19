@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {rmSync} from 'node:fs';
+import {readFileSync, rmSync} from 'node:fs';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {createElement} from 'react';
@@ -1361,6 +1361,52 @@ spec('focus-prose', () => {
       const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
       assert.equal(prose.includes('Written focus prose stays.'), true);
       assert.equal(prose.includes(liveSentence), false);
+    });
+  });
+  requirement('This surface has no line comment and no diff row', () => {
+    scenario('The written prose has no line comment and no diff row', () => {
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:code', 'Written line.\n')],
+          pageIndex: 0,
+        }),
+      );
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      assert.equal(prose.includes('Written line.'), true);
+      assert.equal(prose.includes('line-note'), false);
+      assert.equal(prose.includes('diff-row'), false);
+      assert.equal(prose.includes('data-line'), false);
+      assert.equal(prose.includes('button'), false);
+    });
+  });
+  requirement('A jump is handled before a line click', () => {
+    scenario('A jump is handled before a line click', () => {
+      const scenarioName = 'The prose renders markdown';
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:code', `See ${scenarioName} here.\n`)],
+          pageIndex: 0,
+          capabilities: [
+            {
+              id: 'focus-prose',
+              rows: [{kind: 'ctx' as const, text: `#### Scenario: ${scenarioName}`}],
+            },
+          ],
+        }),
+      );
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      assert.match(prose, /<button type="button" class="jump"/);
+      assert.equal(prose.includes('line-note'), false);
+      assert.equal(prose.includes('diff-row'), false);
+      assert.equal(prose.includes('button class="line"'), false);
+      assert.equal(prose.includes('class="diff-row"'), false);
+      const main = readFileSync(new URL('./client/main.tsx', import.meta.url), 'utf8');
+      const jumpAt = main.indexOf("target?.closest('button.jump')");
+      const lineAt = main.indexOf("target?.closest('button.line, button.diff-row')");
+      assert.ok(jumpAt !== -1 && lineAt !== -1 && jumpAt < lineAt);
+      const jumpBranch = main.slice(jumpAt, lineAt);
+      assert.match(jumpBranch, /return;/);
+      assert.equal(jumpBranch.includes('draftsAfterClick'), false);
     });
   });
 });

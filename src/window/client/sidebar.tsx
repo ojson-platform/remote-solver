@@ -924,7 +924,7 @@ export function FocusBlocks({
   const pageCount = pages.length;
   const currentPage = pageCount - index;
   const badge = page.kind === 'live' ? page.badge : page.marker;
-  const stored = page.kind === 'live' ? page.text : page.display;
+  const stored = page.kind === 'live' ? page.text : page.body;
   const prose = index === 0 && page.kind === 'focus' && tail ? `${stored.replace(/\s*$/, '')}\n${tail}` : stored;
   const proseBody =
     page.kind === 'live' ? (

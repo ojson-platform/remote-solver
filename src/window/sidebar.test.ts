@@ -1340,6 +1340,29 @@ spec('focus-prose', () => {
       assert.equal(prose.includes(marker), false);
     });
   });
+  requirement('The live page sentence is not the written prose', () => {
+    scenario('The live page sentence is not the written prose', () => {
+      const writtenProse = 'Written focus prose stays.\n';
+      const liveSentence = 'Пишу спеки.';
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [
+            {kind: 'live' as const, badge: 'working', text: liveSentence},
+            {
+              kind: 'focus' as const,
+              marker: 'sdd:focus:code',
+              body: writtenProse,
+              display: liveSentence,
+            },
+          ],
+          pageIndex: 1,
+        }),
+      );
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      assert.equal(prose.includes('Written focus prose stays.'), true);
+      assert.equal(prose.includes(liveSentence), false);
+    });
+  });
 });
 
 spec('live-focus-page', () => {

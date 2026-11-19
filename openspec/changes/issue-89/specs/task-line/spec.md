@@ -1,3 +1,7 @@
+<!--
+sdd-absorbed: e48f56599a4130dc
+-->
+
 # Spec Delta
 
 ## Purpose

@@ -1065,8 +1065,8 @@ spec('focus-pager', () => {
       );
       assert.equal(html.includes('focus-row'), false);
       assert.equal(html.includes('focus-pager'), false);
-      assert.match(html, /<section class="block focus-block">\s*<span class="badge">/);
-      assert.match(html, /class="badge"/);
+      assert.match(html, /<div class="focus-body">\s*<span class="badge">/);
+      assert.match(html, /class="focus-prose"/);
       assert.match(html, /<pre>/);
     });
     scenario('Back still walks older written comments, newest first', async () => {
@@ -1233,6 +1233,46 @@ spec('focus-pager', () => {
       assert.equal(html.includes('focus-pager-count'), false);
       assert.equal(html.includes('data-focus="back"'), false);
       assert.equal(html.includes('data-focus="forward"'), false);
+    });
+  });
+});
+
+spec('focus-prose', () => {
+  requirement('The prose renders markdown', () => {
+    scenario('The words after the marker are not rewritten', () => {
+      const marker = 'sdd:focus:code';
+      const body = 'Текст без правок.\nВторая строка.\n';
+      const block = focusBlock(marker, body);
+      assert.equal(focusBlockProse(marker as import('../machine/mark/marker.ts').FocusMarkerLine, body), body);
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {blocks: [block], pageIndex: 0}),
+      );
+      assert.match(html, /<div class="focus-body">[\s\S]*<span class="badge">sdd:focus:code<\/span>[\s\S]*<div class="focus-prose">/);
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      assert.equal(prose.includes('Текст без правок.'), true);
+      assert.equal(prose.includes('Вторая строка.'), true);
+      assert.equal(prose.includes(marker), false);
+      assert.equal(html.split(marker).length - 1, 1);
+    });
+  });
+  requirement('The marker line stays the badge and is not a heading', () => {
+    scenario('The marker line stays the badge and is not a heading', () => {
+      const marker = 'sdd:focus:plan';
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock(marker, 'Plan outcome.\n')],
+          pageIndex: 0,
+        }),
+      );
+      assert.match(html, /<span class="badge">sdd:focus:plan<\/span>/);
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      assert.equal(prose.includes('<h1'), false);
+      assert.equal(prose.includes('<h2'), false);
+      assert.equal(prose.includes('<h3'), false);
+      assert.equal(prose.includes('<h4'), false);
+      assert.equal(prose.includes('<h5'), false);
+      assert.equal(prose.includes('<h6'), false);
+      assert.equal(prose.includes(marker), false);
     });
   });
 });

@@ -899,43 +899,70 @@ export function FocusBlocks({
   const badge = page.kind === 'live' ? page.badge : page.marker;
   const stored = page.kind === 'live' ? page.text : page.display;
   const prose = index === 0 && page.kind === 'focus' && tail ? `${stored.replace(/\s*$/, '')}\n${tail}` : stored;
+  const proseBody =
+    page.kind === 'live' ? (
+      prose
+    ) : (
+      <FocusProse display={prose} capabilities={capabilities} />
+    );
+  const pager = pageCount > 1 ? (
+    <div className="focus-pager">
+      <button
+        className={index >= pageCount - 1 ? 'round off' : 'round'}
+        type="button"
+        data-focus="back"
+        disabled={index >= pageCount - 1}
+      >
+        <ChevronBack />
+      </button>
+      <span className="focus-pager-count">
+        {currentPage}/{pageCount}
+      </span>
+      <button
+        className={index <= 0 ? 'round off' : 'round'}
+        type="button"
+        data-focus="forward"
+        disabled={index <= 0}
+      >
+        <ChevronForward />
+      </button>
+    </div>
+  ) : null;
+  if (page.kind === 'focus') {
+    return (
+      <section className="block focus-block">
+        {pageCount > 1 ? (
+          <>
+            <div className="focus-row">
+              <span className="badge">{badge}</span>
+              {pager}
+            </div>
+            <div className="focus-prose">
+              <pre>{proseBody}</pre>
+            </div>
+          </>
+        ) : (
+          <div className="focus-body">
+            <span className="badge">{badge}</span>
+            <div className="focus-prose">
+              <pre>{proseBody}</pre>
+            </div>
+          </div>
+        )}
+      </section>
+    );
+  }
   return (
     <section className="block focus-block">
       {pageCount > 1 ? (
         <div className="focus-row">
           <span className="badge">{badge}</span>
-          <div className="focus-pager">
-            <button
-              className={index >= pageCount - 1 ? 'round off' : 'round'}
-              type="button"
-              data-focus="back"
-              disabled={index >= pageCount - 1}
-            >
-              <ChevronBack />
-            </button>
-            <span className="focus-pager-count">
-              {currentPage}/{pageCount}
-            </span>
-            <button
-              className={index <= 0 ? 'round off' : 'round'}
-              type="button"
-              data-focus="forward"
-              disabled={index <= 0}
-            >
-              <ChevronForward />
-            </button>
-          </div>
+          {pager}
         </div>
       ) : (
         <span className="badge">{badge}</span>
       )}
-      <pre>
-        {page.kind === 'live' ? (
-          prose
-        ) : (
-          <FocusProse display={prose} capabilities={capabilities} />
-        )}
-      </pre>
+      <pre>{proseBody}</pre>
     </section>
   );
 }

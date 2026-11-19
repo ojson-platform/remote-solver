@@ -624,11 +624,15 @@ function TaskFile({
   pull,
   root,
   blocks,
+  drafts,
+  keyName,
 }: {
   task: SpineTask;
   pull: boolean;
   root: string;
   blocks: readonly SidebarBlock[];
+  drafts: readonly LineDraft[];
+  keyName: string;
 }): ReactNode {
   const sections = task.sections.filter(section => section.lines.some(line => line.text.trim() !== ''));
   if (sections.length === 0) {
@@ -636,45 +640,64 @@ function TaskFile({
   }
   const path = `${root}/tasks/${task.id}.md`;
   const paint = (lines: SpineTask['sections'][number]['lines']): ReactNode[] => {
+    const documentPaint = paintSourceDocument(lines.map(item => item.text));
     const out: ReactNode[] = [];
     let gap = false;
-    for (const line of lines) {
-      if (line.text.trim() === '') {
+    lines.forEach((line, index) => {
+      const painted = documentPaint[index];
+      if (painted?.hide) {
+        return;
+      }
+      const covered = painted?.placeAt !== undefined;
+      if (line.text.trim() === '' && !covered) {
         if (!gap) {
           out.push(<span className="gap" key={line.line} />);
         }
         gap = true;
-        continue;
+        return;
       }
       gap = false;
-      const text = line.text.trimEnd();
+      const lineKey = line.text.trimEnd();
       if (!pull) {
         out.push(
           <p className="line" key={line.line}>
-            {text}
+            {painted?.paint}
           </p>,
         );
-        continue;
+        return;
       }
+      const draft = drafts.find(item => item.line === lineKey);
       out.push(
         <span key={line.line}>
           <button
             type="button"
-            className="line"
-            data-line={text}
+            className={draft ? 'line is-on' : 'line'}
+            data-line={lineKey}
             data-path={path}
             data-at={line.line}
             data-side="right"
           >
-            {text}
+            {painted?.paint}
           </button>
+          {draft ? (
+            <LineNote
+              keyName={keyName}
+              line={draft.line}
+              question={draft.question}
+              text={draft.text}
+              path={path}
+              at={String(line.line)}
+              side="right"
+            />
+          ) : null}
           <PostedComments comments={commentsOnLine(blocks, path, line.line)} />
         </span>,
       );
-    }
+    });
     return out;
   };
   return (
+  <>
     <div className="doc">
       {sections.map(section => (
         <section className="plan-section" key={section.heading}>
@@ -683,6 +706,8 @@ function TaskFile({
         </section>
       ))}
     </div>
+    {pull ? lineTemplate(keyName) : null}
+  </>
   );
 }
 
@@ -1717,6 +1742,8 @@ export function Sidebar({
                   pull={model.pull}
                   root={model.readPath}
                   blocks={opened.blocks}
+                  drafts={drafts}
+                  keyName={row.key}
                 />
               </details>
             ))}

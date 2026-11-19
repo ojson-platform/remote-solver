@@ -6,20 +6,11 @@ Specify shows each spec line as a row of text. The row keeps addition and deleti
 
 ## Requirements
 
-### Requirement: The row shows the line as text
-
-The spec row SHALL show the line as text. A heading mark, a list mark, emphasis, a link, and code in that line SHALL stay characters of that text.
-
-#### Scenario: A marked line stays text
-
-- **WHEN** the person opens Specify on a spec line that contains a heading mark, a list mark, emphasis, a link, and code
-- **THEN** the row shows that line as text, and those marks stay characters of the text
-
 ### Requirement: The row keeps addition and deletion coloring
 
 An added row SHALL carry the classes `diff-row` and `add`. A deleted row SHALL carry the classes `diff-row` and `del`. An unchanged row SHALL carry the classes `diff-row` and `ctx`. When the spec has no addition and no deletion, the row SHALL also carry the class `plain`.
 
-A changed span of a replaced line SHALL be `span.bit`. An unchanged span of that line SHALL NOT be `span.bit`. A line that has no changed span SHALL show its text with no `span.bit`.
+A changed span of a replaced line SHALL be `span.bit`. An unchanged span of that line SHALL NOT be `span.bit`. A line that has no changed span SHALL have no `span.bit`.
 
 #### Scenario: Added, deleted, and unchanged rows keep their classes
 
@@ -31,10 +22,20 @@ A changed span of a replaced line SHALL be `span.bit`. An unchanged span of that
 - **WHEN** the person opens Specify on a replaced line and one span of that line changed
 - **THEN** that changed span is `span.bit`, and an unchanged span of that line is not `span.bit`
 
+#### Scenario: A changed marked word is marked on the painted span
+
+- **WHEN** the person opens Specify on a replaced line whose changed token is the marked word **бета**
+- **THEN** the painted span of that line is `span.bit`
+
+#### Scenario: A changed link or underscore emphasis is marked on the painted span
+
+- **WHEN** the person opens Specify on a replaced line whose changed token is a link, and on a replaced line whose changed token is underscore emphasis
+- **THEN** the row renders that link and that emphasis, the painted span of that link is `span.bit`, the painted span of that emphasis is `span.bit`, and an unchanged span of that line is not `span.bit`
+
 #### Scenario: A line with no changed span has no marked span
 
 - **WHEN** the person opens Specify on a line that has no changed span
-- **THEN** the row shows that line as text and has no `span.bit`
+- **THEN** the row has no `span.bit`
 
 #### Scenario: An unchanged spec row is plain
 
@@ -100,7 +101,7 @@ A line that names a scenario SHALL carry `data-scenario` with that scenario name
 
 ### Requirement: The line numbers and the fold bar stay
 
-On a changed spec, the row SHALL show a baseline number cell and a folded number cell, and a cell with no number SHALL be empty. On a spec with no addition and no deletion, the row SHALL show one line number. A fold of unchanged lines SHALL be a fold bar, and that bar SHALL NOT be the comment control.
+On a changed spec, the row SHALL show a baseline number cell and a folded number cell, and a cell with no number SHALL be empty. On a spec with no addition and no deletion, the row SHALL show one line number. Rendering the line as markdown SHALL NOT remove those number cells. A fold of unchanged lines SHALL be a fold bar, and that bar SHALL NOT be the comment control.
 
 #### Scenario: A changed row keeps both number cells and the fold bar is separate
 
@@ -111,3 +112,27 @@ On a changed spec, the row SHALL show a baseline number cell and a folded number
 
 - **WHEN** the person opens Specify on a spec that has no addition and no deletion
 - **THEN** each row shows one line number
+
+#### Scenario: A code block keeps the line numbers in sequence
+
+- **WHEN** the person opens Specify on a changed spec line that contains a code block, and the following line is another spec line
+- **THEN** that row shows a baseline number cell and a folded number cell, the code block does not show a line number for each of its visual lines, and the following row shows the next line number
+
+#### Scenario: A fence marker stays a row
+
+- **WHEN** the person opens Specify on a source line that is a fence marker, and the following line is the next source line
+- **THEN** that line stays a row, the row keeps its number cells, the fence marks do not stay characters of the text, and the following row shows the next line number
+
+### Requirement: The row renders the line as markdown
+
+The spec row SHALL render the line as markdown. A heading, a list, emphasis, a link, and code in that line SHALL render as markdown, and their marks SHALL NOT stay characters of the text. When a code span's position spans two source lines, the row SHALL show the paint of its own line. A line the value does not contain SHALL NOT show the raw source.
+
+#### Scenario: A marked line renders as markdown
+
+- **WHEN** the person opens Specify on a heading line, a list line, and a line that contains emphasis, a link, and code
+- **THEN** the row renders that heading, that list, that emphasis, that link, and that code as markdown, the list row does not show the characters `- list item`, and the heading mark, the list mark, the emphasis marks, the link marks, and the code marks do not stay characters of the text
+
+#### Scenario: A code span across two source lines shows the paint of its own line
+
+- **WHEN** the person opens Specify on a code span whose position spans two source lines, with gamma delta on the first source line and epsilon on the next, the node value is gamma delta followed by epsilon, and that value does not contain the first covered line
+- **THEN** the first row shows the paint of its own line and does not show the raw source of the first covered line, the next row shows the paint of its own line and does not show the raw source of that line, and a line the value does not contain does not show the raw source

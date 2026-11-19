@@ -103,7 +103,6 @@ test('the package ships the built files and not the source', () => {
     'bin/client.js',
     'bin/face.css',
     'prompts/sdd.md',
-    'skills/sdd-init/SKILL.md',
     'skills/sdd-flow/SKILL.md',
     'skills/sdd-flow/CONTEXT.md',
     'skills/sdd-flow/scripts/sdd.mjs',
@@ -111,6 +110,7 @@ test('the package ships the built files and not the source', () => {
     assert.ok(files.includes(required), required);
   }
   assert.ok(files.some(file => file.startsWith('skills/sdd-flow/steps/') && file.endsWith('.md')));
+  assert.equal(files.includes('skills/sdd-init/SKILL.md'), false);
   assert.equal(
     files.some(file => file.startsWith('src/')),
     false,

@@ -30,6 +30,7 @@ export type {
   IssueRecord,
   Link,
   Openspec,
+  PathChange,
   Pull,
   Review,
   ReviewNote,
@@ -41,6 +42,7 @@ export type {
   ThreadRecord,
   ThreadTarget,
   Tracker,
+  Tree,
   Vcs,
 } from './machine/port.ts';
 

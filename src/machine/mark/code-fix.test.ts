@@ -7,9 +7,10 @@ import {test} from 'vitest';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
+import {gitTree} from '../../adapters/vcs/tree.ts';
 import {memoryPorts} from '../../adapters/tracker/github.ts';
 import {fixThread} from '../../sdd.ts';
-import {isTestPath, parseNameStatus, proveCodeFix, vitestArguments} from './code-fix.ts';
+import {proveCodeFix} from './code-fix.ts';
 
 const whole = "export const place = 'whole';\n";
 const slice = "export const place = 'slice';\n";
@@ -54,10 +55,19 @@ function writeTree(root: string, files: Record<string, string>): void {
   }
 }
 
+const DESIGN = 'openspec/changes/issue-7/design.md';
+const COVERAGE = `## Verification boundary
+
+one-file: \`node <test-file> -t <titles>\`
+trace: \`spec\`, \`requirement\`, and \`scenario\` from \`@ojson/spec-coverage\`
+test path: \`*.test.mjs\`
+`;
+
 function repo(parent: Record<string, string>, head: Record<string, string>): string {
   const root = mkdtempSync(path.join(tmpdir(), 'code-fix-'));
+  const withDesign = (files: Record<string, string>) => (files[DESIGN] ? files : {...files, [DESIGN]: COVERAGE});
   git(root, ['init', '-b', 'master']);
-  writeTree(root, parent);
+  writeTree(root, withDesign(parent));
   git(root, ['add', '-A']);
   git(root, ['commit', '-m', 'parent']);
   for (const name of Object.keys(parent)) {
@@ -65,7 +75,7 @@ function repo(parent: Record<string, string>, head: Record<string, string>): str
       rmSync(path.join(root, name));
     }
   }
-  writeTree(root, head);
+  writeTree(root, withDesign(head));
   git(root, ['add', '-A']);
   git(root, ['commit', '-m', 'answer']);
   return root;
@@ -84,6 +94,7 @@ function nodeRun(root: string, files: string[], _titles?: readonly string[]): Pr
 async function attempt(
   root: string,
   run: (root: string, files: string[], titles: readonly string[]) => Promise<number> = nodeRun,
+  boundary = false,
 ): Promise<{calls: string[]; body: string; error: unknown}> {
   const memory = memoryPorts({
     threadList: {
@@ -106,7 +117,7 @@ async function attempt(
       {
         review: memory.review,
         vcs: {head: async () => head, published: async () => true},
-        prove: () => proveCodeFix(root, run),
+        prove: () => (boundary ? proveCodeFix(root, gitTree(root)) : proveCodeFix(root, gitTree(root), run)),
       },
     );
     return {calls: memory.calls, body, error: undefined};
@@ -141,32 +152,14 @@ test('an added source file comes back after the proof, and a dirty tree is left 
     },
   );
   try {
-    await proveCodeFix(root, nodeRun);
+    await proveCodeFix(root, gitTree(root), nodeRun);
     assertClean(root, slice);
     writeFileSync(path.join(root, 'place.ts'), 'dirty\n');
-    await assert.rejects(proveCodeFix(root, nodeRun), /dirty/);
+    await assert.rejects(proveCodeFix(root, gitTree(root), nodeRun), /dirty/);
     assert.equal(readFileSync(path.join(root, 'place.ts'), 'utf8'), 'dirty\n');
   } finally {
     rmSync(root, {recursive: true, force: true});
   }
-});
-
-test('a test path is the vitest file, and a rename is two paths', () => {
-  assert.equal(isTestPath('src/window/source-line.test.ts'), true);
-  assert.equal(isTestPath('place.test.mjs'), true);
-  assert.equal(isTestPath('src/machine/__tests__/harness.ts'), false);
-  assert.deepEqual(parseNameStatus('M\0src/a.ts\0A\0src/a.test.ts\0'), [
-    {status: 'M', path: 'src/a.ts'},
-    {status: 'A', path: 'src/a.test.ts'},
-  ]);
-  assert.deepEqual(parseNameStatus('R100\0src/old.ts\0src/new.ts\0'), [
-    {status: 'R100', from: 'src/old.ts', path: 'src/new.ts'},
-  ]);
-  assert.deepEqual(vitestArguments('/repo', ['src/a.test.ts']).args, [
-    '--run',
-    '--reporter=default',
-    'src/a.test.ts',
-  ]);
 });
 
 spec('marker', () => {
@@ -304,6 +297,58 @@ spec('marker', () => {
           'resolveThread',
         ]);
         assertClean(root, slice);
+      } finally {
+        rmSync(root, {recursive: true, force: true});
+      }
+    });
+  });
+
+  requirement('A proof runs the boundary command', () => {
+    const boundary = `## Verification boundary
+
+one-file: \`node <test-file>\`
+trace: \`go test\`
+test path: \`*_test.mjs\`
+`;
+    const bare = `## Verification boundary
+
+trace: \`go test\`
+test path: \`*_test.mjs\`
+`;
+    scenario('Fix closes a code thread by the boundary command', async () => {
+      const root = repo(
+        {'place.ts': whole, [DESIGN]: boundary},
+        {
+          'place.ts': slice,
+          [DESIGN]: boundary,
+          'place_test.mjs': asserts("place = 'slice'"),
+        },
+      );
+      try {
+        const closed = await attempt(root, nodeRun, true);
+        const head = git(root, ['rev-parse', 'HEAD']);
+        assert.equal(closed.error, undefined);
+        assert.equal(closed.body, `sdd:fixed ${head}`);
+        assertClean(root, slice);
+      } finally {
+        rmSync(root, {recursive: true, force: true});
+      }
+    });
+
+    scenario('Fix refuses a code thread whose boundary names no command', async () => {
+      const root = repo(
+        {'place.ts': whole, [DESIGN]: bare},
+        {
+          'place.ts': slice,
+          [DESIGN]: bare,
+          'place_test.mjs': asserts("place = 'slice'"),
+        },
+      );
+      try {
+        const closed = await attempt(root, nodeRun, true);
+        assert.match(String(closed.error), /no one-file command/);
+        assert.equal(closed.calls.some(call => call.includes('sdd:layer=spec')), false);
+        assert.equal(closed.calls.includes('resolveThread'), false);
       } finally {
         rmSync(root, {recursive: true, force: true});
       }

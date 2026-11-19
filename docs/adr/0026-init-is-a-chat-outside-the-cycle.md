@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by 0042
 ---
 
 # `sdd-init` is a chat outside the cycle

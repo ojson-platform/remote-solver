@@ -1,6 +1,6 @@
 # Context
 
-Skills talk to the tracker, the review, and the repository only through `node scripts/sdd.mjs`. Every read and every write below is one of its verbs. The source of this package, the built `sdd.mjs`, `bin/`, `node_modules`, the GitHub API, `gh`, and `remote-solver` are not part of a skill. Do not search for them and do not open them to learn a verb.
+Skills talk to the tracker, the review, and the repository only through the `sdd` command. Every read and every write below is one of its verbs. A host note at `scripts/adapters/host.md` that names the chat command replaces `sdd` for this host. The source of this package, the built script, `bin/`, a package directory, a forge API, and `remote-solver` are not part of a skill. Do not search for them and do not open them to learn a verb.
 
 ## Outcome
 
@@ -18,7 +18,7 @@ A run ends in exactly one signal. A run that ends with none leaves the decision 
 
 Read this file once in a run, the first time a step names one of its sections. A file named under a step's Read only is read once. After an edit of a file succeeds, that file is known for the rest of the run: do not read it again.
 
-One edit of a file covers one scenario of the step. When the check command fails after that edit and a file has changed since the last run of the command, one further edit of that file is allowed, then the command runs once more. A command the card does not name does not run, apart from the verbs and the git steps in § Publish. The git steps are § Onto the base. `git log`, `git show`, and a diff of an older commit do not run.
+One edit of a file covers one scenario of the step. When the check command fails after that edit and a file has changed since the last run of the command, one further edit of that file is allowed, then the command runs once more. A command the card does not name does not run, apart from the verbs and § Onto the base. A log, a show, and a diff of an older commit do not run.
 
 The one-file command is the check while its test is red and after each edit of that test or its source, and after each edit in cover-baseline. It runs again after a later edit even when it already exited 0. The layer command, the fast suite, and the type check do not run inside a slice. They run in repair-suite, and once in cover-baseline after that action's one-file commands are green. A one-file command that is not red on its assertion allows one further edit of that test, then Wait.
 
@@ -41,7 +41,7 @@ Earliest to latest: proposal, spec, design, tasks, code. The machine moves the p
 
 ## Upstream
 
-The prompt carries an `## Upstream` block. That block is the current input and the revision this file has absorbed. Do not run git to rebuild it. Listing titles to satisfy a check is allowed. The facts to write come from the block.
+The prompt carries an `## Upstream` block. That block is the current input and the revision this file has absorbed. Do not rebuild it from history. Listing titles to satisfy a check is allowed. The facts to write come from the block.
 
 - The block says this file does not exist yet: write it from the previous artifact, as the step says. Put `sdd-absorbed: <revision>` on its own line.
 - The block says the stamp matches: leave this file.
@@ -97,7 +97,7 @@ The other files of `openspec/changes/issue-<issue>/`, with these headings exactl
 - `## Open questions`: `- [ ]` items. The machine counts them.
 
 `design.md`, every section filled or `none`:
-- `## Verification boundary`: where each capability's Scenarios are observed, and the commands. For each capability: a one-file command that contains `<test-file>`, and the layer command. A fast suite is included when the init block names one, otherwise `none`. The last line of the section is the type check, once for the change, or `none`. The trace line and the test path rule, when the service named them, are copied once after that.
+- `## Verification boundary`: where each capability's Scenarios are observed, and the commands. For each capability: a one-file command that contains `<test-file>`, and the layer command. When the trace line names `@ojson/spec-coverage`, the one-file command also contains `<titles>`. A fast suite is included when the init block names one, otherwise `none`. The last line of the section is the type check, once for the change, or `none`. The trace line and the test path rule, when the service named them, are copied once after that.
 - `## External contracts`: what another service must provide, not its API.
 - `## Technical prerequisites`: each one code in this PR, an issue `Depends: #N`, or a flag with a safe default.
 - `## Approach`: how this change is built. Module boundaries, risks, rejected alternatives, or `none`. The machine does not read it.
@@ -112,18 +112,18 @@ The other files of `openspec/changes/issue-<issue>/`, with these headings exactl
 ## Threads
 
 ```bash
-node scripts/sdd.mjs threads <pull> [--layer <layer>] [--unmarked]
-node scripts/sdd.mjs thread open <pull> <file> <line> '<body>'
-node scripts/sdd.mjs thread reply <pull> <comment> '<body>'
-node scripts/sdd.mjs thread say <pull> '<body>'
-node scripts/sdd.mjs thread resolve <thread>
-node scripts/sdd.mjs thread fix <issue> <pull> <thread>
-node scripts/sdd.mjs thread fix <issue> <pull> --conversation
+sdd threads <pull> [--layer <layer>] [--unmarked]
+sdd thread open <pull> <file> <line> '<body>'
+sdd thread reply <pull> <comment> '<body>'
+sdd thread say <pull> '<body>'
+sdd thread resolve <thread>
+sdd thread fix <issue> <pull> <thread>
+sdd thread fix <issue> <pull> --conversation
 ```
 
 `threads` prints the open review threads as JSON: `thread` (for `resolve` and `fix`), `comment` (for `reply`), `file`, `line`, `marker` (the layer, `note`, or `fixed` the latest reply carries, or `null`), `instruction` (the first comment), `body` (the latest comment). `--layer X` keeps the threads marked `X`; `--unmarked` keeps the ones with no marker. `conversation.last` is the last pull request comment, `conversation.layer` is the layer the conversation still asks for, and `conversation.unanswered` is true when that last comment is a person's and carries no marker.
 
-`thread open` places a thread on a line of the pull request head. `thread say` posts a pull request comment. The command adds `🤖 ` at the start of every body. `thread fix` replies `sdd:fixed <HEAD>` and resolves the thread in one call; `--conversation` posts that line to the conversation instead. It refuses while HEAD is not on the pushed `sdd/<issue>`. On a `code` thread it also refuses unless a test the answering commit changes, whose `scenario` title this change's delta names, fails on that commit's parent and passes on HEAD. A `scenario` the delta does not name does not count, and a neighboring check in the same file does not either. A `scenario` a stable spec names counts the same way. The thread stays open. A thread marked `fixed` is done.
+`thread open` places a thread on a line of the pull request head. `thread say` posts a pull request comment. The command adds `🤖 ` at the start of every body. `thread fix` replies `sdd:fixed <HEAD>` and resolves the thread in one call; `--conversation` posts that line to the conversation instead. It refuses while HEAD is not on the pushed `sdd/<issue>`. On a `code` thread it also refuses unless the boundary command fails on that commit's parent and passes on HEAD. When the trace line names `@ojson/spec-coverage`, a test the answering commit changes, whose `scenario` title this change's delta names, is that command. A `scenario` the delta does not name does not count, and a neighboring check in the same file does not either. A `scenario` a stable spec names counts the same way. A trace that does not name that package runs the one-file command of each changed file the test path names, and a `scenario` call is not required. A missing one-file command refuses and does not mark `sdd:layer=spec`. The thread stays open. A thread marked `fixed` is done.
 
 ### Fix thread
 
@@ -131,7 +131,7 @@ A skill fixes the threads of its own layer: `threads <pull> --layer <layer>`. Wh
 
 ### Onto the base
 
-Rebase `sdd/<issue>` onto the pull request base. Edit only files git marks conflicted. Publish without focus. The phase stays. The same steps run when the pull request conflicts with its base and no person asked.
+Run `sdd rebase <issue> <base>`. `<base>` is the base the step printed. The command rebases `sdd/<issue>` onto that base and prints the conflicted paths. Edit only those paths. Publish without focus. The phase stays. The same steps run when the pull request conflicts with its base and no person asked.
 
 ### Hand-off
 
@@ -142,35 +142,35 @@ A failing log is one signal. No test line: `sdd:note <cause>` and Wait. A covera
 ## Publish
 
 1. The checkout lists only the files of this commit. Anything else is an artifact the task did not name: a generated directory is ignored by the repository, a stray file is deleted, a file that belongs to the task joins the commit. Find why it appeared and remove that cause in the same run. `publish` refuses a dirty checkout and lists its files.
-2. Commit. The repository's own commit rule wins when a checkout-root file states it: `CONTRIBUTING`, `CONTRIBUTING.md`, `AGENTS.md`, `commitlint.config.js`, `commitlint.config.cjs`, `commitlint.config.mjs`, `.commitlintrc`, or `.commitlintrc.json`. Read those paths only. When none of them exists, the subject is `#<issue>: <what changed>`. Do not search the tree. The body contains a line `#<issue>`. Pass the message with `--cleanup=verbatim` so that line stays. Any uncommitted `openspec/` of this issue joins the commit.
-3. `node scripts/sdd.mjs publish <issue> "#<issue>: <what changed>"`. The argument is the pull request title, not the commit subject. It pushes the issue branch. Only the plan step opens the pull request when there is none. A later phase does not open one.
-4. When the commit includes this phase's artifact: `node scripts/sdd.mjs focus <issue> '<body>'`. The body is one marker line plus the prose. A separate review step does not write focus. A step names this section and its marker; it does not restate these paragraphs. The closed markers are `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, `sdd:focus:code`, `sdd:focus:accept`, and `sdd:focus` for the whole pull request. A pattern `sdd:focus:<phase>` is not a marker. The prose is Russian, short, and has no headings. It contains no diff and does not choose the next phase. The first paragraph answers that phase's question. The first sentence of that paragraph is itself the answer. That sentence says what a person sees. A code name follows the plain words and is not the point of the sentence. One sentence holds one decision. A refusal, what is deliberately not built, and where to look are their own sentences. An implementation word does not become a metaphor. Where to look is a place on the screen and is not a test file. These rules hold for every focus, including `sdd:focus` for the whole pull request. A clean first visit is one paragraph. A further paragraph appears only for a refusal, open questions, a weak check, or a remark. There is no fixed heading and no status of layers. `sdd:focus:plan`: the paragraph says what changes for the reader of the ticket and what was refused. It does not count open questions. The phase paints that count. `sdd:focus:spec`: say which promise is new and which existing promise changed, name the scenario without which the decision cannot be understood, and name a promise the issue asked for that the spec does not make. `sdd:focus:design`: say what the person sees on the screen, which alternative was rejected, what is deliberately not built, and where on the screen to look. `sdd:focus:tasks`: name the slices in the order a person would notice them, and name a slice that waits on another. `sdd:focus:code`: say what became true after this commit, what the slice left untouched, and a check that does not prove it. `sdd:focus:accept`: say what landed in the baseline specs and what was left out on purpose. Do not count capabilities, scenarios, or tests. The phase paints the merge sentence. The archive writes this comment every time, including when `sdd:auto-merge` is set. `sdd:focus`: prose for the whole pull request; it belongs to the focus block and to no single spine row. A visit that fixes review threads of its own phase writes that phase's marker even when the diff is small. On plan, spec, design, and tasks the first paragraph says what this commit changed. It names a refusal, a new or changed promise, a rejected alternative, or a waiting slice only when this commit added or changed that. A code change that answers a review thread still says what became true after this commit, what the slice left untouched, and a check that does not prove it. The next paragraph names the remarks in their own words and what changed because of them, including scenario names when scenarios appeared. A last paragraph appears only when something remains to look at, and it says what to look at. The previous comment of that phase stays. Verify, labeling threads, a rebase-only commit, an unarchive publish, and a publish that carries no phase artifact do not call `focus`. When the document was published, `sdd:auto-plan`, `sdd:auto-spec`, and `sdd:auto-design` do not skip the comment. cover-baseline and repair-suite do not call focus, even when the commit contains tests or source.
+2. Run `sdd commit <issue> "#<issue>: <what changed>"`. The repository's own commit rule wins when a checkout-root file states it: `CONTRIBUTING`, `CONTRIBUTING.md`, `AGENTS.md`, `commitlint.config.js`, `commitlint.config.cjs`, `commitlint.config.mjs`, `.commitlintrc`, or `.commitlintrc.json`. Read those paths only. When none of them exists, the subject is `#<issue>: <what changed>`. Do not search the tree. The body is a second paragraph that is the line `#<issue>`. Any uncommitted `openspec/` of this issue joins the commit.
+3. `sdd publish <issue> "#<issue>: <what changed>"`. The argument is the pull request title, not the commit subject. It pushes the issue branch. Only the plan step opens the pull request when there is none. A later phase does not open one.
+4. When the commit includes this phase's artifact: `sdd focus <issue> '<body>'`. The body is one marker line plus the prose. A separate review step does not write focus. A step names this section and its marker; it does not restate these paragraphs. The closed markers are `sdd:focus:plan`, `sdd:focus:spec`, `sdd:focus:design`, `sdd:focus:tasks`, `sdd:focus:code`, `sdd:focus:accept`, and `sdd:focus` for the whole pull request. A pattern `sdd:focus:<phase>` is not a marker. The prose is Russian, short, and has no headings. It contains no diff and does not choose the next phase. The first paragraph answers that phase's question. The first sentence of that paragraph is itself the answer. That sentence says what a person sees. A code name follows the plain words and is not the point of the sentence. One sentence holds one decision. A refusal, what is deliberately not built, and where to look are their own sentences. An implementation word does not become a metaphor. Where to look is a place on the screen and is not a test file. These rules hold for every focus, including `sdd:focus` for the whole pull request. A clean first visit is one paragraph. A further paragraph appears only for a refusal, open questions, a weak check, or a remark. There is no fixed heading and no status of layers. `sdd:focus:plan`: the paragraph says what changes for the reader of the ticket and what was refused. It does not count open questions. The phase paints that count. `sdd:focus:spec`: say which promise is new and which existing promise changed, name the scenario without which the decision cannot be understood, and name a promise the issue asked for that the spec does not make. `sdd:focus:design`: say what the person sees on the screen, which alternative was rejected, what is deliberately not built, and where on the screen to look. `sdd:focus:tasks`: name the slices in the order a person would notice them, and name a slice that waits on another. `sdd:focus:code`: say what became true after this commit, what the slice left untouched, and a check that does not prove it. `sdd:focus:accept`: say what landed in the baseline specs and what was left out on purpose. Do not count capabilities, scenarios, or tests. The phase paints the merge sentence. The archive writes this comment every time, including when `sdd:auto-merge` is set. `sdd:focus`: prose for the whole pull request; it belongs to the focus block and to no single spine row. A visit that fixes review threads of its own phase writes that phase's marker even when the diff is small. On plan, spec, design, and tasks the first paragraph says what this commit changed. It names a refusal, a new or changed promise, a rejected alternative, or a waiting slice only when this commit added or changed that. A code change that answers a review thread still says what became true after this commit, what the slice left untouched, and a check that does not prove it. The next paragraph names the remarks in their own words and what changed because of them, including scenario names when scenarios appeared. A last paragraph appears only when something remains to look at, and it says what to look at. The previous comment of that phase stays. Verify, labeling threads, a rebase-only commit, an unarchive publish, and a publish that carries no phase artifact do not call `focus`. When the document was published, `sdd:auto-plan`, `sdd:auto-spec`, and `sdd:auto-design` do not skip the comment. cover-baseline and repair-suite do not call focus, even when the commit contains tests or source.
 5. The layer's mirror line, when the skill names one: § Issue mirror.
 
 Nothing to commit: skip steps 1–2 and still run step 3.
 
 ## Wait
 
-`node scripts/sdd.mjs wait <issue> '<what the person does>'` sets `sdd:wait-human` and comments on the issue. The comment is the ask: the decision or the broken check, and the next command. A wait without that sentence is refused.
+`sdd wait <issue> '<what the person does>'` sets `sdd:wait-human` and comments on the issue. The comment is the ask: the decision or the broken check, and the next command. A wait without that sentence is refused.
 
 Wait only for a blocker. The review of a published proposal, spec, or design is not one: the machine opens that gate itself.
 
 ## Worktree
 
-Run `node scripts/sdd.mjs worktree <key>` and work in the directory it prints. A branch is checked out in one place, so an older checkout of the same branch has to be removed before this issue can run. A dirty checkout is reused as it is. The spy and a chat driving one issue do not share a checkout.
+Run `sdd worktree <key>` and work in the directory it prints. A branch is checked out in one place, so an older checkout of the same branch has to be removed before this issue can run. A dirty checkout is reused as it is. The spy and a chat driving one issue do not share a checkout.
 
 ## Archive
 
-`node scripts/sdd.mjs fold <issue>` runs `openspec archive issue-<issue> --yes`, moves the dated directory to `openspec/changes/archive/issue-<issue>/`, sets Purpose on a spec the command created, runs `openspec validate --all --strict --no-interactive`, and commits. The commit body contains a line `Sdd-Archive: issue-<issue>`. The verb does not post a focus comment. A non-zero exit is the command text. Do not run `openspec archive` yourself.
+`sdd fold <issue>` runs `openspec archive issue-<issue> --yes`, moves the dated directory to `openspec/changes/archive/issue-<issue>/`, sets Purpose on a spec the command created, runs `openspec validate --all --strict --no-interactive`, and commits. The commit body contains a line `Sdd-Archive: issue-<issue>`. The verb does not post a focus comment. A non-zero exit is the command text. Do not run `openspec archive` yourself.
 
-`node scripts/sdd.mjs unfold <issue>` reverts the tip whose body contains a line `Sdd-Archive: issue-<issue>`. The revert is the new tip. Its body contains a line `#<issue>` and does not contain `Sdd-Archive: issue-<issue>`. When the tip has no such line, the verb exits non-zero and does not revert an earlier commit.
+`sdd unfold <issue>` reverts the tip whose body contains a line `Sdd-Archive: issue-<issue>`. The revert is the new tip. Its body contains a line `#<issue>` and does not contain `Sdd-Archive: issue-<issue>`. When the tip has no such line, the verb exits non-zero and does not revert an earlier commit.
 
 ## Issue mirror
 
 Keep the author's text. Replace only the block between `<!-- sdd:begin -->`
 and `<!-- sdd:end -->`. Create the block at the end if it is missing. One
 line per layer; a layer keeps its line once written. Update one line with
-`node scripts/sdd.mjs mirror <key> <Layer> "<text>"`, where `<Layer>` is `Change`, `Plan`, `Specify`, `Design`, or `Tasks`:
+`sdd mirror <key> <Layer> "<text>"`, where `<Layer>` is `Change`, `Plan`, `Specify`, `Design`, or `Tasks`:
 
 ```md
 <!-- sdd:begin -->

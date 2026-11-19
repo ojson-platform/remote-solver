@@ -18,8 +18,8 @@ const mechanical = new Set([
   'repair-suite',
 ]);
 
-test('skills holds the router and the init skill', () => {
-  assert.deepEqual(readdirSync(root).sort(), ['sdd-flow', 'sdd-init']);
+test('skills holds the flow skill', () => {
+  assert.deepEqual(readdirSync(root).sort(), ['sdd-flow']);
 });
 
 test('each step declares a mode and does not name another step', () => {
@@ -180,7 +180,7 @@ test('an existing artifact stays only when the upstream block says nothing chang
   const design = readFileSync(path.join(stepsDir, 'design.md'), 'utf8');
   const tasks = readFileSync(path.join(stepsDir, 'tasks.md'), 'utf8');
   assert.match(context, /## Upstream/);
-  assert.match(context, /Do not run git to rebuild it/);
+  assert.match(context, /Do not rebuild it from history/);
   assert.match(plan, /file existing is not a reason to leave that sentence|every caller-visible sentence/);
   assert.match(plan, /already replaced is not copied back/);
   assert.match(specify, /does not start from the result already visible/);
@@ -221,7 +221,7 @@ test('an instruction is a thread of this phase, and a note asks for nothing', ()
   assert.match(specify, /go to step 5/);
   assert.match(specify, /An open spec thread does not take step 3/);
   assert.match(specify, /there is no open spec thread: step 3, then step 5/);
-  assert.match(specify, /node scripts\/sdd\.mjs probe <issue>/);
+  assert.match(specify, /sdd probe <issue>/);
   assert.doesNotMatch(design, /then step 6/);
   assert.doesNotMatch(tasks, /then step 8/);
   assert.doesNotMatch(fix, /conversation\.layer` is `code`/);
@@ -240,9 +240,15 @@ test('a code fix hands off before the commit, and verify reads the THEN first', 
   assert.match(fix, /fails on that commit's parent and passes on HEAD/);
   assert.match(fix, /neighboring check in the same file does not either/);
   assert.match(fix, /A `scenario` a stable spec names counts the same way and stays on this layer/);
+  assert.match(fix, /When the trace line names `@ojson\/spec-coverage`/);
+  assert.match(fix, /does not mark `sdd:layer=spec`/);
   assert.match(
     readFileSync(path.join(flow, 'CONTEXT.md'), 'utf8'),
-    /whose `scenario` title this change's delta names[\s\S]*fails on that commit's parent and passes on HEAD/,
+    /When the trace line names `@ojson\/spec-coverage`/,
+  );
+  assert.match(
+    readFileSync(path.join(flow, 'CONTEXT.md'), 'utf8'),
+    /fails on that commit's parent and passes on HEAD[\s\S]*whose `scenario` title this change's delta names/,
   );
   const then = verify.indexOf("read that scenario's THEN");
   const code = verify.indexOf('Hand-off (`CONTEXT.md`) to `code`');
@@ -285,16 +291,19 @@ test('a long command keeps the command status, not a pipe', () => {
   assert.match(repair, /Keep each command's own status, as § Once says/);
 });
 
-test('the chat files point at the sdd script', () => {
+test('the chat files point at the sdd command', () => {
   const skill = readFileSync(path.join(flow, 'SKILL.md'), 'utf8');
   const context = readFileSync(path.join(flow, 'CONTEXT.md'), 'utf8');
-  const init = readFileSync(path.join(root, 'sdd-init', 'SKILL.md'), 'utf8');
-  for (const body of [skill, context, init]) {
-    assert.match(body, /node scripts\/sdd\.mjs/);
-    assert.doesNotMatch(body, /npx sdd|\bpnpm\b|\bSandcastle\b|\bmaster\b/);
+  const banned = /\bgit\b|\bnode\b|\bnpm\b|\bpnpm\b|\bvitest\b|\bnpx sdd\b|\bSandcastle\b|\bmaster\b/;
+  for (const body of [skill, context]) {
+    assert.match(body, /\bsdd (step|rebase) /);
+    assert.doesNotMatch(body, banned);
     assert.doesNotMatch(
       body,
       /\bArcadia\b|\bArcanum\b|\bTracker\b|\ba\.yaml\b|\bya make\b|\btestsuite\b/,
     );
+  }
+  for (const file of readdirSync(stepsDir).filter(name => name.endsWith('.md'))) {
+    assert.doesNotMatch(readFileSync(path.join(stepsDir, file), 'utf8'), banned, file);
   }
 });

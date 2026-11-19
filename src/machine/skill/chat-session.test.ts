@@ -19,12 +19,12 @@ spec('chat-session', () => {
   requirement('The chat runs until the machine waits', () => {
     scenario('A commit or a hand-off runs step again', () => {
       const act = section('Act');
-      assert.match(act, /When the step ends in Publish or Hand-off, run `node scripts\/sdd\.mjs step <key>` again and follow Act/);
+      assert.match(act, /When the step ends in Publish or Hand-off, run `sdd step <key>` again and follow Act/);
     });
     scenario('A paused advance runs step again', () => {
       const act = section('Act');
       assert.match(act, /Act does not apply them again/);
-      assert.match(act, /`advance`: run `node scripts\/sdd\.mjs step <key>` again and follow Act/);
+      assert.match(act, /`advance`: run `sdd step <key>` again and follow Act/);
     });
     scenario('An action with no signal stops', () => {
       assert.match(
@@ -60,19 +60,19 @@ spec('chat-session', () => {
       assert.match(next, /examples, not the whole set/);
       assert.match(
         next,
-        /Agreement when the printed decision has `gate`: run `node scripts\/sdd\.mjs accept <key>`, then Act from a fresh `step`/,
+        /Agreement when the printed decision has `gate`: run `sdd accept <key>`, then Act from a fresh `step`/,
       );
     });
     scenario('Agreement after an empty action continues', () => {
       assert.match(
         section('The next message'),
-        /Agreement after a stop with no signal: run `node scripts\/sdd\.mjs step <key>` again and follow Act/,
+        /Agreement after a stop with no signal: run `sdd step <key>` again and follow Act/,
       );
     });
     scenario('A change continues', () => {
       assert.match(
         section('The next message'),
-        /edit it in the worktree, publish \(`CONTEXT\.md` § Publish\), run `node scripts\/sdd\.mjs unwait <key>`, then Act from a fresh `step`/,
+        /edit it in the worktree, publish \(`CONTEXT\.md` § Publish\), run `sdd unwait <key>`, then Act from a fresh `step`/,
       );
     });
     scenario('The person is not asked to invoke the skill again', () => {

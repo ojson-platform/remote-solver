@@ -6,6 +6,7 @@ import path from 'node:path';
 import {promisify} from 'node:util';
 
 import {adapterMachine, type AdapterMachine, type FileSource, type Link, type Vcs} from '../../machine.ts';
+import {gitTree} from './tree.ts';
 
 export type GitVcsConfig = {
   branchPrefix?: string;
@@ -731,6 +732,31 @@ export function gitVcs(
         return [];
       }
       return porcelain(dir);
+    },
+    tree(dir) {
+      return gitTree(dir);
+    },
+    async rebase(key, base) {
+      const branch = machine.branchName(key, prefix);
+      const dir = await checkoutOf(root, branch);
+      if (!dir) {
+        throw new Error(`no checkout for ${branch}`);
+      }
+      try {
+        await gitAsync(dir, ['rebase', base]);
+        return [];
+      } catch {
+        const names = await gitAsync(dir, ['diff', '--name-only', '--diff-filter=U']);
+        return names.split('\n').filter(file => file !== '');
+      }
+    },
+    async commit(key, subject, body) {
+      const branch = machine.branchName(key, prefix);
+      const dir = await checkoutOf(root, branch);
+      if (!dir) {
+        throw new Error(`no checkout for ${branch}`);
+      }
+      gitTree(dir).commitAll(subject, body);
     },
     async scratch() {
       const probe = mkdtempSync(path.join(tmpdir(), 'sdd-probe-'));

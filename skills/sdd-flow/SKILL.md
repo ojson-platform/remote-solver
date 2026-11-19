@@ -17,13 +17,13 @@ Do not run `remote-solver issue`. Do not choose a skill from the phase. `step` n
 
 Run this from the service root, the directory whose `openspec/config.yaml` names the queue. This skill does not add cycle membership. If `scripts/adapters/host.md` exists, membership is what that note says. Otherwise the issue already carries `sdd:cycle` and the queue label.
 
-An issue with no assignee is claimed by the caller inside `step`. An issue assigned to someone else waits with `assigned to <login>`. Agreement to take it runs `node scripts/sdd.mjs assign <key>`, then Start again.
+An issue with no assignee is claimed by the caller inside `step`. An issue assigned to someone else waits with `assigned to <login>`. Agreement to take it runs `sdd assign <key>`, then Start again.
 
 The issue's service directory, when set, names where the specs live. A value that is not this directory waits with `service is <path>`. Start again from that directory. An empty value means this directory is the service.
 
 ## Start
 
-1. Run `node scripts/sdd.mjs step <key>` and add `--auto-plan`, `--auto-spec`, `--auto-design` for each word named in the invocation.
+1. Run `sdd step <key>` and add `--auto-plan`, `--auto-spec`, `--auto-design` for each word named in the invocation.
 2. Read the printed decision and follow Act.
 
 `done` with reason `not in the open cycle` means the issue is not in the cycle. Say that and stop.
@@ -32,8 +32,8 @@ The issue's service directory, when set, names where the specs live. A value tha
 
 `step` already applies a mechanical phase move and a merge the label allows. Act does not apply them again.
 
-- `agent`: run `node scripts/sdd.mjs worktree <key>`. The printed path is the cwd for every edit and commit in this issue. The printed decision's `step` is the action text, with this service's hooks. Follow that text. Do not open the step file. The printed decision's `queue` and `base` are the queue label and the base branch for the issue being driven in that step. A new child issue uses the first queue under `sdd.queues` in `openspec/config.yaml`, not the printed `queue`. When the step ends in Publish or Hand-off, run `node scripts/sdd.mjs step <key>` again and follow Act. When the step ends in Wait, run `node scripts/sdd.mjs step <key>` once more and follow Act. When the step leaves no Publish, no Hand-off, and no Wait, stop.
-- `advance`: run `node scripts/sdd.mjs step <key>` again and follow Act.
+- `agent`: run `sdd worktree <key>`. The printed path is the cwd for every edit and commit in this issue. The printed decision's `step` is the action text, with this service's hooks. Follow that text. Do not open the step file. The printed decision's `queue` and `base` are the queue label and the base branch for the issue being driven in that step. A new child issue uses the first queue under `sdd.queues` in `openspec/config.yaml`, not the printed `queue`. When the step ends in Publish or Hand-off, run `sdd step <key>` again and follow Act. When the step ends in Wait, run `sdd step <key>` once more and follow Act. When the step leaves no Publish, no Hand-off, and no Wait, stop.
+- `advance`: run `sdd step <key>` again and follow Act.
 - `wait` or `done`: stop.
 
 ## Stop
@@ -46,13 +46,13 @@ This session is still the skill.
 
 Agreement is a sentence that accepts the current stop and asks to go on. `ok`, `accept`, `/sdd-flow ok`, `/sdd-flow accept`, «план ок», «спека ок», and «дизайн ок» are examples, not the whole set.
 
-Agreement when the printed decision has `gate`: run `node scripts/sdd.mjs accept <key>`, then Act from a fresh `step`.
+Agreement when the printed decision has `gate`: run `sdd accept <key>`, then Act from a fresh `step`.
 
-Agreement when the reason is `assigned to <login>`: run `node scripts/sdd.mjs assign <key>`, then Start again.
+Agreement when the reason is `assigned to <login>`: run `sdd assign <key>`, then Start again.
 
-Agreement after a stop with no signal: run `node scripts/sdd.mjs step <key>` again and follow Act.
+Agreement after a stop with no signal: run `sdd step <key>` again and follow Act.
 
-A request to change the artifact: edit it in the worktree, publish (`CONTEXT.md` § Publish), run `node scripts/sdd.mjs unwait <key>`, then Act from a fresh `step`.
+A request to change the artifact: edit it in the worktree, publish (`CONTEXT.md` § Publish), run `sdd unwait <key>`, then Act from a fresh `step`.
 
 `/sdd-flow` or `/sdd-flow <key>` while waiting runs Start again. The poll reads review threads. It does not accept a gate.
 

@@ -165,6 +165,27 @@ export type ScratchCheckout = {
   release(): Promise<void>;
 };
 
+export type PathChange = {
+  path: string;
+  kind: 'added' | 'modified' | 'deleted' | 'renamed';
+  from?: string;
+};
+
+export type Tree = {
+  dirty(): boolean;
+  hasParent(): boolean;
+  headChanges(): PathChange[];
+  toParent(changes: PathChange[]): void;
+  restoreHead(changes: PathChange[]): void;
+  tracked(prefix: string): string[];
+  differs(base: string, head: string, file: string): boolean;
+  unified(base: string, head: string, file: string): string;
+  discard(prefix: string): void;
+  commitAll(subject: string, body?: string): void;
+  headMessage(): string;
+  revertHead(subject: string): void;
+};
+
 export type Vcs = {
   /** Checkout of `sdd/<key>`. Reuses a worktree that already has the branch, and creates one when missing. */
   prepare(key: IssueKey, options: {worktreesDir: string; links: Link[]}): Promise<string>;
@@ -208,6 +229,15 @@ export type Vcs = {
    * Absent when this adapter has no second checkout.
    */
   scratch?(): Promise<ScratchCheckout>;
+  tree?(root: string): Tree;
+  /**
+   * Rebase the issue checkout onto `base`.
+   * Resolves with the conflicted paths. Empty means the rebase finished.
+   * Leaves the conflict in the tree for the agent to edit.
+   */
+  rebase?(key: IssueKey, base: string): Promise<string[]>;
+  /** Commit the issue checkout. The body is the second paragraph. */
+  commit?(key: IssueKey, subject: string, body: string): Promise<void>;
 };
 
 /** The commit a pull-request diff ends at. The parent when `head` is this issue's archive commit. */

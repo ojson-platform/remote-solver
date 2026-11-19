@@ -225,7 +225,7 @@ The thread SHALL stay open.
 
 ### Requirement: A code thread is fixed only when its new test fails on the parent
 
-`thread fix` on an open `code` thread SHALL refuse, and SHALL NOT reply `fixed` or resolve it, when the commit changes no test, when no changed test has a `scenario` title the delta or a stable spec names, when every such test passes on the parent, or when such a test fails on HEAD. It SHALL reply `fixed` with HEAD and resolve the thread when such a test fails on the parent and passes on HEAD. A stable-spec title SHALL count. A title neither the delta nor a stable spec names SHALL NOT.
+When the boundary traces `@ojson/spec-coverage`, `thread fix` on an open `code` thread SHALL refuse, and SHALL NOT reply `fixed` or resolve it, when the commit changes no test, when no changed test has a `scenario` title the delta or a stable spec names, when every such test passes on the parent, or when such a test fails on HEAD. It SHALL reply `fixed` with HEAD and resolve the thread when such a test fails on the parent and passes on HEAD. A title neither names SHALL NOT.
 
 #### Scenario: Fix refuses a code thread whose new test fails on HEAD
 
@@ -241,6 +241,20 @@ The thread SHALL stay open.
 
 - **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, the only `scenario` the answering commit changes is named by a stable spec and not by this change's delta, and that test fails on the parent and passes on HEAD
 - **THEN** the thread's reply is `fixed` with that HEAD and the thread is resolved
+
+### Requirement: A proof runs the boundary command
+
+`thread fix` on an open `code` thread SHALL run the one-file command from the open change's verification boundary, with `<test-file>` replaced by each changed test the boundary's test path names. When that boundary's trace line names `@ojson/spec-coverage`, a changed test SHALL count only when it names a `scenario` title the delta or a stable spec names, and `<titles>` SHALL be that set. A missing one-file command SHALL refuse without handing the thread to spec.
+
+#### Scenario: Fix closes a code thread by the boundary command
+
+- **WHEN** `thread fix` runs for an open `code` thread, the boundary trace is not `@ojson/spec-coverage`, the answering commit changes a file the test path names, and that file's one-file command fails on the parent and passes on HEAD
+- **THEN** the thread's reply is `fixed` with that HEAD and the thread is resolved
+
+#### Scenario: Fix refuses a code thread whose boundary names no command
+
+- **WHEN** `thread fix` runs for an open `code` thread and the open change has no one-file command
+- **THEN** the command fails, the thread stays open, and the reply does not mark `sdd:layer=spec`
 
 ### Requirement: A refused proof hands the code thread to spec
 

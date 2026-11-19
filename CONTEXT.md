@@ -25,7 +25,7 @@ The process that reads open cycles and starts the ones that can move.
 _Avoid_: Watcher, poller, bot
 
 **Step**:
-The file an agent decision names. The chat and the spy run it. `sdd-flow` and `sdd-init` are skills; a step is not.
+The file an agent decision names. The chat and the spy run it. `sdd-flow` is the skill. A host may ship a separate chat that connects a service. This package does not.
 _Avoid_: Skill
 
 **Skill mode**:

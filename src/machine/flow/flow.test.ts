@@ -17,9 +17,30 @@ import {loadCycle, type CycleSnapshot} from '../spy/snapshot.ts';
 import {emptyReview} from '../mark/review.ts';
 import {memoryPorts} from '../../adapters/tracker/github.ts';
 import {change, foldedTip} from '../__tests__/harness.ts';
-import type {FileSource, IssueRecord, Review, ThreadRecord, Tracker} from '../port.ts';
+import type {FileSource, IssueRecord, Review, ThreadRecord, Tracker, Tree} from '../port.ts';
 
 const FINISHED_CLOSE = 'SDLC finished: the pull request is merged and the change is archived.';
+
+const quiet: Tree = {
+  dirty: () => false,
+  hasParent: () => false,
+  headChanges: () => [],
+  toParent: () => {},
+  restoreHead: () => {},
+  tracked: () => [],
+  differs: () => false,
+  unified: () => '',
+  discard: () => {},
+  commitAll: () => {},
+  headMessage: () => '',
+  revertHead: () => {},
+};
+
+const anchored: Tree = {
+  ...quiet,
+  differs: (_base, _head, file) => file.endsWith('/specs/board/spec.md'),
+  unified: () => '@@ -0,0 +1 @@\n+requirement\n',
+};
 
 async function refuseFold(
   options: {
@@ -28,6 +49,7 @@ async function refuseFold(
     files: FileSource;
     change: ChangeView;
     checkout: () => Promise<string>;
+    tree?: Tree;
   },
   error: unknown,
   key = '3',
@@ -39,6 +61,7 @@ async function refuseFold(
     files: options.files,
     capabilities: options.change.capabilities,
     dir: await options.checkout(),
+    tree: options.tree ?? quiet,
     action: 'archive',
     phase: 'accepting',
     pr: '9',
@@ -594,6 +617,7 @@ spec('spec-archive', () => {
             files: {exists: () => false, read: () => '', list: () => []},
             change: change({proposal: true, capabilities: ['board']}),
             checkout: async () => box.root,
+            tree: anchored,
           },
           new Error(said),
         );
@@ -639,6 +663,7 @@ spec('spec-archive', () => {
             files: {exists: () => false, read: () => '', list: () => []},
             change: change({proposal: true, capabilities: ['section']}),
             checkout: async () => box.root,
+            tree: anchored,
           },
           new Error(said),
         );
@@ -700,6 +725,7 @@ spec('spec-archive', () => {
           change: change({proposal: true, capabilities: ['board']}),
           tip: '',
           checkout: async () => box.root,
+          tree: anchored,
         };
         const decision = await refuseFold(options, new Error(said));
         const again = await performIssue('3', options);
@@ -744,6 +770,7 @@ spec('spec-archive', () => {
             files: {exists: () => false, read: () => '', list: () => []},
             change: change({proposal: true, capabilities: ['board']}),
             checkout: async () => box.root,
+            tree: anchored,
           },
           new Error(said),
         );
@@ -808,6 +835,7 @@ spec('spec-archive', () => {
         pr: '37',
         reason: 'return the delta to the change',
         error: new Error('tip has no Sdd-Archive line'),
+        tree: quiet,
       });
       assert.equal(decision.kind, 'wait');
       const notes = await tracker.comments('9');

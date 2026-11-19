@@ -2,14 +2,10 @@ import {execFileSync} from 'node:child_process';
 import {cpSync, existsSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 
-import type {ScratchCheckout} from '../port.ts';
+import type {ScratchCheckout, Tree} from '../port.ts';
 
 const DATED_ARCHIVE_DIR = /^\d{4}-\d{2}-\d{2}-issue-\d+$/;
 const PLACEHOLDER_PURPOSE = /TBD - created by archiving change/;
-
-function git(root: string, args: string[]): string {
-  return execFileSync('git', args, {cwd: root, encoding: 'utf8'});
-}
 
 function findDatedArchiveDir(root: string, key: string): string | undefined {
   const archiveRoot = path.join(root, 'openspec', 'changes', 'archive');
@@ -85,26 +81,14 @@ export function commandRefusal(text: string): string {
 }
 
 /** True when `file` differs between `base` and `head`. An empty head is not a pull request diff. */
-export function changedInDiff(root: string, base: string, head: string, file: string): boolean {
-  if (head === '') {
-    return false;
-  }
-  const from = base === '' ? 'HEAD^' : base;
-  try {
-    return git(root, ['diff', '--name-only', `${from}...${head}`, '--', file]).trim() !== '';
-  } catch {
-    return false;
-  }
+export function changedInDiff(tree: Tree, base: string, head: string, file: string): boolean {
+  return tree.differs(base, head, file);
 }
 
 /** The first added line of `file` in `base...head`. Null when that file is not in the diff. */
-export function addedDiffLine(root: string, base: string, head: string, file: string): number | null {
-  const from = base === '' ? 'HEAD^' : base;
-  const to = head === '' ? 'HEAD' : head;
-  let text = '';
-  try {
-    text = git(root, ['diff', '-U0', `${from}...${to}`, '--', file]);
-  } catch {
+export function addedDiffLine(tree: Tree, base: string, head: string, file: string): number | null {
+  const text = tree.unified(base, head, file);
+  if (text === '') {
     return null;
   }
   let line = 0;
@@ -134,29 +118,27 @@ export function addedDiffLine(root: string, base: string, head: string, file: st
 }
 
 /** Drop the fold. The tip from before the archive stays, and the delta is back in the change. */
-function restoreCheckout(root: string): void {
+function restoreCheckout(tree: Tree): void {
   try {
-    git(root, ['reset', '--hard', 'HEAD']);
-    git(root, ['clean', '-fd', '--', 'openspec']);
+    tree.discard('openspec');
   } catch {
     // A checkout that is not a git tree still reports the refusal.
   }
 }
 
 /** Fold the change the way `accept.md` describes, as one commit. */
-export function foldChange(root: string, key: string, executable: string): void {
+export function foldChange(root: string, key: string, executable: string, tree: Tree): void {
   try {
-    foldCommitted(root, key, executable);
+    foldCommitted(root, key, executable, tree);
   } catch (error) {
-    restoreCheckout(root);
+    restoreCheckout(tree);
     throw error;
   }
 }
 
-function foldCommitted(root: string, key: string, executable: string): void {
+function foldCommitted(root: string, key: string, executable: string, tree: Tree): void {
   archiveAndValidate(root, key, executable);
-  git(root, ['add', '-A']);
-  git(root, ['commit', '-m', 'archive fold', '-m', `Sdd-Archive: issue-${key}`]);
+  tree.commitAll('archive fold', `Sdd-Archive: issue-${key}`);
 }
 
 /** Archive and validate. The caller keeps or drops the checkout. */
@@ -219,12 +201,10 @@ export async function probeArchive(
 }
 
 /** Revert the archive commit. The new tip names the issue and is not an archive. */
-export function restoreChange(root: string, key: string): void {
-  const message = git(root, ['log', '-1', '--format=%B']);
+export function restoreChange(_root: string, key: string, tree: Tree): void {
   const mark = `Sdd-Archive: issue-${key}`;
-  if (!message.split('\n').some(line => line.trimEnd() === mark)) {
+  if (!tree.headMessage().split('\n').some(line => line.trimEnd() === mark)) {
     throw new Error(`tip is not the archive commit for issue ${key}`);
   }
-  git(root, ['revert', '--no-commit', 'HEAD']);
-  git(root, ['commit', '-m', `#${key}`]);
+  tree.revertHead(`#${key}`);
 }

@@ -4,7 +4,7 @@ sdd-absorbed: 1c5da6b86c1e0662
 
 `phase-thread-accept`. The modified requirement is observed on the rendered spine of the open ticket, in `src/window/acceptance.test.ts`. Each scenario drives Plan, Specify, or Design through the page that file already hosts, with the open review threads on that window's review reading. The row that would show acceptance shows the `accept-review` control in the gate's place. A thread that counts leaves that control inactive, and its hover names the phase and says a thread on that phase is still open. When no open review thread counts as this phase, the row shows an active «Принять» named with that phase in the gate's place, and the control does not say that a thread is still open. A later-phase thread and a note are that case. An open question leaves the place empty. The added requirement "The machine does not ask to accept while a thread of this phase is open" is observed on the walk that posts the review-gate ask, in `src/machine/decide/review-gate.test.ts`. While a thread that counts is open and «Принять» is already inactive in the gate's place, that walk does not set `sdd:wait-human` and does not ask to accept the phase, and a `sdd:wait-human` label that is already present stays. The one-file command passes `--reporter=default` so that file can exit 0. The layer command keeps the coverage reporter. `pnpm test` is the CI run of the package script `vitest --run`.
 
-one-file: `pnpm exec vitest --run --reporter=default <test-file>`
+one-file: `pnpm exec vitest --run --reporter=default <test-file> -t <titles>`
 layer: `pnpm test`
 fast suite: none
 `pnpm run test:types`

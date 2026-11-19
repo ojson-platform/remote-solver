@@ -20,6 +20,7 @@ import {vi} from 'vitest';
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {foldChange} from './fold.ts';
+import {gitTree} from '../../adapters/vcs/tree.ts';
 
 vi.setConfig({testTimeout: 20_000});
 
@@ -734,7 +735,7 @@ spec('spec-archive', () => {
           'spec.md',
         );
         const deltaBefore = readFileSync(delta, 'utf8');
-        assert.throws(() => foldChange(root, LONG_REQUIREMENT_KEY, openspecBin()), /very long/);
+        assert.throws(() => foldChange(root, LONG_REQUIREMENT_KEY, openspecBin(), gitTree(root)), /very long/);
         assert.equal(git(root, ['rev-parse', 'HEAD']).trim(), before);
         assert.equal(git(root, ['status', '--porcelain']).trim(), '');
         assert.equal(readFileSync(delta, 'utf8'), deltaBefore);

@@ -1,6 +1,6 @@
 import type {ChangeView} from '../change/change.ts';
 import type {Decision, PullSnapshot} from '../decide/policy.ts';
-import type {FileSource, IssueRecord, Openspec, Review, Tracker} from '../port.ts';
+import type {FileSource, IssueRecord, Openspec, Review, Tracker, Tree} from '../port.ts';
 import type {QueueConfig} from '../spy/service-config.ts';
 
 import {readChange} from '../change/change.ts';
@@ -239,7 +239,7 @@ function commandAlreadyThreaded(pulls: readonly PullSnapshot[], pull: string, co
 /** Open the spec thread. False when the diff has no line to anchor, or the review port refuses. */
 async function openSpecThread(
   key: string,
-  dir: string,
+  tree: Tree,
   pull: string,
   capability: string,
   command: string,
@@ -247,7 +247,7 @@ async function openSpecThread(
 ): Promise<boolean> {
   const range = await review.range(pull);
   const specPath = `openspec/changes/issue-${key}/specs/${capability}/spec.md`;
-  const line = addedDiffLine(dir, range.base ?? '', range.head, specPath);
+  const line = addedDiffLine(tree, range.base ?? '', range.head, specPath);
   if (line === null || range.head === '') {
     return false;
   }
@@ -273,6 +273,7 @@ export async function reportFoldFailure(input: {
   files: FileSource;
   capabilities: readonly string[];
   dir: string;
+  tree: Tree;
   action: 'archive' | 'unarchive';
   phase: Phase;
   pr: string;
@@ -288,7 +289,7 @@ export async function reportFoldFailure(input: {
   if (input.action === 'archive' && conflict && input.review && input.pr !== '') {
     const opened = await openSpecThread(
       input.key,
-      input.dir,
+      input.tree,
       input.pr,
       conflict,
       text,
@@ -304,7 +305,7 @@ export async function reportFoldFailure(input: {
     const range = await input.review.range(input.pr);
     const capability = refusedSpecIds(text).find(id =>
       changedInDiff(
-        input.dir,
+        input.tree,
         range.base ?? '',
         range.head,
         `openspec/changes/issue-${input.key}/specs/${id}/spec.md`,
@@ -314,7 +315,7 @@ export async function reportFoldFailure(input: {
     if (capability && !repeated) {
       const opened = await openSpecThread(
         input.key,
-        input.dir,
+        input.tree,
         input.pr,
         capability,
         text,

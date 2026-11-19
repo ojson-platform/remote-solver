@@ -12,7 +12,6 @@
     "bin/client.js",
     "bin/face.css",
     "prompts",
-    "skills/sdd-init",
     "skills/sdd-flow/SKILL.md",
     "skills/sdd-flow/CONTEXT.md",
     "skills/sdd-flow/steps",

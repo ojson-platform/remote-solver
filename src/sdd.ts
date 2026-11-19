@@ -72,7 +72,7 @@ function need(value: string | undefined, usage: string): string {
 }
 
 const usage =
-  'Usage: sdd plan | step <key> [--auto-plan] [--auto-spec] [--auto-design] | worktree <key> | assign <key> | set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key> | fold <key> | unfold <key> | probe <key> | publish <key> "<title>" | focus <key> "<body>" | link <key> <kind> <other> | checks <pull> | threads <pull> [--layer <layer>] [--unmarked] | thread open|reply|say|resolve ... | thread fix <key> <pull> <thread>|--conversation | mirror <key> <Layer> <text>';
+  'Usage: sdd plan | step <key> [--auto-plan] [--auto-spec] [--auto-design] | worktree <key> | assign <key> | set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key> | fold <key> | unfold <key> | probe <key> | rebase <key> <base> | commit <key> "<subject>" | publish <key> "<title>" | focus <key> "<body>" | link <key> <kind> <other> | checks <pull> | threads <pull> [--layer <layer>] [--unmarked] | thread open|reply|say|resolve ... | thread fix <key> <pull> <thread>|--conversation | mirror <key> <Layer> <text>';
 
 const LINK_KINDS = new Set<IssueLinkKind>(['parent', 'blocks', 'blocked-by', 'depends-on']);
 
@@ -162,16 +162,16 @@ export function fixArgs(rest: string[]): {key: string; pull: string; thread: str
 /**
  * Replies `sdd:fixed <HEAD>` and resolves the thread, or answers the
  * conversation. Refuses while HEAD is not on the remote issue branch. A `code`
- * thread also refuses unless a delta scenario the answering commit changes
- * fails on that commit's parent and passes on HEAD. A scenario the delta does
- * not name does not count. A thread whose latest reply is already
- * `sdd:fixed` is only resolved.
+ * thread also refuses unless the boundary command fails on that commit's
+ * parent and passes on HEAD. When the trace is `@ojson/spec-coverage`, a
+ * scenario the delta does not name does not count. A thread whose latest reply
+ * is already `sdd:fixed` is only resolved.
  */
 export async function fixThread(
   args: {key: string; pull: string; thread: string | null},
   deps: {
     review: Review;
-    vcs: Pick<Vcs, 'head' | 'published'>;
+    vcs: Pick<Vcs, 'head' | 'published' | 'tree'>;
     readFile?: OpenItemFile;
     root?: string;
     prove?: (root: string) => Promise<void>;
@@ -203,7 +203,7 @@ export async function fixThread(
   const marker = parseMarker(record.body);
   if (marker?.kind === 'layer' && marker.layer === 'code') {
     try {
-      await (deps.prove ?? proveCodeFix)(deps.root ?? process.cwd());
+      await (deps.prove ?? (root => proveCodeFix(root, deps.vcs.tree!(root))))(deps.root ?? process.cwd());
     } catch (error) {
       const message = error instanceof Error ? error.message : 'thread fix refused';
       if (/hand the thread off to spec/i.test(message)) {
@@ -287,6 +287,8 @@ const verbs: Record<string, Verb> = {
   fold: foldCommand,
   unfold: unfoldCommand,
   probe: probeCommand,
+  rebase: rebaseCommand,
+  commit: commitCommand,
   publish: publishCommand,
   focus: focusCommand,
   checks,
@@ -471,11 +473,40 @@ async function accept(box: Machine, rest: string[]): Promise<void> {
 async function foldCommand(box: Machine, rest: string[]): Promise<void> {
   const key = oneKey(rest);
   try {
-    foldChange(process.cwd(), key, box.openspec());
+    foldChange(process.cwd(), key, box.openspec(), box.vcs.tree!(process.cwd()));
   } catch (error) {
     await reportArchiveVerb(box, key, 'archive', 'archive the change', error);
     fail(error instanceof Error ? error.message : 'fold failed');
   }
+}
+
+/** Rebase the issue checkout onto the printed base. Conflicted paths are printed. The conflict stays for the agent. */
+async function rebaseCommand(box: Machine, rest: string[]): Promise<void> {
+  const key = rest[0];
+  const base = rest[1];
+  if (!key || !base || rest.length !== 2) {
+    fail('Usage: sdd rebase <key> <base>');
+  }
+  if (!box.vcs.rebase) {
+    fail('this host has no rebase');
+  }
+  const paths = await box.vcs.rebase(key, base);
+  for (const file of paths) {
+    console.log(file);
+  }
+}
+
+/** Commit the issue checkout. The body is the line `#<key>`. */
+async function commitCommand(box: Machine, rest: string[]): Promise<void> {
+  const key = rest[0];
+  const subject = rest.slice(1).join(' ');
+  if (!key || subject === '') {
+    fail('Usage: sdd commit <key> <subject>');
+  }
+  if (!box.vcs.commit) {
+    fail('this host has no commit');
+  }
+  await box.vcs.commit(key, subject, `#${key}`);
 }
 
 /** The specify step's throwaway archive. A refusal stays on that step. The poll does not run this. */
@@ -495,7 +526,7 @@ async function probeCommand(box: Machine, rest: string[]): Promise<void> {
 async function unfoldCommand(box: Machine, rest: string[]): Promise<void> {
   const key = oneKey(rest);
   try {
-    restoreChange(process.cwd(), key);
+    restoreChange(process.cwd(), key, box.vcs.tree!(process.cwd()));
   } catch (error) {
     await reportArchiveVerb(box, key, 'unarchive', 'return the delta to the change', error);
     fail(error instanceof Error ? error.message : 'unfold failed');
@@ -534,6 +565,7 @@ async function reportArchiveVerb(
       pr: open ? String(open.id) : '',
       reason,
       error,
+      tree: box.vcs.tree!(process.cwd()),
     });
   } catch (reportError) {
     console.error(reportError instanceof Error ? reportError.message : 'fold report failed');

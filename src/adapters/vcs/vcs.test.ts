@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {lstatSync, mkdirSync, mkdtempSync, writeFileSync} from 'node:fs';
+import {lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {test} from 'vitest';
@@ -245,4 +245,34 @@ spec('spec-archive', () => {
       assert.equal(files.exists('openspec/changes/archive/2025-11-05-issue-7/proposal.md'), false);
     });
   });
+});
+
+test('rebase leaves the conflicted path and a clean replay is empty', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'sdd-rebase-'));
+  execFileSync('git', ['init', '-b', 'trunk'], {cwd: root, stdio: 'ignore'});
+  writeFileSync(path.join(root, 'a.txt'), 'base\n');
+  git(root, ['add', 'a.txt']);
+  git(root, ['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-m', 'base']);
+  git(root, ['branch', 'sdd/9']);
+  writeFileSync(path.join(root, 'a.txt'), 'trunk\n');
+  git(root, ['add', 'a.txt']);
+  git(root, ['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-m', 'trunk']);
+  git(root, ['checkout', 'sdd/9']);
+  writeFileSync(path.join(root, 'a.txt'), 'issue\n');
+  git(root, ['add', 'a.txt']);
+  git(root, ['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-m', 'issue']);
+  const conflicted = await gitVcs(root).rebase('9', 'trunk');
+  assert.deepEqual(conflicted, ['a.txt']);
+  assert.match(readFileSync(path.join(root, 'a.txt'), 'utf8'), /<<<<<<</);
+
+  const clean = mkdtempSync(path.join(tmpdir(), 'sdd-rebase-clean-'));
+  execFileSync('git', ['init', '-b', 'trunk'], {cwd: clean, stdio: 'ignore'});
+  git(clean, ['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '--allow-empty', '-m', 'base']);
+  git(clean, ['checkout', '-b', 'sdd/9']);
+  git(clean, ['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '--allow-empty', '-m', 'empty']);
+  assert.deepEqual(await gitVcs(clean).rebase('9', 'trunk'), []);
+  writeFileSync(path.join(clean, 'c.txt'), 'c\n');
+  await gitVcs(clean).commit('9', '#9: what', '#9');
+  assert.match(git(clean, ['log', '-1', '--format=%B']), /#9: what/);
+  assert.match(git(clean, ['log', '-1', '--format=%B']), /^#9$/m);
 });

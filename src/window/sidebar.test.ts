@@ -1294,6 +1294,32 @@ spec('focus-prose', () => {
       assert.equal(html.split(marker).length - 1, 1);
     });
   });
+  requirement('A scenario name stays a button.jump', () => {
+    scenario('A scenario name stays a button.jump', () => {
+      const scenarioName = 'The prose renders markdown';
+      const body = `See ${scenarioName} in the text.\n`;
+      const capabilities = [
+        {
+          id: 'focus-prose',
+          rows: [{kind: 'ctx' as const, text: `#### Scenario: ${scenarioName}`}],
+        },
+      ];
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:code', body)],
+          pageIndex: 0,
+          capabilities,
+        }),
+      );
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      assert.match(
+        prose,
+        new RegExp(
+          `<button type="button" class="jump" data-cap="focus-prose">${scenarioName}</button>`,
+        ),
+      );
+    });
+  });
   requirement('The marker line stays the badge and is not a heading', () => {
     scenario('The marker line stays the badge and is not a heading', () => {
       const marker = 'sdd:focus:plan';

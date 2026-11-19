@@ -851,29 +851,30 @@ export function focusIndexAfterSnapshot(input: {
   return clampFocusPageIndex(input.index, input.pageCount);
 }
 
-function FocusProse({
-  display,
-  capabilities,
-}: {
-  display: string;
-  capabilities: readonly {id: string; rows: readonly SpecEntry[]}[];
-}): ReactNode {
-  const parts = linkFocusProseParts(display, capabilities);
-  if (parts.length === 1 && parts[0]?.kind === 'text') {
-    return parts[0].text;
+function paintFocusProseLine(
+  line: string,
+  painted: PaintedSourceLine | undefined,
+  capabilities: readonly {id: string; rows: readonly SpecEntry[]}[],
+): ReactNode {
+  const parts = linkFocusProseParts(line, capabilities);
+  if (!parts.some(part => part.kind === 'jump')) {
+    return painted?.paint;
   }
-  return parts.map((part: FocusProsePart, index) =>
-    part.kind === 'text' ? (
-      <Fragment key={index}>{part.text}</Fragment>
-    ) : (
-      <button key={index} type="button" className="jump" data-cap={part.capability}>
+  return parts.map((part: FocusProsePart, partIndex) =>
+    part.kind === 'jump' ? (
+      <button key={partIndex} type="button" className="jump" data-cap={part.capability}>
         {part.name}
       </button>
+    ) : part.text === '' ? null : (
+      <Fragment key={partIndex}>{paintSourceDocument([part.text])[0]?.paint ?? part.text}</Fragment>
     ),
   );
 }
 
-function paintFocusProse(display: string): ReactNode {
+function paintFocusProse(
+  display: string,
+  capabilities: readonly {id: string; rows: readonly SpecEntry[]}[],
+): ReactNode {
   const lines = display.split('\n');
   const documentPaint = paintSourceDocument(lines);
   let gap = false;
@@ -893,7 +894,7 @@ function paintFocusProse(display: string): ReactNode {
     gap = false;
     return (
       <p className="line" key={index}>
-        {painted?.paint}
+        {paintFocusProseLine(line, painted, capabilities)}
       </p>
     );
   });
@@ -929,7 +930,7 @@ export function FocusBlocks({
     page.kind === 'live' ? (
       prose
     ) : (
-      paintFocusProse(prose)
+      paintFocusProse(prose, capabilities)
     );
   const pager = pageCount > 1 ? (
     <div className="focus-pager">

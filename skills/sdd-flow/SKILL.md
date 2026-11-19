@@ -70,6 +70,8 @@ Any other message while waiting: say what is still waited for.
 | `create-design`, `improve-design`       | agent   | `design`                                |
 | `create-tasks`, `improve-tasks`         | agent   | `tasks`                                 |
 | `implement-next-task`                   | agent   | `implement`                             |
+| `cover-baseline`                        | agent   | `cover-baseline`                        |
+| `repair-suite`                          | agent   | `repair-suite`                          |
 | `fix-implementation`                    | agent   | `fix`                                   |
 | `classify-failures`                     | agent   | `verify`                                |
 | `classify-comments`                     | agent   | `pr-comments`                           |

@@ -115,13 +115,14 @@ Reached only when consent did not advance and the hold did not stop the poll. In
 |---|---|
 | No `tasks.md` | `advance` to `tasking`, reason `tasks.md is missing` |
 | The card revision is not the live delta, or a delta scenario is named on no card | `advance` to `tasking` with that gap |
-| No open pull request, and a task is open | `wait`, reason `no open pull request` |
-| A task is open | `implement-next-task`, reason `next open task <id>` |
 | A delta scenario has no task line | `advance` to `tasking` with that gap |
+| No open pull request, and a task is open or a baseline scenario is untraced | `wait`, reason `no open pull request` |
+| A baseline scenario the delta kept has no spec-coverage trace | `cover-baseline`, reason `untraced baseline` |
+| A task is open | `implement-next-task`, reason `next open task <id>` |
 | A child is not accepted, or a blocker is open | `wait` for that link |
-| Otherwise | `advance` to `verifying`, reason `no open tasks` |
+| Otherwise | `repair-suite`, reason `repair the suite` |
 
-`artifact` / A differing card revision returns implementing to tasking. `artifact` / A live scenario with no card returns implementing to tasking. `artifact` / A matching card still runs the open task. `artifact` / A checked-off cut with an unsliced scenario returns to tasking. `dependencies` / Implementing waits for children and blockers after the tasks. The card gap is before the open task. The missing task line is after it. `artifact` / Implementing without tasks returns to tasking. `artifact` / Implementing without an open pull request waits. One `implement-next-task` run checks that task, commits its test, and leaves `sdd:focus:code`. The phase stays `implementing`. `step-handoff` / Scenarios from two requirements are split before the task. The advance to `verifying` is the poll after the last open task, not that run. The focus marker is not a layer.
+`artifact` / A differing card revision returns implementing to tasking. `artifact` / A live scenario with no card returns implementing to tasking. `artifact` / A matching card still runs the open task. `artifact` / A checked-off cut with an unsliced scenario returns to tasking. `artifact` / An untraced baseline runs before the open task. `dependencies` / Implementing waits for children and blockers after the tasks. The card gap and the missing task line are before the open task and before cover-baseline. `artifact` / Implementing without tasks returns to tasking. `artifact` / Implementing without an open pull request waits. One `implement-next-task` run checks that task, commits its test, and leaves `sdd:focus:code`. The phase stays `implementing`. `step-handoff` / Scenarios from two requirements are split before the task. `repair-suite` is the poll after the last open task. A clean run of it with no commit moves the issue to `verifying`. The focus marker is not a layer.
 
 ### verifying
 
@@ -160,7 +161,7 @@ Applied to the decision the tables produced, in this order.
 | When | Decision | What it replaces |
 |---|---|---|
 | `sdd:refused` matches this agent decision's phase, action, and reason | `wait`. The note is the refusal comment, or `refused <action>: <reason>` | That agent start. A different phase, action, or reason still starts. A person comment removes the label. A refusal `threads on <layer>` is removed when that layer has no open thread |
-| More than one open pull request | `wait` until one remains | Every exit except `implement-next-task`, `classify-comments`, `unarchive`, an earlier-phase rollback, a return to `tasking` for a card gap, and a wait that is not a gate and does not mention merge, archive, or finished |
+| More than one open pull request | `wait` until one remains | Every exit except `implement-next-task`, `cover-baseline`, `repair-suite`, `classify-comments`, `unarchive`, an earlier-phase rollback, a return to `tasking` for a card gap, and a wait that is not a gate and does not mention merge, archive, or finished |
 
 `idle` / The same decision stays idle. `idle` / A person comment starts the effect. `idle` / A different action starts. `idle` / A closed code thread releases the refusal. `pull-request` / Several open pull requests hold the phase line.
 
@@ -200,7 +201,7 @@ What a step leaves, and the poll that takes it. The step text lives in `skills/s
 | A card revision that is not the live delta, or a delta scenario named on no card | `advance` from implementing to tasking before the open task | `artifact` / A differing card revision returns implementing to tasking. `artifact` / A live scenario with no card returns implementing to tasking |
 | Every task is checked and a delta scenario has no task line | `advance` from implementing to tasking | `artifact` / A checked-off cut with an unsliced scenario returns to tasking |
 | Accepting is not archived and a delta scenario has no task line | Wait, and does not archive | `artifact` / Accepting waits while a delta scenario has no task |
-| No open task, no child, and no open blocker | The poll advances to `verifying` and that phase reads the checks. One implement run does not leave this | `dependencies` / Finished tasks with no children move to verifying |
+| No open task, no child, and no open blocker | The poll runs `repair-suite`. A clean run with no commit moves to `verifying`. One implement run does not leave this | `dependencies` / Finished tasks with no children run the suite |
 | `classify-failures` leaves a layer marker and stays on verifying | While the checks stay red, the next poll moves to that marker's phase and does not classify again | `verifying` / Red checks with a code marker return to implementing |
 | Green checks and no layer marker | `advance` to `accepting`. Archive is the next poll on accepting, not this one | `verifying` / Green checks move to accepting |
 | An open unmarked thread, not on an open item | `classify-comments` before the phase skill | `marker` / An unlabeled thread is classified during implementing |

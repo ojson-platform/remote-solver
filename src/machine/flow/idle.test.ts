@@ -716,6 +716,60 @@ spec('idle', () => {
       assert.ok((await tracker.comments('8')).some(note => note.body.includes('threads on code')));
     });
   });
+
+  requirement('A clean suite run moves the phase', () => {
+    scenario('A clean suite run moves to verifying', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-suite-'));
+      const seen: string[] = [];
+      const runtime: Runtime = {
+        async run(skill) {
+          seen.push(skill.action);
+          return {commits: 0};
+        },
+        async ask() {
+          return {text: ''};
+        },
+      };
+      const tasks = path.join('openspec', 'changes', 'issue-8', 'tasks.md');
+      const {tracker, review} = memoryPorts({
+        issues: [
+          {
+            key: '8',
+            title: '#8: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['remote-solver', 'sdd:cycle', 'sdd:implementing'],
+          },
+        ],
+        pulls: {8: [{id: '80', title: '#8: title', state: 'OPEN'}]},
+      });
+      const box = machine(root, {
+        config: {
+          queues: [{name: 'remote-solver'}],
+          base: 'master',
+          branchScope: 'sdd',
+          ignoreComments: [],
+        },
+        tracker,
+        review,
+        vcs: {
+          ...emptyVcs(),
+          filesAt: () => ({
+            exists: rel => rel === tasks,
+            read: rel => (rel === tasks ? '- [x] one\n' : ''),
+            list: () => [],
+          }),
+        },
+        runtime,
+      });
+      const result = await driveIssue(box, '8');
+      assert.equal(result.code, 0);
+      const labels = await tracker.labels('8');
+      assert.ok(labels.includes('sdd:verifying'));
+      assert.equal(labels.includes('sdd:refused'), false);
+      assert.deepEqual(seen, ['repair-suite']);
+    });
+  });
 });
 
 function emptyVcs(): Vcs {

@@ -96,6 +96,8 @@ export function holdOpenPulls(
   if (
     decision.kind === 'agent' &&
     (decision.action === 'implement-next-task' ||
+      decision.action === 'cover-baseline' ||
+      decision.action === 'repair-suite' ||
       decision.action === 'classify-comments' ||
       decision.action === 'unarchive')
   ) {

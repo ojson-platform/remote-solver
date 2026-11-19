@@ -150,12 +150,33 @@ spec('step-handoff', () => {
       assert.match(body, /Write no code/);
     });
     scenario('A coverage gap outside the task is a hand-off', () => {
-      assert.match(step('implement.md'), /coverage gap outside this task is a Hand-off, not a success/);
+      assert.match(
+        step('repair-suite.md'),
+        /coverage gap outside this task is a Hand-off to `code`, not a success/,
+      );
     });
     scenario('Scenarios from two requirements are split before the task', () => {
       const body = step('implement.md');
       assert.match(body, /Scenarios from two Requirements on that card: split `tasks\.md` in its own commit/);
       assert.match(body, /end the run/);
+    });
+  });
+
+  requirement('Cover and the suite hand off what they cannot carry', () => {
+    scenario('A red baseline trace hands off to spec', () => {
+      const body = step('cover-baseline.md');
+      assert.match(body, /A red test is a Hand-off to `spec`/);
+      assert.match(body, /Do not edit product code/);
+      assert.match(body, /Do not edit the spec/);
+    });
+    scenario('A second red layer hands off to code', () => {
+      const body = step('repair-suite.md');
+      assert.match(body, /A second red layer command: Hand-off to `code`/);
+      assert.match(body, /Do not run it a third time/);
+    });
+    scenario('A slice does not repair a coverage gap', () => {
+      const body = step('implement.md');
+      assert.match(body, /A coverage gap outside this task is not a success and is not fixed in this step/);
     });
   });
 });

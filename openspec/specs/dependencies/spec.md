@@ -47,7 +47,7 @@ A child is an open cycle issue this issue is the parent of, by the host parent l
 
 ### Requirement: Implementing waits for children and blockers after the tasks
 
-While a task is open, the machine SHALL run that task before it looks at links and SHALL NOT wait on a link, unless the open pull request conflicts with its base. A conflict SHALL be rebased first. When no task is open and the pull request does not conflict, it SHALL wait until every child is `accepted`, then wait while a blocker is open. A closed issue SHALL NOT hold that wait and SHALL NOT hold the parent. After those waits the machine SHALL move to `verifying`.
+While a task is open and the baseline is traced, the machine SHALL run that task before links and SHALL NOT wait on a link, unless the pull request conflicts with its base. An untraced baseline SHALL run first. A child SHALL NOT hold it. A traced conflict SHALL be rebased first. With no open task and no conflict, the machine SHALL wait until every child is accepted, then while a blocker is open. A closed issue SHALL NOT hold that wait. After those waits the machine SHALL run `repair-suite`.
 
 #### Scenario: An open task runs before the children are checked
 
@@ -66,10 +66,10 @@ A finished parent is the finished-cycle exception to that move. The parent is fi
 - **WHEN** `implementing` has no open task and an open issue is a blocker on a blocked-by link or a depends-on link
 - **THEN** the machine waits and names that issue
 
-#### Scenario: Finished tasks with no children move to verifying
+#### Scenario: Finished tasks with no children run the suite
 
 - **WHEN** `implementing` has no open task, no child, and no open blocker
-- **THEN** the machine moves the issue to `verifying`
+- **THEN** the machine runs `repair-suite` and does not move the issue to `verifying`
 
 #### Scenario: A finished parent with a child short of accepted and an open blocker waits
 
@@ -81,10 +81,15 @@ A finished parent is the finished-cycle exception to that move. The parent is fi
 - **WHEN** implementing already runs an open task before it looks at links, together with waiting on a link while that task is open as the limit that can replace that run
 - **THEN** implementing still runs an open task before it looks at links
 
-#### Scenario: With no open task, it waits until every child is accepted, then waits while a blocker is open, then moves to verifying
+#### Scenario: An untraced baseline runs before an open task and a child
 
-- **WHEN** with no open task, implementing already waits until every child is accepted, then waits while a blocker is open, then moves to verifying, together with moving to verifying while a child is not accepted as the limit that can replace those waits
-- **THEN** with no open task, it waits until every child is accepted, then waits while a blocker is open, then moves to verifying
+- **WHEN** `implementing` has an open task, an untraced baseline scenario, and a child that is not accepted
+- **THEN** the machine runs `cover-baseline` and does not wait on the child
+
+#### Scenario: With no open task, it waits until every child is accepted, then waits while a blocker is open, then runs the suite
+
+- **WHEN** with no open task, implementing already waits until every child is accepted, then waits while a blocker is open, then runs the suite, together with running the suite while a child is not accepted as the limit that can replace those waits
+- **THEN** with no open task, it waits until every child is accepted, then waits while a blocker is open, then runs the suite
 
 #### Scenario: A closed issue does not hold that wait
 

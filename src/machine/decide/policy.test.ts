@@ -63,6 +63,7 @@ function change(over: Partial<ChangeView> = {}): ChangeView {
     cardScenarios: [],
     cardRevision: '',
     slicedScenarios: [],
+    untracedBaseline: [],
     ...over,
   };
 }
@@ -396,13 +397,21 @@ test('tasking waits for a child that is not specified yet', () => {
   }
 });
 
-test('implementing waits for an open blocker, then verifies when the tasks are done', () => {
+test('implementing waits for an open blocker, then repairs the suite when the tasks are done', () => {
   const parent = issue(1, ['sdd:implementing'], {dependsOn: ['8']});
   const blocker = issue(8, ['sdd:cycle', 'sdd:implementing']);
   const waiting = judged(parent, [parent, blocker], [pull(9)], ready);
   assert.equal(waiting.kind, 'wait');
   const done = judged(issue(1, ['sdd:implementing']), [], [pull(9)], ready);
-  assert.deepEqual(done, {kind: 'advance', issue: '1', to: 'verifying', reason: 'no open tasks'});
+  assert.deepEqual(done, {
+    kind: 'agent',
+    issue: '1',
+    action: 'repair-suite',
+    skill: 'repair-suite',
+    phase: 'implementing',
+    pr: '9',
+    reason: 'repair the suite',
+  });
 });
 
 test('verifying classifies red checks, and follows a marker once one exists', () => {
@@ -697,11 +706,14 @@ test('settle walks mechanical advances on labels and stops to close an accepted 
   );
   assert.deepEqual(
     walked.transitions.map(transition => transition.to),
-    ['specifying', 'designing', 'tasking', 'implementing', 'verifying'],
+    ['specifying', 'designing', 'tasking', 'implementing'],
   );
-  assert.equal(walked.decision.kind, 'wait');
+  assert.equal(walked.decision.kind, 'agent');
+  if (walked.decision.kind === 'agent') {
+    assert.equal(walked.decision.action, 'repair-suite');
+  }
   assert.ok(!walked.labels.includes('sdd:wait-human'));
-  assert.ok(walked.labels.includes('sdd:verifying'));
+  assert.ok(walked.labels.includes('sdd:implementing'));
 
   const held = settled(issue(1, ['sdd:accepted']), [], [pull(9)], change({archived: true}));
   assert.deepEqual(held.transitions, []);
@@ -1161,6 +1173,56 @@ spec('artifact', () => {
       const view = readChange('1', source);
       assert.ok(view.slicedScenarios.includes(title));
       assert.equal(unslicedScenario(view), null);
+    });
+  });
+
+  requirement('An untraced baseline is covered before the next task', () => {
+    const line = [{spec: 'focus-prose', requirement: 'Stay', scenario: 'The line stays'}];
+    scenario('An untraced baseline runs before the open task', () => {
+      const decision = judged(
+        issue(1, ['sdd:implementing']),
+        [],
+        [pull(9)],
+        change({tasks: true, openTasks: 1, untracedBaseline: line}),
+      );
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'cover-baseline');
+        assert.equal(decision.reason, 'untraced baseline');
+      }
+    });
+    scenario('An unsliced scenario returns to tasking before the baseline', () => {
+      const decision = judged(
+        issue(1, ['sdd:implementing']),
+        [],
+        [pull(9)],
+        change({
+          tasks: true,
+          openTasks: 0,
+          specsRevision: 'aaa',
+          cardRevision: 'aaa',
+          deltaScenarios: ['The remark stays'],
+          cardScenarios: ['The remark stays'],
+          slicedScenarios: [],
+          untracedBaseline: line,
+        }),
+      );
+      assert.equal(decision.kind, 'advance');
+      if (decision.kind === 'advance') {
+        assert.equal(decision.to, 'tasking');
+      }
+    });
+    scenario('An untraced baseline without a pull request waits', () => {
+      const decision = decide(
+        issue(1, ['sdd:implementing']),
+        [],
+        [],
+        change({tasks: true, untracedBaseline: line}),
+      );
+      assert.equal(decision.kind, 'wait');
+      if (decision.kind === 'wait') {
+        assert.equal(decision.reason, 'no open pull request');
+      }
     });
   });
 });

@@ -106,13 +106,16 @@ spec('dependencies', () => {
         assert.match(decision.reason, /#8/);
       }
     });
-    scenario('Finished tasks with no children move to verifying', () => {
+    scenario('Finished tasks with no children run the suite', () => {
       const decision = decide(issue(1, ['sdd:implementing']), [], [pull(9)], ready);
       assert.deepEqual(decision, {
-        kind: 'advance',
+        kind: 'agent',
         issue: '1',
-        to: 'verifying',
-        reason: 'no open tasks',
+        action: 'repair-suite',
+        skill: 'repair-suite',
+        phase: 'implementing',
+        pr: '9',
+        reason: 'repair the suite',
       });
     });
     scenario('A finished parent with a child short of accepted and an open blocker waits', () => {
@@ -134,8 +137,18 @@ spec('dependencies', () => {
       const decision = decide(parent, [parent, child, blocker], [pull(9)], {...ready, openTasks: 1});
       assert.equal(action(decision), 'implement-next-task');
     });
+    scenario('An untraced baseline runs before an open task and a child', () => {
+      const parent = issue(1, ['sdd:implementing'], {dependsOn: ['8']});
+      const child = issue(2, ['sdd:cycle', 'sdd:implementing'], {parent: '1'});
+      const decision = decide(parent, [parent, child], [pull(9)], {
+        ...ready,
+        openTasks: 1,
+        untracedBaseline: [{spec: 'focus-prose', requirement: 'Stay', scenario: 'The line stays'}],
+      });
+      assert.equal(action(decision), 'cover-baseline');
+    });
     scenario(
-      'With no open task, it waits until every child is accepted, then waits while a blocker is open, then moves to verifying',
+      'With no open task, it waits until every child is accepted, then waits while a blocker is open, then runs the suite',
       () => {
         const doneTasks = {...ready, openTasks: 0};
         const parent = issue(1, ['sdd:implementing'], {dependsOn: ['8']});
@@ -149,10 +162,13 @@ spec('dependencies', () => {
           assert.match(onBlocker.reason, /#8/);
         }
         assert.deepEqual(decide(parent, [parent, childAccepted], [pull(9)], doneTasks), {
-          kind: 'advance',
+          kind: 'agent',
           issue: '1',
-          to: 'verifying',
-          reason: 'no open tasks',
+          action: 'repair-suite',
+          skill: 'repair-suite',
+          phase: 'implementing',
+          pr: '9',
+          reason: 'repair the suite',
         });
       },
     );
@@ -160,10 +176,13 @@ spec('dependencies', () => {
       const parent = issue(1, ['sdd:implementing'], {dependsOn: ['8'], blockedBy: ['8']});
       const decision = decide(parent, [parent], [pull(9)], ready);
       assert.deepEqual(decision, {
-        kind: 'advance',
+        kind: 'agent',
         issue: '1',
-        to: 'verifying',
-        reason: 'no open tasks',
+        action: 'repair-suite',
+        skill: 'repair-suite',
+        phase: 'implementing',
+        pr: '9',
+        reason: 'repair the suite',
       });
     });
     scenario('One issue on two of these links counts once for the wait', () => {

@@ -206,19 +206,27 @@ spec('marker', () => {
       assert.deepEqual(review.layers, []);
       assert.equal(action(decision), 'implement-next-task');
     });
-    scenario('A conversation code marker with no open task moves on to verifying', () => {
+    scenario('A conversation code marker with no open task runs the suite', () => {
       const decision = decide(
         issue(1, ['sdd:implementing']),
         [],
         [pull(9, {review: reviewOf([], codeTalk)})],
         ready,
       );
-      assert.deepEqual(decision, {
-        kind: 'advance',
-        issue: '1',
-        to: 'verifying',
-        reason: 'no open tasks',
-      });
+      assert.equal(action(decision), 'repair-suite');
+    });
+    scenario('A conversation code marker leaves an untraced baseline in place', () => {
+      const decision = decide(
+        issue(1, ['sdd:implementing']),
+        [],
+        [pull(9, {review: reviewOf([], codeTalk)})],
+        change({
+          ...ready,
+          openTasks: 1,
+          untracedBaseline: [{spec: 'focus-prose', requirement: 'Stay', scenario: 'The line stays'}],
+        }),
+      );
+      assert.equal(action(decision), 'cover-baseline');
     });
     scenario('A conversation code marker on accepting does not move to implementing', () => {
       const row = issue(1, ['sdd:accepting']);

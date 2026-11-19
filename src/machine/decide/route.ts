@@ -10,6 +10,8 @@ export const ACTION_SKILL = {
   'create-tasks': 'tasks',
   'improve-tasks': 'tasks',
   'implement-next-task': 'implement',
+  'cover-baseline': 'cover-baseline',
+  'repair-suite': 'repair-suite',
   'fix-implementation': 'fix',
   'classify-failures': 'verify',
   'classify-comments': 'pr-comments',

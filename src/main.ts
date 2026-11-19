@@ -6,7 +6,8 @@ import {claimChat, clearChat} from './adapters/runtime/session.ts';
 import {ghErrorLine, githubPauseRemaining, reportGithubError} from './adapters/tracker/github.ts';
 import {packageLinks} from './adapters/vcs/vcs.ts';
 import {effectSignature, postRefusal, refusalBody, type Decision} from './machine/decide/policy.ts';
-import {performCycle} from './machine/flow/flow.ts';
+import {applyLabels, performCycle} from './machine/flow/flow.ts';
+import {labelsAfterAdvance} from './machine/phase/phase.ts';
 import {endStep, observedSignal, runMarks} from './machine/mark/focus.ts';
 import {contentFiles} from './machine/port.ts';
 import {modeOfSkill} from './machine/skill/skill.ts';
@@ -125,6 +126,12 @@ async function driveHeldIssue(box: Machine, key: string, watch?: SpyWatch): Prom
           `Held: ${decision.action} made no commit; the work changed, so it is not refused.`,
         );
         heldSignature = sig;
+        continue;
+      }
+      if (decision.action === 'repair-suite') {
+        const next = labelsAfterAdvance(record.labels, 'verifying');
+        await applyLabels(box.tracker, key, record.labels, next);
+        console.log(`#${key} advance → verifying: suite is green`);
         continue;
       }
       console.error(

@@ -45,6 +45,20 @@ When more than one open pull request belongs to the issue, the machine SHALL wai
 - **WHEN** `implementing` has an open task and one of two open pull requests conflicts with the base
 - **THEN** the machine runs that task and does not rebase
 
+### Requirement: An untraced baseline runs before two pull requests hold the task
+
+On `implementing`, an untraced baseline SHALL start `cover-baseline` before an open task, including when two pull requests are open and one conflicts. The machine SHALL NOT rebase for that conflict and SHALL NOT wait for one pull request to close.
+
+#### Scenario: An untraced baseline runs while two pull requests are open
+
+- **WHEN** `implementing` has an open task, an untraced baseline scenario, and two open pull requests
+- **THEN** the machine runs `cover-baseline` and does not wait
+
+#### Scenario: An untraced baseline runs when one of two pull requests conflicts
+
+- **WHEN** `implementing` has an open task, an untraced baseline scenario, and one of two open pull requests conflicts
+- **THEN** the machine runs `cover-baseline` and does not rebase
+
 ### Requirement: An earlier thread and a card gap come before two pull requests
 
 An earlier-phase thread SHALL move the phase before an open task on two pull requests. A card gap SHALL return to `tasking` before that task.

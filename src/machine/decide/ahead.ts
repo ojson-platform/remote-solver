@@ -1,4 +1,4 @@
-import {cardGap, type ChangeView} from '../change/change.ts';
+import {cardGap, unslicedScenario, type ChangeView} from '../change/change.ts';
 import type {IssueRecord} from '../port.ts';
 import type {CycleRecord, Decision, PullSnapshot} from './types.ts';
 
@@ -93,8 +93,12 @@ export function decideAhead(read: AheadRead): Decision | null {
     change.tasks &&
     change.openTasks > 0 &&
     !cardGap(change) &&
+    !unslicedScenario(change) &&
     !earlierPhase
   ) {
+    if (change.untracedBaseline.length > 0) {
+      return agent(issue.key, 'cover-baseline', phase, String(open[0].id), 'untraced baseline');
+    }
     return agent(issue.key, 'implement-next-task', phase, String(open[0].id), taskReason(change));
   }
 

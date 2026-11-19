@@ -95,3 +95,42 @@ A thrown read of the tip message SHALL NOT be stored as an empty message. An emp
 
 - **WHEN** reading the tip message throws
 - **THEN** the cycle is not loaded as a tip without an archive line
+
+### Requirement: A kept baseline scenario with no spec-coverage trace is untraced
+
+The machine SHALL list a baseline scenario the delta kept when the design trace line names `@ojson/spec-coverage` and no recorded call matches that triple. A scenario the delta added, modified, or removed SHALL NOT be in that list. The same scenario title on another requirement SHALL stay. A rename SHALL keep the new requirement name. `scenario.skip` SHALL NOT count as a record. When the trace line is absent or names another format, the list SHALL be empty.
+
+#### Scenario: A removed requirement is not untraced
+
+- **WHEN** the delta removes one requirement and adds another, and no test records the two that remain
+- **THEN** the list is those two scenarios and not the removed one
+
+#### Scenario: The same title on another requirement stays
+
+- **WHEN** two requirements share a scenario title and the delta modifies only one
+- **THEN** the unmodified requirement stays in the list
+
+#### Scenario: A rename keeps the new requirement name
+
+- **WHEN** the delta renames a requirement and does not replace its scenario
+- **THEN** the list names the new requirement
+
+#### Scenario: A skipped call does not record the scenario
+
+- **WHEN** the only call for that scenario is `scenario.skip`
+- **THEN** the scenario stays untraced, and a normal call removes it
+
+#### Scenario: Another trace format leaves the list empty
+
+- **WHEN** the trace line is absent or names a format other than `@ojson/spec-coverage`
+- **THEN** the list is empty
+
+#### Scenario: An added scenario is not untraced
+
+- **WHEN** the delta adds a scenario
+- **THEN** that scenario is not in the list
+
+#### Scenario: The change read lists those triples
+
+- **WHEN** the change names a modified capability, the design traces spec-coverage, and the stable spec keeps two scenarios
+- **THEN** the change read lists those two triples

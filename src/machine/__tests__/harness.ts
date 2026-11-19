@@ -42,6 +42,7 @@ export function change(over: Partial<ChangeView> = {}): ChangeView {
     cardScenarios: [],
     cardRevision: '',
     slicedScenarios: [],
+    untracedBaseline: [],
     ...over,
   };
 }

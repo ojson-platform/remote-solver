@@ -340,3 +340,27 @@ On `tasking`, a card gap SHALL start the tasks skill before a child and before t
 
 - **WHEN** `implementing` has no `tasks.md`
 - **THEN** the machine returns to `tasking`
+
+### Requirement: An untraced baseline is covered before the next task
+
+On `implementing`, a baseline scenario the delta kept and the spec-coverage trace does not record SHALL start `cover-baseline` before an open task. A missing task line SHALL return to `tasking` before that. No open pull request SHALL wait, including when no task is open. The cover prompt SHALL list each triple as `spec / requirement / scenario`. The reason SHALL be `untraced baseline` and SHALL NOT name a scenario.
+
+#### Scenario: An untraced baseline runs before the open task
+
+- **WHEN** `implementing` has an open task and an untraced baseline scenario
+- **THEN** the machine runs `cover-baseline` and does not run the task
+
+#### Scenario: An unsliced scenario returns to tasking before the baseline
+
+- **WHEN** `implementing` has no open task, a delta scenario has no task line, and a baseline scenario is untraced
+- **THEN** the machine returns to `tasking` and does not run `cover-baseline`
+
+#### Scenario: An untraced baseline without a pull request waits
+
+- **WHEN** `implementing` has no open task, a baseline scenario is untraced, and no pull request is open
+- **THEN** the machine waits `no open pull request`
+
+#### Scenario: The cover prompt lists each untraced triple
+
+- **WHEN** cover-baseline starts and one kept scenario has no trace
+- **THEN** the prompt lists `spec / requirement / scenario` for that triple and omits a scenario the delta removed

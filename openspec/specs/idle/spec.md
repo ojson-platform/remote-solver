@@ -41,6 +41,15 @@ When one worker runs a later turn and that turn produces no commit, the refusal 
 - **WHEN** a run has finished and the next decision is a different action
 - **THEN** the spy starts that action
 
+### Requirement: A clean suite run moves the phase
+
+A clean `repair-suite` with no commit, no marker, and a clean tree SHALL move the issue to `verifying` and SHALL NOT set `sdd:refused`.
+
+#### Scenario: A clean suite run moves to verifying
+
+- **WHEN** `repair-suite` produces no commit, no marker, and a clean tree
+- **THEN** the issue moves to `verifying` and does not carry `sdd:refused`
+
 ### Requirement: A running issue and the parallel cap are left alone
 
 The spy SHALL NOT settle or start an issue whose worker is still running. It SHALL start at most the parallel cap at once. The default cap SHALL be 2.

@@ -136,6 +136,55 @@ spec('artifact', () => {
 
   });
 
+  requirement('An untraced baseline is covered before the next task', () => {
+    scenario('The cover prompt lists each untraced triple', async () => {
+      const root = repo();
+      const dir = 'openspec/changes/issue-6';
+      write(
+        root,
+        `${dir}/proposal.md`,
+        '## Capabilities\n\n### Modified\n\n- focus-prose keep\n',
+      );
+      write(
+        root,
+        `${dir}/design.md`,
+        [
+          '## Verification boundary',
+          'trace: `spec`, `requirement`, and `scenario` from `@ojson/spec-coverage`',
+          'test path: `src/**/*.test.ts`',
+          '',
+        ].join('\n'),
+      );
+      write(
+        root,
+        `${dir}/specs/focus-prose/spec.md`,
+        '## REMOVED Requirements\n\n### Requirement: The written prose is the words after the marker\n',
+      );
+      write(
+        root,
+        'openspec/specs/focus-prose/spec.md',
+        [
+          '## Requirements',
+          '',
+          '### Requirement: The written prose is the words after the marker',
+          '',
+          '#### Scenario: Marks stay the characters that were written',
+          '',
+          '### Requirement: This surface has no line comment and no diff row',
+          '',
+          '#### Scenario: The written prose has no line comment and no diff row',
+          '',
+        ].join('\n'),
+      );
+      const upstream = await promptOf(root, 'cover-baseline', 'implementing');
+      assert.match(
+        upstream,
+        /focus-prose \/ This surface has no line comment and no diff row \/ The written prose has no line comment and no diff row/,
+      );
+      assert.equal(upstream.includes('Marks stay'), false);
+    });
+  });
+
   requirement('A matching tasks stamp names a card gap', () => {
     scenario('A matching tasks stamp names the card gap', async () => {
       const root = repo();

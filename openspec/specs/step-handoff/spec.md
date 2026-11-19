@@ -148,9 +148,28 @@ No `tasks/<id>.md`, or a card with no § Artifacts heading, SHALL be a hand-off 
 #### Scenario: A coverage gap outside the task is a hand-off
 
 - **WHEN** the suite reports a coverage gap outside this task
-- **THEN** the implement step treats that gap as a hand-off and not as success
+- **THEN** repair-suite treats that gap as a Hand-off to `code` and not as success
 
 #### Scenario: Scenarios from two requirements are split before the task
 
 - **WHEN** one card names scenarios from two Requirements
 - **THEN** the implement step splits `tasks.md` in its own commit, leaves the checkbox open, and ends the run
+
+### Requirement: Cover and the suite hand off what they cannot carry
+
+A red baseline trace SHALL be a Hand-off to `spec` on that scenario line. The run SHALL NOT edit product code or the spec. A second red layer command SHALL be a Hand-off to `code`. A second red type check SHALL be a Hand-off to `code` on that file. A slice SHALL NOT treat a coverage gap as success and SHALL NOT fix it.
+
+#### Scenario: A red baseline trace hands off to spec
+
+- **WHEN** a baseline trace is red
+- **THEN** cover-baseline hands that scenario to `spec` and does not edit product code or the spec
+
+#### Scenario: A second red layer hands off to code
+
+- **WHEN** the layer command is red a second time
+- **THEN** repair-suite hands that file to `code` and does not run the layer command again
+
+#### Scenario: A slice does not repair a coverage gap
+
+- **WHEN** a slice sees a coverage gap outside its task
+- **THEN** the slice does not fix that gap and does not treat it as success

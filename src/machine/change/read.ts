@@ -6,6 +6,7 @@ import path from 'node:path';
 
 import {archiveChangePath, archiveDir, changeDir} from './naming.ts';
 import {absorbedStamp, contentRevision, drifted, sharedStamp} from './stamp.ts';
+import {keptBaseline, matchesTestPath, testPathGlobs, tracesSpecCoverage, untracedOf} from './required.ts';
 import {
   cardScenarioNames,
   deltaScenarioNames,
@@ -91,7 +92,35 @@ export function readChange(key: string, files: FileSource): ChangeView {
     cardScenarios: cardTexts.flatMap(cardScenarioNames),
     cardRevision: sharedDelta(cardTexts),
     slicedScenarios: slicedScenarioNames(tasksText),
+    untracedBaseline: untracedFor(designText, namedCapabilities(proposal), specChunks, files),
   };
+}
+
+function specId(rel: string): string {
+  const parts = rel.split('/');
+  return parts.at(-2) ?? '';
+}
+
+function untracedFor(
+  design: string,
+  capabilities: readonly string[],
+  specChunks: readonly {path: string; text: string}[],
+  files: FileSource,
+): ChangeView['untracedBaseline'] {
+  if (!tracesSpecCoverage(design)) {
+    return [];
+  }
+  const kept = capabilities.flatMap(id => {
+    const delta = specChunks.find(chunk => specId(chunk.path) === id)?.text ?? '';
+    return keptBaseline(files.read(`openspec/specs/${id}/spec.md`), delta, id);
+  });
+  const globs = testPathGlobs(design);
+  const roots = [...new Set(globs.map(glob => glob.split('*')[0]?.replace(/\/$/, '') ?? '').filter(Boolean))];
+  const paths = roots.flatMap(root => files.list(root));
+  const sources = paths
+    .filter(rel => matchesTestPath(rel, globs))
+    .map(rel => ({path: rel, text: files.read(rel)}));
+  return untracedOf(design, kept, sources);
 }
 
 /** The id on the first open checkbox. A backtick token wins over a bare word. */

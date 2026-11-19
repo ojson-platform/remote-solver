@@ -91,6 +91,33 @@ spec('pull-request', () => {
     });
   });
 
+  requirement('An untraced baseline runs before two pull requests hold the task', () => {
+    const untraced = change({
+      tasks: true,
+      openTasks: 1,
+      untracedBaseline: [{spec: 'focus-prose', requirement: 'Stay', scenario: 'The line stays'}],
+    });
+    scenario('An untraced baseline runs while two pull requests are open', () => {
+      const decision = decide(issue(1, ['sdd:implementing']), [], [pull(3), pull(4)], untraced);
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'cover-baseline');
+      }
+    });
+    scenario('An untraced baseline runs when one of two pull requests conflicts', () => {
+      const decision = decide(
+        issue(1, ['sdd:implementing']),
+        [],
+        [pull(3, {conflict: true}), pull(4)],
+        untraced,
+      );
+      assert.equal(decision.kind, 'agent');
+      if (decision.kind === 'agent') {
+        assert.equal(decision.action, 'cover-baseline');
+      }
+    });
+  });
+
   requirement('An earlier thread and a card gap come before two pull requests', () => {
     scenario('An earlier-phase thread moves while two pull requests are open', () => {
       const decision = decide(

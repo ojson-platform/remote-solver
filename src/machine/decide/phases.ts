@@ -193,8 +193,16 @@ function implement(read: PhaseRead): Decision {
   if (card) {
     return {kind: 'advance', issue: issue.key, to: 'tasking', reason: card};
   }
-  if (!pr && change.openTasks > 0) {
+  const slice = unslicedScenario(change);
+  if (slice) {
+    return {kind: 'advance', issue: issue.key, to: 'tasking', reason: slice};
+  }
+  const needsWork = change.untracedBaseline.length > 0 || change.openTasks > 0;
+  if (!pr && needsWork) {
     return {kind: 'wait', issue: issue.key, reason: NO_OPEN_PULL};
+  }
+  if (change.untracedBaseline.length > 0) {
+    return agent(issue.key, 'cover-baseline', phase, pr ? String(pr.id) : '', 'untraced baseline');
   }
   if (change.openTasks > 0) {
     return agent(
@@ -205,17 +213,9 @@ function implement(read: PhaseRead): Decision {
       taskReason(change),
     );
   }
-  const slice = unslicedScenario(change);
-  if (slice) {
-    return {kind: 'advance', issue: issue.key, to: 'tasking', reason: slice};
-  }
   return (
-    linkWait(issue, issues) ?? {
-      kind: 'advance',
-      issue: issue.key,
-      to: 'verifying',
-      reason: 'no open tasks',
-    }
+    linkWait(issue, issues) ??
+    agent(issue.key, 'repair-suite', phase, pr ? String(pr.id) : '', 'repair the suite')
   );
 }
 

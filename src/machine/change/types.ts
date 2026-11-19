@@ -40,6 +40,11 @@ export type ChangeView = {
   cardRevision: string;
   /** Scenario titles named by an open or checked line in `tasks.md`. */
   slicedScenarios: string[];
+  /**
+   * Baseline triples the delta kept and this service's spec-coverage trace
+   * does not record. Empty when the boundary names another trace, or none.
+   */
+  untracedBaseline: {spec: string; requirement: string; scenario: string}[];
 };
 
 /** What a plaque and an open spine need from one branch, plus a mark of its text. */

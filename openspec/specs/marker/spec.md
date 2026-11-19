@@ -109,10 +109,15 @@ A layer marker that sits only on the pull-request conversation SHALL leave the p
 - **WHEN** `implementing` has an open task and the conversation marks `code`
 - **THEN** the machine runs the next task
 
-#### Scenario: A conversation code marker with no open task moves on to verifying
+#### Scenario: A conversation code marker with no open task runs the suite
 
 - **WHEN** `implementing` has no open task and the conversation marks `code`
-- **THEN** the machine moves the issue to `verifying`
+- **THEN** the machine runs `repair-suite`
+
+#### Scenario: A conversation code marker leaves an untraced baseline in place
+
+- **WHEN** `implementing` has an open task, an untraced baseline scenario, and the conversation marks `code`
+- **THEN** the machine runs `cover-baseline`
 
 #### Scenario: A conversation code marker on accepting does not move to implementing
 

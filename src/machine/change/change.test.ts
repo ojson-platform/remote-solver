@@ -9,6 +9,7 @@ import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
 import {contentBranchFiles, gitFiles, strictContentBranchFiles} from '../../adapters/vcs/vcs.ts';
 import {changeText, HEADINGS, readBranch, readChange} from './change.ts';
+import {keptBaseline, untracedOf} from './required.ts';
 import {activeChangePath, archiveChangePath, archiveDir} from './naming.ts';
 import type {FileSource} from '../port.ts';
 
@@ -387,6 +388,165 @@ spec('spec-archive', () => {
       } finally {
         rmSync(root, {recursive: true, force: true});
       }
+    });
+  });
+});
+
+const boundary = [
+  '## Verification boundary',
+  'trace: `spec`, `requirement`, and `scenario` from `@ojson/spec-coverage`',
+  'test path: `src/**/*.test.ts` or `src/**/*.test.tsx`',
+].join('\n');
+
+const prose = [
+  '## Requirements',
+  '',
+  '### Requirement: The written prose is the words after the marker',
+  '',
+  '#### Scenario: Marks stay the characters that were written',
+  '',
+  '### Requirement: This surface has no line comment and no diff row',
+  '',
+  '#### Scenario: The written prose has no line comment and no diff row',
+  '',
+  '### Requirement: A jump is handled before a line click',
+  '',
+  '#### Scenario: A jump is handled before a line click',
+  '',
+].join('\n');
+
+const proseDelta = [
+  '## REMOVED Requirements',
+  '',
+  '### Requirement: The written prose is the words after the marker',
+  '',
+  '## ADDED Requirements',
+  '',
+  '### Requirement: The live page sentence is not the written prose',
+  '',
+  '#### Scenario: The live page sentence is not the written prose',
+  '',
+].join('\n');
+
+function titles(triples: {requirement: string; scenario: string}[]): string[] {
+  return triples.map(triple => `${triple.requirement} / ${triple.scenario}`);
+}
+
+spec('change', () => {
+  requirement('A kept baseline scenario with no spec-coverage trace is untraced', () => {
+    scenario('A removed requirement is not untraced', () => {
+      const kept = keptBaseline(prose, proseDelta, 'focus-prose');
+      assert.deepEqual(titles(kept), [
+        'This surface has no line comment and no diff row / The written prose has no line comment and no diff row',
+        'A jump is handled before a line click / A jump is handled before a line click',
+      ]);
+      assert.equal(
+        untracedOf(boundary, kept, []).some(triple => triple.scenario.startsWith('Marks stay')),
+        false,
+      );
+    });
+
+    scenario('The same title on another requirement stays', () => {
+      const stable = [
+        '## Requirements',
+        '',
+        '### Requirement: Left',
+        '',
+        '#### Scenario: Shared',
+        '',
+        '### Requirement: Right',
+        '',
+        '#### Scenario: Shared',
+        '',
+      ].join('\n');
+      const delta = [
+        '## MODIFIED Requirements',
+        '',
+        '### Requirement: Left',
+        '',
+        '#### Scenario: Shared',
+        '',
+      ].join('\n');
+      assert.deepEqual(titles(keptBaseline(stable, delta, 'focus-prose')), ['Right / Shared']);
+    });
+
+    scenario('A rename keeps the new requirement name', () => {
+      const stable = [
+        '## Requirements',
+        '',
+        '### Requirement: Old',
+        '',
+        '#### Scenario: Kept',
+        '',
+      ].join('\n');
+      const delta = [
+        '## RENAMED Requirements',
+        '',
+        '- FROM: `### Requirement: Old`',
+        '- TO: `### Requirement: New`',
+        '',
+      ].join('\n');
+      assert.deepEqual(titles(keptBaseline(stable, delta, 'focus-prose')), ['New / Kept']);
+    });
+
+    scenario('A skipped call does not record the scenario', () => {
+      const kept = [{spec: 'focus-prose', requirement: 'New', scenario: 'Kept'}];
+      const source = [
+        "spec('focus-prose', () => {",
+        "  requirement('New', () => {",
+        "    scenario.skip('Kept', () => {});",
+        '  });',
+        '});',
+      ].join('\n');
+      assert.equal(untracedOf(boundary, kept, [{path: 'src/focus.test.ts', text: source}]).length, 1);
+      const recorded = source.replace('scenario.skip', 'scenario');
+      assert.deepEqual(untracedOf(boundary, kept, [{path: 'src/focus.test.ts', text: recorded}]), []);
+    });
+
+    scenario('Another trace format leaves the list empty', () => {
+      const kept = keptBaseline(prose, proseDelta, 'focus-prose');
+      const other = boundary.replace('@ojson/spec-coverage', 'go test names');
+      assert.deepEqual(untracedOf(other, kept, []), []);
+      assert.deepEqual(untracedOf('## Verification boundary\n', kept, []), []);
+    });
+
+    scenario('An added scenario is not untraced', () => {
+      const kept = keptBaseline(prose, proseDelta, 'focus-prose');
+      assert.equal(
+        kept.some(triple => triple.scenario === 'The live page sentence is not the written prose'),
+        false,
+      );
+    });
+
+    scenario('The change read lists those triples', () => {
+      const proposal = [
+        '## Capabilities',
+        '',
+        '### Modified',
+        '',
+        '- focus-prose keep',
+        '',
+      ].join('\n');
+      const entries: Record<string, string> = {
+        'openspec/changes/issue-90/proposal.md': proposal,
+        'openspec/changes/issue-90/design.md': boundary,
+        'openspec/changes/issue-90/tasks.md': '- [ ] one\n',
+        'openspec/changes/issue-90/specs/focus-prose/spec.md': proseDelta,
+        'openspec/specs/focus-prose/spec.md': prose,
+      };
+      const names = Object.keys(entries);
+      const view = readChange('90', {
+        exists: rel => names.includes(rel),
+        read: rel => entries[rel] ?? '',
+        list: prefix => names.filter(rel => rel.startsWith(`${prefix.replace(/\/$/, '')}/`)),
+      });
+      assert.deepEqual(
+        view.untracedBaseline.map(triple => triple.scenario),
+        [
+          'The written prose has no line comment and no diff row',
+          'A jump is handled before a line click',
+        ],
+      );
     });
   });
 });

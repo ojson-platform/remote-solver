@@ -66,6 +66,12 @@ function folded(file: string, stamp: string, revision: string, chunks: Chunk[]):
   ].join('\n');
 }
 
+function coverBlock(cwd: string, key: string): string {
+  const triples = readChange(key, workingTree(cwd)).untracedBaseline;
+  const lines = triples.map(triple => `- ${triple.spec} / ${triple.requirement} / ${triple.scenario}`);
+  return [heading, '', 'Untraced baseline scenarios:', ...lines].join('\n');
+}
+
 function unreadable(): string {
   return [
     heading,
@@ -127,6 +133,13 @@ export function upstreamBlock(
     if (skill === 'implement') {
       try {
         return implementBlock(cwd, key, machine);
+      } catch {
+        return unreadable();
+      }
+    }
+    if (skill === 'cover-baseline') {
+      try {
+        return coverBlock(cwd, key);
       } catch {
         return unreadable();
       }

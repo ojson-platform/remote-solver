@@ -9,7 +9,14 @@ import {modeOfSkill, modelFor, skillMode} from './skill.ts';
 const root = path.join(import.meta.dirname, '..', '..', '..', 'skills');
 const flow = path.join(root, 'sdd-flow');
 const stepsDir = path.join(flow, 'steps');
-const mechanical = new Set(['tasks', 'implement', 'fix', 'pr-comments']);
+const mechanical = new Set([
+  'tasks',
+  'implement',
+  'fix',
+  'pr-comments',
+  'cover-baseline',
+  'repair-suite',
+]);
 
 test('skills holds the router and the init skill', () => {
   assert.deepEqual(readdirSync(root).sort(), ['sdd-flow', 'sdd-init']);
@@ -270,12 +277,12 @@ test('the final review treats a broken design sentence as a return', () => {
 
 test('a long command keeps the command status, not a pipe', () => {
   const context = readFileSync(path.join(flow, 'CONTEXT.md'), 'utf8');
-  const implement = readFileSync(path.join(stepsDir, 'implement.md'), 'utf8');
+  const repair = readFileSync(path.join(stepsDir, 'repair-suite.md'), 'utf8');
   assert.match(context, /Redirect its output to a file and remember its status/);
   assert.match(context, /Do not pipe the command into `tail` or `head`/);
   assert.match(context, /`missing`, `near`, `outside`, or `spec coverage has gaps`/);
   assert.match(context, /Do not run the command again to see another slice of the same output/);
-  assert.match(implement, /Keep each command's own status, as § Once says/);
+  assert.match(repair, /Keep each command's own status, as § Once says/);
 });
 
 test('the chat files point at the sdd script', () => {

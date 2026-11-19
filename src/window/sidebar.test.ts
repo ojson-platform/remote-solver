@@ -1257,7 +1257,8 @@ spec('focus-prose', () => {
       );
       const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
       assert.match(prose, /<span[^>]*>Heading<\/span>/);
-      assert.match(prose, /<span[^>]*>- list item<\/span>/);
+      assert.match(prose, />list item</);
+      assert.equal(prose.includes('- list item'), false);
       assert.match(prose, /<strong>emphasis<\/strong>/);
       assert.match(prose, /<a href="https:\/\/example.com">link<\/a>/);
       assert.match(prose, /<code>code<\/code>/);

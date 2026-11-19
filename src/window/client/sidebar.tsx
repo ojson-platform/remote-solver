@@ -876,7 +876,7 @@ function paintFocusProse(
   capabilities: readonly {id: string; rows: readonly SpecEntry[]}[],
 ): ReactNode {
   const lines = display.split('\n');
-  const documentPaint = paintSourceDocument(lines);
+  const documentPaint = paintSourceDocument(lines, {listTextOnly: true});
   let gap = false;
   return lines.map((line, index) => {
     const painted = documentPaint[index];

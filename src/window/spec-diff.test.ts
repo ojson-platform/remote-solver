@@ -774,10 +774,6 @@ function diffRowByLine(html: string, id: string, line: string): string {
   return cap.slice(start, cap.indexOf('</button>', at) + '</button>'.length);
 }
 
-function numCells(block: string): string[] {
-  return [...block.matchAll(/<span class="num">([^<]*)<\/span>/g)].map(match => match[1] ?? '');
-}
-
 function lineButton(html: string, line: string): string {
   const marker = `data-line="${line}"`;
   const at = html.indexOf(marker);
@@ -873,11 +869,10 @@ spec('spec-diff', () => {
   });
 
   requirement('The drawer shows the folded spec', () => {
-    scenario('A changed line shows both numbers and the changed words', async () => {
+    scenario('A changed line shows the changed words', async () => {
       const oldLine = 'Старый текст требования.';
       const newLine = 'Новый текст требования.';
       const baseline = specText(['### Requirement: Чтение', '', oldLine]);
-      const folded = specText(['### Requirement: Чтение', '', newLine]);
       const delta = specText([
         '## MODIFIED Requirements',
         '',
@@ -889,12 +884,10 @@ spec('spec-diff', () => {
         {login: () => MANAGER, tickets: () => [held('1', 'specifying')]},
         async (page, window, paths) => {
           const {html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
-          const left = String(sourceLine(baseline, oldLine));
-          const right = String(sourceLine(folded, newLine));
           const deletion = diffBlock(html, SPEC_ID, 'del', 'class="bit">Старый');
           const addition = diffBlock(html, SPEC_ID, 'add', 'class="bit">Новый');
-          assert.deepEqual(numCells(deletion).slice(0, 2), [left, '']);
-          assert.deepEqual(numCells(addition).slice(0, 2), ['', right]);
+          assert.equal(deletion.includes('class="num"'), false);
+          assert.equal(addition.includes('class="num"'), false);
           assert.match(deletion, /<span class="bit">Старый<\/span>/);
           assert.match(addition, /<span class="bit">Новый<\/span>/);
           assert.equal(deletion.includes('class="bit">текст'), false);
@@ -902,7 +895,7 @@ spec('spec-diff', () => {
         },
       );
     });
-    scenario('An unchanged spec shows one line number', async () => {
+    scenario('An unchanged spec shows no line number', async () => {
       const lines = ['### Requirement: Чтение', '', 'Текст.'];
       const baseline = specText(lines);
       const delta = specText(['## MODIFIED Requirements', '', ...lines]);
@@ -913,7 +906,7 @@ spec('spec-diff', () => {
           const rows = [...capHtml(html, SPEC_ID).matchAll(/<(div|button) class="diff-row[^"]*"[\s\S]*?<\/\1>/g)];
           assert.ok(rows.length > 0);
           for (const row of rows) {
-            assert.equal([...(row[0].matchAll(/<span class="num">/g))].length, 1);
+            assert.equal(row[0].includes('class="num"'), false);
           }
         },
       );
@@ -1136,7 +1129,7 @@ spec('spec-diff', () => {
           const rowStart = html.lastIndexOf('<button', html.indexOf(`data-line="${newLine}"`));
           const row = html.slice(rowStart, html.indexOf('</button>', rowStart));
           assert.match(row, /class="diff-row /);
-          assert.match(row, /class="num"/);
+          assert.equal(row.includes('class="num"'), false);
           assert.equal(
             (
               await post(
@@ -2016,8 +2009,8 @@ spec('spec-row', () => {
     });
   });
 
-  requirement('The line numbers and the fold bar stay', () => {
-    scenario('A changed row keeps both number cells and the fold bar is separate', async () => {
+  requirement('The fold bar stays and the row has no line number', () => {
+    scenario('A changed row has no line number and the fold bar is separate', async () => {
       const between = ['u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10'];
       const baseline = specText(['### Requirement: Чтение', 'head-old', ...between, 'tail-old']);
       const delta = specText([
@@ -2039,13 +2032,13 @@ spec('spec-row', () => {
           assert.match(cap, /<button[^>]*class="fold-bar"/);
           const headNew = diffRowByLine(html, SPEC_ID, 'head-new');
           const tailNew = diffRowByLine(html, SPEC_ID, 'tail-new');
-          assert.equal(numCells(headNew).length, 2);
-          assert.equal(numCells(tailNew).length, 2);
+          assert.equal(headNew.includes('class="num"'), false);
+          assert.equal(tailNew.includes('class="num"'), false);
           assert.equal(cap.includes('class="fold-bar diff-row'), false);
         },
       );
     });
-    scenario('An unchanged spec shows one line number', async () => {
+    scenario('An unchanged spec shows no line number', async () => {
       const lines = ['### Requirement: Чтение', '', 'Текст.'];
       const baseline = specText(lines);
       const delta = specText(['## MODIFIED Requirements', '', ...lines]);
@@ -2056,12 +2049,12 @@ spec('spec-row', () => {
           const rows = [...capHtml(html, SPEC_ID).matchAll(/<(div|button) class="diff-row[^"]*"[\s\S]*?<\/\1>/g)];
           assert.ok(rows.length > 0);
           for (const row of rows) {
-            assert.equal([...(row[0].matchAll(/<span class="num">/g))].length, 1);
+            assert.equal(row[0].includes('class="num"'), false);
           }
         },
       );
     });
-    scenario('A code block keeps the line numbers in sequence', async () => {
+    scenario('A code block stays one row per source line', async () => {
       const codeBody = ['```', 'alpha', 'beta', '```'];
       const after = 'Следующая строка.';
       const baseline = specText(['### Requirement: Чтение', '', ...codeBody, after]);
@@ -2085,11 +2078,10 @@ spec('spec-row', () => {
           assert.equal(after?.kind, 'add');
           assert.equal(after?.right, 7);
           const afterRow = diffRowByLine(html, SPEC_ID, 'Следующая строка изменена.');
-          assert.deepEqual(numCells(afterRow).slice(0, 2), ['', '7']);
+          assert.equal(afterRow.includes('class="num"'), false);
           const alphaRow = diffRowByLine(html, SPEC_ID, 'alpha');
-          assert.deepEqual(numCells(alphaRow).slice(0, 2), ['4', '4']);
-          const innerNums = [...alphaRow.matchAll(/<code>[\s\S]*?<span class="num">/g)];
-          assert.equal(innerNums.length, 0);
+          assert.equal(alphaRow.includes('class="num"'), false);
+          assert.match(alphaRow, /<code class="src">alpha<\/code>/);
         },
       );
     });
@@ -2116,15 +2108,15 @@ spec('spec-row', () => {
           assert.ok(fence);
           assert.equal(fence.right, 3);
           const fenceRow = diffRowByLine(html, SPEC_ID, fenceOpen);
-          assert.deepEqual(numCells(fenceRow).slice(0, 2), ['3', '3']);
+          assert.equal(fenceRow.includes('class="num"'), false);
           const fenceBody = fenceRow.split('class="diff-text"')[1] ?? '';
           assert.equal(fenceBody.includes('```js'), false);
-          assert.match(fenceRow, /<code><\/code>/);
+          assert.match(fenceRow, /<code class="src"><\/code>/);
           const next = specView(shot, SPEC_ID).flat.find(row => row.text === 'const y = 2;');
           assert.equal(next?.kind, 'add');
           assert.equal(next?.right, 4);
           const nextRow = diffRowByLine(html, SPEC_ID, 'const y = 2;');
-          assert.deepEqual(numCells(nextRow).slice(0, 2), ['', '4']);
+          assert.equal(nextRow.includes('class="num"'), false);
         },
       );
     });
@@ -2199,9 +2191,9 @@ spec('spec-row', () => {
         async (page, window, paths) => {
           const {html} = await drawSpec(page, window, paths.arcadia, delta, baseline);
           const cap = capHtml(html, SPEC_ID);
-          assert.match(cap, /<span[^>]*>Requirement: Markdown<\/span>/);
+          assert.match(cap, /<span class="hd hd-3">Requirement: Markdown<\/span>/);
           assert.equal(cap.includes('### Requirement: Markdown'), false);
-          assert.match(cap, /<span[^>]*>Leaf heading<\/span>/);
+          assert.match(cap, /<span class="hd hd-1">Leaf heading<\/span>/);
           assert.equal(cap.includes('# Leaf heading'), false);
           assert.match(cap, /<span[^>]*>list item<\/span>/);
           assert.equal(cap.includes('- list item'), false);

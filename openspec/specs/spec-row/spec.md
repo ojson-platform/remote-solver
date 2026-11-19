@@ -99,38 +99,38 @@ A line that names a scenario SHALL carry `data-scenario` with that scenario name
 - **WHEN** the person opens Specify on a line that names a scenario
 - **THEN** the row carries `data-scenario` with that scenario name
 
-### Requirement: The line numbers and the fold bar stay
+### Requirement: The fold bar stays and the row has no line number
 
-On a changed spec, the row SHALL show a baseline number cell and a folded number cell, and a cell with no number SHALL be empty. On a spec with no addition and no deletion, the row SHALL show one line number. Rendering the line as markdown SHALL NOT remove those number cells. A fold of unchanged lines SHALL be a fold bar, and that bar SHALL NOT be the comment control.
+A fold of unchanged lines SHALL be a fold bar, and that bar SHALL NOT be the comment control. A spec row SHALL NOT show a line number.
 
-#### Scenario: A changed row keeps both number cells and the fold bar is separate
+#### Scenario: A changed row has no line number and the fold bar is separate
 
 - **WHEN** the person opens Specify on a spec that has a change and a fold of unchanged lines
-- **THEN** a changed row shows a baseline number cell and a folded number cell, and the fold is a fold bar separate from the row
+- **THEN** the fold is a fold bar separate from the row, and the changed row shows no line number
 
-#### Scenario: An unchanged spec shows one line number
+#### Scenario: An unchanged spec shows no line number
 
 - **WHEN** the person opens Specify on a spec that has no addition and no deletion
-- **THEN** each row shows one line number
+- **THEN** each row shows no line number
 
-#### Scenario: A code block keeps the line numbers in sequence
+#### Scenario: A code block stays one row per source line
 
 - **WHEN** the person opens Specify on a changed spec line that contains a code block, and the following line is another spec line
-- **THEN** that row shows a baseline number cell and a folded number cell, the code block does not show a line number for each of its visual lines, and the following row shows the next line number
+- **THEN** that code line stays one row, the row shows no line number, and the following row is the next source line
 
 #### Scenario: A fence marker stays a row
 
 - **WHEN** the person opens Specify on a source line that is a fence marker, and the following line is the next source line
-- **THEN** that line stays a row, the row keeps its number cells, the fence marks do not stay characters of the text, and the following row shows the next line number
+- **THEN** that line stays a row, the fence marks do not stay characters of the text, the row shows no line number, and the following row is the next source line
 
 ### Requirement: The row renders the line as markdown
 
-The spec row SHALL render the line as markdown. A heading, a list, emphasis, a link, and code in that line SHALL render as markdown, and their marks SHALL NOT stay characters of the text. When a code span's position spans two source lines, the row SHALL show the paint of its own line. A line the value does not contain SHALL NOT show the raw source.
+The spec row SHALL render the line as markdown. A heading SHALL show its depth. A heading, a list, emphasis, a link, and code in that line SHALL render as markdown, and their marks SHALL NOT stay characters of the text. When a code span's position spans two source lines, the row SHALL show the paint of its own line. A line the value does not contain SHALL NOT show the raw source.
 
 #### Scenario: A marked line renders as markdown
 
 - **WHEN** the person opens Specify on a heading line, a list line, and a line that contains emphasis, a link, and code
-- **THEN** the row renders that heading, that list, that emphasis, that link, and that code as markdown, the list row does not show the characters `- list item`, and the heading mark, the list mark, the emphasis marks, the link marks, and the code marks do not stay characters of the text
+- **THEN** the row renders that heading at its depth, that list, that emphasis, that link, and that code as markdown, the list row does not show the characters `- list item`, and the heading mark, the list mark, the emphasis marks, the link marks, and the code marks do not stay characters of the text
 
 #### Scenario: A code span across two source lines shows the paint of its own line
 

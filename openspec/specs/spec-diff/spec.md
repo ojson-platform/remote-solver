@@ -52,15 +52,13 @@ When the tip commit contains a line `Sdd-Archive: issue-<key>` and the parent ba
 
 The drawer SHALL show a unified diff of the baseline against the folded spec.
 
-A changed row SHALL show the baseline line number on the left and the folded line number on the right.
-
-When the folded spec has no addition and no deletion, a row SHALL show one line number.
+A row SHALL NOT show a line number.
 
 A changed word inside a one-line replacement SHALL be marked.
 
 A run of more than six unchanged lines between changes SHALL be one gap row whose hidden rows are in the snapshot.
 
-#### Scenario: A changed line shows both numbers and the changed words
+#### Scenario: A changed line shows the changed words
 
 More than three unchanged lines before the first change, or after the last change, SHALL be a gap that keeps the three lines next to the change.
 
@@ -71,12 +69,12 @@ Context beside that change SHALL NOT include a line from an earlier scenario.
 The section headings of the delta SHALL NOT appear in the rows.
 
 - **WHEN** one line of a requirement is replaced by one line
-- **THEN** the deletion shows the baseline line number, the addition shows the folded line number, and the changed words are marked
+- **THEN** the changed words are marked, and the row shows no line number
 
-#### Scenario: An unchanged spec shows one line number
+#### Scenario: An unchanged spec shows no line number
 
 - **WHEN** the baseline and the folded spec are the same text and the cycle is open
-- **THEN** each shown row has one line number
+- **THEN** each shown row shows no line number
 
 #### Scenario: Unchanged lines between hunks sit in the gap
 

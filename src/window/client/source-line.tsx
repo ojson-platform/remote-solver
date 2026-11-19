@@ -44,7 +44,7 @@ function headingLine(line: string): ReactNode | undefined {
   if (marks === 2 || marks === 3) {
     return undefined;
   }
-  return <span>{matched[2]}</span>;
+  return <span className={`hd hd-${marks}`}>{matched[2]}</span>;
 }
 
 function listMarker(line: string): string {
@@ -462,12 +462,15 @@ function paintBlockSlice(
     return undefined;
   }
   if (block.type === 'code') {
-    return <code>{codeLineText(block, line, rawLine, texts)}</code>;
+    const text = codeLineText(block, line, rawLine, texts);
+    return options?.listTextOnly ? <code className="src">{text}</code> : <code>{text}</code>;
   }
   const phrasing = phrasingOnSourceLine(phrasingFromBlock(block), line, rawLine, definitions);
   if (block.type === 'listItem' && line === block.position.start.line) {
     if (options?.listTextOnly) {
-      return phrasing.length === 0 ? undefined : phrasingChildren(phrasing, definitions);
+      return phrasing.length === 0 ? undefined : (
+        <span className="item">{phrasingChildren(phrasing, definitions)}</span>
+      );
     }
   }
   if (block.type === 'tableRow') {
@@ -501,7 +504,7 @@ function paintBlockSlice(
     return undefined;
   }
   if (block.type === 'heading') {
-    return <span>{phrasingChildren(phrasing, definitions)}</span>;
+    return <span className={`hd hd-${block.depth}`}>{phrasingChildren(phrasing, definitions)}</span>;
   }
   return phrasingChildren(phrasing, definitions);
 }

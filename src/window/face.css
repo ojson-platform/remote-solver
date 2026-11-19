@@ -779,30 +779,35 @@
   .spine .cap summary { white-space: nowrap; }
   .spine .badge { margin-left: 8px; color: var(--muted); font-weight: 500; white-space: nowrap; }
   .spine .diff-row {
-    display: grid;
-    grid-template-columns: 2.6em 2.6em minmax(0, 1fr);
-    column-gap: 8px;
-    align-items: start;
-    padding: 0 4px;
+    display: block;
+    padding: 1px 4px;
     border-radius: 4px;
   }
   .spine .diff-row.add { background: color-mix(in srgb, var(--green) 16%, transparent); }
   .spine .diff-row.del { background: color-mix(in srgb, var(--red) 16%, transparent); }
-  .spine .diff-row .num {
-    color: var(--muted);
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
+  .spine .diff-text .hd { display: block; font-weight: 650; letter-spacing: 0.01em; }
+  .spine .diff-text .hd-1 { font-size: 18px; margin: 6px 0 2px; }
+  .spine .diff-text .hd-2 { font-size: 15px; margin: 14px 0 4px; }
+  .spine .diff-text .hd-3 { font-size: 13.5px; margin: 12px 0 2px; }
+  .spine .diff-text .hd-4,
+  .spine .diff-text .hd-5,
+  .spine .diff-text .hd-6 { font-size: 12.5px; margin: 8px 0 2px; font-weight: 600; }
+  .spine .diff-text .item { display: block; position: relative; padding-left: 1.15em; }
+  .spine .diff-text .item::before { content: "•"; position: absolute; left: 0.15em; }
+  .spine .diff-text code.src {
+    display: block;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    padding: 0 8px;
+    white-space: pre-wrap;
   }
   .spine .diff-row .bit { border-radius: 2px; }
   .spine .diff-row.add .bit { background: color-mix(in srgb, var(--green) 48%, transparent); }
   .spine .diff-row.del .bit { background: color-mix(in srgb, var(--red) 48%, transparent); }
   .spine .diff-row button.line,
   .spine button.diff-row {
-    display: grid;
-    grid-template-columns: 2.6em 2.6em minmax(0, 1fr);
-    column-gap: 8px;
-    align-items: start;
+    display: block;
     width: 100%;
     margin: 0;
     padding: 0 4px;
@@ -822,7 +827,7 @@
   }
   .spine .diff-row.plain,
   .spine button.diff-row.plain {
-    grid-template-columns: 2.6em minmax(0, 1fr);
+    display: block;
   }
   .spine .none { color: var(--muted); }
   .spine button.fold-bar {

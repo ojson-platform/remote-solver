@@ -1197,12 +1197,6 @@ function lineBody(row: SpecRow, paint?: ReactNode): ReactNode {
   });
 }
 
-function numberCell(value: number | undefined): ReactNode {
-  if (value === undefined) {
-    return <span className="num" />;
-  }
-  return <span className="num">{value}</span>;
-}
 
 function noteAnchor(row: SpecRow): {path: string; at: string; side: string} | undefined {
   const anchor = row.anchor;
@@ -1263,19 +1257,10 @@ function DiffRow({
         side={anchor?.side}
       />
     ) : null;
-  const numbers = plain ? (
-    numberCell(row.right ?? row.left)
-  ) : (
-    <>
-      {numberCell(row.left)}
-      {numberCell(row.right)}
-    </>
-  );
   const rowClass = `diff-row${plain ? ' plain' : ''} ${row.kind}`;
   if (!showButton) {
     return (
       <div className={rowClass} data-scenario={scene}>
-        {numbers}
         <div className="diff-text">
           <span className="line">{body}</span>
         </div>
@@ -1294,7 +1279,6 @@ function DiffRow({
         data-side={anchor?.side}
         data-scenario={scene}
       >
-        {numbers}
         <span className="diff-text">{body}</span>
       </button>
       {note}

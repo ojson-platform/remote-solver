@@ -159,6 +159,12 @@ export type FileSource = {
 /** A path in this package, linked as `.sandcastle/<to>` inside a checkout. */
 export type Link = {from: string; to: string};
 
+/** A second checkout of the current tip. `release` drops it. The caller's checkout stays. */
+export type ScratchCheckout = {
+  root: string;
+  release(): Promise<void>;
+};
+
 export type Vcs = {
   /** Checkout of `sdd/<key>`. Reuses a worktree that already has the branch, and creates one when missing. */
   prepare(key: IssueKey, options: {worktreesDir: string; links: Link[]}): Promise<string>;
@@ -196,6 +202,12 @@ export type Vcs = {
   dirty(): Promise<string[]>;
   /** Paths `git status` reports in the issue worktree. Absent means the caller treats the tree as clean. */
   issueDirty?(key: IssueKey): Promise<string[]>;
+  /**
+   * A second checkout of the current tip.
+   * The caller may change it. `release` drops it. This checkout stays.
+   * Absent when this adapter has no second checkout.
+   */
+  scratch?(): Promise<ScratchCheckout>;
 };
 
 /** The commit a pull-request diff ends at. The parent when `head` is this issue's archive commit. */

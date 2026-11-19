@@ -223,6 +223,20 @@ When the fold reports a conflict with a baseline, the machine SHALL open one thr
 - **WHEN** the fold reports a conflict with `openspec/specs/board/spec.md` and the pull request changes that change's delta spec
 - **THEN** one thread starts with `sdd:layer=spec → specifying`, no `sdd:refused` is posted, and the next poll moves the issue to `specifying`
 
+### Requirement: Specify probes the fold before publish
+
+The specify step SHALL archive the change in a throwaway checkout and SHALL run `openspec validate --all --strict --no-interactive` there before publish. It SHALL delete that checkout. The working tree SHALL stay, committed and uncommitted. A refusal SHALL stay on the specify step.
+
+#### Scenario: A probe that fails after the fold keeps the checkout
+
+- **WHEN** the specify step probes a change whose fold leaves a baseline with no requirement
+- **THEN** the command exits non-zero, the checkout still has the change directory and no archive commit, and the baseline requirement stays
+
+#### Scenario: A probe that passes keeps the checkout
+
+- **WHEN** the specify step probes a change whose fold validates
+- **THEN** the command exits zero, the change directory stays, and the baseline is the copy from before the probe
+
 ### Requirement: Unfold refuses a tip that is not the archive commit
 
 When unfold sees a tip with no `Sdd-Archive` line, the machine SHALL post `sdd:refused` for that phase, action `unarchive`, and reason `return the delta to the change`. The next poll SHALL NOT run that unarchive.

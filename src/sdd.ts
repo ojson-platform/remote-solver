@@ -6,7 +6,7 @@ import {solverRoot, turn, type Machine} from './adapters/compose.ts';
 import {openMachine} from './adapters/load.ts';
 import {packageLinks} from './adapters/vcs/vcs.ts';
 import {readChange} from './machine/change/change.ts';
-import {foldChange, restoreChange} from './machine/change/fold.ts';
+import {foldChange, probeArchive, restoreChange} from './machine/change/fold.ts';
 import {changeDir} from './machine/change/naming.ts';
 import {
   accept as acceptGate,
@@ -46,7 +46,7 @@ import {workingTree} from './window/change-files.ts';
 // Verbs the skills call. The GitHub and git adapters sit behind them.
 //   sdd plan
 //   sdd set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key>
-//   sdd fold <key> | unfold <key>
+//   sdd fold <key> | unfold <key> | probe <key>
 //   sdd publish <key> "<pull title>"
 //   sdd checks <pull>
 //   sdd threads <pull> [--layer <layer>] [--unmarked]
@@ -72,7 +72,7 @@ function need(value: string | undefined, usage: string): string {
 }
 
 const usage =
-  'Usage: sdd plan | step <key> [--auto-plan] [--auto-spec] [--auto-design] | worktree <key> | assign <key> | set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key> | fold <key> | unfold <key> | publish <key> "<title>" | focus <key> "<body>" | link <key> <kind> <other> | checks <pull> | threads <pull> [--layer <layer>] [--unmarked] | thread open|reply|say|resolve ... | thread fix <key> <pull> <thread>|--conversation | mirror <key> <Layer> <text>';
+  'Usage: sdd plan | step <key> [--auto-plan] [--auto-spec] [--auto-design] | worktree <key> | assign <key> | set <key> <phase> | wait <key> "<what the person does>" | unwait <key> | accept <key> | fold <key> | unfold <key> | probe <key> | publish <key> "<title>" | focus <key> "<body>" | link <key> <kind> <other> | checks <pull> | threads <pull> [--layer <layer>] [--unmarked] | thread open|reply|say|resolve ... | thread fix <key> <pull> <thread>|--conversation | mirror <key> <Layer> <text>';
 
 const LINK_KINDS = new Set<IssueLinkKind>(['parent', 'blocks', 'blocked-by', 'depends-on']);
 
@@ -286,6 +286,7 @@ const verbs: Record<string, Verb> = {
   accept,
   fold: foldCommand,
   unfold: unfoldCommand,
+  probe: probeCommand,
   publish: publishCommand,
   focus: focusCommand,
   checks,
@@ -474,6 +475,19 @@ async function foldCommand(box: Machine, rest: string[]): Promise<void> {
   } catch (error) {
     await reportArchiveVerb(box, key, 'archive', 'archive the change', error);
     fail(error instanceof Error ? error.message : 'fold failed');
+  }
+}
+
+/** The specify step's throwaway archive. A refusal stays on that step. The poll does not run this. */
+async function probeCommand(box: Machine, rest: string[]): Promise<void> {
+  const key = oneKey(rest);
+  if (!box.vcs.scratch) {
+    fail('this vcs has no second checkout');
+  }
+  try {
+    await probeArchive(process.cwd(), key, box.openspec(), () => box.vcs.scratch!());
+  } catch (error) {
+    fail(error instanceof Error ? error.message : 'probe failed');
   }
 }
 

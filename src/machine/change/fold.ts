@@ -1,6 +1,8 @@
 import {execFileSync} from 'node:child_process';
-import {existsSync, readdirSync, readFileSync, renameSync, writeFileSync} from 'node:fs';
+import {cpSync, existsSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
+
+import type {ScratchCheckout} from '../port.ts';
 
 const DATED_ARCHIVE_DIR = /^\d{4}-\d{2}-\d{2}-issue-\d+$/;
 const PLACEHOLDER_PURPOSE = /TBD - created by archiving change/;
@@ -152,6 +154,13 @@ export function foldChange(root: string, key: string, executable: string): void 
 }
 
 function foldCommitted(root: string, key: string, executable: string): void {
+  archiveAndValidate(root, key, executable);
+  git(root, ['add', '-A']);
+  git(root, ['commit', '-m', 'archive fold', '-m', `Sdd-Archive: issue-${key}`]);
+}
+
+/** Archive and validate. The caller keeps or drops the checkout. */
+function archiveAndValidate(root: string, key: string, executable: string): void {
   let output = '';
   try {
     output = execFileSync(executable, ['archive', `issue-${key}`, '--yes'], {
@@ -182,8 +191,31 @@ function foldCommitted(root: string, key: string, executable: string): void {
     const failed = error as {stdout?: string; stderr?: string};
     throw new Error(commandRefusal(`${failed.stdout ?? ''}\n${failed.stderr ?? ''}`));
   }
-  git(root, ['add', '-A']);
-  git(root, ['commit', '-m', 'archive fold', '-m', `Sdd-Archive: issue-${key}`]);
+}
+
+/**
+ * Archive the change in a second checkout and validate there.
+ * The adapter opens and drops that checkout. This checkout stays as it was.
+ * A refusal is the command text.
+ */
+export async function probeArchive(
+  root: string,
+  key: string,
+  executable: string,
+  openScratch: () => Promise<ScratchCheckout>,
+): Promise<void> {
+  const scratch = await openScratch();
+  try {
+    const source = path.join(root, 'openspec');
+    const dest = path.join(scratch.root, 'openspec');
+    rmSync(dest, {recursive: true, force: true});
+    if (existsSync(source)) {
+      cpSync(source, dest, {recursive: true});
+    }
+    archiveAndValidate(scratch.root, key, executable);
+  } finally {
+    await scratch.release();
+  }
 }
 
 /** Revert the archive commit. The new tip names the issue and is not an archive. */

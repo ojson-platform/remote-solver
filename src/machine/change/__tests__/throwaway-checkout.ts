@@ -64,6 +64,7 @@ The system SHALL apply delta behavior.
 export function throwawayWithArchive(
   slug: string,
   input: {baselines: BaselineMap; change: ChangeInput},
+  options?: {fold?: boolean},
 ): ThrowawayCheckout {
   const root = mkdtempSync(path.join(tmpdir(), `openspec-${slug}-`));
   git(root, ['init', '-b', 'master']);
@@ -93,6 +94,10 @@ export function throwawayWithArchive(
     const dir = path.join(changeRoot, 'specs', capability);
     mkdirSync(dir, {recursive: true});
     writeFileSync(path.join(dir, 'spec.md'), delta);
+  }
+
+  if (options?.fold === false) {
+    return {root, issueKey};
   }
 
   const validate = runOpenspec(root, ['validate', '--all', '--strict', '--no-interactive']);

@@ -1,6 +1,7 @@
 
 import {execFile, execFileSync} from 'node:child_process';
-import {existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync} from 'node:fs';
+import {existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {promisify} from 'node:util';
 
@@ -730,6 +731,21 @@ export function gitVcs(
         return [];
       }
       return porcelain(dir);
+    },
+    async scratch() {
+      const probe = mkdtempSync(path.join(tmpdir(), 'sdd-probe-'));
+      try {
+        await gitAsync(root, ['worktree', 'add', '--detach', probe, 'HEAD']);
+      } catch (error) {
+        rmSync(probe, {recursive: true, force: true});
+        throw error;
+      }
+      return {
+        root: probe,
+        async release() {
+          await gitAsync(root, ['worktree', 'remove', '--force', probe]);
+        },
+      };
     },
   };
 }

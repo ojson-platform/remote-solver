@@ -212,6 +212,7 @@ test('an instruction is a thread of this phase, and a note asks for nothing', ()
   assert.match(specify, /go to step 5/);
   assert.match(specify, /An open spec thread does not take step 3/);
   assert.match(specify, /there is no open spec thread: step 3, then step 5/);
+  assert.match(specify, /node scripts\/sdd\.mjs probe <issue>/);
   assert.doesNotMatch(design, /then step 6/);
   assert.doesNotMatch(tasks, /then step 8/);
   assert.doesNotMatch(fix, /conversation\.layer` is `code`/);

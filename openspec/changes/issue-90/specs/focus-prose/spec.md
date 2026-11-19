@@ -1,10 +1,14 @@
+<!--
+sdd-absorbed: 68ce34c407b94bc8
+-->
+
 # Spec Delta
 
 ## ADDED Requirements
 
 ### Requirement: The prose renders markdown
 
-The words after the marker SHALL be rendered as markdown beside the badge. A heading, a list, emphasis, a link, and code SHALL render, and their marks SHALL NOT stay the characters that were written. Those words SHALL stay the words that were written.
+The words after the marker SHALL be rendered as markdown beside the badge. A heading, a list, emphasis, a link, and code SHALL render, and their marks SHALL NOT stay the characters that were written. Those words SHALL stay the words that were written. That prose SHALL NOT be left in a `pre`.
 
 #### Scenario: The prose renders markdown
 
@@ -14,12 +18,12 @@ The words after the marker SHALL be rendered as markdown beside the badge. A hea
 #### Scenario: The prose is rendered beside the badge
 
 - **WHEN** the person opens a written focus
-- **THEN** the prose beside the badge is rendered, and the written characters are not left literal
+- **THEN** the prose is rendered beside the badge, and it is not left in a `pre`
 
 #### Scenario: The words after the marker are not rewritten
 
 - **WHEN** the person opens a written focus
-- **THEN** the prose beside the badge is the words after the marker and those words are not rewritten
+- **THEN** the badge is the first line, and the prose beside the badge is the words after that line and those words are not rewritten
 
 ### Requirement: The marker line stays the badge and is not a heading
 

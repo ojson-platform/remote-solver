@@ -624,11 +624,15 @@ function TaskFile({
   pull,
   root,
   blocks,
+  drafts,
+  keyName,
 }: {
   task: SpineTask;
   pull: boolean;
   root: string;
   blocks: readonly SidebarBlock[];
+  drafts: readonly LineDraft[];
+  keyName: string;
 }): ReactNode {
   const sections = task.sections.filter(section => section.lines.some(line => line.text.trim() !== ''));
   if (sections.length === 0) {
@@ -662,11 +666,12 @@ function TaskFile({
         );
         return;
       }
+      const draft = drafts.find(item => item.line === lineKey);
       out.push(
         <span key={line.line}>
           <button
             type="button"
-            className="line"
+            className={draft ? 'line is-on' : 'line'}
             data-line={lineKey}
             data-path={path}
             data-at={line.line}
@@ -674,6 +679,17 @@ function TaskFile({
           >
             {painted?.paint}
           </button>
+          {draft ? (
+            <LineNote
+              keyName={keyName}
+              line={draft.line}
+              question={draft.question}
+              text={draft.text}
+              path={path}
+              at={String(line.line)}
+              side="right"
+            />
+          ) : null}
           <PostedComments comments={commentsOnLine(blocks, path, line.line)} />
         </span>,
       );
@@ -681,6 +697,7 @@ function TaskFile({
     return out;
   };
   return (
+  <>
     <div className="doc">
       {sections.map(section => (
         <section className="plan-section" key={section.heading}>
@@ -689,6 +706,8 @@ function TaskFile({
         </section>
       ))}
     </div>
+    {pull ? lineTemplate(keyName) : null}
+  </>
   );
 }
 
@@ -1723,6 +1742,8 @@ export function Sidebar({
                   pull={model.pull}
                   root={model.readPath}
                   blocks={opened.blocks}
+                  drafts={drafts}
+                  keyName={row.key}
                 />
               </details>
             ))}

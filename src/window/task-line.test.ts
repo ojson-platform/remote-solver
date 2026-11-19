@@ -1,14 +1,20 @@
 import assert from 'node:assert/strict';
 
+import {createElement} from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {changeDir} from '../machine/change/naming.ts';
 
+import {App} from './client/app.tsx';
+import {draftsAfterClick} from './page.ts';
 import {
   MANAGER,
   held,
   hosted,
   pageHtml,
   post,
+  readSnapshot,
   spineOf,
   writeChange,
 } from './__tests__/page.harness.ts';
@@ -72,6 +78,10 @@ function taskDoc(tasksSpine: string): string {
   const docEnd = tasksSpine.indexOf('</div>', docStart + '<div class="doc">'.length);
   assert.ok(docEnd > docStart);
   return tasksSpine.slice(docStart, docEnd + '</div>'.length);
+}
+
+function escapeRe(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function lineButton(html: string, line: string): string {
@@ -185,6 +195,63 @@ spec('task-line', () => {
             assert.match(button, /^<button\b[^>]*type="button"[^>]*class="[^"]*\bline\b/);
             assert.equal(button.includes('class="diff-row'), false);
           }
+        },
+      );
+    });
+  });
+
+  requirement('A click opens the remark draft', () => {
+    scenario('A click opens the remark draft', async () => {
+      const line = 'Plain line.';
+      const other = '### Subsection';
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'implementing', {openPullRequests: 1, pull: '94'})],
+        },
+        async (page, _window, paths) => {
+          await openPaintTask(page, paths);
+          const shot = await readSnapshot(page.url);
+          const drafts = draftsAfterClick([], line);
+          assert.equal(drafts.length, 1);
+          assert.equal(drafts[0]?.line, line);
+          const tasks = spineOf(renderToStaticMarkup(createElement(App, {snapshot: shot, drafts})), KEY, 'Tasks');
+          const doc = taskDoc(tasks);
+          assert.equal(lineButton(doc, other).includes('is-on'), false);
+          assert.equal(doc.includes('class="line-note"'), true);
+          const button = lineButton(doc, line);
+          assert.match(
+            doc,
+            new RegExp(
+              `${escapeRe(button)}[\\s\\S]*<form[^>]*class="line-note"[\\s\\S]*name="line"[^>]*value="${escapeRe(line)}"`,
+            ),
+          );
+        },
+      );
+    });
+  });
+
+  requirement('The task file paints the remark draft', () => {
+    scenario('The task file paints the remark draft the click stored', async () => {
+      const line = 'Plain line.';
+      await hosted(
+        {
+          login: () => MANAGER,
+          tickets: () => [held(KEY, 'implementing', {openPullRequests: 1, pull: '94'})],
+        },
+        async (page, _window, paths) => {
+          await openPaintTask(page, paths);
+          const shot = await readSnapshot(page.url);
+          const drafts = draftsAfterClick([], line);
+          const tasks = spineOf(renderToStaticMarkup(createElement(App, {snapshot: shot, drafts})), KEY, 'Tasks');
+          const doc = taskDoc(tasks);
+          const button = lineButton(doc, line);
+          assert.match(button, /\bis-on\b/);
+          const at = doc.indexOf(button);
+          const slice = doc.slice(at, at + 1200);
+          assert.match(slice, /class="line-note"/);
+          assert.match(slice, new RegExp(`name="path"[^>]*value="${escapeRe(PAINT_TASK_PATH)}"`));
+          assert.match(slice, /name="at"[^>]*value="\d+"/);
         },
       );
     });

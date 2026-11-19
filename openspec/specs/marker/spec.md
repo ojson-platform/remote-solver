@@ -220,7 +220,7 @@ The thread SHALL stay open.
 
 ### Requirement: A code thread is fixed only when its new test fails on the parent
 
-`thread fix` on an open `code` thread SHALL refuse, and SHALL NOT reply `fixed` or resolve it, when the commit changes no test, when no changed test has a `scenario` title the delta names, when every such test passes on the first parent, or when such a test fails on HEAD. It SHALL reply `fixed` with HEAD and resolve the thread when such a test fails on the first parent and passes on HEAD, and HEAD is the remote issue branch tip. A title the delta does not name SHALL NOT count.
+`thread fix` on an open `code` thread SHALL refuse, and SHALL NOT reply `fixed` or resolve it, when the commit changes no test, when no changed test has a `scenario` title the delta or a stable spec names, when every such test passes on the parent, or when such a test fails on HEAD. It SHALL reply `fixed` with HEAD and resolve the thread when such a test fails on the parent and passes on HEAD. A stable-spec title SHALL count. A title neither the delta nor a stable spec names SHALL NOT.
 
 #### Scenario: Fix refuses a code thread whose new test fails on HEAD
 
@@ -230,6 +230,11 @@ The thread SHALL stay open.
 #### Scenario: Fix closes a code thread after the new test fails on the parent
 
 - **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, and a delta scenario the answering commit changes fails on the parent and passes on HEAD
+- **THEN** the thread's reply is `fixed` with that HEAD and the thread is resolved
+
+#### Scenario: Fix closes a code thread whose scenario a stable spec names
+
+- **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, the only `scenario` the answering commit changes is named by a stable spec and not by this change's delta, and that test fails on the parent and passes on HEAD
 - **THEN** the thread's reply is `fixed` with that HEAD and the thread is resolved
 
 ### Requirement: A refused proof hands the code thread to spec
@@ -243,7 +248,7 @@ When a `code` thread proof refuses and that refusal says to hand the thread off 
 
 #### Scenario: Fix refuses a code thread whose scenario is not in the delta
 
-- **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, and the only `scenario` the answering commit changes is not named by this change's delta, and that test fails on the parent and passes on HEAD
+- **WHEN** `thread fix` runs for an open `code` thread, HEAD is on the remote issue branch, and the only `scenario` the answering commit changes is named neither by this change's delta nor by a stable spec, and that test fails on the parent and passes on HEAD
 - **THEN** the command fails, the thread stays open, and the reply is `sdd:layer=spec → specifying`
 
 #### Scenario: Fix refuses a code thread when a neighboring test is the one that fails

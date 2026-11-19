@@ -107,8 +107,24 @@ spec('step-handoff', () => {
         fix,
         /A new example of a promise a scenario already states is that scenario\. Write that scenario's test red, then the source/,
       );
+      assert.match(comments, /A word the scenario title does not contain is that same promise/);
+      assert.match(fix, /The red run fails on the example the remark names before any source edit/);
+      assert.match(fix, /A green run of a neighboring example is not that red run/);
       assert.match(fix, /The test keeps the scenario title the delta already names/);
       assert.match(fix, /Hand-off to `spec` only when no scenario states the promise/);
+    });
+    scenario('A stable spec scenario stays code', () => {
+      const comments = step('pr-comments.md');
+      assert.match(
+        comments,
+        /A scenario a stable spec names is that promise, even when this change's delta does not name it/,
+      );
+      assert.match(step('fix.md'), /A `scenario` a stable spec names counts the same way and stays on this layer/);
+    });
+    scenario('A promise this change does not own is out', () => {
+      const comments = step('pr-comments.md');
+      assert.match(comments, /A promise no scenario states that this change does not own is `out`/);
+      assert.match(step('fix.md'), /A promise this change does not own is `out`, not `spec`/);
     });
   });
 

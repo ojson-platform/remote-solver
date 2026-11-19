@@ -141,16 +141,34 @@ export function deltaScenarioTitles(root: string): Set<string> {
   return titles;
 }
 
+/** Scenario titles the stable specs name. A change delta does not count. */
+export function stableScenarioTitles(root: string): Set<string> {
+  const listed = gitOk(root, ['ls-files', '--', 'openspec/specs']);
+  const titles = new Set<string>();
+  for (const file of listed.split('\n')) {
+    if (!file.endsWith('/spec.md') || !file.startsWith('openspec/specs/')) {
+      continue;
+    }
+    const text = readFileSync(path.join(root, file), 'utf8');
+    for (const match of text.matchAll(/^#### Scenario:\s*(.+?)\s*$/gm)) {
+      if (match[1]) {
+        titles.add(match[1]);
+      }
+    }
+  }
+  return titles;
+}
+
 /**
- * Scenario titles the changed tests name that this change's delta also names.
- * A title the delta does not name is dropped.
+ * Scenario titles the changed tests name that the delta or a stable spec names.
+ * A title neither names is dropped.
  */
 export function proofTitles(root: string, tests: readonly string[]): string[] {
-  const delta = deltaScenarioTitles(root);
+  const allowed = new Set([...deltaScenarioTitles(root), ...stableScenarioTitles(root)]);
   const named = new Set<string>();
   for (const file of tests) {
     for (const title of scenarioTitles(readFileSync(path.join(root, file), 'utf8'))) {
-      if (delta.has(title)) {
+      if (allowed.has(title)) {
         named.add(title);
       }
     }
@@ -159,9 +177,9 @@ export function proofTitles(root: string, tests: readonly string[]): string[] {
 }
 
 /**
- * Refuses unless a delta scenario the HEAD commit changes fails against that
- * commit's first parent and passes on HEAD. A scenario the delta does not name
- * does not count. Restores the worktree either way.
+ * Refuses unless a scenario the HEAD commit changes, named by the delta or a
+ * stable spec, fails against that commit's first parent and passes on HEAD. A
+ * scenario neither names does not count. Restores the worktree either way.
  */
 export async function proveCodeFix(
   root: string,
@@ -183,7 +201,7 @@ export async function proveCodeFix(
   const titles = proofTitles(root, tests);
   if (titles.length === 0) {
     throw new Error(
-      "the answering test's scenario is not in the delta. Hand the thread off to spec.",
+      "the answering test's scenario is not in the delta or a stable spec. Hand the thread off to spec.",
     );
   }
   const sources = entries.filter(entry => !isTestPath(entry.path));

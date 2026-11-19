@@ -224,9 +224,12 @@ test('a code fix hands off before the commit, and verify reads the THEN first', 
   const handed = fix.indexOf('behavior the named scenarios do not describe');
   const commit = fix.indexOf('One commit per thread');
   assert.ok(handed !== -1 && commit !== -1 && handed < commit);
+  assert.match(fix, /The red run fails on the example the remark names before any source edit/);
+  assert.match(fix, /A green run of a neighboring example is not that red run/);
   assert.match(fix, /whose `scenario` title this change's delta names/);
   assert.match(fix, /fails on that commit's parent and passes on HEAD/);
   assert.match(fix, /neighboring check in the same file does not either/);
+  assert.match(fix, /A `scenario` a stable spec names counts the same way and stays on this layer/);
   assert.match(
     readFileSync(path.join(flow, 'CONTEXT.md'), 'utf8'),
     /whose `scenario` title this change's delta names[\s\S]*fails on that commit's parent and passes on HEAD/,
@@ -254,10 +257,12 @@ test('the final review treats a broken design sentence as a return', () => {
   const unnamed = designStep.indexOf('names an observation no scenario names is a Hand-off');
   const publishWhenNamed = designStep.indexOf('Publish (`CONTEXT.md`) only when every such sentence is named by a scenario');
   assert.ok(unnamed !== -1 && publishWhenNamed !== -1 && unnamed < publishWhenNamed);
-  assert.match(
-    readFileSync(path.join(stepsDir, 'pr-comments.md'), 'utf8'),
-    /observation no scenario names is `spec`/,
-  );
+  const comments = readFileSync(path.join(stepsDir, 'pr-comments.md'), 'utf8');
+  const quoted = comments.indexOf('quotes a promise a scenario already states');
+  const unnamedRemark = comments.indexOf('observation no scenario names is `spec`');
+  assert.ok(quoted !== -1 && unnamedRemark !== -1 && quoted < unnamedRemark);
+  assert.match(comments, /A word the scenario title does not contain is that same promise/);
+  assert.match(review, /A new example of a promise a scenario already states is lens `code`/);
 });
 
 test('a long command keeps the command status, not a pipe', () => {

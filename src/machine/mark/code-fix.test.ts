@@ -15,7 +15,9 @@ const whole = "export const place = 'whole';\n";
 const slice = "export const place = 'slice';\n";
 const PLACE = 'The place is the slice';
 const ORPHAN = 'Every covered line of a fenced code block renders inside code';
+const STABLE = 'The Plan row shows the outcome';
 const DELTA = 'openspec/changes/issue-7/specs/place/spec.md';
+const STABLE_SPEC = 'openspec/specs/spine/spec.md';
 
 function specFor(title: string): string {
   return `### Requirement: Place\n\n#### Scenario: ${title}\n\n- **WHEN** the caller reads the place\n- **THEN** the place is the slice\n`;
@@ -262,6 +264,33 @@ spec('marker', () => {
       const root = repo(
         {'place.ts': whole, [DELTA]: specFor(PLACE)},
         {'place.ts': slice, [DELTA]: specFor(PLACE), 'place.test.mjs': named(PLACE, asserts("place = 'slice'"))},
+      );
+      try {
+        const closed = await attempt(root);
+        const head = git(root, ['rev-parse', 'HEAD']);
+        assert.equal(closed.error, undefined);
+        assert.equal(closed.body, `sdd:fixed ${head}`);
+        assert.deepEqual(closed.calls, [
+          'threadList',
+          'reply',
+          'body:🤖 sdd:fixed ' + head,
+          'resolveThread',
+        ]);
+        assertClean(root, slice);
+      } finally {
+        rmSync(root, {recursive: true, force: true});
+      }
+    });
+
+    scenario('Fix closes a code thread whose scenario a stable spec names', async () => {
+      const root = repo(
+        {'place.ts': whole, [DELTA]: specFor(PLACE), [STABLE_SPEC]: specFor(STABLE)},
+        {
+          'place.ts': slice,
+          [DELTA]: specFor(PLACE),
+          [STABLE_SPEC]: specFor(STABLE),
+          'place.test.mjs': named(STABLE, asserts("place = 'slice'")),
+        },
       );
       try {
         const closed = await attempt(root);

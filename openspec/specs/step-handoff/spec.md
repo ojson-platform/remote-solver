@@ -101,14 +101,24 @@ The classify step SHALL reply `sdd:layer=<layer> → <phase>` and SHALL leave th
 
 ### Requirement: A named promise stays on the file's layer
 
-A remark that quotes a promise a scenario already states SHALL take the layer of the file it sits on, even when the example is new. `spec` SHALL remain only a promise no scenario states.
+A remark that quotes a promise a scenario already states, in the delta or a stable spec, SHALL take the file's layer, even when the example is new. `spec` SHALL remain only a promise no scenario states. A promise this change does not own SHALL be `out`.
 
-A code repair of that remark SHALL write the existing scenario's test red, then the source, and SHALL keep the scenario title the delta already names. It SHALL hand off to `spec` only when no scenario states the promise.
+A code repair SHALL write that scenario's test red on the remark's example, then the source. A green neighboring example SHALL NOT be that red run. A stable-spec scenario SHALL stay on that layer.
 
 #### Scenario: A new example of a named promise stays code
 
-- **WHEN** a remark on source quotes a promise a scenario already states, and the example is not named in that scenario
-- **THEN** classification replies `code`, and the code repair writes that scenario's test red then the source, keeping the delta's scenario title
+- **WHEN** a remark on source quotes a promise a scenario already states, and the scenario title does not contain the example
+- **THEN** classification replies `code`, and the code repair writes that scenario's test red on that example then the source, keeping the delta's scenario title
+
+#### Scenario: A stable spec scenario stays code
+
+- **WHEN** a remark on source quotes a promise a stable spec states, and this change's delta does not name that scenario
+- **THEN** classification replies `code`, and the repair writes that scenario's test red on the remark's example
+
+#### Scenario: A promise this change does not own is out
+
+- **WHEN** a remark quotes a promise no scenario states, and this change's capabilities do not name it
+- **THEN** classification replies `out` and does not hand the thread to `spec`
 
 ### Requirement: Design writes the question it cannot close
 

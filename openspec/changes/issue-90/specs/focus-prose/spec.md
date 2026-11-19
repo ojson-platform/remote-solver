@@ -27,11 +27,11 @@ The words after the marker SHALL be rendered as markdown beside the badge. A hea
 
 ### Requirement: Marks stay beside the jump button
 
-When a scenario name sits in a list item that spans more than one line, the prose beside the badge SHALL show the list mark in front of the jump button. A heading mark and emphasis marks SHALL stay beside that button the same way. The document paint for that line SHALL NOT include those marks. The paint SHALL run on the text around a scenario name.
+When a scenario name sits in a list item that spans more than one line, the prose beside the badge SHALL show the list mark in front of the jump button. A heading mark and emphasis marks SHALL stay beside that button the same way. The document paint for that line SHALL NOT include those marks. The paint SHALL run on the text around a scenario name, and the heading mark, the list mark, the emphasis marks, the link marks, and the code marks SHALL NOT stay the characters that were written.
 
 #### Scenario: Marks stay beside the jump button
 
-- **WHEN** the person opens a written focus whose prose contains a heading, a list, emphasis, a link, and code, and a scenario name sits in a list item that spans more than one line
+- **WHEN** the person opens a written focus whose prose contains a heading mark, a list mark, emphasis marks, a link mark, and a code mark, and a scenario name sits in a list item that spans more than one line
 - **THEN** the prose beside the badge shows the list mark in front of the jump button, a heading mark and emphasis marks stay beside that button the same way, the document paint for that line does not include those marks, the paint runs on the text around that scenario name, and the heading mark, the list mark, the emphasis marks, the link marks, and the code marks do not stay the characters that were written
 
 ### Requirement: The marker line stays the badge and is not a heading

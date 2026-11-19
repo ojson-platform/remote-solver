@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {rmSync} from 'node:fs';
+import {readFileSync, rmSync} from 'node:fs';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 import {createElement} from 'react';
@@ -1065,9 +1065,9 @@ spec('focus-pager', () => {
       );
       assert.equal(html.includes('focus-row'), false);
       assert.equal(html.includes('focus-pager'), false);
-      assert.match(html, /<section class="block focus-block">\s*<span class="badge">/);
-      assert.match(html, /class="badge"/);
-      assert.match(html, /<pre>/);
+      assert.match(html, /<div class="focus-body">\s*<span class="badge">/);
+      assert.match(html, /class="focus-prose"/);
+      assert.equal(html.includes('<pre>'), false);
     });
     scenario('Back still walks older written comments, newest first', async () => {
       await hosted(
@@ -1233,6 +1233,181 @@ spec('focus-pager', () => {
       assert.equal(html.includes('focus-pager-count'), false);
       assert.equal(html.includes('data-focus="back"'), false);
       assert.equal(html.includes('data-focus="forward"'), false);
+    });
+  });
+});
+
+spec('focus-prose', () => {
+  requirement('The prose renders markdown', () => {
+    scenario('The prose renders markdown', () => {
+      const body = [
+        '## Heading',
+        '',
+        '- list item',
+        '',
+        '**emphasis**',
+        '',
+        '[link](https://example.com)',
+        '',
+        '`code`',
+        '',
+      ].join('\n');
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {blocks: [focusBlock('sdd:focus:code', body)], pageIndex: 0}),
+      );
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      assert.match(prose, /<span[^>]*>Heading<\/span>/);
+      assert.match(prose, />list item</);
+      assert.equal(prose.includes('- list item'), false);
+      assert.match(prose, /<strong>emphasis<\/strong>/);
+      assert.match(prose, /<a href="https:\/\/example.com">link<\/a>/);
+      assert.match(prose, /<code>code<\/code>/);
+      assert.equal(prose.includes('##'), false);
+      assert.equal(prose.includes('**'), false);
+      assert.equal(prose.includes('](https://'), false);
+      assert.equal(prose.includes('`code`'), false);
+    });
+    scenario('The prose is rendered beside the badge', () => {
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:plan', 'Plain prose.\n')],
+          pageIndex: 0,
+        }),
+      );
+      assert.match(html, /<div class="focus-body">[\s\S]*<span class="badge">sdd:focus:plan<\/span>[\s\S]*<div class="focus-prose">/);
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      assert.equal(prose.includes('<pre'), false);
+      assert.equal(prose.includes('Plain prose.'), true);
+    });
+    scenario('The words after the marker are not rewritten', () => {
+      const marker = 'sdd:focus:code';
+      const body = 'Текст без правок.\nВторая строка.\n';
+      const block = focusBlock(marker, body);
+      assert.equal(focusBlockProse(marker as import('../machine/mark/marker.ts').FocusMarkerLine, body), body);
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {blocks: [block], pageIndex: 0}),
+      );
+      assert.match(html, /<div class="focus-body">[\s\S]*<span class="badge">sdd:focus:code<\/span>[\s\S]*<div class="focus-prose">/);
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      assert.equal(prose.includes('Текст без правок.'), true);
+      assert.equal(prose.includes('Вторая строка.'), true);
+      assert.equal(prose.includes(marker), false);
+      assert.equal(html.split(marker).length - 1, 1);
+    });
+  });
+  requirement('A scenario name stays a button.jump', () => {
+    scenario('A scenario name stays a button.jump', () => {
+      const scenarioName = 'The prose renders markdown';
+      const body = `See ${scenarioName} in the text.\n`;
+      const capabilities = [
+        {
+          id: 'focus-prose',
+          rows: [{kind: 'ctx' as const, text: `#### Scenario: ${scenarioName}`}],
+        },
+      ];
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:code', body)],
+          pageIndex: 0,
+          capabilities,
+        }),
+      );
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      assert.match(
+        prose,
+        new RegExp(
+          `<button type="button" class="jump" data-cap="focus-prose">${scenarioName}</button>`,
+        ),
+      );
+    });
+  });
+  requirement('The marker line stays the badge and is not a heading', () => {
+    scenario('The marker line stays the badge and is not a heading', () => {
+      const marker = 'sdd:focus:plan';
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock(marker, 'Plan outcome.\n')],
+          pageIndex: 0,
+        }),
+      );
+      assert.match(html, /<span class="badge">sdd:focus:plan<\/span>/);
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      assert.equal(prose.includes('<h1'), false);
+      assert.equal(prose.includes('<h2'), false);
+      assert.equal(prose.includes('<h3'), false);
+      assert.equal(prose.includes('<h4'), false);
+      assert.equal(prose.includes('<h5'), false);
+      assert.equal(prose.includes('<h6'), false);
+      assert.equal(prose.includes(marker), false);
+    });
+  });
+  requirement('The live page sentence is not the written prose', () => {
+    scenario('The live page sentence is not the written prose', () => {
+      const writtenProse = 'Written focus prose stays.\n';
+      const liveSentence = 'Пишу спеки.';
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [
+            {kind: 'live' as const, badge: 'working', text: liveSentence},
+            {
+              kind: 'focus' as const,
+              marker: 'sdd:focus:code',
+              body: writtenProse,
+              display: liveSentence,
+            },
+          ],
+          pageIndex: 1,
+        }),
+      );
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      assert.equal(prose.includes('Written focus prose stays.'), true);
+      assert.equal(prose.includes(liveSentence), false);
+    });
+  });
+  requirement('This surface has no line comment and no diff row', () => {
+    scenario('The written prose has no line comment and no diff row', () => {
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:code', 'Written line.\n')],
+          pageIndex: 0,
+        }),
+      );
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      assert.equal(prose.includes('Written line.'), true);
+      assert.equal(prose.includes('line-note'), false);
+      assert.equal(prose.includes('diff-row'), false);
+      assert.equal(prose.includes('data-line'), false);
+      assert.equal(prose.includes('button'), false);
+    });
+  });
+  requirement('A jump is handled before a line click', () => {
+    scenario('A jump is handled before a line click', () => {
+      const scenarioName = 'The prose renders markdown';
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:code', `See ${scenarioName} here.\n`)],
+          pageIndex: 0,
+          capabilities: [
+            {
+              id: 'focus-prose',
+              rows: [{kind: 'ctx' as const, text: `#### Scenario: ${scenarioName}`}],
+            },
+          ],
+        }),
+      );
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      assert.match(prose, /<button type="button" class="jump"/);
+      assert.equal(prose.includes('line-note'), false);
+      assert.equal(prose.includes('diff-row'), false);
+      assert.equal(prose.includes('button class="line"'), false);
+      assert.equal(prose.includes('class="diff-row"'), false);
+      const main = readFileSync(new URL('./client/main.tsx', import.meta.url), 'utf8');
+      const jumpAt = main.indexOf("target?.closest('button.jump')");
+      const lineAt = main.indexOf("target?.closest('button.line, button.diff-row')");
+      assert.ok(jumpAt !== -1 && lineAt !== -1 && jumpAt < lineAt);
+      const jumpBranch = main.slice(jumpAt, lineAt);
+      assert.match(jumpBranch, /return;/);
+      assert.equal(jumpBranch.includes('draftsAfterClick'), false);
     });
   });
 });

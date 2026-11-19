@@ -918,7 +918,14 @@
     gap: 12px;
     margin-bottom: 8px;
   }
+  .focus-block .focus-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .focus-block .focus-body .badge,
   .focus-block .focus-row .badge { margin-bottom: 0; }
+  .focus-block .focus-prose { flex: 1; min-width: 0; }
   .focus-block .badge { display: inline-block; margin-bottom: 8px; font-family: var(--mono); font-size: 12px; }
   .focus-block .focus-pager {
     display: inline-flex;

@@ -1,4 +1,4 @@
-sdd-absorbed: bfa2878e4eb945d1
+sdd-absorbed: 784e683ea9ccd01b
 
 - [ ] `focus-prose-marker` The words after the marker are not rewritten; The marker line stays the badge and is not a heading
 - [ ] `focus-prose-markdown` The prose renders markdown; The prose is rendered beside the badge

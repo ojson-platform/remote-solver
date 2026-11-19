@@ -1067,7 +1067,7 @@ spec('focus-pager', () => {
       assert.equal(html.includes('focus-pager'), false);
       assert.match(html, /<div class="focus-body">\s*<span class="badge">/);
       assert.match(html, /class="focus-prose"/);
-      assert.match(html, /<pre>/);
+      assert.equal(html.includes('<pre>'), false);
     });
     scenario('Back still walks older written comments, newest first', async () => {
       await hosted(
@@ -1239,6 +1239,45 @@ spec('focus-pager', () => {
 
 spec('focus-prose', () => {
   requirement('The prose renders markdown', () => {
+    scenario('The prose renders markdown', () => {
+      const body = [
+        '## Heading',
+        '',
+        '- list item',
+        '',
+        '**emphasis**',
+        '',
+        '[link](https://example.com)',
+        '',
+        '`code`',
+        '',
+      ].join('\n');
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {blocks: [focusBlock('sdd:focus:code', body)], pageIndex: 0}),
+      );
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      assert.match(prose, /<span[^>]*>Heading<\/span>/);
+      assert.match(prose, /<span[^>]*>- list item<\/span>/);
+      assert.match(prose, /<strong>emphasis<\/strong>/);
+      assert.match(prose, /<a href="https:\/\/example.com">link<\/a>/);
+      assert.match(prose, /<code>code<\/code>/);
+      assert.equal(prose.includes('##'), false);
+      assert.equal(prose.includes('**'), false);
+      assert.equal(prose.includes('](https://'), false);
+      assert.equal(prose.includes('`code`'), false);
+    });
+    scenario('The prose is rendered beside the badge', () => {
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:plan', 'Plain prose.\n')],
+          pageIndex: 0,
+        }),
+      );
+      assert.match(html, /<div class="focus-body">[\s\S]*<span class="badge">sdd:focus:plan<\/span>[\s\S]*<div class="focus-prose">/);
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      assert.equal(prose.includes('<pre'), false);
+      assert.equal(prose.includes('Plain prose.'), true);
+    });
     scenario('The words after the marker are not rewritten', () => {
       const marker = 'sdd:focus:code';
       const body = 'Текст без правок.\nВторая строка.\n';

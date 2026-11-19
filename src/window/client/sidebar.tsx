@@ -873,6 +873,32 @@ function FocusProse({
   );
 }
 
+function paintFocusProse(display: string): ReactNode {
+  const lines = display.split('\n');
+  const documentPaint = paintSourceDocument(lines);
+  let gap = false;
+  return lines.map((line, index) => {
+    const painted = documentPaint[index];
+    if (painted?.hide) {
+      return null;
+    }
+    const covered = painted?.placeAt !== undefined;
+    if (line.trim() === '' && !covered) {
+      if (!gap) {
+        gap = true;
+        return <span className="gap" key={index} />;
+      }
+      return null;
+    }
+    gap = false;
+    return (
+      <p className="line" key={index}>
+        {painted?.paint}
+      </p>
+    );
+  });
+}
+
 export function FocusBlocks({
   blocks,
   pageIndex = 0,
@@ -903,7 +929,7 @@ export function FocusBlocks({
     page.kind === 'live' ? (
       prose
     ) : (
-      <FocusProse display={prose} capabilities={capabilities} />
+      paintFocusProse(prose)
     );
   const pager = pageCount > 1 ? (
     <div className="focus-pager">
@@ -937,16 +963,12 @@ export function FocusBlocks({
               <span className="badge">{badge}</span>
               {pager}
             </div>
-            <div className="focus-prose">
-              <pre>{proseBody}</pre>
-            </div>
+            <div className="focus-prose">{proseBody}</div>
           </>
         ) : (
           <div className="focus-body">
             <span className="badge">{badge}</span>
-            <div className="focus-prose">
-              <pre>{proseBody}</pre>
-            </div>
+            <div className="focus-prose">{proseBody}</div>
           </div>
         )}
       </section>

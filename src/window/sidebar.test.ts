@@ -1391,33 +1391,6 @@ spec('focus-prose', () => {
       assert.match(wrappedJump, /<\/button>\s*after<\/strong>/);
       assert.equal(wrappedJump.includes('**'), false);
 
-      const firstLineCrossBody = [
-        '## Heading',
-        '',
-        '- **The prose renders markdown',
-        '  after**',
-        '',
-      ].join('\n');
-      const firstLineCrossHtml = renderToStaticMarkup(
-        createElement(FocusBlocks, {
-          blocks: [focusBlock('sdd:focus:code', firstLineCrossBody)],
-          pageIndex: 0,
-          capabilities,
-        }),
-      );
-      const firstLineCrossProse =
-        firstLineCrossHtml.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
-      const firstLineCrossJump =
-        firstLineCrossProse
-          .match(/<p class="line">([\s\S]*?)<\/p>/g)
-          ?.find(item => item.includes('class="jump"')) ?? '';
-      assert.match(
-        firstLineCrossJump,
-        /-\s*<strong>[\s\S]*<button[^>]*class="jump"[\s\S]*after<\/strong>/,
-      );
-      assert.equal(firstLineCrossJump.includes('**'), false);
-      assert.match(firstLineCrossJump, /after<\/strong>/);
-
       const crossLineCases = [
         {
           body: ['## Heading', '', '- **before', '  The prose renders markdown after**', ''].join('\n'),

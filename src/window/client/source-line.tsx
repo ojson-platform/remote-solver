@@ -564,7 +564,7 @@ function listItemCoveringLine(tree: Root, line: number): ListItem | undefined {
 export function focusProseMultiLineListJumpLine(
   tree: Root,
   lineIndex: number,
-  line: string,
+  lines: readonly string[],
 ): {active: boolean; listMarker: string; headingMarker: string} {
   const lineNum = lineIndex + 1;
   const block = listItemCoveringLine(tree, lineNum);
@@ -572,17 +572,21 @@ export function focusProseMultiLineListJumpLine(
     return {active: false, listMarker: '', headingMarker: ''};
   }
   const multi = placeEndLine(block.position) > block.position.start.line;
-  const itemStart = lineNum === block.position.start.line;
-  if (!multi || !itemStart) {
+  if (!multi) {
     return {active: false, listMarker: '', headingMarker: ''};
   }
+  const itemStartIndex = block.position.start.line - 1;
+  const itemStart = lineIndex === itemStartIndex;
+  const listMarkerText = listMarker(lines[itemStartIndex] ?? '');
   let headingMarker = '';
-  visit(tree, node => {
-    if (node.type === 'heading' && node.position?.start.line === lineNum) {
-      headingMarker = `${'#'.repeat(node.depth)} `;
-    }
-  });
-  return {active: true, listMarker: listMarker(line), headingMarker};
+  if (itemStart) {
+    visit(tree, node => {
+      if (node.type === 'heading' && node.position?.start.line === lineNum) {
+        headingMarker = `${'#'.repeat(node.depth)} `;
+      }
+    });
+  }
+  return {active: true, listMarker: listMarkerText, headingMarker};
 }
 
 /** First line index of a multi-line list item when the jump sits on a later line of that item. */

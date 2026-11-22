@@ -910,7 +910,7 @@ function paintFocusProseLine(
   if (!parts.some(part => part.kind === 'jump')) {
     return painted?.paint;
   }
-  const jumpMarks = focusProseMultiLineListJumpLine(proseTree, lineIndex, line);
+  const jumpMarks = focusProseMultiLineListJumpLine(proseTree, lineIndex, lines);
   const buttons = new Map<string, ReactNode>();
   let source = '';
   let jumpIndex = 0;
@@ -938,6 +938,8 @@ function paintFocusProseLine(
     } else if (jumpMarks.listMarker !== '' && source.startsWith(jumpMarks.listMarker)) {
       lead = jumpMarks.listMarker;
       source = source.slice(jumpMarks.listMarker.length);
+    } else if (jumpMarks.listMarker !== '') {
+      lead = jumpMarks.listMarker;
     }
   }
   const paintStart = focusProseMultiLineListJumpPaintStart(proseTree, lineIndex);

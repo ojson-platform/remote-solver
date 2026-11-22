@@ -1,6 +1,6 @@
 - The live page sentence is not the written prose
 
-sdd-delta: 1e4329fa9ba10afb
+sdd-delta: f9ac38635ce24bd5
 
 ## Source
 

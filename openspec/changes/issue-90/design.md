@@ -4,7 +4,7 @@ sdd-absorbed: 1e4329fa9ba10afb
 
 `focus-prose`. Scenarios are observed on the written focus the sidebar draws, the rendered `FocusBlocks` in `src/window/sidebar.test.ts`. The prose beside the badge renders a heading, a list, emphasis, a link, and code, and the heading mark, the list mark, the emphasis marks, the link marks, and the code marks do not stay the characters that were written. That prose is not left in a `pre`. The badge is the first line, and the prose beside the badge is the words after that line and those words are not rewritten. The marker line is the badge, the badge is the first line, and that line is not a heading. A scenario name in that prose is a `button.jump`. When a scenario name sits on a line of a multi-line list item, the prose beside the badge shows that item's list mark once and a heading mark on that line once, in front of the jump button, that line's document paint does not include those two marks, and the paint runs on the text around the name, including a later line of the item, where emphasis, a link, and code render as markdown. The prose beside the badge is the written prose and is not the live page sentence. The one-file command passes `--reporter=default` so that file can exit 0. The layer command keeps the coverage reporter.
 
-one-file: `pnpm exec vitest --run --maxWorkers=1 --reporter=default <test-file> -t <titles>`
+one-file: `pnpm exec vitest --run --maxWorkers=1 --reporter=default '<test-file>' -t '<titles>'`
 layer: `pnpm test`
 
 fast suite: none

@@ -1416,6 +1416,7 @@ spec('focus-prose', () => {
         /-\s*<strong>[\s\S]*<button[^>]*class="jump"[\s\S]*after<\/strong>/,
       );
       assert.equal(firstLineCrossJump.includes('**'), false);
+      assert.match(firstLineCrossJump, /after<\/strong>/);
 
       const crossLineCases = [
         {

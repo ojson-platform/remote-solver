@@ -1367,6 +1367,55 @@ spec('focus-prose', () => {
       assert.equal(laterJumpLine.includes('](https://'), false);
       assert.equal(laterJumpLine.includes('`code`'), false);
       assert.match(laterJumpLine, /-\s*<strong>emphasis<\/strong>\s*<a href="https:\/\/example.com\/guide">docs<\/a>/);
+      assert.equal(laterJumpLine.includes('the tail'), false);
+
+      const jumpOnlyBody = [
+        '## Heading',
+        '',
+        '- first',
+        '  plain The prose renders markdown',
+        '  **emphasis** tail',
+        '',
+      ].join('\n');
+      const jumpOnlyHtml = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:code', jumpOnlyBody)],
+          pageIndex: 0,
+          capabilities,
+        }),
+      );
+      const jumpOnlyProse = jumpOnlyHtml.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      const jumpOnlyLine =
+        jumpOnlyProse
+          .match(/<p class="line">([\s\S]*?)<\/p>/g)
+          ?.find(item => item.includes('class="jump"')) ?? '';
+      assert.equal(jumpOnlyLine.includes('emphasis'), false);
+      assert.match(jumpOnlyProse, /<p class="line">[\s\S]*<strong>emphasis<\/strong>[\s\S]*tail/);
+
+      const openOnJumpLineBody = [
+        '## Heading',
+        '',
+        '- first',
+        '  **open The prose renders markdown',
+        '  close**',
+        '',
+      ].join('\n');
+      const openOnJumpLineHtml = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:code', openOnJumpLineBody)],
+          pageIndex: 0,
+          capabilities,
+        }),
+      );
+      const openOnJumpProse =
+        openOnJumpLineHtml.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      const openOnJumpLine =
+        openOnJumpProse
+          .match(/<p class="line">([\s\S]*?)<\/p>/g)
+          ?.find(item => item.includes('class="jump"')) ?? '';
+      assert.match(openOnJumpLine, /\*\*open/);
+      assert.equal(openOnJumpLine.includes('<strong>open'), false);
+      assert.equal(openOnJumpLine.includes('close'), false);
 
       const wrappedBody = [
         '## Heading',

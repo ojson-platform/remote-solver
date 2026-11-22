@@ -1036,9 +1036,10 @@ function paintFocusProseLine(
               .map((text, offset) => (offset === 0 ? source : text));
   const paintSpanFromJumpFirstLine = paintEnd !== undefined && paintStart === undefined && afterJumpOnLine;
   const paintMultiLineJumpTail = paintEnd !== undefined && paintStart === undefined && !afterJumpOnLine;
+  const paintLaterJump = paintStart !== undefined;
   const paintedSlices = paintSourceDocument(
     paintTexts,
-    paintMultiLineJumpTail || paintSpanFromJumpFirstLine ? undefined : {listTextOnly: true},
+    paintMultiLineJumpTail || paintSpanFromJumpFirstLine || paintLaterJump ? undefined : {listTextOnly: true},
   );
   const paintedHead =
     paintMultiLineJumpTail || paintSpanFromJumpFirstLine

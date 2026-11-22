@@ -23,6 +23,8 @@ function write(root: string, name: string, text: string): void {
 test('tree reads a rename, a content change, discards a scratch edit, and commits', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'tree-'));
   git(root, ['init', '-b', 'trunk']);
+  git(root, ['config', 'user.email', 'sdd@example.com']);
+  git(root, ['config', 'user.name', 'sdd']);
   write(root, 'a.txt', 'one\n');
   git(root, ['add', '-A']);
   git(root, ['commit', '-m', 'parent']);

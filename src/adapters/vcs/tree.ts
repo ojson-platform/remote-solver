@@ -4,15 +4,22 @@ import type {PathChange, Tree} from '../../machine/port.ts';
 
 type NameEntry = {status: string; path: string; from?: string};
 
-function gitResult(root: string, args: string[]): {status: number; stdout: string} {
+function gitText(value: string | Buffer | undefined): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  return value?.toString('utf8') ?? '';
+}
+
+function gitResult(root: string, args: string[]): {status: number; stdout: string; stderr: string} {
   try {
-    return {status: 0, stdout: execFileSync('git', args, {cwd: root, encoding: 'utf8'})};
+    return {status: 0, stdout: execFileSync('git', args, {cwd: root, encoding: 'utf8'}), stderr: ''};
   } catch (error) {
-    const failed = error as {status?: number; stdout?: string | Buffer};
-    const stdout = failed.stdout;
+    const failed = error as {status?: number; stdout?: string | Buffer; stderr?: string | Buffer};
     return {
       status: failed.status ?? 1,
-      stdout: typeof stdout === 'string' ? stdout : stdout?.toString('utf8') ?? '',
+      stdout: gitText(failed.stdout),
+      stderr: gitText(failed.stderr),
     };
   }
 }
@@ -20,7 +27,8 @@ function gitResult(root: string, args: string[]): {status: number; stdout: strin
 function gitOk(root: string, args: string[]): string {
   const result = gitResult(root, args);
   if (result.status !== 0) {
-    throw new Error(`git ${args.join(' ')} failed`);
+    const detail = (result.stderr || result.stdout).trim();
+    throw new Error(detail === '' ? `git ${args.join(' ')} failed` : `git ${args.join(' ')} failed: ${detail}`);
   }
   return result.stdout;
 }

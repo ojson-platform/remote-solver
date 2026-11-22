@@ -267,6 +267,8 @@ test('rebase leaves the conflicted path and a clean replay is empty', async () =
 
   const clean = mkdtempSync(path.join(tmpdir(), 'sdd-rebase-clean-'));
   execFileSync('git', ['init', '-b', 'trunk'], {cwd: clean, stdio: 'ignore'});
+  git(clean, ['config', 'user.email', 'test@example.com']);
+  git(clean, ['config', 'user.name', 'test']);
   git(clean, ['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '--allow-empty', '-m', 'base']);
   git(clean, ['checkout', '-b', 'sdd/9']);
   git(clean, ['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '--allow-empty', '-m', 'empty']);

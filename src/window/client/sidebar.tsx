@@ -899,6 +899,34 @@ function spliceJumpTokens(node: ReactNode, buttons: ReadonlyMap<string, ReactNod
   return cloneElement(node, undefined, spliceJumpTokens(child, buttons));
 }
 
+function focusProseJumpFirstLineSpanSlices(
+  lines: readonly string[],
+  start: number,
+  capabilities: readonly {id: string; rows: readonly SpecEntry[]}[],
+  proseTree: ReturnType<typeof focusProseSourceTree>,
+): PaintedSourceLine[] | undefined {
+  const paintEnd = focusProseMultiLineListJumpPaintEnd(proseTree, start);
+  if (
+    paintEnd === undefined ||
+    !linkFocusProseParts(lines[start] ?? '', capabilities).some(part => part.kind === 'jump') ||
+    !focusProseJumpHasTailOnSameLine(lines[start] ?? '', capabilities)
+  ) {
+    return undefined;
+  }
+  const parts = linkFocusProseParts(lines[start] ?? '', capabilities);
+  let source = '';
+  for (const part of parts) {
+    if (part.kind === 'jump') {
+      continue;
+    }
+    source += part.text;
+  }
+  const paintTexts = lines
+    .slice(start, paintEnd + 1)
+    .map((text, offset) => (offset === 0 ? source : text));
+  return paintSourceDocument(paintTexts, undefined);
+}
+
 function focusProseJumpHasTailOnSameLine(
   line: string,
   capabilities: readonly {id: string; rows: readonly SpecEntry[]}[],
@@ -927,6 +955,16 @@ function paintFocusProseLine(
 ): ReactNode {
   const parts = linkFocusProseParts(line, capabilities);
   if (!parts.some(part => part.kind === 'jump')) {
+    for (let start = 0; start < lineIndex; start += 1) {
+      const paintEnd = focusProseMultiLineListJumpPaintEnd(proseTree, start);
+      if (paintEnd === undefined || lineIndex > paintEnd) {
+        continue;
+      }
+      const slices = focusProseJumpFirstLineSpanSlices(lines, start, capabilities, proseTree);
+      if (slices !== undefined) {
+        return slices[lineIndex - start]?.paint;
+      }
+    }
     return painted?.paint;
   }
   const jumpMarks = focusProseMultiLineListJumpLine(proseTree, lineIndex, lines);
@@ -1002,21 +1040,16 @@ function paintFocusProseLine(
     paintTexts,
     paintMultiLineJumpTail || paintSpanFromJumpFirstLine ? undefined : {listTextOnly: true},
   );
-  const paintedHead = paintMultiLineJumpTail ? paintedSlices[0]?.paint : paintedSlices[paintedSlices.length - 1]?.paint;
+  const paintedHead =
+    paintMultiLineJumpTail || paintSpanFromJumpFirstLine
+      ? paintedSlices[0]?.paint
+      : paintedSlices[paintedSlices.length - 1]?.paint;
   const paintedTail =
     paintMultiLineJumpTail && paintedSlices.length > 1
       ? paintedSlices[paintedSlices.length - 1]?.paint
       : undefined;
-  const paintedSpanBody =
-    paintSpanFromJumpFirstLine && paintedSlices.length > 0
-      ? paintedSlices.flatMap((slice, sliceIndex) =>
-          slice.paint === undefined ? [] : [<Fragment key={sliceIndex}>{slice.paint}</Fragment>],
-        )
-      : undefined;
   const body =
-    paintedSpanBody !== undefined
-      ? spliceJumpTokens(paintedSpanBody, buttons)
-      : paintedHead === undefined && paintedTail === undefined
+    paintedHead === undefined && paintedTail === undefined
         ? source
         : paintMultiLineJumpTail && paintedTail !== undefined
           ? (
@@ -1051,12 +1084,10 @@ function paintFocusProse(
       const tailEnd = focusProseMultiLineListJumpPaintEnd(proseTree, start);
       if (
         tailEnd !== undefined &&
+        index === tailEnd &&
         index > start &&
-        index <= tailEnd &&
         linkFocusProseParts(lines[start] ?? '', capabilities).some(part => part.kind === 'jump') &&
-        (index === tailEnd
-          ? !focusProseJumpHasTailOnSameLine(lines[start] ?? '', capabilities)
-          : focusProseJumpHasTailOnSameLine(lines[start] ?? '', capabilities))
+        !focusProseJumpHasTailOnSameLine(lines[start] ?? '', capabilities)
       ) {
         return null;
       }

@@ -1526,16 +1526,25 @@ spec('focus-prose', () => {
         ),
       );
       assert.match(jumpLine, /<\/button>\s*tail\s*<strong>/);
-      assert.match(jumpLine, /<strong>[\s\S]*hasis<\/strong>/);
-      assert.match(jumpLine, /<a href="https:\/\/example.com">docs<\/a>/);
-      assert.match(jumpLine, /<code>[\s\S]*de<\/code>/);
+      assert.match(jumpLine, /<strong>emp<\/strong>/);
+      assert.equal(jumpLine.includes('hasis'), false);
+      assert.equal(jumpLine.includes('docs</a>'), false);
+      assert.equal(jumpLine.includes('<code>'), false);
       assert.equal(jumpLine.includes('**'), false);
       assert.equal(jumpLine.includes('](https://'), false);
       assert.equal(jumpLine.includes('`'), false);
-      const laterLines = lineParas.filter(
-        item => !item.includes('class="jump"') && (item.includes('hasis') || item.includes('docs</a>')),
-      );
-      assert.equal(laterLines.length, 0);
+      const laterLines = lineParas.filter(item => !item.includes('class="jump"'));
+      assert.ok(laterLines.length >= 1);
+      const laterHtml = laterLines.join('\n');
+      assert.match(laterHtml, /<strong>[\s\S]*hasis<\/strong>/);
+      assert.match(laterHtml, /<a href="https:\/\/example.com">docs<\/a>/);
+      assert.match(laterHtml, /<code>[\s\S]*de<\/code>/);
+      assert.equal(laterHtml.includes('**'), false);
+      assert.equal(laterHtml.includes('](https://'), false);
+      assert.equal(laterHtml.includes('`'), false);
+      for (const item of laterLines) {
+        assert.equal(/^\s*<p class="line">/.test(item), true);
+      }
     });
   });
   requirement('A heading mark on a later line stays in front of the jump', () => {

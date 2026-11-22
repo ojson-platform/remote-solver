@@ -1366,7 +1366,7 @@ spec('focus-prose', () => {
       assert.equal(laterJumpLine.includes('**emphasis**'), false);
       assert.equal(laterJumpLine.includes('](https://'), false);
       assert.equal(laterJumpLine.includes('`code`'), false);
-      assert.doesNotMatch(laterJumpLine, /^\s*-\s*<button/);
+      assert.match(laterJumpLine, /-\s*<strong>emphasis<\/strong>/);
 
       const wrappedBody = [
         '## Heading',

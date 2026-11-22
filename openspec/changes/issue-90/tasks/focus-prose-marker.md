@@ -1,7 +1,7 @@
 - The words after the marker are not rewritten
 - The marker line stays the badge and is not a heading
 
-sdd-delta: f9ac38635ce24bd5
+sdd-delta: 60598f439f900bc1
 
 ## Source
 

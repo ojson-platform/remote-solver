@@ -1,10 +1,10 @@
 - The live page sentence is not the written prose
 
-sdd-delta: bfa2878e4eb945d1
+sdd-delta: 1e4329fa9ba10afb
 
 ## Source
 
-In `src/window/client/sidebar.tsx`, `FocusBlocks` keeps the prose beside the badge as the written prose from focus content, not the live page sentence. Assume `focus-prose-jump`.
+In `src/window/client/sidebar.tsx`, `FocusBlocks` keeps the prose beside the badge as the written prose from focus content, not the live page sentence. Assume `focus-prose-marks`.
 
 Linked issues: #88.
 

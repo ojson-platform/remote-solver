@@ -1,10 +1,10 @@
 - A scenario name stays a button.jump
 
-sdd-delta: bfa2878e4eb945d1
+sdd-delta: 1e4329fa9ba10afb
 
 ## Source
 
-`linkFocusProseParts` in the window still separates a scenario name in the written prose; paint runs on the text around it, and a jump is handled before the line click as it is today. A scenario name in that prose stays a `button.jump`. Assume `focus-prose-markdown`. Leave the live page sentence to `focus-prose-written`.
+`linkFocusProseParts` in the window still separates a scenario name in the written prose; paint runs on the text around it, and a jump is handled before the line click as it is today. A scenario name in that prose stays a `button.jump`. Assume `focus-prose-markdown`. Leave marks beside the jump button to `focus-prose-marks` and the live page sentence to `focus-prose-written`.
 
 Linked issues: #88.
 

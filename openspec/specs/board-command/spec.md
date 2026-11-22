@@ -298,3 +298,27 @@ When a worker leaves, the page SHALL wait for the next spy poll and SHALL NOT re
 
 - **WHEN** the poll after a worker leaves fails
 - **THEN** the page reads the tracker
+
+### Requirement: A page write starts the next poll
+
+A successful write of a label, a phase, or an assignee from the page SHALL start the spy's next poll without waiting out the interval. A poll that is already reading SHALL finish, and the following poll SHALL start at once. A failed write SHALL NOT start that poll.
+
+#### Scenario: A successful label write nudges the spy
+
+- **WHEN** the page adds `sdd:specified` and that write succeeds
+- **THEN** the page asks the spy to poll now
+
+#### Scenario: A nudge during the wait reads again before the interval
+
+- **WHEN** the spy is waiting out its interval and the page asks it to poll
+- **THEN** the spy reads the tracker again before that interval elapses
+
+#### Scenario: A poll already reading finishes, then reads again at once
+
+- **WHEN** the spy is inside a poll and the page asks it to poll
+- **THEN** that poll finishes and the next poll starts without the interval
+
+#### Scenario: A failed write leaves the interval
+
+- **WHEN** the page's label write fails
+- **THEN** the spy is not asked to poll

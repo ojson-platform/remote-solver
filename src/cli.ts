@@ -150,6 +150,7 @@ async function runBoard(home: string | undefined, port: number | undefined): Pro
   const spy = createBoardSpyState(() => {
     pageNote();
   });
+  let nudgeSpy = () => {};
   const page = await serveLiveBoard({
     homePath,
     repo: repo().slug,
@@ -163,6 +164,7 @@ async function runBoard(home: string | undefined, port: number | undefined): Pro
     decision: spy.decision,
     screen: spy.screen,
     desk: spy.desk,
+    nudge: () => nudgeSpy(),
     ...(port !== undefined ? {port} : {}),
   });
   pageNote = () => {
@@ -171,6 +173,9 @@ async function runBoard(home: string | undefined, port: number | undefined): Pro
   console.log(page.url);
   void watchSpy(box, {
     ...spy.sink,
+    onNudge(nudge) {
+      nudgeSpy = nudge;
+    },
     refresh: () => page.refresh(),
     apply: (snapshot, readId) => {
       page.apply(snapshot, readId);

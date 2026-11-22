@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import {mkdtempSync} from 'node:fs';
 import {tmpdir} from 'node:os';
+import path from 'node:path';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
@@ -9,6 +11,7 @@ import {runSpy} from './main.ts';
 import type {Decision} from './machine/decide/policy.ts';
 import type {Runtime, Vcs} from './machine/port.ts';
 import {tick, type State} from './machine/spy/scheduler.ts';
+import {openLiveBoard} from './window/live.ts';
 
 const MANAGER = 'ada';
 
@@ -195,6 +198,193 @@ spec('parallel-cap', () => {
 
       assert.ok(notes.some(line => /parallel 2\b/.test(line)));
       assert.ok(notes.some(line => /parallel 4\b/.test(line)));
+    });
+  });
+});
+
+function until(ready: () => boolean): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const started = Date.now();
+    const timer = setInterval(() => {
+      if (ready()) {
+        clearInterval(timer);
+        resolve();
+        return;
+      }
+      if (Date.now() - started > 3_000) {
+        clearInterval(timer);
+        reject(new Error('timed out'));
+      }
+    }, 10);
+  });
+}
+
+spec('board-command', () => {
+  requirement('A page write starts the next poll', () => {
+    scenario('A successful label write nudges the spy', async () => {
+      const ports = memoryPorts({
+        user: MANAGER,
+        issues: [
+          {
+            key: '90',
+            title: '#90: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['remote-solver', 'sdd:cycle', 'sdd:specifying'],
+            assignee: MANAGER,
+          },
+        ],
+        pulls: {'90': [{id: '93', title: '#90: title', state: 'OPEN'}]},
+      });
+      let nudges = 0;
+      const home = mkdtempSync(path.join(tmpdir(), 'nudge-'));
+      const live = openLiveBoard({
+        homePath: path.join(home, 'config.yaml'),
+        repo: 'acme/billing',
+        tracker: ports.tracker,
+        review: ports.review,
+        nudge: () => {
+          nudges += 1;
+        },
+      });
+      await live.refresh();
+      assert.equal(live.window.acceptReview('90'), undefined);
+      await until(() => nudges === 1);
+      assert.equal(nudges, 1);
+    });
+
+    scenario('A nudge during the wait reads again before the interval', async () => {
+      const ports = memoryPorts({
+        user: MANAGER,
+        issues: [
+          {
+            key: '90',
+            title: '#90: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['remote-solver', 'sdd:cycle', 'sdd:specifying', 'sdd:wait-human'],
+            assignee: MANAGER,
+          },
+        ],
+        pulls: {'90': [{id: '93', title: '#90: title', state: 'OPEN'}]},
+      });
+      let reads = 0;
+      const listOpen = ports.tracker.listOpen.bind(ports.tracker);
+      ports.tracker.listOpen = async () => {
+        reads += 1;
+        return listOpen();
+      };
+      const box = spyMachine(ports, idleRuntime);
+      let nudge = () => {};
+      let settled = false;
+      const controller = new AbortController();
+      const done = runSpy(box, ['--interval', '60'], {
+        signal: controller.signal,
+        onNudge(fn) {
+          nudge = fn;
+        },
+        onReport(line) {
+          if (line.startsWith('Poll settled')) {
+            settled = true;
+          }
+        },
+      });
+      try {
+        await until(() => settled);
+        await new Promise(resolve => setTimeout(resolve, 50));
+        const started = Date.now();
+        nudge();
+        await until(() => reads >= 2);
+        assert.ok(Date.now() - started < 2_000);
+      } finally {
+        controller.abort();
+        await done;
+      }
+    });
+
+    scenario('A poll already reading finishes, then reads again at once', async () => {
+      const ports = memoryPorts({
+        user: MANAGER,
+        issues: [
+          {
+            key: '90',
+            title: '#90: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['remote-solver', 'sdd:cycle', 'sdd:specifying', 'sdd:wait-human'],
+            assignee: MANAGER,
+          },
+        ],
+        pulls: {'90': [{id: '93', title: '#90: title', state: 'OPEN'}]},
+      });
+      let reads = 0;
+      let release: (() => void) | undefined;
+      const listOpen = ports.tracker.listOpen.bind(ports.tracker);
+      ports.tracker.listOpen = async () => {
+        reads += 1;
+        if (reads === 1) {
+          await new Promise<void>(resolve => {
+            release = resolve;
+          });
+        }
+        return listOpen();
+      };
+      const box = spyMachine(ports, idleRuntime);
+      let nudge = () => {};
+      const controller = new AbortController();
+      const done = runSpy(box, ['--interval', '60'], {
+        signal: controller.signal,
+        onNudge(fn) {
+          nudge = fn;
+        },
+      });
+      try {
+        await until(() => reads === 1);
+        nudge();
+        const started = Date.now();
+        release?.();
+        await until(() => reads >= 2);
+        assert.ok(Date.now() - started < 2_000);
+      } finally {
+        release?.();
+        controller.abort();
+        await done;
+      }
+    });
+
+    scenario('A failed write leaves the interval', async () => {
+      const ports = memoryPorts({
+        user: MANAGER,
+        issues: [
+          {
+            key: '90',
+            title: '#90: title',
+            body: '',
+            state: 'OPEN',
+            labels: ['remote-solver', 'sdd:cycle', 'sdd:specifying'],
+            assignee: MANAGER,
+          },
+        ],
+        pulls: {'90': [{id: '93', title: '#90: title', state: 'OPEN'}]},
+      });
+      ports.tracker.editLabels = async () => {
+        throw new Error('github refused');
+      };
+      let nudges = 0;
+      const home = mkdtempSync(path.join(tmpdir(), 'nudge-fail-'));
+      const live = openLiveBoard({
+        homePath: path.join(home, 'config.yaml'),
+        repo: 'acme/billing',
+        tracker: ports.tracker,
+        review: ports.review,
+        nudge: () => {
+          nudges += 1;
+        },
+      });
+      await live.refresh();
+      assert.equal(live.window.acceptReview('90'), undefined);
+      await new Promise(resolve => setTimeout(resolve, 30));
+      assert.equal(nudges, 0);
     });
   });
 });

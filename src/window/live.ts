@@ -193,6 +193,8 @@ export function watchSpy(
     apply?: (snapshot: CycleSnapshot, readId?: number) => void;
     /** The number for a tracker read, taken before the read starts. */
     beginRead?: () => number;
+    /** Receives the function that starts the next spy poll now. */
+    onNudge?: (nudge: () => void) => void;
   },
   signal?: AbortSignal,
 ): Promise<void> {
@@ -224,6 +226,7 @@ export function watchSpy(
       forget(sink.refresh());
     },
     beginRead: sink.beginRead,
+    onNudge: sink.onNudge,
   };
   return runSpy(box, ['--parallel', '20'], watch);
 }
@@ -280,6 +283,8 @@ export type LiveBoardOptions = {
   desk?: Desk;
   /** TCP port. Absent means the system chooses one. */
   port?: number;
+  /** Starts the next spy poll. Called after a label, phase, or assignee write succeeds. */
+  nudge?: () => void;
 };
 
 function logProblem(error: unknown): void {
@@ -459,6 +464,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
     });
     void Promise.resolve()
       .then(() => tracker.editLabels(key, [...add], [...remove]))
+      .then(() => options.nudge?.())
       .catch(error => {
         logProblem(error);
         const undone: LabelWish[] = [];
@@ -845,7 +851,7 @@ export function openLiveBoard(options: LiveBoardOptions) {
       writeAssignee(key, login) {
         bump();
         patch(key, ticket => ({...ticket, assignee: login}));
-        forget(tracker.assign(key, login));
+        forget(tracker.assign(key, login).then(() => options.nudge?.()));
       },
       writePhase(key, phase) {
         const before = labelsOf(key);
@@ -859,11 +865,13 @@ export function openLiveBoard(options: LiveBoardOptions) {
           }
           return {...ticket, labels};
         });
-        void setPhase(key, phase as Phase, tracker, {labels: before}).catch(error => {
-          logProblem(error);
-          bump();
-          patch(key, ticket => ({...ticket, labels: before}));
-        });
+        void setPhase(key, phase as Phase, tracker, {labels: before})
+          .then(() => options.nudge?.())
+          .catch(error => {
+            logProblem(error);
+            bump();
+            patch(key, ticket => ({...ticket, labels: before}));
+          });
       },
       editLabels(key, add, remove = []) {
         changeLabels(key, add, remove);

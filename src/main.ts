@@ -165,6 +165,8 @@ export type SpyWatch = {
   onDecision?: (issue: string, decision: Decision) => void;
   /** Stops the loop at the next wait. */
   signal?: AbortSignal;
+  /** Called once with the function that starts the next poll now. */
+  onNudge?: (nudge: () => void) => void;
 };
 
 function say(watch: SpyWatch | undefined, line: string): void {
@@ -207,17 +209,23 @@ export async function runSpy(box: Machine, argv: string[], watch?: SpyWatch): Pr
     watch?.onRunning?.([...state.running]);
   };
 
+  const nudge = () => {
+    if (wake) {
+      wake();
+      return;
+    }
+    woke = true;
+  };
+
   const finish = (issue: string, code: number) => {
     state = exited(state, issue);
     publish();
     watch?.onTurn?.(issue, undefined);
     say(watch, `#${issue} worker exited ${code}`);
-    if (wake) {
-      wake();
-    } else {
-      woke = true;
-    }
+    nudge();
   };
+
+  watch?.onNudge?.(nudge);
 
   say(watch, `Spy polling every ${intervalMs / 1000}s, parallel ${parallel}.`);
 

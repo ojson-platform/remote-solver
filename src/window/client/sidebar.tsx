@@ -13,9 +13,14 @@ import {unchangedLabel} from '../spec-diff.ts';
 import {Gate, LinkMarks} from './board.tsx';
 import {BusyEdge} from './busy.tsx';
 import {ActForm, Hidden} from './forms.tsx';
-import {capIsOpen, layerHasFold, linkFocusProseParts, type FocusProsePart} from './gesture.ts';
+import {capIsOpen, layerHasFold, linkFocusProseParts} from './gesture.ts';
 import {ChevronBack, ChevronForward, Cross, Pill, SendMark} from './marks.tsx';
-import {type PaintedSourceLine, paintSourceDocument} from './source-line.tsx';
+import {
+  focusProseMultiLineListJumpLine,
+  focusProseSourceTree,
+  type PaintedSourceLine,
+  paintSourceDocument,
+} from './source-line.tsx';
 
 function codeLine(line: string, places: Record<string, string>): ReactNode {
   const matched = /^(\s*)Code(\s+)(\S.*)$/.exec(line);
@@ -851,26 +856,129 @@ export function focusIndexAfterSnapshot(input: {
   return clampFocusPageIndex(input.index, input.pageCount);
 }
 
-function FocusProse({
-  display,
-  capabilities,
-}: {
-  display: string;
-  capabilities: readonly {id: string; rows: readonly SpecEntry[]}[];
-}): ReactNode {
-  const parts = linkFocusProseParts(display, capabilities);
-  if (parts.length === 1 && parts[0]?.kind === 'text') {
-    return parts[0].text;
+function spliceJumpTokens(node: ReactNode, buttons: ReadonlyMap<string, ReactNode>): ReactNode {
+  if (typeof node === 'string') {
+    const keys = [...buttons.keys()];
+    if (!keys.some(key => node.includes(key))) {
+      return node;
+    }
+    const pattern = new RegExp(keys.map(key => key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+    const out: ReactNode[] = [];
+    let cursor = 0;
+    for (const match of node.matchAll(pattern)) {
+      const at = match.index ?? 0;
+      if (at > cursor) {
+        out.push(node.slice(cursor, at));
+      }
+      const button = buttons.get(match[0] ?? '');
+      if (button) {
+        out.push(button);
+      }
+      cursor = at + (match[0]?.length ?? 0);
+    }
+    if (cursor < node.length) {
+      out.push(node.slice(cursor));
+    }
+    return out;
   }
-  return parts.map((part: FocusProsePart, index) =>
-    part.kind === 'text' ? (
-      <Fragment key={index}>{part.text}</Fragment>
-    ) : (
-      <button key={index} type="button" className="jump" data-cap={part.capability}>
-        {part.name}
-      </button>
-    ),
+  if (Array.isArray(node)) {
+    return node.flatMap(child => {
+      const next = spliceJumpTokens(child, buttons);
+      return Array.isArray(next) ? next : [next];
+    });
+  }
+  if (!isValidElement(node)) {
+    return node;
+  }
+  const child = (node.props as {children?: ReactNode}).children;
+  if (child === undefined) {
+    return node;
+  }
+  return cloneElement(node, undefined, spliceJumpTokens(child, buttons));
+}
+
+function paintFocusProseLine(
+  line: string,
+  lineIndex: number,
+  painted: PaintedSourceLine | undefined,
+  capabilities: readonly {id: string; rows: readonly SpecEntry[]}[],
+  proseTree: ReturnType<typeof focusProseSourceTree>,
+): ReactNode {
+  const parts = linkFocusProseParts(line, capabilities);
+  if (!parts.some(part => part.kind === 'jump')) {
+    return painted?.paint;
+  }
+  const jumpMarks = focusProseMultiLineListJumpLine(proseTree, lineIndex, line);
+  const buttons = new Map<string, ReactNode>();
+  let source = '';
+  let jumpIndex = 0;
+  for (const part of parts) {
+    if (part.kind === 'jump') {
+      const token = `FOCUSJUMP${jumpIndex}`;
+      jumpIndex += 1;
+      buttons.set(
+        token,
+        <button key={token} type="button" className="jump" data-cap={part.capability}>
+          {part.name}
+        </button>,
+      );
+      source += token;
+      continue;
+    }
+    source += part.text;
+  }
+  let lead = '';
+  if (jumpMarks.active) {
+    const leadStrip = jumpMarks.listMarker + jumpMarks.headingMarker;
+    if (leadStrip !== '' && source.startsWith(leadStrip)) {
+      lead = leadStrip;
+      source = source.slice(leadStrip.length);
+    } else if (jumpMarks.listMarker !== '' && source.startsWith(jumpMarks.listMarker)) {
+      lead = jumpMarks.listMarker;
+      source = source.slice(jumpMarks.listMarker.length);
+    }
+  }
+  const paintedLine = paintSourceDocument([source], {listTextOnly: true})[0]?.paint;
+  const body = paintedLine === undefined ? source : spliceJumpTokens(paintedLine, buttons);
+  if (lead === '') {
+    return body;
+  }
+  return (
+    <Fragment>
+      {lead}
+      {body}
+    </Fragment>
   );
+}
+
+function paintFocusProse(
+  display: string,
+  capabilities: readonly {id: string; rows: readonly SpecEntry[]}[],
+): ReactNode {
+  const lines = display.split('\n');
+  const proseTree = focusProseSourceTree(lines);
+  const documentPaint = paintSourceDocument(lines, {listTextOnly: true});
+  let gap = false;
+  return lines.map((line, index) => {
+    const painted = documentPaint[index];
+    if (painted?.hide) {
+      return null;
+    }
+    const covered = painted?.placeAt !== undefined;
+    if (line.trim() === '' && !covered) {
+      if (!gap) {
+        gap = true;
+        return <span className="gap" key={index} />;
+      }
+      return null;
+    }
+    gap = false;
+    return (
+      <p className="line" key={index}>
+        {paintFocusProseLine(line, index, painted, capabilities, proseTree)}
+      </p>
+    );
+  });
 }
 
 export function FocusBlocks({
@@ -897,45 +1005,68 @@ export function FocusBlocks({
   const pageCount = pages.length;
   const currentPage = pageCount - index;
   const badge = page.kind === 'live' ? page.badge : page.marker;
-  const stored = page.kind === 'live' ? page.text : page.display;
+  const stored = page.kind === 'live' ? page.text : page.body;
   const prose = index === 0 && page.kind === 'focus' && tail ? `${stored.replace(/\s*$/, '')}\n${tail}` : stored;
+  const proseBody =
+    page.kind === 'live' ? (
+      prose
+    ) : (
+      paintFocusProse(prose, capabilities)
+    );
+  const pager = pageCount > 1 ? (
+    <div className="focus-pager">
+      <button
+        className={index >= pageCount - 1 ? 'round off' : 'round'}
+        type="button"
+        data-focus="back"
+        disabled={index >= pageCount - 1}
+      >
+        <ChevronBack />
+      </button>
+      <span className="focus-pager-count">
+        {currentPage}/{pageCount}
+      </span>
+      <button
+        className={index <= 0 ? 'round off' : 'round'}
+        type="button"
+        data-focus="forward"
+        disabled={index <= 0}
+      >
+        <ChevronForward />
+      </button>
+    </div>
+  ) : null;
+  if (page.kind === 'focus') {
+    return (
+      <section className="block focus-block">
+        {pageCount > 1 ? (
+          <>
+            <div className="focus-row">
+              <span className="badge">{badge}</span>
+              {pager}
+            </div>
+            <div className="focus-prose">{proseBody}</div>
+          </>
+        ) : (
+          <div className="focus-body">
+            <span className="badge">{badge}</span>
+            <div className="focus-prose">{proseBody}</div>
+          </div>
+        )}
+      </section>
+    );
+  }
   return (
     <section className="block focus-block">
       {pageCount > 1 ? (
         <div className="focus-row">
           <span className="badge">{badge}</span>
-          <div className="focus-pager">
-            <button
-              className={index >= pageCount - 1 ? 'round off' : 'round'}
-              type="button"
-              data-focus="back"
-              disabled={index >= pageCount - 1}
-            >
-              <ChevronBack />
-            </button>
-            <span className="focus-pager-count">
-              {currentPage}/{pageCount}
-            </span>
-            <button
-              className={index <= 0 ? 'round off' : 'round'}
-              type="button"
-              data-focus="forward"
-              disabled={index <= 0}
-            >
-              <ChevronForward />
-            </button>
-          </div>
+          {pager}
         </div>
       ) : (
         <span className="badge">{badge}</span>
       )}
-      <pre>
-        {page.kind === 'live' ? (
-          prose
-        ) : (
-          <FocusProse display={prose} capabilities={capabilities} />
-        )}
-      </pre>
+      <pre>{proseBody}</pre>
     </section>
   );
 }

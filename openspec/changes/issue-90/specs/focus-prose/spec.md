@@ -8,7 +8,7 @@ sdd-absorbed: 68ce34c407b94bc8
 
 ### Requirement: The prose renders markdown
 
-The words after the marker SHALL be rendered as markdown beside the badge. A heading, a list, emphasis, a link, and code SHALL render, and their marks SHALL NOT stay the characters that were written. Those words SHALL stay the words that were written. That prose SHALL NOT be left in a `pre`.
+The words after the marker SHALL be rendered as markdown beside the badge. A heading, a list, emphasis, a link, and code SHALL render, and their marks SHALL NOT stay the characters that were written. Those words SHALL stay the words that were written. That prose SHALL NOT be left in a `pre`. When a scenario name sits on the first line of a list item that spans three or more lines, and that line has no text after the name, the words on a line between the first and the last SHALL be beside the badge. Those words SHALL be the words after the marker line, and they SHALL NOT be rewritten.
 
 #### Scenario: The prose renders markdown
 
@@ -24,6 +24,11 @@ The words after the marker SHALL be rendered as markdown beside the badge. A hea
 
 - **WHEN** the person opens a written focus
 - **THEN** the badge is the first line, and the prose beside the badge is the words after that line and those words are not rewritten
+
+#### Scenario: A middle line stays beside the badge
+
+- **WHEN** the person opens a written focus where a scenario name sits on the first line of a list item that spans three or more lines, and that line has no text after the name
+- **THEN** the words on the line between the first and the last are beside the badge, the prose beside the badge is the words after the marker line, and those words are not rewritten
 
 ### Requirement: Marks stay beside the jump button
 

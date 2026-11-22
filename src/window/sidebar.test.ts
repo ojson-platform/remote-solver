@@ -1368,6 +1368,7 @@ spec('focus-prose', () => {
       assert.equal(laterJumpLine.includes('`code`'), false);
       assert.match(laterJumpLine, /-\s*<strong>emphasis<\/strong>\s*<a href="https:\/\/example.com\/guide">docs<\/a>/);
       assert.equal(laterJumpLine.includes('the tail'), false);
+      assert.equal(laterJumpLine.includes('intro on the first line'), false);
 
       const laterLineSpanCases = [
         {
@@ -1418,6 +1419,31 @@ spec('focus-prose', () => {
         assert.equal(spanJump.match(rendered) === null, true);
         assert.equal(spanJump.includes(closeAbsent), false);
       }
+
+      const earlierItalicBody = [
+        '## Heading',
+        '',
+        '- *before',
+        '  The prose renders markdown after*',
+        '',
+      ].join('\n');
+      const earlierItalicHtml = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:code', earlierItalicBody)],
+          pageIndex: 0,
+          capabilities,
+        }),
+      );
+      const earlierItalicProse =
+        earlierItalicHtml.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      const earlierItalicJump =
+        earlierItalicProse
+          .match(/<p class="line">([\s\S]*?)<\/p>/g)
+          ?.find(item => item.includes('class="jump"')) ?? '';
+      assert.match(earlierItalicJump, /<button[^>]*class="jump"/);
+      assert.equal(earlierItalicJump.match(/<em[^>]*>[\s\S]*<button/), null);
+      assert.equal(earlierItalicJump.includes('*before'), false);
+      assert.match(earlierItalicJump, /after/);
 
       const earlierLineOpenBody = [
         '## Heading',

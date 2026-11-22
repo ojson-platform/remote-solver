@@ -1052,9 +1052,7 @@ function paintFocusProseLine(
       : paintStart !== undefined
         ? earlierListLineOpensSpan
           ? [lines[paintStart] ?? '', jumpLineWithoutJump]
-          : lines
-              .slice(paintStart, lineIndex + 1)
-              .map((text, offset) => (offset === lineIndex - paintStart ? source : text))
+          : [source]
         : afterJumpOnLine && paintEnd === undefined
           ? [source]
           : lines

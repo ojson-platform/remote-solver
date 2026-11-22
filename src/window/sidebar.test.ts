@@ -1338,6 +1338,31 @@ spec('focus-prose', () => {
       assert.equal(prose.includes('](https://'), false);
       assert.equal(prose.includes('`code`'), false);
       assert.equal(jumpLine.includes('- ### **emphasis**'), false);
+
+      const laterBody = [
+        '## Heading',
+        '',
+        '- [link](https://example.com) `code`',
+        '- intro on the first line',
+        '  **emphasis** then The prose renders markdown on',
+        '  the tail.',
+        '',
+      ].join('\n');
+      const laterHtml = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:code', laterBody)],
+          pageIndex: 0,
+          capabilities,
+        }),
+      );
+      const laterProse = laterHtml.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      const laterJumpLine =
+        laterProse
+          .match(/<p class="line">([\s\S]*?)<\/p>/g)
+          ?.find(item => item.includes('class="jump"')) ?? '';
+      assert.match(laterJumpLine, /\*\*emphasis\*\* then\s*<button[^>]*class="jump"/);
+      assert.doesNotMatch(laterJumpLine, /^\s*-\s*<button/);
+      assert.doesNotMatch(laterJumpLine, /<strong>emphasis<\/strong>/);
     });
   });
   requirement('A scenario name stays a button.jump', () => {

@@ -868,6 +868,21 @@ function paintFocusProseLine(
     return painted?.paint;
   }
   const jumpMarks = focusProseMultiLineListJumpLine(proseTree, lineIndex, line);
+  if (jumpMarks.rawLinePaint) {
+    return parts.map((part: FocusProsePart, partIndex) => {
+      if (part.kind === 'jump') {
+        return (
+          <button key={partIndex} type="button" className="jump" data-cap={part.capability}>
+            {part.name}
+          </button>
+        );
+      }
+      if (part.text === '') {
+        return null;
+      }
+      return <Fragment key={partIndex}>{part.text}</Fragment>;
+    });
+  }
   const leadStrip = jumpMarks.active ? jumpMarks.listMarker + jumpMarks.headingMarker : '';
   const nodes = parts.map((part: FocusProsePart, partIndex) => {
     if (part.kind === 'jump') {

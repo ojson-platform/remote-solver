@@ -13,7 +13,7 @@ import {unchangedLabel} from '../spec-diff.ts';
 import {Gate, LinkMarks} from './board.tsx';
 import {BusyEdge} from './busy.tsx';
 import {ActForm, Hidden} from './forms.tsx';
-import {capIsOpen, layerHasFold, linkFocusProseParts, type FocusProsePart} from './gesture.ts';
+import {capIsOpen, layerHasFold, linkFocusProseParts} from './gesture.ts';
 import {ChevronBack, ChevronForward, Cross, Pill, SendMark} from './marks.tsx';
 import {
   focusProseMultiLineListJumpLine,
@@ -856,6 +856,47 @@ export function focusIndexAfterSnapshot(input: {
   return clampFocusPageIndex(input.index, input.pageCount);
 }
 
+function spliceJumpTokens(node: ReactNode, buttons: ReadonlyMap<string, ReactNode>): ReactNode {
+  if (typeof node === 'string') {
+    const keys = [...buttons.keys()];
+    if (!keys.some(key => node.includes(key))) {
+      return node;
+    }
+    const pattern = new RegExp(keys.map(key => key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+    const out: ReactNode[] = [];
+    let cursor = 0;
+    for (const match of node.matchAll(pattern)) {
+      const at = match.index ?? 0;
+      if (at > cursor) {
+        out.push(node.slice(cursor, at));
+      }
+      const button = buttons.get(match[0] ?? '');
+      if (button) {
+        out.push(button);
+      }
+      cursor = at + (match[0]?.length ?? 0);
+    }
+    if (cursor < node.length) {
+      out.push(node.slice(cursor));
+    }
+    return out;
+  }
+  if (Array.isArray(node)) {
+    return node.flatMap(child => {
+      const next = spliceJumpTokens(child, buttons);
+      return Array.isArray(next) ? next : [next];
+    });
+  }
+  if (!isValidElement(node)) {
+    return node;
+  }
+  const child = (node.props as {children?: ReactNode}).children;
+  if (child === undefined) {
+    return node;
+  }
+  return cloneElement(node, undefined, spliceJumpTokens(child, buttons));
+}
+
 function paintFocusProseLine(
   line: string,
   lineIndex: number,
@@ -868,58 +909,44 @@ function paintFocusProseLine(
     return painted?.paint;
   }
   const jumpMarks = focusProseMultiLineListJumpLine(proseTree, lineIndex, line);
-  if (jumpMarks.rawLinePaint) {
-    return parts.map((part: FocusProsePart, partIndex) => {
-      if (part.kind === 'jump') {
-        return (
-          <button key={partIndex} type="button" className="jump" data-cap={part.capability}>
-            {part.name}
-          </button>
-        );
-      }
-      if (part.text === '') {
-        return null;
-      }
-      return <Fragment key={partIndex}>{part.text}</Fragment>;
-    });
-  }
-  const leadStrip = jumpMarks.active ? jumpMarks.listMarker + jumpMarks.headingMarker : '';
-  const nodes = parts.map((part: FocusProsePart, partIndex) => {
+  const buttons = new Map<string, ReactNode>();
+  let source = '';
+  let jumpIndex = 0;
+  for (const part of parts) {
     if (part.kind === 'jump') {
-      return (
-        <button key={partIndex} type="button" className="jump" data-cap={part.capability}>
+      const token = `FOCUSJUMP${jumpIndex}`;
+      jumpIndex += 1;
+      buttons.set(
+        token,
+        <button key={token} type="button" className="jump" data-cap={part.capability}>
           {part.name}
-        </button>
+        </button>,
       );
+      source += token;
+      continue;
     }
-    if (part.text === '') {
-      return null;
+    source += part.text;
+  }
+  let lead = '';
+  if (jumpMarks.active) {
+    const leadStrip = jumpMarks.listMarker + jumpMarks.headingMarker;
+    if (leadStrip !== '' && source.startsWith(leadStrip)) {
+      lead = leadStrip;
+      source = source.slice(leadStrip.length);
+    } else if (jumpMarks.listMarker !== '' && source.startsWith(jumpMarks.listMarker)) {
+      lead = jumpMarks.listMarker;
+      source = source.slice(jumpMarks.listMarker.length);
     }
-    let fragment = part.text;
-    if (partIndex === 0 && leadStrip !== '' && fragment.startsWith(leadStrip)) {
-      fragment = fragment.slice(leadStrip.length);
-    } else if (
-      partIndex === 0 &&
-      jumpMarks.active &&
-      jumpMarks.listMarker !== '' &&
-      fragment.startsWith(jumpMarks.listMarker)
-    ) {
-      fragment = fragment.slice(jumpMarks.listMarker.length);
-    }
-    return (
-      <Fragment key={partIndex}>
-        {paintSourceDocument([fragment], {listTextOnly: true})[0]?.paint ?? fragment}
-      </Fragment>
-    );
-  });
-  if (!jumpMarks.active) {
-    return nodes;
+  }
+  const paintedLine = paintSourceDocument([source], {listTextOnly: true})[0]?.paint;
+  const body = paintedLine === undefined ? source : spliceJumpTokens(paintedLine, buttons);
+  if (lead === '') {
+    return body;
   }
   return (
     <Fragment>
-      {jumpMarks.listMarker === '' ? null : jumpMarks.listMarker}
-      {jumpMarks.headingMarker === '' ? null : jumpMarks.headingMarker}
-      {nodes}
+      {lead}
+      {body}
     </Fragment>
   );
 }

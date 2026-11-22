@@ -562,19 +562,16 @@ export function focusProseMultiLineListJumpLine(
   tree: Root,
   lineIndex: number,
   line: string,
-): {active: boolean; listMarker: string; headingMarker: string; rawLinePaint: boolean} {
+): {active: boolean; listMarker: string; headingMarker: string} {
   const lineNum = lineIndex + 1;
   const block = listItemCoveringLine(tree, lineNum);
   if (block?.position === undefined) {
-    return {active: false, listMarker: '', headingMarker: '', rawLinePaint: false};
+    return {active: false, listMarker: '', headingMarker: ''};
   }
   const multi = placeEndLine(block.position) > block.position.start.line;
   const itemStart = lineNum === block.position.start.line;
-  if (multi && !itemStart) {
-    return {active: false, listMarker: '', headingMarker: '', rawLinePaint: true};
-  }
   if (!multi || !itemStart) {
-    return {active: false, listMarker: '', headingMarker: '', rawLinePaint: false};
+    return {active: false, listMarker: '', headingMarker: ''};
   }
   let headingMarker = '';
   visit(tree, node => {
@@ -582,7 +579,7 @@ export function focusProseMultiLineListJumpLine(
       headingMarker = `${'#'.repeat(node.depth)} `;
     }
   });
-  return {active: true, listMarker: listMarker(line), headingMarker, rawLinePaint: false};
+  return {active: true, listMarker: listMarker(line), headingMarker};
 }
 
 /** The spine lines of one document, painted as nodes in that single markdown document. */

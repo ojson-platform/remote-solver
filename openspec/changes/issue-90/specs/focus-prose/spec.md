@@ -27,12 +27,12 @@ The words after the marker SHALL be rendered as markdown beside the badge. A hea
 
 ### Requirement: Marks stay beside the jump button
 
-When a scenario name sits in a list item that spans more than one line, the prose beside the badge SHALL show the list mark in front of the jump button. A heading mark and emphasis marks SHALL stay beside that button the same way. The document paint for that line SHALL NOT include those marks. The paint SHALL run on the text around a scenario name, and the heading mark, the list mark, the emphasis marks, the link marks, and the code marks SHALL NOT stay the characters that were written.
+When a scenario name sits on a line of a multi-line list item, the prose beside the badge SHALL show that item's list mark once and a heading mark on that line once, in front of the jump button. That line's document paint SHALL NOT include those two marks. The paint SHALL run on the text around the name, including a later line of the item. Emphasis, a link, and code on that line SHALL render as markdown. Link marks and code marks SHALL NOT stay the characters that were written.
 
 #### Scenario: Marks stay beside the jump button
 
-- **WHEN** the person opens a written focus whose prose contains a heading mark, a list mark, emphasis marks, a link mark, and a code mark, and a scenario name sits in a list item that spans more than one line
-- **THEN** the prose beside the badge shows the list mark in front of the jump button, a heading mark and emphasis marks stay beside that button the same way, the document paint for that line does not include those marks, the paint runs on the text around that scenario name, and the heading mark, the list mark, the emphasis marks, the link marks, and the code marks do not stay the characters that were written
+- **WHEN** the person opens a written focus whose prose contains a heading mark, a list mark, emphasis, a link, and code, and a scenario name sits on a line of a multi-line list item, including a later line of that item
+- **THEN** the prose beside the badge shows that item's list mark once and a heading mark on that line once, in front of the jump button, that line's document paint does not include those two marks, the paint runs on the text around the name, including a later line of the item, emphasis, a link, and code on that line render as markdown, and the link marks and the code marks do not stay the characters that were written
 
 ### Requirement: The marker line stays the badge and is not a heading
 

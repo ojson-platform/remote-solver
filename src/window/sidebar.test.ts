@@ -1344,7 +1344,7 @@ spec('focus-prose', () => {
         '',
         '- [link](https://example.com) `code`',
         '- intro on the first line',
-        '  **emphasis** then The prose renders markdown on',
+        '  **emphasis** [docs](https://example.com/guide) `code` then The prose renders markdown on',
         '  the tail.',
         '',
       ].join('\n');
@@ -1360,9 +1360,36 @@ spec('focus-prose', () => {
         laterProse
           .match(/<p class="line">([\s\S]*?)<\/p>/g)
           ?.find(item => item.includes('class="jump"')) ?? '';
-      assert.match(laterJumpLine, /\*\*emphasis\*\* then\s*<button[^>]*class="jump"/);
+      assert.match(laterJumpLine, /<strong>emphasis<\/strong>/);
+      assert.match(laterJumpLine, /<a href="https:\/\/example.com\/guide">docs<\/a>/);
+      assert.match(laterJumpLine, /<code>code<\/code>\s*then\s*<button[^>]*class="jump"/);
+      assert.equal(laterJumpLine.includes('**emphasis**'), false);
+      assert.equal(laterJumpLine.includes('](https://'), false);
+      assert.equal(laterJumpLine.includes('`code`'), false);
       assert.doesNotMatch(laterJumpLine, /^\s*-\s*<button/);
-      assert.doesNotMatch(laterJumpLine, /<strong>emphasis<\/strong>/);
+
+      const wrappedBody = [
+        '## Heading',
+        '',
+        '- **before The prose renders markdown after** stays',
+        '  the second line.',
+        '',
+      ].join('\n');
+      const wrappedHtml = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:code', wrappedBody)],
+          pageIndex: 0,
+          capabilities,
+        }),
+      );
+      const wrappedProse = wrappedHtml.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      const wrappedJump =
+        wrappedProse
+          .match(/<p class="line">([\s\S]*?)<\/p>/g)
+          ?.find(item => item.includes('class="jump"')) ?? '';
+      assert.match(wrappedJump, /-\s*<strong>before\s*<button[^>]*class="jump"/);
+      assert.match(wrappedJump, /<\/button>\s*after<\/strong>/);
+      assert.equal(wrappedJump.includes('**'), false);
     });
   });
   requirement('A scenario name stays a button.jump', () => {

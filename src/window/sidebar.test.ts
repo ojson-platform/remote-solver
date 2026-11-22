@@ -1369,6 +1369,57 @@ spec('focus-prose', () => {
       assert.match(laterJumpLine, /-\s*<strong>emphasis<\/strong>\s*<a href="https:\/\/example.com\/guide">docs<\/a>/);
       assert.equal(laterJumpLine.includes('the tail'), false);
 
+      const earlierLineOpenBody = [
+        '## Heading',
+        '',
+        '- **before',
+        '  The prose renders markdown after**',
+        '',
+      ].join('\n');
+      const earlierLineOpenHtml = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:code', earlierLineOpenBody)],
+          pageIndex: 0,
+          capabilities,
+        }),
+      );
+      const earlierLineOpenProse =
+        earlierLineOpenHtml.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      const earlierLineOpenJump =
+        earlierLineOpenProse
+          .match(/<p class="line">([\s\S]*?)<\/p>/g)
+          ?.find(item => item.includes('class="jump"')) ?? '';
+      assert.ok(earlierLineOpenProse.includes('jump'), earlierLineOpenProse);
+      assert.match(earlierLineOpenJump, /-\s*<button[^>]*class="jump"/);
+      assert.equal(earlierLineOpenJump.includes('<strong>before'), false);
+      assert.equal(earlierLineOpenJump.includes('**before'), false);
+      assert.match(earlierLineOpenJump, /after/);
+
+      const laterLineOpenSpanBody = [
+        '## Heading',
+        '',
+        '- intro',
+        '  **open The prose renders markdown',
+        '  close**',
+        '',
+      ].join('\n');
+      const laterLineOpenSpanHtml = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:code', laterLineOpenSpanBody)],
+          pageIndex: 0,
+          capabilities,
+        }),
+      );
+      const laterLineOpenSpanProse =
+        laterLineOpenSpanHtml.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      const laterLineOpenSpanJump =
+        laterLineOpenSpanProse
+          .match(/<p class="line">([\s\S]*?)<\/p>/g)
+          ?.find(item => item.includes('class="jump"')) ?? '';
+      assert.match(laterLineOpenSpanJump, /\*\*open/);
+      assert.equal(laterLineOpenSpanJump.includes('<strong>open'), false);
+      assert.equal(laterLineOpenSpanJump.includes('close'), false);
+
       const jumpOnlyBody = [
         '## Heading',
         '',
@@ -1470,23 +1521,30 @@ spec('focus-prose', () => {
       const crossLineCases = [
         {
           body: ['## Heading', '', '- **before', '  The prose renders markdown after**', ''].join('\n'),
-          jumpLine: /<strong>[\s\S]*<button[^>]*class="jump"[\s\S]*after<\/strong>/,
+          wraps: /<\s*strong[^>]*>[\s\S]*<button[^>]*class="jump"/,
+          tail: /after/,
           stray: '**',
         },
         {
           body: ['## Heading', '', '- [docs', '  The prose renders markdown](https://example.com)', ''].join(
             '\n',
           ),
-          jumpLine: /<a href="https:\/\/example.com">[\s\S]*<button[^>]*class="jump"/,
+          wraps: /<a[^>]*>[\s\S]*<button[^>]*class="jump"/,
           stray: '](',
         },
         {
           body: ['## Heading', '', '- `open', '  The prose renders markdown close`', ''].join('\n'),
-          jumpLine: /<code>[\s\S]*<button[^>]*class="jump"/,
+          wraps: /<code[^>]*>[\s\S]*<button[^>]*class="jump"/,
+          tail: /close/,
           stray: '`',
         },
       ] as const;
-      for (const {body, jumpLine, stray} of crossLineCases) {
+      for (const {body, wraps, tail, stray} of crossLineCases as Array<{
+        body: string;
+        wraps: RegExp;
+        tail?: RegExp;
+        stray: string;
+      }>) {
         const crossHtml = renderToStaticMarkup(
           createElement(FocusBlocks, {
             blocks: [focusBlock('sdd:focus:code', body)],
@@ -1498,7 +1556,11 @@ spec('focus-prose', () => {
         const crossJump =
           crossProse.match(/<p class="line">([\s\S]*?)<\/p>/g)?.find(item => item.includes('class="jump"')) ??
           '';
-        assert.match(crossJump, jumpLine);
+        assert.match(crossJump, /-\s*<button[^>]*class="jump"/);
+        assert.equal(crossJump.match(wraps) === null, true);
+        if (tail) {
+          assert.match(crossJump, tail);
+        }
         assert.equal(crossJump.includes(stray), false);
       }
     });

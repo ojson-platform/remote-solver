@@ -585,6 +585,21 @@ export function focusProseMultiLineListJumpLine(
   return {active: true, listMarker: listMarker(line), headingMarker};
 }
 
+/** First line index of a multi-line list item when the jump sits on a later line of that item. */
+export function focusProseMultiLineListJumpPaintStart(tree: Root, lineIndex: number): number | undefined {
+  const lineNum = lineIndex + 1;
+  const block = listItemCoveringLine(tree, lineNum);
+  if (block?.position === undefined) {
+    return undefined;
+  }
+  const multi = placeEndLine(block.position) > block.position.start.line;
+  const itemStart = block.position.start.line - 1;
+  if (!multi || lineIndex === itemStart) {
+    return undefined;
+  }
+  return itemStart;
+}
+
 /** The spine lines of one document, painted as nodes in that single markdown document. */
 export function paintSourceDocument(
   texts: readonly string[],

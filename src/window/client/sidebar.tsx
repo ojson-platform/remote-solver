@@ -17,6 +17,7 @@ import {capIsOpen, layerHasFold, linkFocusProseParts} from './gesture.ts';
 import {ChevronBack, ChevronForward, Cross, Pill, SendMark} from './marks.tsx';
 import {
   focusProseMultiLineListJumpLine,
+  focusProseMultiLineListJumpPaintStart,
   focusProseSourceTree,
   type PaintedSourceLine,
   paintSourceDocument,
@@ -900,6 +901,7 @@ function spliceJumpTokens(node: ReactNode, buttons: ReadonlyMap<string, ReactNod
 function paintFocusProseLine(
   line: string,
   lineIndex: number,
+  lines: readonly string[],
   painted: PaintedSourceLine | undefined,
   capabilities: readonly {id: string; rows: readonly SpecEntry[]}[],
   proseTree: ReturnType<typeof focusProseSourceTree>,
@@ -938,7 +940,12 @@ function paintFocusProseLine(
       source = source.slice(jumpMarks.listMarker.length);
     }
   }
-  const paintedLine = paintSourceDocument([source], {listTextOnly: true})[0]?.paint;
+  const paintStart = focusProseMultiLineListJumpPaintStart(proseTree, lineIndex);
+  const paintTexts =
+    paintStart === undefined
+      ? [source]
+      : lines.slice(paintStart, lineIndex + 1).map((text, offset) => (offset === lineIndex - paintStart ? source : text));
+  const paintedLine = paintSourceDocument(paintTexts, {listTextOnly: true})[paintTexts.length - 1]?.paint;
   const body = paintedLine === undefined ? source : spliceJumpTokens(paintedLine, buttons);
   if (lead === '') {
     return body;
@@ -975,7 +982,7 @@ function paintFocusProse(
     gap = false;
     return (
       <p className="line" key={index}>
-        {paintFocusProseLine(line, index, painted, capabilities, proseTree)}
+        {paintFocusProseLine(line, index, lines, painted, capabilities, proseTree)}
       </p>
     );
   });

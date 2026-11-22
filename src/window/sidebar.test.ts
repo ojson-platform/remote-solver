@@ -1390,6 +1390,41 @@ spec('focus-prose', () => {
       assert.match(wrappedJump, /-\s*<strong>before\s*<button[^>]*class="jump"/);
       assert.match(wrappedJump, /<\/button>\s*after<\/strong>/);
       assert.equal(wrappedJump.includes('**'), false);
+
+      const crossLineCases = [
+        {
+          body: ['## Heading', '', '- **before', '  The prose renders markdown after**', ''].join('\n'),
+          jumpLine: /<strong>[\s\S]*<button[^>]*class="jump"[\s\S]*after<\/strong>/,
+          stray: '**',
+        },
+        {
+          body: ['## Heading', '', '- [docs', '  The prose renders markdown](https://example.com)', ''].join(
+            '\n',
+          ),
+          jumpLine: /<a href="https:\/\/example.com">[\s\S]*<button[^>]*class="jump"/,
+          stray: '](',
+        },
+        {
+          body: ['## Heading', '', '- `open', '  The prose renders markdown close`', ''].join('\n'),
+          jumpLine: /<code>[\s\S]*<button[^>]*class="jump"/,
+          stray: '`',
+        },
+      ] as const;
+      for (const {body, jumpLine, stray} of crossLineCases) {
+        const crossHtml = renderToStaticMarkup(
+          createElement(FocusBlocks, {
+            blocks: [focusBlock('sdd:focus:code', body)],
+            pageIndex: 0,
+            capabilities,
+          }),
+        );
+        const crossProse = crossHtml.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+        const crossJump =
+          crossProse.match(/<p class="line">([\s\S]*?)<\/p>/g)?.find(item => item.includes('class="jump"')) ??
+          '';
+        assert.match(crossJump, jumpLine);
+        assert.equal(crossJump.includes(stray), false);
+      }
     });
   });
   requirement('A scenario name stays a button.jump', () => {

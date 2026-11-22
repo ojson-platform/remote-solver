@@ -16,7 +16,7 @@ This slice waits on **`depends-49-sidebar`** (Technical prerequisites).
 
 `src/window/unsent-remark.test.ts` observes immediately after a successful send: the thread appears in the sidebar (on its line or phase foot per #49) and the draft clears in the same paint; the just-sent thread is visible on its own line at the moment the draft clears; when the pull request has that thread, the draft disappears.
 
-- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --reporter=default src/window/unsent-remark.test.ts`
+- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --maxWorkers=1 --reporter=default src/window/unsent-remark.test.ts`
 - **Once** after that command exits 0: `pnpm test`; then `pnpm run test:types`
 
 Trace: `spec`, `requirement`, and `scenario` from `@ojson/spec-coverage`.

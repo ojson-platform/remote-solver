@@ -18,7 +18,7 @@ Seams (no child issues): `layerAct` held branch vs existing accept branch; snaps
 
 `src/window/acceptance.test.ts` drives Plan, Specify, or Design on the open ticket with review threads staged per scenario: «Принять» stays in the gate's place, is inactive when a counting thread is open, and hover names the phase and says a thread on that phase is still open.
 
-- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --reporter=default src/window/acceptance.test.ts`
+- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --maxWorkers=1 --reporter=default src/window/acceptance.test.ts`
 - **Once** after that command exits 0: `pnpm test`; then `pnpm run test:types`
 
 Trace: `spec`, `requirement`, and `scenario` from `@ojson/spec-coverage`.

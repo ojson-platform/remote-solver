@@ -18,7 +18,7 @@ Seams (no child issues): failed send vs draft retention; stale error vs thread a
 
 `src/window/unsent-remark.test.ts` covers failed sends leaving the draft only when that thread is not on the pull request; when the pull request has that thread the draft clears including after a stale-style error; refused sends from «Записать» return `комментарий не записан` without a conversation comment; retries do not create a duplicate thread with the same text on the same line when the pull request already has that thread.
 
-- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --reporter=default src/window/unsent-remark.test.ts`
+- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --maxWorkers=1 --reporter=default src/window/unsent-remark.test.ts`
 - **Once** after that command exits 0: `pnpm test`; then `pnpm run test:types`
 
 Trace: `spec`, `requirement`, and `scenario` from `@ojson/spec-coverage`.

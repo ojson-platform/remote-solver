@@ -14,7 +14,7 @@ Seams (no child issues): page count in `focus.ts` vs conditional pager markup in
 
 `src/window/sidebar.test.ts` observes rendered `FocusBlocks` with one written focus: no `.focus-pager`, row is badge and prose only.
 
-- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --reporter=default src/window/sidebar.test.ts`
+- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --maxWorkers=1 --reporter=default src/window/sidebar.test.ts`
 - **Once** after that command exits 0: `pnpm test`; then `pnpm run test:types`
 
 Trace: `spec`, `requirement`, and `scenario` from `@ojson/spec-coverage`.

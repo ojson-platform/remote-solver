@@ -12,7 +12,7 @@ Seams (no child issues): omitted index on open vs initial `pageIndex` in sidebar
 
 `src/window/board.test.ts` observes the rendered sidebar on open: landing on the latest page with the pager showing that page's count.
 
-- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --reporter=default src/window/board.test.ts`
+- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --maxWorkers=1 --reporter=default src/window/board.test.ts`
 - **Once** after that command exits 0: `pnpm test`; then `pnpm run test:types`
 
 Trace: `spec`, `requirement`, and `scenario` from `@ojson/spec-coverage`.

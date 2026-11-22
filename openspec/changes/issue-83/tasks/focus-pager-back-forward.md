@@ -13,7 +13,7 @@ Seams (no child issues): index in client memory vs rendered page in `FocusBlocks
 
 `src/window/sidebar.test.ts` observes rendered `FocusBlocks` and the client walk: Back moves to older written comments newest first; Forward returns toward now.
 
-- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --reporter=default src/window/sidebar.test.ts`
+- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --maxWorkers=1 --reporter=default src/window/sidebar.test.ts`
 - **Once** after that command exits 0: `pnpm test`; then `pnpm run test:types`
 
 Trace: `spec`, `requirement`, and `scenario` from `@ojson/spec-coverage`.

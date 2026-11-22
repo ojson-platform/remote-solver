@@ -18,7 +18,7 @@ Seams (no child issues): chevron glyphs in `marks.tsx` vs pager drawing in `side
 
 `src/window/sidebar.test.ts` observes the rendered `FocusBlocks`: one control on the focus row opposite the badge with back and forward chevrons each in a round and the count between; rounds not a new circle; chevron icons not words; `<` and `>` not the mark; count placement and `12/12` on the latest page; badge and prose unchanged beside the pager.
 
-- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --reporter=default src/window/sidebar.test.ts`
+- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --maxWorkers=1 --reporter=default src/window/sidebar.test.ts`
 - **Once** after that command exits 0: `pnpm test`; then `pnpm run test:types`
 
 Trace: `spec`, `requirement`, and `scenario` from `@ojson/spec-coverage`.

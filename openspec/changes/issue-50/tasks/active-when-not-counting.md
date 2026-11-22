@@ -16,7 +16,7 @@ Seams (no child issues): phase-specific marker map in counting vs `decideOpen`; 
 
 `src/window/acceptance.test.ts` with only non-counting threads (including later-phase marker and note): the row shows active «Принять» in the gate's place and the control does not say a thread is still open.
 
-- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --reporter=default src/window/acceptance.test.ts`
+- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --maxWorkers=1 --reporter=default src/window/acceptance.test.ts`
 - **Once** after that command exits 0: `pnpm test`; then `pnpm run test:types`
 
 Trace: `spec`, `requirement`, and `scenario` from `@ojson/spec-coverage`.

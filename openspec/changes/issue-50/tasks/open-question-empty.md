@@ -14,7 +14,7 @@ Seams (no child issues): open-question `none` branch vs held branch when a count
 
 `src/window/acceptance.test.ts` with an open question and a counting phase thread: the acceptance place stays empty, as today.
 
-- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --reporter=default src/window/acceptance.test.ts`
+- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --maxWorkers=1 --reporter=default src/window/acceptance.test.ts`
 - **Once** after that command exits 0: `pnpm test`; then `pnpm run test:types`
 
 Trace: `spec`, `requirement`, and `scenario` from `@ojson/spec-coverage`.

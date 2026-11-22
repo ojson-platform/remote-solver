@@ -15,7 +15,7 @@ Seams (no child issues): in-field send vs phase-row accept; queue field state vs
 
 `src/window/unsent-remark.test.ts` drives the rendered window for the open ticket: a new remark stays visible until send; activating send posts each non-empty unsent remark as its own thread; «Принять» remains on the phase row and the send control does not occupy that place. The test may read the existing window harness and rendered DOM.
 
-- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --reporter=default src/window/unsent-remark.test.ts`
+- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --maxWorkers=1 --reporter=default src/window/unsent-remark.test.ts`
 - **Once** after that command exits 0: `pnpm test`; then `pnpm run test:types`
 
 Trace: `spec`, `requirement`, and `scenario` from `@ojson/spec-coverage`.

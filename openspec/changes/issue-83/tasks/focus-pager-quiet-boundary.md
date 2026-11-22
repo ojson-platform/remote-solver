@@ -13,7 +13,7 @@ Seams (no child issues): quiet `off`/`disabled` on the drawn control vs click li
 
 `src/window/sidebar.test.ts` observes rendered `FocusBlocks` on the oldest and latest pages: the round that cannot move stays in place, carries `off` and `disabled`, and the count does not jump.
 
-- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --reporter=default src/window/sidebar.test.ts`
+- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --maxWorkers=1 --reporter=default src/window/sidebar.test.ts`
 - **Once** after that command exits 0: `pnpm test`; then `pnpm run test:types`
 
 Trace: `spec`, `requirement`, and `scenario` from `@ojson/spec-coverage`.

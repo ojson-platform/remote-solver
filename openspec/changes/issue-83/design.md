@@ -4,7 +4,7 @@ sdd-absorbed: e51e36369ca7899f
 
 `focus-pager`. Scenarios are observed on the focus block the sidebar draws. The rounds, the chevron icon, the characters `<` and `>` not being the mark, the count between the rounds, a round that stays in place and goes quiet, one written focus leaving the pager out, the count from the oldest page, Back, Forward, and the badge and the prose staying as they are are the rendered `FocusBlocks` in `src/window/sidebar.test.ts`. Opening on the latest page is the rendered sidebar in `src/window/board.test.ts`. The one-file command passes `--reporter=default` so that file can exit 0. The layer command keeps the coverage reporter.
 
-one-file: `pnpm exec vitest --run --reporter=default <test-file> -t <titles>`
+one-file: `pnpm exec vitest --run --maxWorkers=1 --reporter=default <test-file> -t <titles>`
 layer: `pnpm test`
 
 fast suite: none

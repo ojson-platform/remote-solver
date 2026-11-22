@@ -16,7 +16,7 @@ Seams (no child issues): `decideAhead` classification vs window counting; single
 
 `src/machine/decide/review-gate.test.ts` walks the review-gate post while a counting phase thread is open and acceptance is held in the gate's place: no new `sdd:wait-human`, no accept ask, and an existing label stays.
 
-- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --reporter=default src/machine/decide/review-gate.test.ts`
+- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --maxWorkers=1 --reporter=default src/machine/decide/review-gate.test.ts`
 - **Once** after that command exits 0: `pnpm test`; then `pnpm run test:types`
 
 Trace: `spec`, `requirement`, and `scenario` from `@ojson/spec-coverage`.

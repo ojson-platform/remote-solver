@@ -13,7 +13,7 @@ Seams (no child issues): in-memory queue vs reload; open ticket scope vs another
 
 `src/window/unsent-remark.test.ts` observes the queue is for the open ticket and that a full reload (new page) drops unsent remarks.
 
-- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --reporter=default src/window/unsent-remark.test.ts`
+- **On each attempt** (while the test is red and after each edit to the test or its sources): `pnpm exec vitest --run --maxWorkers=1 --reporter=default src/window/unsent-remark.test.ts`
 - **Once** after that command exits 0: `pnpm test`; then `pnpm run test:types`
 
 Trace: `spec`, `requirement`, and `scenario` from `@ojson/spec-coverage`.

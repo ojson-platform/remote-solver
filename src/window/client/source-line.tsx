@@ -564,7 +564,7 @@ function listItemCoveringLine(tree: Root, line: number): ListItem | undefined {
 export function focusProseMultiLineListJumpLine(
   tree: Root,
   lineIndex: number,
-  line: string,
+  lines: readonly string[],
 ): {active: boolean; listMarker: string; headingMarker: string} {
   const lineNum = lineIndex + 1;
   const block = listItemCoveringLine(tree, lineNum);
@@ -572,17 +572,58 @@ export function focusProseMultiLineListJumpLine(
     return {active: false, listMarker: '', headingMarker: ''};
   }
   const multi = placeEndLine(block.position) > block.position.start.line;
-  const itemStart = lineNum === block.position.start.line;
-  if (!multi || !itemStart) {
+  if (!multi) {
     return {active: false, listMarker: '', headingMarker: ''};
   }
+  const itemStartIndex = block.position.start.line - 1;
+  const listMarkerText = listMarker(lines[itemStartIndex] ?? '');
   let headingMarker = '';
   visit(tree, node => {
     if (node.type === 'heading' && node.position?.start.line === lineNum) {
       headingMarker = `${'#'.repeat(node.depth)} `;
     }
   });
-  return {active: true, listMarker: listMarker(line), headingMarker};
+  return {active: true, listMarker: listMarkerText, headingMarker};
+}
+
+/** First line index of a multi-line list item when the jump sits on a later line of that item. */
+export function focusProseMultiLineListJumpPaintStart(tree: Root, lineIndex: number): number | undefined {
+  const lineNum = lineIndex + 1;
+  const block = listItemCoveringLine(tree, lineNum);
+  if (block?.position === undefined) {
+    return undefined;
+  }
+  const multi = placeEndLine(block.position) > block.position.start.line;
+  const itemStart = block.position.start.line - 1;
+  if (!multi || lineIndex === itemStart) {
+    return undefined;
+  }
+  return itemStart;
+}
+
+/** Last zero-based line index of the list item that covers this line. */
+export function focusProseMultiLineListItemEnd(tree: Root, lineIndex: number): number | undefined {
+  const lineNum = lineIndex + 1;
+  const block = listItemCoveringLine(tree, lineNum);
+  if (block?.position === undefined) {
+    return undefined;
+  }
+  return placeEndLine(block.position) - 1;
+}
+
+/** Last line index when the jump sits on the first line of a multi-line list item. */
+export function focusProseMultiLineListJumpPaintEnd(tree: Root, lineIndex: number): number | undefined {
+  const lineNum = lineIndex + 1;
+  const block = listItemCoveringLine(tree, lineNum);
+  if (block?.position === undefined) {
+    return undefined;
+  }
+  const multi = placeEndLine(block.position) > block.position.start.line;
+  const itemStart = block.position.start.line - 1;
+  if (!multi || lineIndex !== itemStart) {
+    return undefined;
+  }
+  return placeEndLine(block.position) - 1;
 }
 
 /** The spine lines of one document, painted as nodes in that single markdown document. */

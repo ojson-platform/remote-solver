@@ -1,7 +1,7 @@
 - The prose renders markdown
 - The prose is rendered beside the badge
 
-sdd-delta: f9ac38635ce24bd5
+sdd-delta: 60598f439f900bc1
 
 ## Source
 

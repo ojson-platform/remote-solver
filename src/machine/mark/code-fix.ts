@@ -82,6 +82,20 @@ function proofTitles(root: string, tests: readonly string[]): string[] {
   return [...named].sort();
 }
 
+function shSingleQuoted(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function substituteOneFileCommand(command: string, file: string, titleArg: string): string {
+  return command
+    .replace(/'<test-file>'/g, shSingleQuoted(file))
+    .replace(/"<test-file>"/g, shSingleQuoted(file))
+    .replace(/<test-file>/g, shSingleQuoted(file))
+    .replace(/'<titles>'/g, shSingleQuoted(titleArg))
+    .replace(/"<titles>"/g, shSingleQuoted(titleArg))
+    .replace(/<titles>/g, shSingleQuoted(titleArg));
+}
+
 function runBoundary(root: string, files: string[], titles: readonly string[]): Promise<number> {
   const command = oneFileCommand(readDesigns(root));
   const titleArg = titles.map(title => title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
@@ -92,7 +106,7 @@ function runBoundary(root: string, files: string[], titles: readonly string[]): 
         resolve(status);
         return;
       }
-      const line = command.replaceAll('<test-file>', files[index] ?? '').replaceAll('<titles>', titleArg);
+      const line = substituteOneFileCommand(command, files[index] ?? '', titleArg);
       const child = spawn('sh', ['-c', line], {cwd: root, stdio: 'inherit'});
       child.on('error', reject);
       child.on('close', code => {

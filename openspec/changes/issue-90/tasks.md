@@ -6,5 +6,5 @@ sdd-absorbed: dd6232c846e5ca15
 - [x] `focus-prose-marks` Marks stay beside the jump button
 - [x] `focus-prose-middle` A middle line stays beside the badge
 - [x] `focus-prose-mark-close` A mark that opens on the first line closes as markdown
-- [ ] `focus-prose-heading-jump` A heading mark on a later line stays in front of the jump
+- [x] `focus-prose-heading-jump` A heading mark on a later line stays in front of the jump
 - [ ] `focus-prose-written` The live page sentence is not the written prose

@@ -1538,6 +1538,50 @@ spec('focus-prose', () => {
       assert.equal(laterLines.length, 0);
     });
   });
+  requirement('A heading mark on a later line stays in front of the jump', () => {
+    scenario('A heading mark on a later line stays in front of the jump', () => {
+      const scenarioName = 'The prose renders markdown';
+      const body = [
+        '## Heading',
+        '',
+        '- intro on the first line',
+        '  ### then The prose renders markdown on',
+        '  the tail.',
+        '',
+      ].join('\n');
+      const capabilities = [
+        {
+          id: 'focus-prose',
+          rows: [{kind: 'ctx' as const, text: `#### Scenario: ${scenarioName}`}],
+        },
+      ];
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:code', body)],
+          pageIndex: 0,
+          capabilities,
+        }),
+      );
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      const jumpLine =
+        prose.match(/<p class="line">([\s\S]*?)<\/p>/g)?.find(item => item.includes('class="jump"')) ?? '';
+      assert.match(jumpLine, /-\s*###\s*then\s*<button[^>]*class="jump"/);
+      assert.match(
+        jumpLine,
+        new RegExp(
+          `<button type="button" class="jump" data-cap="focus-prose">${scenarioName}</button>`,
+        ),
+      );
+      assert.match(jumpLine, new RegExp(`${scenarioName}</button>\\s*on`));
+      assert.equal(jumpLine.includes('hd-'), false);
+      assert.equal(jumpLine.includes('<h'), false);
+      const introLine =
+        prose.match(/<p class="line">([\s\S]*?)<\/p>/g)?.find(item => item.includes('intro on the first line')) ??
+        '';
+      assert.equal(introLine.includes('-'), false);
+      assert.equal(introLine.includes('###'), false);
+    });
+  });
   requirement('A scenario name stays a button.jump', () => {
     scenario('A scenario name stays a button.jump', () => {
       const scenarioName = 'The prose renders markdown';

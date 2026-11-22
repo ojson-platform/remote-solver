@@ -957,8 +957,18 @@ function paintFocusProseLine(
     } else if (jumpMarks.listMarker !== '' && source.startsWith(jumpMarks.listMarker)) {
       lead = jumpMarks.listMarker;
       source = source.slice(jumpMarks.listMarker.length);
-    } else if (jumpMarks.listMarker !== '') {
-      lead = jumpMarks.listMarker;
+    } else {
+      if (jumpMarks.listMarker !== '') {
+        lead = jumpMarks.listMarker;
+      }
+      if (jumpMarks.headingMarker !== '') {
+        const trimmed = source.trimStart();
+        if (trimmed.startsWith(jumpMarks.headingMarker)) {
+          lead += jumpMarks.headingMarker;
+          const leading = source.slice(0, source.length - trimmed.length);
+          source = leading + trimmed.slice(jumpMarks.headingMarker.length);
+        }
+      }
     }
   }
   const paintStart = focusProseMultiLineListJumpPaintStart(proseTree, lineIndex);

@@ -576,16 +576,13 @@ export function focusProseMultiLineListJumpLine(
     return {active: false, listMarker: '', headingMarker: ''};
   }
   const itemStartIndex = block.position.start.line - 1;
-  const itemStart = lineIndex === itemStartIndex;
   const listMarkerText = listMarker(lines[itemStartIndex] ?? '');
   let headingMarker = '';
-  if (itemStart) {
-    visit(tree, node => {
-      if (node.type === 'heading' && node.position?.start.line === lineNum) {
-        headingMarker = `${'#'.repeat(node.depth)} `;
-      }
-    });
-  }
+  visit(tree, node => {
+    if (node.type === 'heading' && node.position?.start.line === lineNum) {
+      headingMarker = `${'#'.repeat(node.depth)} `;
+    }
+  });
   return {active: true, listMarker: listMarkerText, headingMarker};
 }
 

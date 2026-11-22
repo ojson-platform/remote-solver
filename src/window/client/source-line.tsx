@@ -601,6 +601,16 @@ export function focusProseMultiLineListJumpPaintStart(tree: Root, lineIndex: num
   return itemStart;
 }
 
+/** Last zero-based line index of the list item that covers this line. */
+export function focusProseMultiLineListItemEnd(tree: Root, lineIndex: number): number | undefined {
+  const lineNum = lineIndex + 1;
+  const block = listItemCoveringLine(tree, lineNum);
+  if (block?.position === undefined) {
+    return undefined;
+  }
+  return placeEndLine(block.position) - 1;
+}
+
 /** Last line index when the jump sits on the first line of a multi-line list item. */
 export function focusProseMultiLineListJumpPaintEnd(tree: Root, lineIndex: number): number | undefined {
   const lineNum = lineIndex + 1;

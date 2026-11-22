@@ -1373,9 +1373,9 @@ spec('focus-prose', () => {
       const laterLineSpanCases = [
         {
           body: ['## Heading', '', '- intro', '  **open The prose renders markdown', '  close**', ''].join('\n'),
-          open: /\*\*open/,
           rendered: /<strong>/,
-          closeAbsent: 'close',
+          rawAbsent: '**',
+          closeRawAbsent: 'close**',
         },
         {
           body: [
@@ -1386,22 +1386,22 @@ spec('focus-prose', () => {
             '  close](https://example.com/guide)',
             '',
           ].join('\n'),
-          open: /\[open/,
           rendered: /<a href=/,
-          closeAbsent: 'close]',
+          rawAbsent: '](',
+          closeRawAbsent: 'close]',
         },
         {
           body: ['## Heading', '', '- intro', '  `open The prose renders markdown', '  close`', ''].join('\n'),
-          open: /`open/,
           rendered: /<code>/,
-          closeAbsent: 'close`',
+          rawAbsent: '`',
+          closeRawAbsent: 'close`',
         },
       ] as const;
-      for (const {body, open, rendered, closeAbsent} of laterLineSpanCases as Array<{
+      for (const {body, rendered, rawAbsent, closeRawAbsent} of laterLineSpanCases as Array<{
         body: string;
-        open: RegExp;
         rendered: RegExp;
-        closeAbsent: string;
+        rawAbsent: string;
+        closeRawAbsent: string;
       }>) {
         const spanHtml = renderToStaticMarkup(
           createElement(FocusBlocks, {
@@ -1414,10 +1414,10 @@ spec('focus-prose', () => {
         const spanJump =
           spanProse.match(/<p class="line">([\s\S]*?)<\/p>/g)?.find(item => item.includes('class="jump"')) ??
           '';
-        assert.match(spanJump, open);
+        assert.match(spanJump, rendered);
         assert.match(spanJump, /<button[^>]*class="jump"/);
-        assert.equal(spanJump.match(rendered) === null, true);
-        assert.equal(spanJump.includes(closeAbsent), false);
+        assert.equal(spanJump.includes(rawAbsent), false);
+        assert.equal(spanJump.includes(closeRawAbsent), false);
       }
 
       const earlierItalicBody = [
@@ -1492,9 +1492,9 @@ spec('focus-prose', () => {
         laterLineOpenSpanProse
           .match(/<p class="line">([\s\S]*?)<\/p>/g)
           ?.find(item => item.includes('class="jump"')) ?? '';
-      assert.match(laterLineOpenSpanJump, /\*\*open/);
-      assert.equal(laterLineOpenSpanJump.includes('<strong>open'), false);
-      assert.equal(laterLineOpenSpanJump.includes('close'), false);
+      assert.match(laterLineOpenSpanJump, /<strong>[\s\S]*open/);
+      assert.equal(laterLineOpenSpanJump.includes('**'), false);
+      assert.equal(laterLineOpenSpanJump.includes('close**'), false);
 
       const jumpOnlyBody = [
         '## Heading',
@@ -1540,9 +1540,9 @@ spec('focus-prose', () => {
         openOnJumpProse
           .match(/<p class="line">([\s\S]*?)<\/p>/g)
           ?.find(item => item.includes('class="jump"')) ?? '';
-      assert.match(openOnJumpLine, /\*\*open/);
-      assert.equal(openOnJumpLine.includes('<strong>open'), false);
-      assert.equal(openOnJumpLine.includes('close'), false);
+      assert.match(openOnJumpLine, /<strong>[\s\S]*open/);
+      assert.equal(openOnJumpLine.includes('**'), false);
+      assert.equal(openOnJumpLine.includes('close**'), false);
 
       const wrappedBody = [
         '## Heading',
@@ -1725,7 +1725,8 @@ spec('focus-prose', () => {
       const laterHtml = laterLines.join('\n');
       assert.match(laterHtml, /<strong>[\s\S]*hasis<\/strong>/);
       assert.match(laterHtml, /<a href="https:\/\/example.com">docs<\/a>/);
-      assert.match(laterHtml, /<code>[\s\S]*de<\/code>/);
+      assert.match(laterHtml, /<code>[\s\S]*\s+de<\/code>/);
+      assert.equal(laterHtml.includes('`de`'), false);
       assert.equal(laterHtml.includes('**'), false);
       assert.equal(laterHtml.includes('](https://'), false);
       assert.equal(laterHtml.includes('`'), false);

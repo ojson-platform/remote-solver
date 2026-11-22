@@ -1369,6 +1369,56 @@ spec('focus-prose', () => {
       assert.match(laterJumpLine, /-\s*<strong>emphasis<\/strong>\s*<a href="https:\/\/example.com\/guide">docs<\/a>/);
       assert.equal(laterJumpLine.includes('the tail'), false);
 
+      const laterLineSpanCases = [
+        {
+          body: ['## Heading', '', '- intro', '  **open The prose renders markdown', '  close**', ''].join('\n'),
+          open: /\*\*open/,
+          rendered: /<strong>/,
+          closeAbsent: 'close',
+        },
+        {
+          body: [
+            '## Heading',
+            '',
+            '- intro',
+            '  [open The prose renders markdown',
+            '  close](https://example.com/guide)',
+            '',
+          ].join('\n'),
+          open: /\[open/,
+          rendered: /<a href=/,
+          closeAbsent: 'close]',
+        },
+        {
+          body: ['## Heading', '', '- intro', '  `open The prose renders markdown', '  close`', ''].join('\n'),
+          open: /`open/,
+          rendered: /<code>/,
+          closeAbsent: 'close`',
+        },
+      ] as const;
+      for (const {body, open, rendered, closeAbsent} of laterLineSpanCases as Array<{
+        body: string;
+        open: RegExp;
+        rendered: RegExp;
+        closeAbsent: string;
+      }>) {
+        const spanHtml = renderToStaticMarkup(
+          createElement(FocusBlocks, {
+            blocks: [focusBlock('sdd:focus:code', body)],
+            pageIndex: 0,
+            capabilities,
+          }),
+        );
+        const spanProse = spanHtml.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+        const spanJump =
+          spanProse.match(/<p class="line">([\s\S]*?)<\/p>/g)?.find(item => item.includes('class="jump"')) ??
+          '';
+        assert.match(spanJump, open);
+        assert.match(spanJump, /<button[^>]*class="jump"/);
+        assert.equal(spanJump.match(rendered) === null, true);
+        assert.equal(spanJump.includes(closeAbsent), false);
+      }
+
       const earlierLineOpenBody = [
         '## Heading',
         '',

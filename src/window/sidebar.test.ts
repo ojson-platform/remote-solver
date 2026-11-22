@@ -1454,6 +1454,43 @@ spec('focus-prose', () => {
       }
     });
   });
+  requirement('A middle line stays beside the badge', () => {
+    scenario('A middle line stays beside the badge', () => {
+      const scenarioName = 'The prose renders markdown';
+      const middleLine = '  Middle line between first and last.';
+      const body = ['- ' + scenarioName, middleLine, '  Last line of the item.', ''].join('\n');
+      const marker = 'sdd:focus:code';
+      const capabilities = [
+        {
+          id: 'focus-prose',
+          rows: [{kind: 'ctx' as const, text: `#### Scenario: ${scenarioName}`}],
+        },
+      ];
+      assert.equal(
+        focusBlockProse(marker as import('../machine/mark/marker.ts').FocusMarkerLine, body),
+        body,
+      );
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock(marker, body)],
+          pageIndex: 0,
+          capabilities,
+        }),
+      );
+      assert.match(html, /<div class="focus-body">[\s\S]*<span class="badge">sdd:focus:code<\/span>[\s\S]*<div class="focus-prose">/);
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      const lineParas = prose.match(/<p class="line">([\s\S]*?)<\/p>/g) ?? [];
+      assert.ok(lineParas.some(item => item.includes('Middle line between first and last.')));
+      const jumpLine =
+        lineParas.find(item => item.includes('class="jump"')) ?? '';
+      assert.match(
+        jumpLine,
+        new RegExp(
+          `<button type="button" class="jump" data-cap="focus-prose">${scenarioName}</button>`,
+        ),
+      );
+    });
+  });
   requirement('A scenario name stays a button.jump', () => {
     scenario('A scenario name stays a button.jump', () => {
       const scenarioName = 'The prose renders markdown';

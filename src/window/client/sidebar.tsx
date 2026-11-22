@@ -1032,7 +1032,8 @@ function paintFocusProse(
       const tailEnd = focusProseMultiLineListJumpPaintEnd(proseTree, start);
       if (
         tailEnd !== undefined &&
-        index <= tailEnd &&
+        index === tailEnd &&
+        index > start &&
         linkFocusProseParts(lines[start] ?? '', capabilities).some(part => part.kind === 'jump') &&
         !focusProseJumpHasTailOnSameLine(lines[start] ?? '', capabilities)
       ) {

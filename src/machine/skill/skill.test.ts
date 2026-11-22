@@ -264,8 +264,15 @@ test('the final review treats a broken design sentence as a return', () => {
   const design = review.indexOf('**Design.**');
   const named = review.indexOf('A test with no scenario is a finding when the design lens names it');
   assert.ok(design !== -1 && named !== -1 && design < named);
-  assert.match(review, /spans more than one source line/);
-  assert.match(review, /compare each covered line with that value/);
+  assert.match(review, /One return per design sentence/);
+  assert.match(review, /A scenario that names one example of the class, and not the class, does not state the class/);
+  assert.match(review, /widen the scenario that should state the sentence so its WHEN and THEN name the class/);
+  assert.match(review, /one weaker stand-in of the class and stays red while the observation is false/);
+  assert.match(review, /the return is that scenario's own example failing in the diff/);
+  assert.match(review, /An input the scenarios do not use is not a return/);
+  assert.match(review, /A check that stays green on the example the scenario names is not a failing example/);
+  assert.match(review, /A branch that check does not call is an input the scenarios do not use/);
+  assert.match(review, /A later return of the same sentence happens only when the scenario that now names the class is false/);
   assert.match(review, /A design sentence the diff breaks is a return/);
   assert.match(review, /When no scenario names the promise, the lens is `spec`/);
   assert.match(review, /`where` is the delta spec that should name it/);
@@ -278,7 +285,8 @@ test('the final review treats a broken design sentence as a return', () => {
   const unnamedRemark = comments.indexOf('observation no scenario names is `spec`');
   assert.ok(quoted !== -1 && unnamedRemark !== -1 && quoted < unnamedRemark);
   assert.match(comments, /A word the scenario title does not contain is that same promise/);
-  assert.match(review, /A new example of a promise a scenario already states is lens `code`/);
+  assert.match(review, /does not name the promise, and the lens is `spec`/);
+  assert.match(review, /An input the scenarios do not use is not a new code return of that promise/);
 });
 
 test('a long command keeps the command status, not a pipe', () => {

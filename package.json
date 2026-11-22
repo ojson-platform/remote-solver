@@ -26,6 +26,7 @@
     "prepare": "pnpm build",
     "prepublishOnly": "pnpm build",
     "test": "vitest --run",
+    "eval:agents": "node scripts/eval-agents.mjs",
     "test:types": "tsc --noEmit",
     "lint": "eslint .",
     "format:check": "prettier --check ."

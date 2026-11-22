@@ -56,7 +56,7 @@ A **drop** is the folded spec or the diff no longer doing that behaviour.
 
 **Code.** For each module this diff adds or changes, name its interface in a sentence. Then ask three questions. Is the interface nearly as large as the body? Does a caller have to know the implementation to use it? Does one behaviour in this diff have to be edited in more than one module? A pass-through fails the deletion test. A real seam has two adapters; a port with one adapter is indirection. Report a miss against the interface the caller must know, not against a wish for a different design. The approach and the rejected list are the design lens.
 
-**Design.** For each approach sentence that names a behaviour a caller can observe, and for each rejected behaviour, say whether the diff does that sentence. A sentence the scenarios do not pin down still counts. When the sentence names positions or a node's value, take one input the scenarios do not use whose position spans more than one source line, and compare each covered line with that value. A covered line that shows the raw source where the value does not is a return. The test that expects the raw source is the gap. A rejected behaviour the diff does is a return. Quote the design sentence as the promise.
+**Design.** For each approach sentence that names a behaviour a caller can observe, and for each rejected behaviour, say whether the diff does that sentence. A sentence the scenarios do not pin down still counts. One return per design sentence. A scenario that names one example of the class, and not the class, does not state the class. When no scenario states the class, the return is one spec gap: widen the scenario that should state the sentence so its WHEN and THEN name the class. The check of that scenario includes one weaker stand-in of the class and stays red while the observation is false. When a scenario states the class, the return is that scenario's own example failing in the diff. The gap is the class that scenario names. An input the scenarios do not use is not a return, and a test of that input is not the gap. A check that stays green on the example the scenario names is not a failing example. A branch that check does not call is an input the scenarios do not use. A later return of the same sentence happens only when the scenario that now names the class is false. A rejected behaviour the diff does is a return. Quote the design sentence as the promise.
 
 **Spec.** For each requirement this change adds or changes, name its observation in a sentence. Then ask three questions. Does every sentence force that observation, with the same values in the requirement, the WHEN, and the THEN? Can this requirement stand together with its scenario, with the other requirements, and with the diff? Would the check go red for this THEN, and stay red when a weaker stand-in is true? A THEN that only repeats the requirement is not a scenario. A test with no scenario is a finding when the design lens names it. Any other test with no scenario is not a finding. A phrase found in a document is a finding only when the observation is behaviour.
 
@@ -66,7 +66,7 @@ A **drop** is the folded spec or the diff no longer doing that behaviour.
 
 ## Return or leave
 
-**Return** when, without the fix, the issue's outcome is false, the spec contradicts itself or the diff, a design sentence is false in the diff, a test that should catch the break stays green, or a kept promise drops without the issue naming that drop. One return per gap. A green test that expects the false design sentence is part of that return.
+**Return** when, without the fix, the issue's outcome is false, the spec contradicts itself or the diff, a design sentence is false in the diff, the scenario's own example is false while its check stays green, or a kept promise drops without the issue naming that drop. One return per gap. A green test that expects the false design sentence is part of that return.
 
 **Leave** when a later change could deepen a module, tighten a sentence, or add a test, and a reader can already use the result, and no design sentence is false. A design sentence the diff breaks is a return. A leave is not posted. The next review does not promote it because it was named before. A return appears again only from the issue, the design, and the spec.
 
@@ -76,7 +76,7 @@ No returns: the review is done.
 
 State each return as four fields:
 
-- lens: `code`, `spec`, `task`, or `kept`. A new example of a promise a scenario already states is lens `code`, even when the scenario title does not contain the example. When no scenario names the promise, the lens is `spec`.
+- lens: `code`, `spec`, `task`, or `kept`. When a scenario states the class and that scenario's own example fails, the lens is `code`. A scenario that names one example of the class, and not the class, does not name the promise, and the lens is `spec`. An input the scenarios do not use is not a new code return of that promise. When no scenario names the promise, the lens is `spec`.
 - promise: the sentence that breaks, quoted from the issue, the design, the spec, the interface, the baseline, or the ADR
 - where: the file in the diff. When a scenario states the promise, `where` stays that file. When no scenario names the promise, `where` is the delta spec that should name it.
 - gap: what is wrong, in one or two sentences

@@ -1,10 +1,23 @@
 .env
 logs/
+eval-results/
 worktrees/
 .worktrees/
 node_modules/
 .spec-coverage/
 docs/superpowers/
+
+# Local tool state and imported skills. The product skill stays visible.
+.aifactory/
+.cursor/
+.superpowers/
+__pycache__/
+docs/agents/
+docs/plans/
+skills-lock.json
+*.prototype.html
+.agents/skills/*
+!.agents/skills/sdd-final-review/
 
 # Built by `pnpm build`; `prepare` and `prepublishOnly` write them.
 bin/remote-solver.mjs

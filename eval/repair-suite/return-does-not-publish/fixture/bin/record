@@ -1,0 +1,6 @@
+#!/bin/sh
+name=$(basename "$0")
+printf '%s' "$name" >> "$EVAL_TRACE"
+printf ' %s' "$@" >> "$EVAL_TRACE"
+printf ' exit=0\n' >> "$EVAL_TRACE"
+exit 0

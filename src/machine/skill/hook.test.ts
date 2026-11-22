@@ -6,7 +6,7 @@ import {test} from 'vitest';
 
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
-import {cycleHooks, stepPrompt} from './hook.ts';
+import {assembledStep, cycleHooks, stepPrompt} from './hook.ts';
 import {ACTION_SKILL} from '../decide/route.ts';
 import {hookQueues, openHookGroup, readServiceYaml} from '../../window/__tests__/window.harness.ts';
 
@@ -519,6 +519,19 @@ function proveTheStepDoesNotMergeThePullRequest(): void {
   const archive = stepSection(readAcceptStep(), 'archive');
   assert.match(archive, /does not merge the pull request/i);
 }
+
+test('the final review stands at the end of repair-suite', () => {
+  const root = path.join(import.meta.dirname, '..', '..', '..');
+  const input = {solverRoot: root, serviceRoot: root, sddHooks: undefined};
+  const suite = assembledStep({...input, skill: 'repair-suite', action: 'repair-suite'});
+  const archive = assembledStep({...input, skill: 'accept', action: 'archive'});
+  const review = suite.indexOf('make the final review of sdd flow before Publish');
+  const steps = suite.indexOf('## Steps');
+  const check = suite.indexOf('## Check');
+  assert.ok(steps !== -1 && review !== -1 && check !== -1 && steps < review && review < check);
+  assert.match(suite, /When a thread was opened, do not Publish/);
+  assert.equal(archive.includes('final review'), false);
+});
 
 spec('spec-archive', () => {
   requirement('One commit holds the fold', () => {

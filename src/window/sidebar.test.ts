@@ -1295,6 +1295,51 @@ spec('focus-prose', () => {
       assert.equal(html.split(marker).length - 1, 1);
     });
   });
+  requirement('Marks stay beside the jump button', () => {
+    scenario('Marks stay beside the jump button', () => {
+      const scenarioName = 'The prose renders markdown';
+      const body = [
+        '## Heading',
+        '',
+        '- [link](https://example.com) `code`',
+        '- ### **emphasis** then The prose renders markdown on',
+        '  the second line.',
+        '',
+      ].join('\n');
+      const capabilities = [
+        {
+          id: 'focus-prose',
+          rows: [{kind: 'ctx' as const, text: `#### Scenario: ${scenarioName}`}],
+        },
+      ];
+      const html = renderToStaticMarkup(
+        createElement(FocusBlocks, {
+          blocks: [focusBlock('sdd:focus:code', body)],
+          pageIndex: 0,
+          capabilities,
+        }),
+      );
+      const prose = html.match(/<div class="focus-prose">([\s\S]*?)<\/div>/)?.[1] ?? '';
+      const jumpLine =
+        prose.match(/<p class="line">([\s\S]*?)<\/p>/g)?.find(item => item.includes('class="jump"')) ?? '';
+      assert.match(prose, /<span[^>]*>Heading<\/span>/);
+      assert.match(prose, /<a href="https:\/\/example.com">link<\/a>/);
+      assert.match(prose, /<code>code<\/code>/);
+      assert.match(jumpLine, /-\s*###\s*<strong>emphasis<\/strong>\s*then\s*<button[^>]*class="jump"/);
+      assert.match(
+        jumpLine,
+        new RegExp(
+          `<button type="button" class="jump" data-cap="focus-prose">${scenarioName}</button>`,
+        ),
+      );
+      assert.match(jumpLine, new RegExp(`${scenarioName}</button>\\s*on`));
+      assert.equal(prose.includes('## Heading'), false);
+      assert.equal(prose.includes('**emphasis**'), false);
+      assert.equal(prose.includes('](https://'), false);
+      assert.equal(prose.includes('`code`'), false);
+      assert.equal(jumpLine.includes('- ### **emphasis**'), false);
+    });
+  });
   requirement('A scenario name stays a button.jump', () => {
     scenario('A scenario name stays a button.jump', () => {
       const scenarioName = 'The prose renders markdown';

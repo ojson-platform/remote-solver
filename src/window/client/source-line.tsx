@@ -544,6 +544,44 @@ function paintOneLine(
   return {paint: undefined, placeAt: undefined};
 }
 
+export function focusProseSourceTree(lines: readonly string[]): Root {
+  return remark().use(remarkGfm).parse(lines.join('\n')) as Root;
+}
+
+function listItemCoveringLine(tree: Root, line: number): ListItem | undefined {
+  let item: ListItem | undefined;
+  visit(tree, node => {
+    if (node.type === 'listItem' && node.position && lineInPlace(node.position, line)) {
+      item = node;
+    }
+  });
+  return item;
+}
+
+export function focusProseMultiLineListJumpLine(
+  tree: Root,
+  lineIndex: number,
+  line: string,
+): {active: boolean; listMarker: string; headingMarker: string} {
+  const lineNum = lineIndex + 1;
+  const block = listItemCoveringLine(tree, lineNum);
+  if (block?.position === undefined) {
+    return {active: false, listMarker: '', headingMarker: ''};
+  }
+  const multi = placeEndLine(block.position) > block.position.start.line;
+  const itemStart = lineNum === block.position.start.line;
+  if (!multi || !itemStart) {
+    return {active: false, listMarker: '', headingMarker: ''};
+  }
+  let headingMarker = '';
+  visit(tree, node => {
+    if (node.type === 'heading' && node.position?.start.line === lineNum) {
+      headingMarker = `${'#'.repeat(node.depth)} `;
+    }
+  });
+  return {active: true, listMarker: listMarker(line), headingMarker};
+}
+
 /** The spine lines of one document, painted as nodes in that single markdown document. */
 export function paintSourceDocument(
   texts: readonly string[],

@@ -15,7 +15,12 @@ import {BusyEdge} from './busy.tsx';
 import {ActForm, Hidden} from './forms.tsx';
 import {capIsOpen, layerHasFold, linkFocusProseParts, type FocusProsePart} from './gesture.ts';
 import {ChevronBack, ChevronForward, Cross, Pill, SendMark} from './marks.tsx';
-import {type PaintedSourceLine, paintSourceDocument} from './source-line.tsx';
+import {
+  focusProseMultiLineListJumpLine,
+  focusProseSourceTree,
+  type PaintedSourceLine,
+  paintSourceDocument,
+} from './source-line.tsx';
 
 function codeLine(line: string, places: Record<string, string>): ReactNode {
   const matched = /^(\s*)Code(\s+)(\S.*)$/.exec(line);
@@ -853,21 +858,54 @@ export function focusIndexAfterSnapshot(input: {
 
 function paintFocusProseLine(
   line: string,
+  lineIndex: number,
   painted: PaintedSourceLine | undefined,
   capabilities: readonly {id: string; rows: readonly SpecEntry[]}[],
+  proseTree: ReturnType<typeof focusProseSourceTree>,
 ): ReactNode {
   const parts = linkFocusProseParts(line, capabilities);
   if (!parts.some(part => part.kind === 'jump')) {
     return painted?.paint;
   }
-  return parts.map((part: FocusProsePart, partIndex) =>
-    part.kind === 'jump' ? (
-      <button key={partIndex} type="button" className="jump" data-cap={part.capability}>
-        {part.name}
-      </button>
-    ) : part.text === '' ? null : (
-      <Fragment key={partIndex}>{paintSourceDocument([part.text])[0]?.paint ?? part.text}</Fragment>
-    ),
+  const jumpMarks = focusProseMultiLineListJumpLine(proseTree, lineIndex, line);
+  const leadStrip = jumpMarks.active ? jumpMarks.listMarker + jumpMarks.headingMarker : '';
+  const nodes = parts.map((part: FocusProsePart, partIndex) => {
+    if (part.kind === 'jump') {
+      return (
+        <button key={partIndex} type="button" className="jump" data-cap={part.capability}>
+          {part.name}
+        </button>
+      );
+    }
+    if (part.text === '') {
+      return null;
+    }
+    let fragment = part.text;
+    if (partIndex === 0 && leadStrip !== '' && fragment.startsWith(leadStrip)) {
+      fragment = fragment.slice(leadStrip.length);
+    } else if (
+      partIndex === 0 &&
+      jumpMarks.active &&
+      jumpMarks.listMarker !== '' &&
+      fragment.startsWith(jumpMarks.listMarker)
+    ) {
+      fragment = fragment.slice(jumpMarks.listMarker.length);
+    }
+    return (
+      <Fragment key={partIndex}>
+        {paintSourceDocument([fragment], {listTextOnly: true})[0]?.paint ?? fragment}
+      </Fragment>
+    );
+  });
+  if (!jumpMarks.active) {
+    return nodes;
+  }
+  return (
+    <Fragment>
+      {jumpMarks.listMarker === '' ? null : jumpMarks.listMarker}
+      {jumpMarks.headingMarker === '' ? null : jumpMarks.headingMarker}
+      {nodes}
+    </Fragment>
   );
 }
 
@@ -876,6 +914,7 @@ function paintFocusProse(
   capabilities: readonly {id: string; rows: readonly SpecEntry[]}[],
 ): ReactNode {
   const lines = display.split('\n');
+  const proseTree = focusProseSourceTree(lines);
   const documentPaint = paintSourceDocument(lines, {listTextOnly: true});
   let gap = false;
   return lines.map((line, index) => {
@@ -894,7 +933,7 @@ function paintFocusProse(
     gap = false;
     return (
       <p className="line" key={index}>
-        {paintFocusProseLine(line, painted, capabilities)}
+        {paintFocusProseLine(line, index, painted, capabilities, proseTree)}
       </p>
     );
   });

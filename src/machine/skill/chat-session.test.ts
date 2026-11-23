@@ -32,8 +32,25 @@ spec('chat-session', () => {
         /When the step leaves no Publish, no Hand-off, and no Wait, stop/,
       );
     });
-    scenario('Wait or done stops the chat', () => {
-      assert.match(section('Act'), /`wait` or `done`: stop/);
+    scenario('A dialog does not stop the chat', () => {
+      const act = section('Act');
+      assert.match(act, /`wait` with `dialog`: do not stop/);
+      assert.match(act, /Show every entry together in the client's question dialog/);
+      assert.match(
+        act,
+        /Offer a ready answer only when that entry's text already states that whole answer/,
+      );
+      assert.match(act, /Always leave a place for the person's own words/);
+      assert.match(act, /person's words unchanged in place of `<answer>`/);
+      assert.match(act, /Do not edit the change/);
+      assert.match(act, /Then run `sdd step <key>` and follow Act/);
+      assert.match(act, /When that command exits non-zero, stop, and the message names the file and the exit/);
+      assert.match(act, /Dismissing runs nothing and stops/);
+      assert.match(act, /A later message that answers these entries is recorded the same way/);
+      assert.match(act, /A message that does not answer them shows the dialog again/);
+    });
+    scenario('A wait without a dialog stops the chat', () => {
+      assert.match(section('Act'), /`wait` without `dialog`, or `done`: stop/);
     });
     scenario('The chat follows the printed step', () => {
       const act = section('Act');
@@ -81,6 +98,14 @@ spec('chat-session', () => {
     scenario('The person is not asked to invoke the skill again', () => {
       assert.match(skill, /Do not ask for `\/sdd-flow` again/);
       assert.match(section('The next message'), /This session is still the skill/);
+    });
+    scenario('An answer to a printed dialog continues', () => {
+      const next = section('The next message');
+      assert.match(next, /answers entries of a printed `dialog`/);
+      assert.match(next, /person's words unchanged in place of `<answer>`/);
+      assert.match(next, /Do not edit the change/);
+      assert.match(next, /Then Act from a fresh `step`/);
+      assert.match(next, /does not answer those entries shows the dialog again/);
     });
   });
 });

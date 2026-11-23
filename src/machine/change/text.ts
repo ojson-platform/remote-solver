@@ -34,6 +34,28 @@ export function unchecked(text: string, heading: string): number {
   return section(text, heading).split('\n').filter(openBox).length;
 }
 
+/** Open items under the first heading `unchecked` counts, with file line numbers. */
+export function openItems(text: string, heading: string): {line: number; text: string}[] {
+  const lines = text.split(/\r?\n/);
+  const start = lines.findIndex(line => new RegExp(`^## ${heading}\\s*$`).test(line));
+  if (start < 0) {
+    return [];
+  }
+  const items: {line: number; text: string}[] = [];
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const line = lines[index] ?? '';
+    if (/^## /.test(line)) {
+      break;
+    }
+    if (!openBox(line)) {
+      continue;
+    }
+    const trimmed = line.trim();
+    items.push({line: index + 1, text: trimmed.slice('- [ ]'.length).trim()});
+  }
+  return items;
+}
+
 /** Checked and open task boxes in a whole file, not under one heading. */
 export function taskBoxes(text: string): {done: number; open: number} {
   let done = 0;

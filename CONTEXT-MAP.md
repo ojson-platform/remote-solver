@@ -12,7 +12,7 @@
 
 ## Relationships
 
-- **SDLC machine → Machine, Reviewer, Adapters, Window**: cycle, phase, gate, change, layer, marker, thread, and signal keep their names from the root glossary. A module glossary adds only words that are its own.
+- **SDLC machine → Machine, Reviewer, Adapters, Window**: cycle, phase, gate, change, layer, marker, thread, dialog, and signal keep their names from the root glossary. A module glossary adds only words that are its own.
 - **Window**: the face draws the board. It uses the phase and the gate the machine already named. The controls it draws are named in the window glossary.
 - **Machine → Adapters**: the machine reads and writes the tracker, the review, the repository, the runtime, and the OpenSpec binary through ports. Adapters implement those ports. Marker grammar stays in the machine.
 - **Reviewer → Machine**: the reviewer reads the change, the markers, and the review. The machine's phase policy does not know the reviewer.

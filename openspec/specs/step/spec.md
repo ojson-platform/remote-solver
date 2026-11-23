@@ -107,6 +107,30 @@ For `plan`, the upstream block SHALL say the issue text is the upstream of `prop
 - **WHEN** `step` runs for a plan action and the issue body is empty
 - **THEN** the printed `step` says the issue has no description and still tells the run not to search
 
+### Requirement: A wait on an open item prints a dialog
+
+When `step` waits because an item is open under `## Open questions` or `## Open decisions`, and that file is on the issue branch of the one open pull request, the printed decision SHALL carry `dialog`. Each entry SHALL be one unchecked item under that heading: its text, and a `record` that opens a thread on that line of the published file, with `<answer>` where the person's words go. A checked item SHALL be absent. An item under another heading SHALL be absent. A `wait` that is not these open items SHALL NOT carry `dialog`. When an open thread already sits on an open question, `step` SHALL print `improve-proposal` and SHALL NOT carry `dialog`.
+
+#### Scenario: Open questions are printed as a dialog
+
+- **WHEN** `step` waits on open questions in a published proposal
+- **THEN** `dialog` lists each unchecked question under `## Open questions`, the record opens a proposal thread on that line with `<answer>`, and a checked item and an item under another heading are absent
+
+#### Scenario: Open decisions are printed as a dialog
+
+- **WHEN** `step` waits on open decisions in a published design
+- **THEN** `dialog` lists each unchecked decision and the record opens a design thread on that line with `<answer>`
+
+#### Scenario: A gate wait prints no dialog
+
+- **WHEN** `step` waits on the proposal review gate
+- **THEN** the printed decision has no `dialog`
+
+#### Scenario: A thread on an open question is the proposal action
+
+- **WHEN** an open question already has an open thread
+- **THEN** `step` prints `improve-proposal` and does not carry `dialog`
+
 ### Requirement: Worktree prepares the session checkout
 
 `worktree <key>` SHALL check out branch `sdd/<key>` at `.worktrees/sdd-<key>`, creating the checkout when it is missing and reusing it when it exists, including when it is dirty.

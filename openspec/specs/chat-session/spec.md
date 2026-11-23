@@ -8,7 +8,7 @@ One chat drives one issue until the machine waits or the issue is done. The next
 
 ### Requirement: The chat runs until the machine waits
 
-A step that ends in Publish or Hand-off SHALL run `step` again. A printed `advance` SHALL run `step` again. A step that leaves no Publish, no Hand-off, and no Wait SHALL stop. A printed `wait` or `done` SHALL stop. The printed `step` SHALL carry the issue text, then the upstream block, then the action text with this service's hooks. The chat SHALL follow that text and SHALL NOT open the step file.
+A step that ends in Publish or Hand-off SHALL run `step` again. A printed `advance` SHALL run `step` again. A step that leaves no Publish, no Hand-off, and no Wait SHALL stop. A printed `wait` that carries `dialog` SHALL show those entries together in the client's question dialog and SHALL NOT stop. A ready answer SHALL be offered only when the entry's text already states that whole answer. The person's own words SHALL always be offered. Each answer SHALL be recorded by that entry's `record`, with the person's words unchanged in place of `<answer>`. The chat SHALL NOT edit the change. It SHALL then run `step` again. When that command exits non-zero, the chat SHALL stop and name the file and the exit. Dismissing SHALL record nothing and stop. A later message that answers these entries SHALL be recorded the same way. A message that does not answer them SHALL show the dialog again. A printed `wait` without `dialog`, or `done`, SHALL stop. The printed `step` SHALL carry the issue text, then the upstream block, then the action text with this service's hooks. The chat SHALL follow that text and SHALL NOT open the step file.
 
 #### Scenario: A commit or a hand-off runs step again
 
@@ -25,9 +25,17 @@ A step that ends in Publish or Hand-off SHALL run `step` again. A printed `advan
 - **WHEN** the step leaves no Publish, no Hand-off, and no Wait
 - **THEN** the chat stops
 
-#### Scenario: Wait or done stops the chat
+#### Scenario: A dialog does not stop the chat
 
-- **WHEN** `step` prints `wait` or `done`
+- **WHEN** `step` prints `wait` with `dialog`
+- **THEN** the chat shows every entry together in the client's question dialog, offers a ready answer only when the entry's text already states that whole answer, always leaves a place for the person's own words, records each answer by that entry's `record` with the person's words unchanged in place of `<answer>`, does not edit the change, and runs `step` again
+- **AND** dismissing records nothing and stops
+- **AND** a command that exits non-zero stops the chat and the message names the file and the exit
+- **AND** a later message that answers these entries is recorded the same way, and a message that does not answer them shows the dialog again
+
+#### Scenario: A wait without a dialog stops the chat
+
+- **WHEN** `step` prints `wait` without `dialog`, or `done`
 - **THEN** the chat stops
 
 #### Scenario: The chat follows the printed step
@@ -67,3 +75,8 @@ The next message SHALL continue the same issue. The skill SHALL NOT ask for `/sd
 
 - **WHEN** the chat is waiting
 - **THEN** the skill does not ask for `/sdd-flow` again, and the next message continues this session
+
+#### Scenario: An answer to a printed dialog continues
+
+- **WHEN** the next message answers entries of a printed `dialog`
+- **THEN** the chat records each answer with that entry's `record` and the person's words unchanged, does not edit the change, and runs `step`

@@ -193,11 +193,13 @@ What a step leaves, and the poll that takes it. The step text lives in `skills/s
 
 | Leaves | Takes | Scenario |
 |---|---|---|
-| Plan publishes `proposal.md` and the pull request, and a question is open | The poll stays on proposing and waits | `artifact` / Open questions hold proposing under auto-plan |
+| Plan publishes `proposal.md` and the pull request, and a question is open | The poll stays on proposing and waits. The printed wait carries `dialog` for each open question | `artifact` / Open questions hold proposing under auto-plan. `step` / Open questions are printed as a dialog |
+| The chat records an answer on an open question | The next poll runs `improve-proposal` and prints no `dialog` | `step` / A thread on an open question is the proposal action |
 | Plan publishes `proposal.md` and the pull request, and no question is open | The proposal review gate. `specifying` in the same poll only after `sdd:auto-plan` or `proposed` | `review-gate` / A published proposal is asked once |
 | Specify publishes the delta and the stamp matches the proposal revision | The spec review gate. `designing` only after `sdd:auto-spec` or `specified` | `artifact` / A matching spec stamp still opens the gate |
 | The delta exists and the spec stamp is behind the proposal revision | `improve-specs`, and does not advance | `artifact` / A stale spec stamp restarts specify before the auto advance |
-| An open decision, even when the design stamp is behind | Wait on designing, before `create-design` | `artifact` / An open decision waits before a stale design stamp |
+| An open decision, even when the design stamp is behind | Wait on designing, before `create-design`. The printed wait carries `dialog` for each open decision on the issue branch | `artifact` / An open decision waits before a stale design stamp. `step` / Open decisions are printed as a dialog |
+| The chat records an answer on an open decision | The next poll runs `improve-design` | `marker` / A design marker during a held design review improves the design |
 | Design is published, the stamp matches the specs revision, and no decision is open | The design review gate. `tasking` in the same poll only after `sdd:auto-design` or `designed` | `review-gate` / The machine opens the review once. Its scenario is the proposal ask. The design ask has no scenario of its own |
 | The tasks stamp records the revision of the specs and the design | `create-tasks` when the stamp is behind, before the advance to implementing | `artifact` / A stale tasks stamp restarts tasks before implementing |
 | A card revision that is not the live delta, or a delta scenario named on no card | `advance` from implementing to tasking before the open task | `artifact` / A differing card revision returns implementing to tasking. `artifact` / A live scenario with no card returns implementing to tasking |

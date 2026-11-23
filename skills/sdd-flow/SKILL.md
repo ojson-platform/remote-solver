@@ -34,7 +34,8 @@ The issue's service directory, when set, names where the specs live. A value tha
 
 - `agent`: run `sdd worktree <key>`. The printed path is the cwd for every edit and commit in this issue. The printed decision's `step` carries the issue text, then the upstream block, then the action text with this service's hooks. Follow that text. Do not open the step file. The printed decision's `queue` and `base` are the queue label and the base branch for the issue being driven in that step. A new child issue uses the first queue under `sdd.queues` in `openspec/config.yaml`, not the printed `queue`. When the step ends in Publish or Hand-off, run `sdd step <key>` again and follow Act. When the step ends in Wait, run `sdd step <key>` once more and follow Act. When the step leaves no Publish, no Hand-off, and no Wait, stop.
 - `advance`: run `sdd step <key>` again and follow Act.
-- `wait` or `done`: stop.
+- `wait` with `dialog`: do not stop. Show every entry together in the client's question dialog. Offer a ready answer only when that entry's text already states that whole answer. Always leave a place for the person's own words. The person may answer every entry, some of them, or dismiss. For each answer, run that entry's `record` with the person's words unchanged in place of `<answer>`. Do not edit the change. Then run `sdd step <key>` and follow Act. When that command exits non-zero, stop, and the message names the file and the exit. Dismissing runs nothing and stops. A later message that answers these entries is recorded the same way. A message that does not answer them shows the dialog again.
+- `wait` without `dialog`, or `done`: stop.
 
 ## Stop
 
@@ -55,6 +56,8 @@ Agreement after a stop with no signal: run `sdd step <key>` again and follow Act
 A request to change the artifact: edit it in the worktree, publish (`CONTEXT.md` § Publish), run `sdd unwait <key>`, then Act from a fresh `step`.
 
 `/sdd-flow` or `/sdd-flow <key>` while waiting runs Start again. The poll reads review threads. It does not accept a gate.
+
+A message that answers entries of a printed `dialog`: run each answered entry's `record` with the person's words unchanged in place of `<answer>`. Do not edit the change. Then Act from a fresh `step`. A message that does not answer those entries shows the dialog again.
 
 Any other message while waiting: say what is still waited for.
 

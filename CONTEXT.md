@@ -48,6 +48,10 @@ _Avoid_: Ledger, plaque, gap list
 One open review conversation on the pull request, with the handles a step replies and resolves with.
 _Avoid_: Comment (that is one message inside it)
 
+**Dialog**:
+Questions a wait asks in the chat. The chat records each answer and runs the step again. A wait with no questions stops.
+_Avoid_: Form, questionnaire
+
 **Signal**:
 How a step run ends: Publish, Wait, or Hand-off. A run with none is idle.
 _Avoid_: Result, exit

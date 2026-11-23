@@ -12,9 +12,18 @@ import {machine} from '../../adapters/compose.ts';
 import {memoryPorts} from '../../adapters/tracker/github.ts';
 import {runSdd} from '../../sdd.ts';
 import {planFiles, planIssue} from '../__tests__/harness.ts';
+import {changeDir} from '../change/naming.ts';
+import {itemDialog} from './dialog.ts';
 import {pauseAdvance} from './step.ts';
 import type {Decision} from '../decide/policy.ts';
-import type {FileSource} from '../port.ts';
+import type {FileSource, ThreadRecord} from '../port.ts';
+
+type Printed = Decision & {
+  step?: string;
+  queue?: string;
+  base?: string;
+  dialog?: {text: string; record: string}[];
+};
 
 function proposalFiles(key: string): FileSource {
   const proposal = `openspec/changes/issue-${key}/proposal.md`;
@@ -40,11 +49,13 @@ async function runStep(
   queues: {name: string}[] = [{name: 'Sandcastle'}],
   base?: string,
   root = process.cwd(),
-): Promise<{printed: Decision & {step?: string}; labels: (key: string) => Promise<string[]>; calls: string[]}> {
+  threads: Record<string, ThreadRecord[]> = {},
+): Promise<{printed: Printed; labels: (key: string) => Promise<string[]>; calls: string[]}> {
   const {tracker, review, calls} = memoryPorts({
     issues,
     pulls,
     checks: {'9': {checks: 'green'}},
+    threadList: threads,
   });
   const box = machine(root, {
     config: base === undefined ? {queues} : {queues, base},
@@ -80,7 +91,7 @@ async function runStep(
     console.log = logged;
   }
   return {
-    printed: JSON.parse(lines.at(-1) ?? '{}') as Decision,
+    printed: JSON.parse(lines.at(-1) ?? '{}') as Printed,
     labels: key => tracker.labels(key),
     calls,
   };
@@ -376,6 +387,110 @@ spec('step', () => {
       assert.equal(step.includes('The distance reaches the support meta.'), false);
     });
   });
+
+  requirement('A wait on an open item prints a dialog', () => {
+    const pull = {'1': [{id: '9', title: '#1: title', state: 'OPEN'}]};
+    const proposal = path.join(changeDir('1'), 'proposal.md');
+    const design = path.join(changeDir('1'), 'design.md');
+    const questions = [
+      '# Proposal',
+      '',
+      '## Open questions',
+      '- [x] closed',
+      '- [ ] Which name',
+      '- [ ] Which type',
+      '',
+      '## Scope',
+      '- [ ] not a question',
+      '',
+    ].join('\n');
+    const decisions = ['# Design', '', '## Open decisions', '- [x] closed', '- [ ] Which store', ''].join(
+      '\n',
+    );
+
+    function branch(texts: Record<string, string>): (key: string) => FileSource {
+      return () => ({
+        exists: rel => Object.prototype.hasOwnProperty.call(texts, rel),
+        read: rel => texts[rel] ?? '',
+        list: () => Object.keys(texts),
+      });
+    }
+
+    function record(file: string, line: number, layer: string, phase: string): string {
+      return `sdd thread open 9 ${file} ${line} 'sdd:layer=${layer} → ${phase} <answer>'`;
+    }
+
+    scenario('Open questions are printed as a dialog', async () => {
+      const {printed} = await runStep(
+        ['step', '1'],
+        [planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposing'])],
+        branch({[proposal]: questions}),
+        pull,
+      );
+      assert.equal(printed.kind, 'wait');
+      assert.deepEqual(printed.dialog, [
+        {text: 'Which name', record: record(proposal, 5, 'proposal', 'proposing')},
+        {text: 'Which type', record: record(proposal, 6, 'proposal', 'proposing')},
+      ]);
+    });
+
+    scenario('Open decisions are printed as a dialog', async () => {
+      const {printed} = await runStep(
+        ['step', '1'],
+        [planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:designing'])],
+        branch({[proposal]: '# Proposal\n', [design]: decisions}),
+        pull,
+      );
+      assert.equal(printed.kind, 'wait');
+      assert.deepEqual(printed.dialog, [
+        {text: 'Which store', record: record(design, 5, 'design', 'designing')},
+      ]);
+    });
+
+    scenario('A gate wait prints no dialog', async () => {
+      const {printed} = await runStep(
+        ['step', '1'],
+        [planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposing'])],
+        branch({[proposal]: '# Proposal\n\n## Problem\n\nThe distance.\n'}),
+        pull,
+      );
+      assert.equal(printed.kind, 'wait');
+      if (printed.kind === 'wait') {
+        assert.deepEqual(printed.gate, {artifact: 'proposal', from: 'proposing', to: 'proposed'});
+      }
+      assert.equal(printed.dialog, undefined);
+    });
+
+    scenario('A thread on an open question is the proposal action', async () => {
+      const {printed} = await runStep(
+        ['step', '1'],
+        [planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposing'])],
+        branch({[proposal]: questions}),
+        pull,
+        [{name: 'Sandcastle'}],
+        undefined,
+        process.cwd(),
+        {
+          '9': [
+            {
+              id: 'T1',
+              comment: 'C1',
+              path: proposal,
+              line: 5,
+              resolved: false,
+              body: 'use the short name',
+              comments: ['use the short name'],
+            },
+          ],
+        },
+      );
+      assert.equal(printed.kind, 'agent');
+      if (printed.kind === 'agent') {
+        assert.equal(printed.action, 'improve-proposal');
+      }
+      assert.equal(printed.dialog, undefined);
+    });
+  });
 });
 
 spec('hook', () => {
@@ -413,6 +528,31 @@ spec('hook', () => {
       }
     });
   });
+});
+
+test('an open thread is left out of the dialog and a resolved one stays', () => {
+  const file = 'openspec/changes/issue-1/proposal.md';
+  const text = ['## Open questions', '- [ ] Which name', '- [ ] Which type', ''].join('\n');
+  assert.deepEqual(
+    itemDialog({
+      pull: '9',
+      file,
+      text,
+      heading: 'Open questions',
+      layer: 'proposal',
+      phase: 'proposing',
+      threads: [
+        {resolved: false, path: file, line: 2},
+        {resolved: true, path: file, line: 3},
+      ],
+    }),
+    [
+      {
+        text: 'Which type',
+        record: `sdd thread open 9 ${file} 3 'sdd:layer=proposal → proposing <answer>'`,
+      },
+    ],
+  );
 });
 
 test('a return advance pauses the walk and a forward move does not', () => {

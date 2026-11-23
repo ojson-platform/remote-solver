@@ -15,6 +15,7 @@ import {
   publishChoice,
   type Decision,
 } from './machine/decide/policy.ts';
+import {waitDialog} from './machine/flow/dialog.ts';
 import {applyLabels, pick, resolveCycle, serviceWait} from './machine/flow/flow.ts';
 import {reportFoldFailure} from './machine/flow/step.ts';
 import {proveCodeFix} from './machine/mark/code-fix.ts';
@@ -357,6 +358,7 @@ async function step(box: Machine, rest: string[]): Promise<void> {
 /** `queue` is the queue of the issue being driven. The prompt placeholder `QUEUE` is the first configured queue, the one a new child issue is filed in. */
 async function printStep(decision: Decision, box: Machine, labels: readonly string[]): Promise<void> {
   const step = decision.kind === 'agent' ? await agentStep(box, decision) : '';
+  const dialog = decision.kind === 'wait' ? await waitDialog(box, decision) : [];
   console.log(
     JSON.stringify(
       {
@@ -364,6 +366,7 @@ async function printStep(decision: Decision, box: Machine, labels: readonly stri
         queue: queueOf(labels, box.config.queues)?.name ?? box.config.queues[0].name,
         base: box.config.base,
         ...(step === '' ? {} : {step}),
+        ...(dialog.length === 0 ? {} : {dialog}),
       },
       null,
       2,

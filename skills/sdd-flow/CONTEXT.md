@@ -131,7 +131,7 @@ A skill fixes the threads of its own layer: `threads <pull> --layer <layer>`. Wh
 
 ### Onto the base
 
-Run `sdd rebase <issue> <base>` before the rest of Fix thread. `<base>` is the base the step printed. When the branch already contains that base, the command changes nothing. When the command prints conflicted paths, edit only those paths, publish without focus, and stop. The phase stays. When the command prints no path, continue the thread. The same command runs when the pull request conflicts with its base and no person asked. When `sdd rebase` or `sdd publish` exits non-zero, stop and name the exit. Do not rebase again by hand.
+Run `sdd rebase <issue> <base>` before the rest of Fix thread. `<base>` is the base the step printed. When the branch already contains that base, the command changes nothing. When the command prints conflicted paths, edit only those paths, publish without focus, and stop. The phase stays. When the command prints no path, continue the thread. Do not open the program. The same command runs when the pull request conflicts with its base and no person asked. When `sdd rebase` or `sdd publish` exits non-zero, stop and name the exit. Do not rebase again by hand.
 
 ### Hand-off
 

@@ -217,6 +217,7 @@ test('an instruction is a thread of this phase, and a note asks for nothing', ()
   assert.match(context, /### Onto the base/);
   assert.match(context, /When the branch already contains that base, the command changes nothing/);
   assert.match(context, /When the command prints no path, continue the thread/);
+  assert.match(context, /Do not open the program/);
   assert.match(context, /Do not rebase again by hand/);
   assert.match(comments, /reply with one line: `sdd:layer=<layer> → <phase>`/);
   assert.doesNotMatch(comments, /reply with one line: `sdd:layer=<layer> → <phase> <cause>`/);

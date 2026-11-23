@@ -15,7 +15,7 @@ One chat, one issue, until `step` prints `done`. `/sdd-flow <key>` starts it. Wo
 
 Do not run `remote-solver issue`. Do not choose a skill from the phase. `step` names it.
 
-Run this from the service root, the directory whose `openspec/config.yaml` names the queue. This skill does not add cycle membership. If `scripts/adapters/host.md` exists, membership is what that note says. Otherwise the issue already carries `sdd:cycle` and the queue label.
+Run this from the service root, the directory whose `openspec/config.yaml` names the queue. This skill does not add cycle membership. If `scripts/adapters/host.md` exists, read it before the first command. Membership is what that note says. A chat command named there replaces `sdd` in this skill. Otherwise the issue already carries `sdd:cycle` and the queue label.
 
 An issue with no assignee is claimed by the caller inside `step`. An issue assigned to someone else waits with `assigned to <login>`. Agreement to take it runs `sdd assign <key>`, then Start again.
 

@@ -659,6 +659,19 @@ async function thread(box: Machine, rest: string[]): Promise<void> {
   await verb(box, rest);
 }
 
+/** The line GitHub refused is not on the pushed head. Any other open failure keeps its own message. */
+export function handoffAnchorRefusal(error: unknown, file: string, line: number): string | undefined {
+  const stderr =
+    typeof error === 'object' && error !== null && 'stderr' in error && typeof error.stderr === 'string'
+      ? error.stderr
+      : '';
+  const message = error instanceof Error ? error.message : String(error);
+  if (!/HTTP 422|Validation Failed/.test(`${message}\n${stderr}`)) {
+    return undefined;
+  }
+  return `the line is not on the pushed head: ${file}:${line}. The step stops.`;
+}
+
 async function threadOpen(box: Machine, rest: string[]): Promise<void> {
   const pull = need(rest[1], usage);
   const file = need(rest[2], usage);
@@ -667,7 +680,15 @@ async function threadOpen(box: Machine, rest: string[]): Promise<void> {
   if (!Number.isInteger(line) || !body) {
     fail(usage);
   }
-  await box.review.openThread(pull, {commit: await box.vcs.head(), path: file, line, body});
+  try {
+    await box.review.openThread(pull, {commit: await box.vcs.head(), path: file, line, body});
+  } catch (error) {
+    const refusal = handoffAnchorRefusal(error, file, line);
+    if (refusal) {
+      fail(refusal);
+    }
+    throw error;
+  }
 }
 
 async function threadReply(box: Machine, rest: string[]): Promise<void> {

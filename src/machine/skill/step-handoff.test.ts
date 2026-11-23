@@ -174,6 +174,11 @@ spec('step-handoff', () => {
       assert.match(body, /A second red layer command: Hand-off to `code`/);
       assert.match(body, /Do not run it a third time/);
     });
+    scenario('A hand-off whose line is not on the pushed head waits', () => {
+      const body = step('repair-suite.md');
+      assert.match(body, /thread open that exits non-zero: Wait/);
+      assert.match(body, /Do not open a thread on another file/);
+    });
     scenario('A slice does not repair a coverage gap', () => {
       const body = step('implement.md');
       assert.match(body, /A coverage gap outside this task is not a success and is not fixed in this step/);

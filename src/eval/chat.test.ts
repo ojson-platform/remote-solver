@@ -13,6 +13,7 @@ import {dialogAnswerIsAThread} from '../../eval/chat/dialog-answer-is-a-thread/s
 import {gateAgreementAccepts} from '../../eval/chat/gate-agreement-accepts/score.ts';
 import {invocationDoesNotAccept} from '../../eval/chat/invocation-does-not-accept/score.ts';
 import {rebaseIsCarriedOut} from '../../eval/chat/rebase-is-carried-out/score.ts';
+import {skipRunsStep} from '../../eval/chat/skip-runs-step/score.ts';
 import {whereIsTheCycle} from '../../eval/chat/where-is-the-cycle/score.ts';
 import {skillMode} from '../machine/skill/mode.ts';
 
@@ -136,6 +137,38 @@ test("a thread without the person's words misses", () => {
     ),
     'fail',
   );
+});
+
+test('a second thread open misses', () => {
+  assert.equal(dialogAnswerIsAThread(attempt([opened, opened, 'sdd step 1 exit=0'])), 'fail');
+});
+
+test("the person's words inside a longer answer miss", () => {
+  assert.equal(
+    dialogAnswerIsAThread(
+      attempt([
+        `sdd thread open 9 ${proposal} 5 'sdd:layer=proposal → proposing The name is distance today' exit=0`,
+        'sdd step 1 exit=0',
+      ]),
+    ),
+    'fail',
+  );
+});
+
+test('skip runs step and records nothing', () => {
+  assert.equal(skipRunsStep(attempt(['sdd step 1 exit=0'])), 'pass');
+});
+
+test('an empty trace is not a skip', () => {
+  assert.equal(skipRunsStep(attempt([])), 'fail');
+});
+
+test('recording a skip misses', () => {
+  assert.equal(skipRunsStep(attempt([opened, 'sdd step 1 exit=0'])), 'fail');
+});
+
+test('editing the change on a skip is forbidden', () => {
+  assert.equal(skipRunsStep(attempt(['sdd step 1 exit=0'], [proposal])), 'forbidden');
 });
 
 test('agreement on a gate accepts and then runs step', () => {

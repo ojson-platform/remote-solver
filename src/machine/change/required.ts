@@ -1,5 +1,7 @@
 /** The fold of a baseline and its delta. The vitest reporter is not this file. */
 
+import {DELTA_SECTION} from './delta.ts';
+
 export type ScenarioTriple = {
   spec: string;
   requirement: string;
@@ -56,7 +58,7 @@ function sectionBody(markdown: string, heading: string): string[] | undefined {
 }
 
 function renamesIn(markdown: string): Array<[string, string]> {
-  const body = sectionBody(markdown, '## RENAMED Requirements');
+  const body = sectionBody(markdown, DELTA_SECTION.renamed);
   if (!body) {
     return [];
   }
@@ -78,7 +80,7 @@ function renamesIn(markdown: string): Array<[string, string]> {
 }
 
 function removedNames(markdown: string): string[] {
-  const body = sectionBody(markdown, '## REMOVED Requirements');
+  const body = sectionBody(markdown, DELTA_SECTION.removed);
   if (!body) {
     return [];
   }
@@ -104,13 +106,13 @@ export function foldTriples(
   if (removed.size > 0) {
     next = next.filter(triple => !(triple.spec === spec && removed.has(triple.requirement)));
   }
-  const modified = scenariosUnder(delta, '## MODIFIED Requirements', spec);
+  const modified = scenariosUnder(delta, DELTA_SECTION.modified, spec);
   const replaced = new Set(modified.map(triple => triple.requirement));
   if (replaced.size > 0) {
     next = next.filter(triple => !(triple.spec === spec && replaced.has(triple.requirement)));
     next.push(...modified);
   }
-  next.push(...scenariosUnder(delta, '## ADDED Requirements', spec));
+  next.push(...scenariosUnder(delta, DELTA_SECTION.added, spec));
   return next;
 }
 
@@ -125,8 +127,8 @@ function scenariosUnder(markdown: string, heading: string, spec: string): Scenar
 /** Triples the delta added or replaced. A kept baseline scenario is not among them. */
 export function deltaOwnedTriples(delta: string, spec: string): ScenarioTriple[] {
   return [
-    ...scenariosUnder(delta, '## ADDED Requirements', spec),
-    ...scenariosUnder(delta, '## MODIFIED Requirements', spec),
+    ...scenariosUnder(delta, DELTA_SECTION.added, spec),
+    ...scenariosUnder(delta, DELTA_SECTION.modified, spec),
   ];
 }
 

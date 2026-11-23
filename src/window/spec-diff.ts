@@ -1,3 +1,5 @@
+import {DELTA_SECTION} from '../machine/change/delta.ts';
+
 export type SpecBadge = 'new' | 'changed' | 'removed';
 
 export type SpecAnchor = {path: string; line: number; side: 'right' | 'left'};
@@ -82,10 +84,10 @@ function sectionLines(delta: string): Record<SectionName, SourceLine[]> {
 }
 
 function sectionName(line: string): SectionName | null {
-  if (line === '## ADDED Requirements') return 'ADDED';
-  if (line === '## MODIFIED Requirements') return 'MODIFIED';
-  if (line === '## REMOVED Requirements') return 'REMOVED';
-  if (line === '## RENAMED Requirements') return 'RENAMED';
+  if (line === DELTA_SECTION.added) return 'ADDED';
+  if (line === DELTA_SECTION.modified) return 'MODIFIED';
+  if (line === DELTA_SECTION.removed) return 'REMOVED';
+  if (line === DELTA_SECTION.renamed) return 'RENAMED';
   return null;
 }
 

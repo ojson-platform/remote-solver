@@ -1,3 +1,4 @@
+import {execFileSync} from 'node:child_process';
 import {cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
@@ -8,7 +9,7 @@ import {runAgent} from '../adapters/runtime/agent.ts';
 import {assembledStep} from '../machine/skill/hook.ts';
 import {modelFor, skillMode} from '../machine/skill/mode.ts';
 
-import {cases, commandExit, familyNames, requestedFamily, type EvalCase} from './cases.ts';
+import {cases, commandExit, familyNames, requestedFamily, requestedId, type EvalCase} from './cases.ts';
 import {aggregate, type Attempt} from './score.ts';
 
 const attempts = 3;
@@ -24,7 +25,10 @@ export async function main(argv: string[], root: string): Promise<number> {
     process.stdout.write(`${familyNames.join('\n')}\n`);
     return 2;
   }
-  const selected = family === 'all' ? cases : cases.filter(item => item.family === family);
+  const id = requestedId(argv);
+  const selected = (family === 'all' ? cases : cases.filter(item => item.family === family)).filter(
+    item => id === undefined || item.id === id,
+  );
   if (selected.length === 0) {
     process.stdout.write(`${family} has no cases\n`);
     return 2;
@@ -81,6 +85,26 @@ function casePrompt(item: EvalCase, root: string): string {
   });
 }
 
+/** A clone has the fixture files and no nested git dir. The agent diffs against master. */
+function ensureFixtureGit(dir: string): void {
+  if (existsSync(path.join(dir, '.git'))) {
+    return;
+  }
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_NAME: 'eval',
+    GIT_AUTHOR_EMAIL: 'eval@example.com',
+    GIT_COMMITTER_NAME: 'eval',
+    GIT_COMMITTER_EMAIL: 'eval@example.com',
+  };
+  const git = (...args: string[]) => execFileSync('git', args, {cwd: dir, env});
+  git('init', '-b', 'master');
+  git('commit', '--allow-empty', '-m', 'base');
+  git('checkout', '-b', 'sdd/1');
+  git('add', '-A');
+  git('commit', '-m', 'change');
+}
+
 async function oneAttempt(item: EvalCase, root: string, prompt: string, index: number): Promise<Attempt> {
   const source = path.join(root, 'eval', item.family, item.id, 'fixture');
   const cwd = mkdtempSync(path.join(tmpdir(), `eval-${item.family}-${item.id}-`));
@@ -89,6 +113,7 @@ async function oneAttempt(item: EvalCase, root: string, prompt: string, index: n
     if (existsSync(source)) {
       cpSync(source, cwd, {recursive: true});
     }
+    ensureFixtureGit(cwd);
     if (item.family === 'repair-suite') {
       const skillDir = path.join(root, '.agents/skills/sdd-final-review');
       if (existsSync(skillDir)) {

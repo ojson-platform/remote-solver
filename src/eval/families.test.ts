@@ -14,6 +14,7 @@ import {cardFileIsEditedOnce} from '../../eval/repair-suite/card-file-is-edited-
 import {foreignFileIsHandoff} from '../../eval/repair-suite/foreign-file-is-handoff/score.ts';
 import {greenSuitePublishes} from '../../eval/repair-suite/green-suite-publishes/score.ts';
 import {nearIsNotAHandoff} from '../../eval/repair-suite/near-is-not-a-handoff/score.ts';
+import {unusedLineIsNotAReturn} from '../../eval/review/unused-line-is-not-a-return/score.ts';
 
 import type {Attempt} from './score.ts';
 
@@ -146,6 +147,26 @@ test('a card file is edited once', () => {
   assert.equal(
     cardFileIsEditedOnce(attempt(['layer exit=1', 'layer exit=0', 'sdd publish 1 title exit=0'], ['src/paint.ts'])),
     'pass',
+  );
+});
+
+test('an unnamed class is one spec gap', () => {
+  assert.equal(
+    unusedLineIsNotAReturn(
+      attempt([], [], {}, 'lens: spec\npromise: A covered line shows the node value.\nwhere: openspec/changes/issue-1/specs/paint/spec.md\ngap: name the class'),
+    ),
+    'pass',
+  );
+});
+
+test('silence on an unnamed class misses', () => {
+  assert.equal(unusedLineIsNotAReturn(attempt([], [], {}, 'Возвратов нет.')), 'fail');
+});
+
+test('a code return of the unused line is forbidden', () => {
+  assert.equal(
+    unusedLineIsNotAReturn(attempt([], [], {}, 'lens: code\npromise: A covered line shows the node value.\nwhere: src/paint.ts\ngap: the indent')),
+    'forbidden',
   );
 });
 

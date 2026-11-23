@@ -68,6 +68,18 @@ test('a specimen return names the class and a weaker stand-in', () => {
   assert.equal(specimenIsSpec(attempt(text)), 'pass');
 });
 
+test('a field glued after a period and a dash is still a field', () => {
+  const text = [
+    'The review is done.- lens: spec',
+    'promise: «A covered line shows the node value.»',
+    'where: openspec/changes/issue-1/specs/paint/spec.md',
+    'gap: The scenario names one example.',
+  ].join('\n');
+  const parsed = findings(text);
+  assert.equal(parsed?.[0]?.lens, 'spec');
+  assert.equal(parsed?.[0]?.where, specFile);
+});
+
 test('a field glued to the previous sentence is still a field', () => {
   const text = [
     'The review is done.lens: spec',

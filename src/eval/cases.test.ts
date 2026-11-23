@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
-import {commandExit, familyNames, requestedFamily} from './cases.ts';
+import {commandExit, familyNames, requestedFamily, requestedId} from './cases.ts';
 
 test('a missing family names the families and is not a pass', () => {
   assert.equal(requestedFamily([]), undefined);
@@ -11,6 +11,8 @@ test('a missing family names the families and is not a pass', () => {
 test('the family is the first bare argument', () => {
   assert.equal(requestedFamily(['--', 'review']), 'review');
   assert.equal(requestedFamily(['review']), 'review');
+  assert.equal(requestedId(['review', 'unused-line-is-not-a-return']), 'unused-line-is-not-a-return');
+  assert.equal(requestedId(['review']), undefined);
 });
 
 test('one failed case fails the command', () => {

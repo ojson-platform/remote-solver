@@ -32,7 +32,7 @@ function fieldParts(line: string): string[] {
   const table = tableRow.exec(text);
   const body = table ? `${table[1]}: ${table[2]}` : text;
   return body
-    .split(/(?<=\.)(?=(?:lens|promise|where|gap):)/)
+    .split(/(?<=\.)(?=\s*[-*]?\s*(?:lens|promise|where|gap):)/)
     .map(part => part.trim())
     .filter(part => part !== '');
 }

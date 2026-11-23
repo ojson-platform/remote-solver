@@ -15,6 +15,7 @@ import {returnDoesNotPublish} from '../../eval/repair-suite/return-does-not-publ
 import {classNamedNoReturn} from '../../eval/review/class-named-no-return/score.ts';
 import {ownExampleFailsCode} from '../../eval/review/own-example-fails-code/score.ts';
 import {specimenIsSpec} from '../../eval/review/specimen-is-spec/score.ts';
+import {unusedLineIsNotAReturn} from '../../eval/review/unused-line-is-not-a-return/score.ts';
 
 import type {Attempt, AttemptVerdict} from './score.ts';
 
@@ -34,6 +35,7 @@ export type EvalCase = {
 export const cases: EvalCase[] = [
   {id: 'specimen-is-spec', family: 'review', prompt: 'skill', skill: 'sdd-final-review', action: 'review', score: specimenIsSpec},
   {id: 'class-named-no-return', family: 'review', prompt: 'skill', skill: 'sdd-final-review', action: 'review', score: classNamedNoReturn},
+  {id: 'unused-line-is-not-a-return', family: 'review', prompt: 'skill', skill: 'sdd-final-review', action: 'review', score: unusedLineIsNotAReturn},
   {id: 'own-example-fails-code', family: 'review', prompt: 'skill', skill: 'sdd-final-review', action: 'review', score: ownExampleFailsCode},
   {id: 'example-stays-that-scenario', family: 'fix', prompt: 'assembled-step', skill: 'fix', action: 'fix', score: exampleStaysThatScenario},
   {id: 'no-scenario-hands-to-spec', family: 'fix', prompt: 'assembled-step', skill: 'fix', action: 'fix', score: noScenarioHandsToSpec},
@@ -51,9 +53,16 @@ export const cases: EvalCase[] = [
   {id: 'return-does-not-publish', family: 'repair-suite', prompt: 'assembled-step', skill: 'repair-suite', action: 'repair-suite', score: returnDoesNotPublish},
 ];
 
+function bareArgs(argv: string[]): string[] {
+  return argv.filter(arg => arg !== '--' && !arg.startsWith('-'));
+}
+
 export function requestedFamily(argv: string[]): string | undefined {
-  const args = argv.filter(arg => arg !== '--');
-  return args.find(arg => !arg.startsWith('-'));
+  return bareArgs(argv)[0];
+}
+
+export function requestedId(argv: string[]): string | undefined {
+  return bareArgs(argv)[1];
 }
 
 export function commandExit(verdicts: Array<'pass' | 'fail' | 'inconclusive'>): number {

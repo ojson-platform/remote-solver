@@ -466,6 +466,38 @@ spec('marker', () => {
       });
     });
 
+    scenario('A code marker on the design boundary stays on the suite', () => {
+      const boundaryFile = 'openspec/changes/issue-1/design.md';
+      const text = ['## Verification boundary', '', 'layer: `pnpm test`'].join('\n');
+      const thread = {
+        resolved: false,
+        path: boundaryFile,
+        line: 3,
+        body: 'sdd:layer=code → implementing',
+      };
+      const review = reviewOf([thread], [], rel => (rel === boundaryFile ? text : undefined));
+      assert.deepEqual(review.layers, []);
+      const decision = decide(issue(1, ['sdd:implementing']), [], [pull(9, {review})], ready);
+      assert.equal(action(decision), 'repair-suite');
+    });
+
+    scenario('A code marker on a source file fixes implementation', () => {
+      const review = reviewOf(
+        [
+          {
+            resolved: false,
+            path: 'src/window/sidebar.test.ts',
+            line: 1369,
+            body: 'sdd:layer=code → implementing',
+          },
+        ],
+        [],
+      );
+      assert.deepEqual(review.layers, ['code']);
+      const decision = decide(issue(1, ['sdd:implementing']), [], [pull(9, {review})], ready);
+      assert.equal(action(decision), 'fix-implementation');
+    });
+
     scenario('A checked decision keeps the reply\'s layer', () => {
       const checked = design.replace('- [ ] which write', '- [x] which write');
       const review = reviewOf(

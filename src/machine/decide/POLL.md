@@ -36,6 +36,8 @@ Scenarios: `phase` / A cycle with no phase enters proposing. `phase` / Cancelled
 
 A thread on an unchecked Open decisions line is `design`. A thread on an unchecked Open questions line is `proposal`. The reply's marker does not replace that, except `fixed`. The thread is not unmarked. `marker` / An unmarked reply on an open decision is design. `marker` / A spec marker on an open decision stays on design.
 
+A `code` marker on `proposal.md`, `design.md`, `tasks.md`, or a delta spec does not start `fix-implementation`. `marker` / A code marker on the design boundary stays on the suite.
+
 A layer marker only on the pull-request conversation does not roll the phase back and does not start that layer's action. `marker` / A conversation code marker during implementing leaves the next task. `marker` / A conversation code marker on accepting does not move to implementing.
 
 `out`, `note`, `fixed`, and `begin` do not move the phase. `marker` / Out does not move the phase.
@@ -222,6 +224,7 @@ What a step leaves, and the poll that takes it. The step text lives in `skills/s
 | The tasks step cuts the delta | One card per slice. Scenarios of one observation share it. Each scenario sits in one slice | `step-handoff` / Tasks publishes one card per slice |
 | Specify finds the capability list, the problem, the scope, or the last requirement of a baseline wrong | Hand-off to `proposal`. The spec files stay. The next poll reads that marker | `step-handoff` / Specify hands the capability list to proposal |
 | A failing log's THEN names the behavior | Hand-off to `code`. The verify step writes no files. While the checks stay red the next poll moves to that phase | `step-handoff` / A failure that names behavior hands off to code. `verifying` / Red checks with a code marker return to implementing |
+| `thread open` for a Hand-off exits non-zero | Wait (§ Wait) naming the file and the exit. No thread on another path. The next poll does not start that layer's action | `marker` / A hand-off whose line is not on the pushed head waits |
 | Validate names a spec file | Hand-off to `spec` | `step-handoff` / A validate failure that names a spec file hands off to spec |
 | A coverage line `missing`, `near`, or `outside` names a delta scenario | Hand-off to `code` on that spec's test. The next poll writes the test. This is not a Wait | `step-handoff` / A missing scenario test returns to code |
 | A failure has no test line | `sdd:note` and Wait | `step-handoff` / No test line is a note and a wait |

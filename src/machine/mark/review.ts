@@ -162,6 +162,23 @@ export function openItemLayer(
   return (lines[line - 1] ?? '').trim().startsWith('- [ ]') ? kind : null;
 }
 
+/** A code marker on a change document is not the code layer. An open item still pins its own layer. */
+export function codeOnChangeDoc(file: string, layer: string): boolean {
+  if (layer !== 'code') {
+    return false;
+  }
+  const name = file.split('\\').join('/');
+  if (!name.includes('openspec/changes/') || name.includes('openspec/changes/archive/')) {
+    return false;
+  }
+  return (
+    name.endsWith('/proposal.md') ||
+    name.endsWith('/design.md') ||
+    name.endsWith('/tasks.md') ||
+    (name.includes('/specs/') && name.endsWith('.md'))
+  );
+}
+
 /** The marker the latest reply carries: a layer, `note`, `fixed`, `begin`, or nothing. */
 export function markerOf(body: string): string | null {
   return markerName(parseMarker(body));
@@ -237,7 +254,7 @@ export function readReview(
       unanswered = true;
     } else if (pinned) {
       layers.push(pinned);
-    } else if (marker?.kind === 'layer') {
+    } else if (marker?.kind === 'layer' && !codeOnChangeDoc(thread.path ?? '', marker.layer)) {
       layers.push(marker.layer);
     }
     lines.push({

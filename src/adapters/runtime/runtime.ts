@@ -11,17 +11,8 @@ import {assembledStep} from '../../machine/skill/hook.ts';
 import {linkCommand as checkoutLinks, packageLinks} from '../vcs/vcs.ts';
 
 import {runAgent} from './agent.ts';
+import {skillPrompt} from './prompt.ts';
 import {rememberChat} from './session.ts';
-import {upstreamBlock} from './upstream.ts';
-
-function tasksLinks(block: string, skill: SkillRun): string {
-  if (skill.skill !== 'tasks') {
-    return block;
-  }
-  const ids = [...new Set(skill.links ?? [])];
-  const list = ids.length === 0 ? 'none' : ids.map(id => `#${id}`).join(', ');
-  return `${block}\n\nLinked issues: ${list}.`;
-}
 
 /** The hook sandcastle runs. Links whatever of this package is on disk. */
 export function linkCommand(solverRoot: string, serviceRoot: string): string {
@@ -117,23 +108,6 @@ async function commitCount(vcs: Vcs, before: string, after: string): Promise<num
   return range.commits.split('\n').filter(line => line.trim()).length;
 }
 
-/** Title and body for the skill prompt. The run already has the issue, so it does not look it up. */
-export function issueText(title: string, body: string): string {
-  const heading = title.trim();
-  const description = body.trim();
-  const lines = [
-    'The issue text follows. It is the whole description. Do not search the repository for this issue, and do not read the service source to recover it.',
-    '',
-    `# ${heading}`,
-    '',
-    description,
-  ];
-  if (description === '') {
-    lines.push('', 'The issue has no description.');
-  }
-  return lines.join('\n');
-}
-
 /** One runtime for every host. The checkout is whatever `vcs` prepares. */
 export function agentRuntime(config: AgentRuntimeConfig): Runtime {
   const machine = config.machine ?? runtimeMachine;
@@ -162,6 +136,16 @@ export function agentRuntime(config: AgentRuntimeConfig): Runtime {
           machine.stepPrompt(file, action, serviceHooks, sddHooks),
         serviceRoot => machine.serviceHookDoc(serviceRoot),
       );
+      const written = skillPrompt({
+        title: skill.issue?.title ?? '',
+        body: skill.issue?.body ?? '',
+        cwd: dir,
+        skill: skill.skill,
+        key: skill.key,
+        links: skill.links,
+        step: stepText,
+        machine,
+      });
       const answer = await runAgent({
         cwd: dir,
         hostCwd: config.root,
@@ -176,9 +160,9 @@ export function agentRuntime(config: AgentRuntimeConfig): Runtime {
           SKILL: skill.skill,
           QUEUE: config.queueLabel,
           BASE: config.prBase,
-          ISSUE_TEXT: issueText(skill.issue?.title ?? '', skill.issue?.body ?? ''),
-          UPSTREAM: tasksLinks(upstreamBlock(dir, skill.skill, skill.key, machine), skill),
-          STEP: stepText,
+          ISSUE_TEXT: written.issue,
+          UPSTREAM: written.upstream,
+          STEP: written.step,
         },
         logPath: agentLogPath(
           config.root,

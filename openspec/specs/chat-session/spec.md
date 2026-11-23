@@ -8,7 +8,7 @@ One chat drives one issue until the machine waits or the issue is done. The next
 
 ### Requirement: The chat runs until the machine waits
 
-A step that ends in Publish or Hand-off SHALL run `step` again. A printed `advance` SHALL run `step` again. A step that leaves no Publish, no Hand-off, and no Wait SHALL stop. A printed `wait` or `done` SHALL stop. The printed `step` SHALL be the action text the chat follows, and the chat SHALL NOT open the step file.
+A step that ends in Publish or Hand-off SHALL run `step` again. A printed `advance` SHALL run `step` again. A step that leaves no Publish, no Hand-off, and no Wait SHALL stop. A printed `wait` or `done` SHALL stop. The printed `step` SHALL carry the issue text, then the upstream block, then the action text with this service's hooks. The chat SHALL follow that text and SHALL NOT open the step file.
 
 #### Scenario: A commit or a hand-off runs step again
 

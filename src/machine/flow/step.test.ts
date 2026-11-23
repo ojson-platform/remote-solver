@@ -326,6 +326,56 @@ spec('step', () => {
       assert.equal(readlinkSync(link), modules);
     });
   });
+
+  requirement('The printed step carries the issue and the upstream', () => {
+    scenario('A plan step prints the issue above the upstream block', async () => {
+      const {printed} = await runStep(
+        ['step', '1'],
+        [
+          {
+            ...planIssue(
+              '1',
+              ['Sandcastle', 'sdd:cycle', 'sdd:proposed'],
+              'The distance reaches the support meta.',
+            ),
+            title: 'Pass the distance',
+          },
+        ],
+        planFiles,
+      );
+      assert.equal(printed.kind, 'agent');
+      const step = printed.step ?? '';
+      const search = step.indexOf('Do not search the repository for this issue');
+      const source = step.indexOf('do not read the service source to recover it');
+      const title = step.indexOf('# Pass the distance');
+      const body = step.indexOf('The distance reaches the support meta.');
+      const upstream = step.indexOf('The issue text above is the upstream of `proposal.md`');
+      const kept = step.indexOf('file existing is not a reason to leave that sentence');
+      const replaced = step.indexOf('already replaced is not copied back');
+      const heading = step.indexOf('## Steps');
+      assert.ok(
+        search >= 0 &&
+          source > search &&
+          title > source &&
+          body > title &&
+          upstream > body &&
+          kept > upstream &&
+          replaced > kept &&
+          heading > replaced,
+      );
+    });
+    scenario('An empty description stays empty in the printed step', async () => {
+      const {printed} = await runStep(
+        ['step', '1'],
+        [planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:proposed'], '   ')],
+        planFiles,
+      );
+      const step = printed.step ?? '';
+      assert.match(step, /The issue has no description\./);
+      assert.match(step, /Do not search the repository for this issue/);
+      assert.equal(step.includes('The distance reaches the support meta.'), false);
+    });
+  });
 });
 
 spec('hook', () => {

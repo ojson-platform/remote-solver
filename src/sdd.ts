@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import {solverRoot, turn, type Machine} from './adapters/compose.ts';
 import {openMachine} from './adapters/load.ts';
+import {skillPrompt} from './adapters/runtime/prompt.ts';
 import {packageLinks} from './adapters/vcs/vcs.ts';
 import {readChange} from './machine/change/change.ts';
 import {foldChange, probeArchive, restoreChange} from './machine/change/fold.ts';
@@ -385,13 +386,22 @@ async function agentStep(
   const declared = (record.service ?? '').trim();
   const serviceRoot =
     declared === '' ? checkout : path.isAbsolute(declared) ? declared : path.join(checkout, declared);
-  return assembledStep({
+  const step = assembledStep({
     solverRoot: solverRoot(),
     skill: decision.skill,
     action: decision.action,
     serviceRoot,
     sddHooks: record.sddHooks,
   });
+  return skillPrompt({
+    title: record.title,
+    body: record.body,
+    cwd: checkout,
+    skill: decision.skill,
+    key: decision.issue,
+    links: [...new Set([...record.dependsOn, ...record.blockedBy, ...record.blocks])],
+    step,
+  }).body;
 }
 
 async function worktree(box: Machine, rest: string[]): Promise<void> {

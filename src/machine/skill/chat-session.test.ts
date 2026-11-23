@@ -37,7 +37,10 @@ spec('chat-session', () => {
     });
     scenario('The chat follows the printed step', () => {
       const act = section('Act');
-      assert.match(act, /The printed decision's `step` is the action text, with this service's hooks/);
+      assert.match(
+        act,
+        /The printed decision's `step` carries the issue text, then the upstream block, then the action text with this service's hooks/,
+      );
       assert.match(act, /Follow that text/);
       assert.match(act, /Do not open the step file/);
     });

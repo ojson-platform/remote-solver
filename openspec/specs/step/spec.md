@@ -91,6 +91,22 @@ When `step` is given `--auto-plan`, `--auto-spec`, or `--auto-design`, it SHALL 
 - **WHEN** the issue is not in the cycle and `step` is given `--auto-plan`
 - **THEN** the printed decision is `done` and `sdd:auto-plan` is absent
 
+### Requirement: The printed step carries the issue and the upstream
+
+When the printed decision is an agent action, `step` SHALL be the issue text, then the upstream block, then the assembled step. The issue text SHALL tell the run not to search the repository for the issue and not to read the service source to recover it, and that instruction SHALL stand above the title and the body. An empty title SHALL stay empty. An empty body SHALL stay empty, and the text SHALL say the issue has no description.
+
+For `plan`, the upstream block SHALL say the issue text is the upstream of `proposal.md`, that the file existing is not a reason to leave that sentence, and that a sentence the proposal already replaced is not copied back. The assembled step SHALL stand after that block.
+
+#### Scenario: A plan step prints the issue above the upstream block
+
+- **WHEN** `step` runs for a plan action and the issue has a title and a body
+- **THEN** the printed `step` tells the run not to search the repository or read the service source, then contains that title and that body, then says the issue text is the upstream of `proposal.md`, and the step file stands after that sentence
+
+#### Scenario: An empty description stays empty in the printed step
+
+- **WHEN** `step` runs for a plan action and the issue body is empty
+- **THEN** the printed `step` says the issue has no description and still tells the run not to search
+
 ### Requirement: Worktree prepares the session checkout
 
 `worktree <key>` SHALL check out branch `sdd/<key>` at `.worktrees/sdd-<key>`, creating the checkout when it is missing and reusing it when it exists, including when it is dirty.

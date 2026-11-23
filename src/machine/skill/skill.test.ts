@@ -114,7 +114,7 @@ test('design.md Approach: paragraph rules live once in skills/sdd-flow/CONTEXT.m
   }
   const paragraphRules: Record<(typeof FOCUS_MARKERS)[number], RegExp> = {
     'sdd:focus:plan':
-      /reader of the ticket|what was refused|open questions.*place and count/s,
+      /what changes for the person|what was refused|open questions.*place and count/s,
     'sdd:focus:spec':
       /promise is new|existing promise changed|scenario without which|spec does not make/s,
     'sdd:focus:design':
@@ -144,7 +144,7 @@ test('design.md Approach: paragraph rules live once in skills/sdd-flow/CONTEXT.m
     assert.match(body, new RegExp(`focus with marker \`${marker}\``, 'i'), step);
     assert.doesNotMatch(
       body,
-      /reader of the ticket|promise is new|behavior lives|person sees on the screen/,
+      /what changes for the person|promise is new|behavior lives|person sees on the screen/,
       step,
     );
   }

@@ -15,7 +15,7 @@ One chat, one issue, until `step` prints `done`. `/sdd-flow <key>` starts it. Wo
 
 Do not run `remote-solver issue`. Do not choose a skill from the phase. `step` names it.
 
-Run this from the service root, the directory whose `openspec/config.yaml` names the queue. This skill does not add cycle membership. If `scripts/adapters/host.md` exists, membership is what that note says. Otherwise the issue already carries `sdd:cycle` and the queue label.
+Run this from the service root, the directory whose `openspec/config.yaml` names the queue. This skill does not add cycle membership. If `scripts/adapters/host.md` exists, read it before the first command. Membership is what that note says. A chat command named there replaces `sdd` in this skill. Otherwise the issue already carries `sdd:cycle` and the queue label.
 
 An issue with no assignee is claimed by the caller inside `step`. An issue assigned to someone else waits with `assigned to <login>`. Agreement to take it runs `sdd assign <key>`, then Start again.
 
@@ -32,7 +32,7 @@ The issue's service directory, when set, names where the specs live. A value tha
 
 `step` already applies a mechanical phase move and a merge the label allows. Act does not apply them again.
 
-- `agent`: run `sdd worktree <key>`. The printed path is the cwd for every edit and commit in this issue. The printed decision's `step` is the action text, with this service's hooks. Follow that text. Do not open the step file. The printed decision's `queue` and `base` are the queue label and the base branch for the issue being driven in that step. A new child issue uses the first queue under `sdd.queues` in `openspec/config.yaml`, not the printed `queue`. When the step ends in Publish or Hand-off, run `sdd step <key>` again and follow Act. When the step ends in Wait, run `sdd step <key>` once more and follow Act. When the step leaves no Publish, no Hand-off, and no Wait, stop.
+- `agent`: run `sdd worktree <key>`. The printed path is the cwd for every edit and commit in this issue. The printed decision's `step` carries the issue text, then the upstream block, then the action text with this service's hooks. Follow that text. Do not open the step file. The printed decision's `queue` and `base` are the queue label and the base branch for the issue being driven in that step. A new child issue uses the first queue under `sdd.queues` in `openspec/config.yaml`, not the printed `queue`. When the step ends in Publish or Hand-off, run `sdd step <key>` again and follow Act. When the step ends in Wait, run `sdd step <key>` once more and follow Act. When the step leaves no Publish, no Hand-off, and no Wait, stop.
 - `advance`: run `sdd step <key>` again and follow Act.
 - `wait` or `done`: stop.
 

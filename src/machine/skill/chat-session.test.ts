@@ -35,7 +35,9 @@ spec('chat-session', () => {
     scenario('A dialog does not stop the chat', () => {
       const act = section('Act');
       assert.match(act, /`wait` with `dialog`: do not stop/);
+      assert.match(act, /Say that this phase has open questions and this turn answers them/);
       assert.match(act, /The printed `text` is the question/);
+      assert.match(act, /The prompt is that text/);
       assert.match(act, /Do not open the change to prepare the dialog/);
       assert.match(act, /Show every entry together in the client's question dialog/);
       assert.match(act, /A choice is a whole answer the person can accept unchanged/);
@@ -43,10 +45,10 @@ spec('chat-session', () => {
         act,
         /Never offer a choice that sends the person to another field, skips the entry, or stops the cycle/,
       );
-      assert.match(
-        act,
-        /When no whole answer is ready, or the dialog needs a second choice and only one is ready, ask in the message/,
-      );
+      assert.match(act, /One whole answer is enough: the dialog still opens/);
+      assert.match(act, /Do not add a choice you cannot stand behind/);
+      assert.match(act, /Do not ask by printing the question alone/);
+      assert.match(act, /When the tool refuses a single choice, ask in the message/);
       assert.match(act, /The person's own words stay available/);
       assert.match(act, /person's words unchanged in place of `<answer>`/);
       assert.match(act, /That command is the only post/);
@@ -77,9 +79,18 @@ spec('chat-session', () => {
       assert.match(act, /The printed text is the outcome/);
       assert.match(
         act,
-        /The printed path is the cwd for every edit, commit, and publish in this issue/,
+        /Edit in the printed path/,
       );
-      assert.match(act, /Do not search the tree for that checkout, and do not use the directory the chat started from/);
+      assert.match(act, /Every `sdd` command runs from the service root/);
+      assert.match(act, /Do not search the tree for that checkout/);
+      assert.match(act, /Do not rebase, commit, or publish except by the `sdd` command/);
+      assert.match(act, /When `sdd publish` exits non-zero, stop and name the exit/);
+      assert.match(act, /Do not rebase the branch by hand and do not open the program/);
+      assert.match(
+        act,
+        /A repository rule that runs a local check before push does not apply in this cycle/,
+      );
+      assert.match(act, /Pull-request checks are read when the phase is verifying/);
     });
   });
 

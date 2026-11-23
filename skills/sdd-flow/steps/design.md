@@ -23,7 +23,7 @@ An open thread of layer `design`: steps 1–4 do not write `design.md` again. St
 3. **Write the approach.** `## Approach` says how this change is built: module boundaries, risks, rejected alternatives. `none` when there is nothing to say. Leave the three required sections as step 2 wrote them.
    When the service describes its architecture, record the seams of this change in the service model.
 4. No decision yet: an open decision item. Do not Wait for it. The phase paints the count. Leave it open.
-5. `improve-design`: Fix thread (`CONTEXT.md`), layer `design`. A thread on an open decision records the choice and checks that item in the same commit, before a hand-off or `thread fix`. The hand-off is a new thread on the other layer's file.
+5. `improve-design`: Fix thread (`CONTEXT.md`), layer `design`. A thread on an open decision writes that choice on the item and checks it, and leaves the rest of the file, in the same commit, before a hand-off or `thread fix`. The hand-off is a new thread on the other layer's file.
 6. An approach sentence that names an observation no scenario names is a Hand-off to `spec` on that sentence. When that thread is already open, do not open another. Do not publish and do not move `sdd-absorbed`. Publish (`CONTEXT.md`) only when every such sentence is named by a scenario. When `design.md` is in the commit, focus with marker `sdd:focus:design`. Mirror: `Design`. Open decisions do not delay the push.
 7. An open decision remains in `design.md`. Do not Wait for it. The phase paints the count.
 

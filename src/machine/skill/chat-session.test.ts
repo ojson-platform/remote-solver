@@ -38,20 +38,22 @@ spec('chat-session', () => {
       assert.match(act, /Say that this phase has open questions and this turn answers them/);
       assert.match(act, /The printed `text` is the question/);
       assert.match(act, /The prompt is that text/);
-      assert.match(act, /Do not open the change to prepare the dialog/);
-      assert.match(act, /The printed text and the issue text already in the step are enough for a choice/);
-      assert.match(act, /Do not open the tracker to invent one/);
       assert.match(act, /Show every entry together in the client's question dialog/);
+      assert.match(
+        act,
+        /Write each choice from the printed question and the issue text already in the step/,
+      );
+      assert.match(act, /Each whole answer is its own choice/);
       assert.match(act, /A choice is a whole answer the person can accept unchanged/);
       assert.match(
         act,
-        /Never offer a choice that sends the person to another field or stops the cycle/,
+        /When one whole answer is ready, the second choice is Skip: it records nothing, the item stays open, and the next run asks it again/,
       );
-      assert.match(act, /Do not repeat an answer to fill another choice/);
-      assert.match(act, /The second choice skips the entry: it records nothing/);
       assert.match(act, /One whole answer is enough: the dialog still opens/);
       assert.match(act, /Do not ask by printing the question alone/);
-      assert.match(act, /A skip records nothing. When every entry was skipped, stop/);
+      assert.match(act, /A skip records nothing/);
+      assert.match(act, /Skipping one entry still runs `sdd step <key>`/);
+      assert.match(act, /When every entry was skipped, stop/);
       assert.match(act, /The person's own words stay available/);
       assert.match(act, /person's words unchanged in place of `<answer>`/);
       assert.match(act, /That command is the only post/);
@@ -135,17 +137,8 @@ spec('chat-session', () => {
     });
     scenario('An answer to a printed dialog continues', () => {
       const next = section('The next message');
-      assert.match(next, /answers entries of a printed `dialog`/);
-      assert.match(next, /person's words unchanged in place of `<answer>`/);
-      assert.match(next, /That command is the only post/);
-      assert.match(next, /Do not edit the change/);
-      assert.match(next, /Then Act from a fresh `step`/);
-      assert.match(
-        next,
-        /When the next step still lists an entry the person answered, stop, and say the record did not close it/,
-      );
-      assert.match(next, /An entry left unanswered stays open, and the next run asks it again/);
-      assert.match(next, /Do not post the answer another way/);
+      assert.match(next, /answers entries of a printed `dialog` follows that dialog's record/);
+      assert.doesNotMatch(next, /run each answered entry's `record`/);
     });
     scenario('A question about the cycle runs step', () => {
       const next = section('The next message');

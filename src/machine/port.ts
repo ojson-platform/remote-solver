@@ -215,8 +215,8 @@ export type Vcs = {
   changed?(base: string, head: string): Promise<boolean>;
   /** Push the issue branch `sdd/<key>` and set its upstream. */
   push(key: IssueKey): Promise<void>;
-  /** HEAD of the checkout this adapter was opened on. */
-  head(): Promise<string>;
+  /** HEAD of the issue checkout when `key` has one. Otherwise the checkout this adapter was opened on. */
+  head(key?: IssueKey): Promise<string>;
   /** `commit` is the tip of the remote issue branch `sdd/<key>`, or behind it. */
   published(key: IssueKey, commit: string): Promise<boolean>;
   /** Paths `git status` reports in this checkout: changed, staged, or untracked. Empty on a clean tree. */

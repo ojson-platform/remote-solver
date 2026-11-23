@@ -705,8 +705,9 @@ export function gitVcs(
         return exitStatus(error) === 1;
       }
     },
-    async head() {
-      return (await gitAsync(root, ['rev-parse', 'HEAD'])).trim();
+    async head(key) {
+      const dir = key ? await checkoutOf(root, machine.branchName(key, prefix)) : null;
+      return (await gitAsync(dir ?? root, ['rev-parse', 'HEAD'])).trim();
     },
     async push(key) {
       await run('git', ['push', '-u', 'origin', machine.branchName(key, prefix)], {

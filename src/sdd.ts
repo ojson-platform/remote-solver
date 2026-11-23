@@ -163,7 +163,7 @@ export function fixArgs(rest: string[]): {key: string; pull: string; thread: str
 
 /**
  * Replies `sdd:fixed <HEAD>` and resolves the thread, or answers the
- * conversation. Refuses while HEAD is not on the remote issue branch. A `code`
+ * conversation. Refuses while the issue checkout's HEAD is not on the remote issue branch. A `code`
  * thread also refuses unless the boundary command fails on that commit's
  * parent and passes on HEAD. When the trace is `@ojson/spec-coverage`, a
  * scenario the delta does not name does not count. A thread whose latest reply
@@ -179,7 +179,7 @@ export async function fixThread(
     prove?: (root: string) => Promise<void>;
   },
 ): Promise<string> {
-  const head = await deps.vcs.head();
+  const head = await deps.vcs.head(args.key);
   if (!(await deps.vcs.published(args.key, head))) {
     throw new Error(
       `HEAD ${head} is not on the remote branch of #${args.key}: Publish, then thread fix.`,

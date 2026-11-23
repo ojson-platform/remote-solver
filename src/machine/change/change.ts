@@ -8,7 +8,10 @@ export {
   HEADINGS,
   missingBaselineIds,
   namedCapabilities,
+  openBox,
   specsReady,
+  taskBoxes,
+  unchecked,
   unjudgedAddedIds,
   unslicedScenario,
 } from './text.ts';

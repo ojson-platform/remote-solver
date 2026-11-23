@@ -1,7 +1,7 @@
 
 import type {Decision} from '../machine/decide/policy.ts';
 
-import {specsReady} from '../machine/change/change.ts';
+import {openBox, specsReady} from '../machine/change/change.ts';
 import {readReason} from '../machine/decide/reason.ts';
 
 import type {Screen} from './desk.ts';
@@ -253,7 +253,7 @@ export function reviewReady(
   }
   if (gate === 'designed') {
     const decisions = model.design.sections.find(section => section.heading === 'Open decisions');
-    const open = decisions?.lines.some(line => line.text.trimStart().startsWith('- [ ]')) ?? false;
+    const open = decisions?.lines.some(line => openBox(line.text)) ?? false;
     return model.design.present && !open;
   }
   if (action !== undefined && SPEC_TURNS.has(action)) {
@@ -501,7 +501,7 @@ function openCycle(
   const questions = model.proposal.questions.filter(item => item.open).length;
   const decisionSection = model.design.sections.find(section => section.heading === 'Open decisions');
   const decisions =
-    decisionSection?.lines.filter(line => line.text.trimStart().startsWith('- [ ]')).length ?? 0;
+    decisionSection?.lines.filter(line => openBox(line.text)).length ?? 0;
   const tail = paintedTail(blocks, decision, questions, decisions);
   const alone = exclusivePage(decision);
   const layers = SPINE_LAYERS.map(layer => ({

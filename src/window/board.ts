@@ -2,7 +2,7 @@ import type {FileSource} from '../machine/port.ts';
 
 import path from 'node:path';
 
-import {documentDir, HEADINGS, type BranchFacts} from '../machine/change/change.ts';
+import {documentDir, HEADINGS, taskBoxes, unchecked, type BranchFacts} from '../machine/change/change.ts';
 import {openTaskId} from '../machine/change/read.ts';
 import {isFocusRecord} from '../machine/mark/marker.ts';
 import {GATE_CLOSES, GATE_PHASES, phaseOf, phaseRank, type Phase} from '../machine/phase/phase.ts';
@@ -100,22 +100,6 @@ function columnOf(phase: Phase, item: WindowTicket): ColumnName | null {
   return null;
 }
 
-function section(text: string, heading: string): string {
-  const match = new RegExp(`^## ${heading}\\s*$`, 'm').exec(text);
-  if (!match) {
-    return '';
-  }
-  const rest = text.slice(match.index + match[0].length);
-  const next = rest.search(/^## /m);
-  return next === -1 ? rest : rest.slice(0, next);
-}
-
-function unchecked(text: string, heading: string): number {
-  return section(text, heading)
-    .split('\n')
-    .filter(line => line.trimStart().startsWith('- [ ]')).length;
-}
-
 function openCount(
   checkout: string | undefined,
   key: string,
@@ -145,17 +129,7 @@ function taskRow(text: string | undefined): {done: number; open: number} | undef
   if (text === undefined) {
     return undefined;
   }
-  let done = 0;
-  let open = 0;
-  for (const line of text.split('\n')) {
-    const trimmed = line.trimStart();
-    if (trimmed.startsWith('- [x]')) {
-      done += 1;
-    } else if (trimmed.startsWith('- [ ]')) {
-      open += 1;
-    }
-  }
-  return {done, open};
+  return taskBoxes(text);
 }
 
 /** A lone gate is not a rank. The plaque still treats specified and designed as reached. */

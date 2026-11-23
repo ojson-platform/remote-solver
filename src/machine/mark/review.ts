@@ -1,6 +1,6 @@
 import type {Conversation, Thread, ThreadRecord} from '../port.ts';
 
-import {HEADINGS} from '../change/change.ts';
+import {HEADINGS, openBox} from '../change/change.ts';
 import {phaseRank, type Phase} from '../phase/phase.ts';
 
 import {authorIgnored} from './ignore.ts';
@@ -159,7 +159,7 @@ export function openItemLayer(
   if (heading !== wanted) {
     return null;
   }
-  return (lines[line - 1] ?? '').trim().startsWith('- [ ]') ? kind : null;
+  return openBox(lines[line - 1] ?? '') ? kind : null;
 }
 
 /** A code marker on a change document is not the code layer. An open item still pins its own layer. */

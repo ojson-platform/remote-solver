@@ -15,6 +15,7 @@ import {
   namedCapabilities,
   sharedDelta,
   slicedScenarioNames,
+  taskBoxes,
   unchecked,
   unjudgedAddedIds,
 } from './text.ts';
@@ -71,10 +72,7 @@ export function readChange(key: string, files: FileSource): ChangeView {
     archived: files.exists(archiveDir(key)) || files.list(archiveDir(key)).length > 0,
     openQuestions: unchecked(proposal, HEADINGS.openQuestions),
     openDecisions: unchecked(files.read(designPath), HEADINGS.openDecisions),
-    openTasks: files
-      .read(tasksPath)
-      .split('\n')
-      .filter(line => line.trimStart().startsWith('- [ ]')).length,
+    openTasks: taskBoxes(files.read(tasksPath)).open,
     openTask: openTaskId(tasksText) ?? '',
     capabilities: namedCapabilities(proposal),
     missingBaseline: missing,
@@ -150,17 +148,7 @@ function taskCounts(text: string, present: boolean): {done: number; open: number
   if (!present) {
     return undefined;
   }
-  let done = 0;
-  let open = 0;
-  for (const line of text.split('\n')) {
-    const trimmed = line.trimStart();
-    if (trimmed.startsWith('- [x]')) {
-      done += 1;
-    } else if (trimmed.startsWith('- [ ]')) {
-      open += 1;
-    }
-  }
-  return {done, open};
+  return taskBoxes(text);
 }
 
 /**

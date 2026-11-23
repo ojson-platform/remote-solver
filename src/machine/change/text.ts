@@ -21,10 +21,31 @@ export function section(text: string, heading: string): string {
   return next === -1 ? rest : rest.slice(0, next);
 }
 
+/** An open checkbox. A checked box is `- [x]`, lowercase. */
+export function openBox(line: string): boolean {
+  return line.trimStart().startsWith('- [ ]');
+}
+
+function doneBox(line: string): boolean {
+  return line.trimStart().startsWith('- [x]');
+}
+
 export function unchecked(text: string, heading: string): number {
-  return section(text, heading)
-    .split('\n')
-    .filter(line => line.trimStart().startsWith('- [ ]')).length;
+  return section(text, heading).split('\n').filter(openBox).length;
+}
+
+/** Checked and open task boxes in a whole file, not under one heading. */
+export function taskBoxes(text: string): {done: number; open: number} {
+  let done = 0;
+  let open = 0;
+  for (const line of text.split('\n')) {
+    if (doneBox(line)) {
+      done += 1;
+    } else if (openBox(line)) {
+      open += 1;
+    }
+  }
+  return {done, open};
 }
 
 /** Scenario titles in the ADDED and MODIFIED blocks of one delta. */

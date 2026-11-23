@@ -1,5 +1,6 @@
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 
 import {parse} from 'yaml';
 
@@ -172,11 +173,20 @@ function place(file: string, heading: string, before: string, after: string): st
   return insertBefore(withAfter, index, before).join('\n');
 }
 
+/** The package keeps steps under `skills/sdd-flow/steps`. A script copied out of the package keeps them beside `scripts`. */
+function stepFile(solverRoot: string, skill: string, scriptDir: string): string {
+  const packaged = path.join(solverRoot, 'skills/sdd-flow/steps', `${skill}.md`);
+  if (existsSync(packaged)) {
+    return packaged;
+  }
+  return path.join(scriptDir, '..', 'steps', `${skill}.md`);
+}
+
 /**
  * The step file with this action's service paragraphs and then its cycle paragraph.
  * `before` and `after` are the only points that enter. Another action does not.
+ * The board and `step` both print this text.
  */
-/** The step file with this action's hooks. The board and `step` both print this text. */
 export function assembledStep(
   input: {
     solverRoot: string;
@@ -192,12 +202,13 @@ export function assembledStep(
     sddHooks: unknown,
   ) => string = stepPrompt,
   hooks: (serviceRoot: string) => unknown = serviceHookDoc,
+  scriptDir = path.dirname(fileURLToPath(import.meta.url)),
 ): string {
-  const stepFile = path.join(input.solverRoot, 'skills/sdd-flow/steps', `${input.skill}.md`);
-  if (!existsSync(stepFile)) {
+  const found = stepFile(input.solverRoot, input.skill, scriptDir);
+  if (!existsSync(found)) {
     return '';
   }
-  return mix(readFileSync(stepFile, 'utf8'), input.action, hooks(input.serviceRoot), input.sddHooks);
+  return mix(readFileSync(found, 'utf8'), input.action, hooks(input.serviceRoot), input.sddHooks);
 }
 
 export function stepPrompt(

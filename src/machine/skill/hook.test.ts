@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {readFileSync, rmSync} from 'node:fs';
+import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {test} from 'vitest';
@@ -524,6 +525,35 @@ function proveTheStepDoesNotMergeThePullRequest(): void {
   const archive = stepSection(readAcceptStep(), 'archive');
   assert.match(archive, /does not merge the pull request/i);
 }
+
+test('a step beside the script is the assembled text', () => {
+  const skill = mkdtempSync(path.join(tmpdir(), 'sdd-skill-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'sdd-solver-'));
+  try {
+    mkdirSync(path.join(skill, 'scripts'));
+    mkdirSync(path.join(skill, 'steps'));
+    writeFileSync(path.join(skill, 'steps', 'plan.md'), plan);
+    const text = assembledStep(
+      {
+        solverRoot: root,
+        skill: 'plan',
+        action: 'create-proposal',
+        serviceRoot: root,
+        sddHooks: {'create-proposal': {before: 'cyc line'}},
+      },
+      stepPrompt,
+      () => ({'create-proposal': {before: ['svc line']}}),
+      path.join(skill, 'scripts'),
+    );
+    const service = text.indexOf('svc line');
+    const cycle = text.indexOf('cyc line');
+    const heading = text.indexOf('## Steps');
+    assert.ok(service >= 0 && service < cycle && cycle < heading);
+  } finally {
+    rmSync(skill, {recursive: true, force: true});
+    rmSync(root, {recursive: true, force: true});
+  }
+});
 
 test('the final review stands at the end of repair-suite', () => {
   const root = path.join(import.meta.dirname, '..', '..', '..');

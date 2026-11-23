@@ -1,5 +1,5 @@
 import type {LayerAct, SnapshotRow, WindowSnapshot} from '../snapshot.ts';
-import type {Spine, SpineLayer} from '../spine.ts';
+import {layerForStation, type Spine, type SpineLayer} from '../spine.ts';
 import type {GateStation, SidebarBlock} from '../types.ts';
 
 import {GATE_STATIONS, isGateStation} from '../types.ts';
@@ -166,30 +166,6 @@ export function releaseHold(hold: FrameHold, seq: number): FrameHold {
   };
 }
 
-function shellOpen(station: string | undefined): SpineLayer {
-  switch (station) {
-    case 'proposing':
-    case 'proposed':
-      return 'Plan';
-    case 'specifying':
-    case 'specified':
-      return 'Specify';
-    case 'designing':
-    case 'designed':
-      return 'Design';
-    case 'tasking':
-      return 'Tasks';
-    case 'implementing':
-    case 'verifying':
-      return 'Code';
-    case 'accepting':
-    case 'accepted':
-      return 'Accept';
-    default:
-      return 'Change';
-  }
-}
-
 function shellAct(layer: SpineLayer): LayerAct {
   if (layer === 'Plan' || layer === 'Specify' || layer === 'Design' || layer === 'Accept') {
     return 'gate';
@@ -203,7 +179,7 @@ function shellBlocks(_row: SnapshotRow): SidebarBlock[] {
 
 function shellSpine(row: SnapshotRow): Spine {
   return {
-    open: shellOpen(row.station),
+    open: layerForStation(row.station),
     station: row.station,
     lines: [],
     rest: [],
@@ -356,7 +332,7 @@ export function paintFrame(
   } else if (key !== undefined && shot.opened?.key !== key) {
     const row = shot.rows.find(item => item.key === key);
     if (row) {
-      const sameLayer = kept?.spine.open === shellOpen(row.station);
+      const sameLayer = kept?.spine.open === layerForStation(row.station);
       next.opened = kept?.key === key && sameLayer ? {...kept, title: row.title} : shellDrawer(row);
     }
   }

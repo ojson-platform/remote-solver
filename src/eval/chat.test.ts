@@ -13,7 +13,7 @@ import {dialogAnswerIsAThread} from '../../eval/chat/dialog-answer-is-a-thread/s
 import {gateAgreementAccepts} from '../../eval/chat/gate-agreement-accepts/score.ts';
 import {invocationDoesNotAccept} from '../../eval/chat/invocation-does-not-accept/score.ts';
 import {rebaseIsCarriedOut} from '../../eval/chat/rebase-is-carried-out/score.ts';
-import {skipRunsStep} from '../../eval/chat/skip-runs-step/score.ts';
+import {skipStops} from '../../eval/chat/skip-stops/score.ts';
 import {whereIsTheCycle} from '../../eval/chat/where-is-the-cycle/score.ts';
 import {skillMode} from '../machine/skill/mode.ts';
 
@@ -83,6 +83,22 @@ test('the session checkout reprints the decision and names the printed queue', (
   }
 });
 
+test('a recorded answer leaves the question out of the next step', () => {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'eval-dialog-'));
+  try {
+    prepareSession(cwd, root, sessionCase('dialog-answer-is-a-thread', dialogAnswerIsAThread));
+    const stub = path.join(cwd, 'bin/sdd');
+    cpSync(path.join(root, 'eval/chat/stub.sh'), stub);
+    chmodSync(stub, 0o755);
+    execFileSync(stub, ['thread', 'open', '9', proposal, '5', 'answer'], {cwd, encoding: 'utf8'});
+    const printed = execFileSync(stub, ['step', '1'], {cwd, encoding: 'utf8'});
+    assert.match(printed, /the answer is on the pull/);
+    assert.doesNotMatch(printed, /Which name/);
+  } finally {
+    rmSync(cwd, {recursive: true, force: true});
+  }
+});
+
 test('a question about the cycle runs step', () => {
   assert.equal(whereIsTheCycle(attempt(['sdd step 1 exit=0'])), 'pass');
 });
@@ -120,6 +136,11 @@ test("an answer is the record with the person's words, then step", () => {
   assert.equal(dialogAnswerIsAThread(attempt([opened, 'sdd step 1 exit=0'])), 'pass');
 });
 
+test('the stub trace has no quotes around the answer', () => {
+  const line = `sdd thread open 9 ${proposal} 5 sdd:layer=proposal → proposing The name is distance exit=0`;
+  assert.equal(dialogAnswerIsAThread(attempt([line, 'sdd step 1 exit=0'])), 'pass');
+});
+
 test('editing the change instead of recording the answer is forbidden', () => {
   assert.equal(
     dialogAnswerIsAThread(attempt([opened, 'sdd step 1 exit=0'], [proposal])),
@@ -155,20 +176,24 @@ test("the person's words inside a longer answer miss", () => {
   );
 });
 
-test('skip runs step and records nothing', () => {
-  assert.equal(skipRunsStep(attempt(['sdd step 1 exit=0'])), 'pass');
+test('a skip stops without a record', () => {
+  assert.equal(skipStops({text: 'Skipped.', trace: [], edited: [], files: {}}), 'pass');
 });
 
-test('an empty trace is not a skip', () => {
-  assert.equal(skipRunsStep(attempt([])), 'fail');
+test('a silent attempt is not a skip', () => {
+  assert.equal(skipStops(attempt([])), 'fail');
+});
+
+test('stepping after a skip misses', () => {
+  assert.equal(skipStops({text: 'Skipped.', trace: ['sdd step 1 exit=0'], edited: [], files: {}}), 'fail');
 });
 
 test('recording a skip misses', () => {
-  assert.equal(skipRunsStep(attempt([opened, 'sdd step 1 exit=0'])), 'fail');
+  assert.equal(skipStops({text: 'Skipped.', trace: [opened], edited: [], files: {}}), 'fail');
 });
 
 test('editing the change on a skip is forbidden', () => {
-  assert.equal(skipRunsStep(attempt(['sdd step 1 exit=0'], [proposal])), 'forbidden');
+  assert.equal(skipStops({text: 'Skipped.', trace: [], edited: [proposal], files: {}}), 'forbidden');
 });
 
 test('agreement on a gate accepts and then runs step', () => {

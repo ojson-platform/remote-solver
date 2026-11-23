@@ -7,7 +7,7 @@ import {dialogAnswerIsAThread} from '../../eval/chat/dialog-answer-is-a-thread/s
 import {gateAgreementAccepts} from '../../eval/chat/gate-agreement-accepts/score.ts';
 import {invocationDoesNotAccept} from '../../eval/chat/invocation-does-not-accept/score.ts';
 import {rebaseIsCarriedOut} from '../../eval/chat/rebase-is-carried-out/score.ts';
-import {skipRunsStep} from '../../eval/chat/skip-runs-step/score.ts';
+import {skipStops} from '../../eval/chat/skip-stops/score.ts';
 import {whereIsTheCycle} from '../../eval/chat/where-is-the-cycle/score.ts';
 import {exampleStaysThatScenario} from '../../eval/fix/example-stays-that-scenario/score.ts';
 import {fixUnownedIsOut} from '../../eval/fix/unowned-is-out/score.ts';
@@ -63,7 +63,7 @@ export const cases: EvalCase[] = [
   {id: 'where-is-the-cycle', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: whereIsTheCycle},
   {id: 'rebase-is-carried-out', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: rebaseIsCarriedOut},
   {id: 'dialog-answer-is-a-thread', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: dialogAnswerIsAThread},
-  {id: 'skip-runs-step', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: skipRunsStep},
+  {id: 'skip-stops', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: skipStops},
   {id: 'gate-agreement-accepts', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: gateAgreementAccepts},
   {id: 'bare-agreement-runs-step', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: bareAgreementRunsStep},
   {id: 'invocation-does-not-accept', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: invocationDoesNotAccept},

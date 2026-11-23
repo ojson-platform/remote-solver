@@ -46,6 +46,10 @@ export function prepareSession(cwd: string, root: string, item: EvalCase): void 
   const bin = path.join(cwd, 'bin');
   mkdirSync(bin, {recursive: true});
   cpSync(path.join(dir, 'decision.json'), path.join(bin, 'decision.json'));
+  const after = path.join(dir, 'decision-after.json');
+  if (existsSync(after)) {
+    cpSync(after, path.join(bin, 'decision-after.json'));
+  }
   const skillDir = path.join(cwd, 'skills/sdd-flow');
   mkdirSync(skillDir, {recursive: true});
   cpSync(path.join(root, 'skills/sdd-flow/CONTEXT.md'), path.join(skillDir, 'CONTEXT.md'));

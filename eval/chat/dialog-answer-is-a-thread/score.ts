@@ -19,7 +19,7 @@ export function dialogAnswerIsAThread(attempt: Attempt): AttemptVerdict {
     opened.length === 1 &&
     open !== undefined &&
     open.exit === 0 &&
-    open.line.includes(`proposing ${words}'`) &&
+    (open.line.includes(`proposing ${words}'`) || open.line.includes(`proposing ${words} exit=`)) &&
     open.line.includes('proposal.md');
   return recorded && follows(attempt.trace, 'thread', 'step') ? 'pass' : 'fail';
 }

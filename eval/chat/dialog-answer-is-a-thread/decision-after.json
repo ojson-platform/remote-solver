@@ -1,0 +1,7 @@
+{
+  "kind": "wait",
+  "issue": "1",
+  "reason": "the answer is on the pull",
+  "queue": "Sandcastle",
+  "base": "trunk"
+}

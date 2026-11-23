@@ -51,12 +51,11 @@ spec('chat-session', () => {
       );
       assert.match(act, /One whole answer is enough: the dialog still opens/);
       assert.match(act, /Do not ask by printing the question alone/);
-      assert.match(act, /A skip records nothing/);
-      assert.match(act, /Skipping one entry still runs `sdd step <key>`/);
-      assert.match(act, /When every entry was skipped, stop/);
+      assert.match(act, /A skip records nothing. When every entry was skipped, stop/);
       assert.match(act, /The person's own words stay available/);
       assert.match(act, /person's words unchanged in place of `<answer>`/);
       assert.match(act, /That command is the only post/);
+      assert.match(act, /When it exits 0, the post is done. Do not run it again/);
       assert.match(act, /Do not edit the change/);
       assert.match(act, /Then run `sdd step <key>` and follow Act/);
       assert.match(act, /When that command exits non-zero, stop, and the message names the file and the exit/);

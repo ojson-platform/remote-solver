@@ -3,6 +3,7 @@ import type {Phase} from '../machine/phase/phase.ts';
 
 import {readReason, type ReasonRead} from '../machine/decide/reason.ts';
 
+import {WRITING_LAYER} from './phrase.ts';
 import {turnAction, type BoardTurn, type ColumnName, type PhaseRow} from './types.ts';
 
 /** Up to four lines of the closed plaque. The window reads them; it does not write them. */
@@ -38,11 +39,7 @@ const BREAKS = [
 ];
 
 const LAYER: Partial<Record<Phase, string>> = {
-  proposing: 'Plan',
-  specifying: 'Specify',
-  designing: 'Design',
-  tasking: 'Tasks',
-  implementing: 'Code',
+  ...WRITING_LAYER,
   verifying: 'Verify',
   accepting: 'Accept',
 };

@@ -52,13 +52,27 @@ export function paintedTail(
   return focusTail(decision, questions, decisions);
 }
 
-const LAYER_NAME: Partial<Record<Phase, string>> = {
+/** The column a writing phase shows. A gate and Verify are not in this table. */
+export const WRITING_LAYER = {
   proposing: 'Plan',
   specifying: 'Specify',
   designing: 'Design',
   tasking: 'Tasks',
   implementing: 'Code',
-};
+} as const;
+
+function writingName(phase: Phase): string | undefined {
+  switch (phase) {
+    case 'proposing':
+    case 'specifying':
+    case 'designing':
+    case 'tasking':
+    case 'implementing':
+      return WRITING_LAYER[phase];
+    default:
+      return undefined;
+  }
+}
 
 /** The catalog sentence for the action a worker is already doing. */
 export function workingSentence(action: string, reason = ''): string {
@@ -130,7 +144,7 @@ function agentSentence(action: AgentAction, reason: string): string {
 function advanceSentence(reason: string, to: Phase): string | undefined {
   const read = readReason(reason);
   if (read.kind === 'sent-back') {
-    return `Замечание вернуло задачу на ${LAYER_NAME[to] ?? to}.`;
+    return `Замечание вернуло задачу на ${writingName(to) ?? to}.`;
   }
   if (read.kind === 'conflict') {
     return 'Пул-реквест конфликтует с базой. Возвращаю на Code.';

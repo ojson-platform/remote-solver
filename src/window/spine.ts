@@ -19,6 +19,7 @@ import {focusMarkerLine, isFocusRecord} from '../machine/mark/marker.ts';
 
 import {strictChangeFiles, strictContentChangeFiles} from './change-files.ts';
 import {scanFocusComments} from './focus.ts';
+import {WRITING_LAYER} from './phrase.ts';
 import {specDiff} from './spec-diff.ts';
 
 
@@ -237,16 +238,17 @@ export function layerForStation(station: string | undefined): SpineLayer {
   switch (station) {
     case 'proposing':
     case 'proposed':
-      return 'Plan';
+      return WRITING_LAYER.proposing;
     case 'specifying':
     case 'specified':
-      return 'Specify';
+      return WRITING_LAYER.specifying;
     case 'designing':
     case 'designed':
-      return 'Design';
+      return WRITING_LAYER.designing;
     case 'tasking':
-      return 'Tasks';
+      return WRITING_LAYER.tasking;
     case 'implementing':
+      return WRITING_LAYER.implementing;
     case 'verifying':
       return 'Code';
     case 'accepting':

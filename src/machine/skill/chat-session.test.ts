@@ -39,16 +39,19 @@ spec('chat-session', () => {
       assert.match(act, /The printed `text` is the question/);
       assert.match(act, /The prompt is that text/);
       assert.match(act, /Do not open the change to prepare the dialog/);
+      assert.match(act, /The printed text and the issue text already in the step are enough for a choice/);
+      assert.match(act, /Do not open the tracker to invent one/);
       assert.match(act, /Show every entry together in the client's question dialog/);
       assert.match(act, /A choice is a whole answer the person can accept unchanged/);
       assert.match(
         act,
-        /Never offer a choice that sends the person to another field, skips the entry, or stops the cycle/,
+        /Never offer a choice that sends the person to another field or stops the cycle/,
       );
+      assert.match(act, /Do not repeat an answer to fill another choice/);
+      assert.match(act, /The second choice skips the entry: it records nothing/);
       assert.match(act, /One whole answer is enough: the dialog still opens/);
-      assert.match(act, /Do not add a choice you cannot stand behind/);
       assert.match(act, /Do not ask by printing the question alone/);
-      assert.match(act, /When the tool refuses a single choice, ask in the message/);
+      assert.match(act, /A skip records nothing. When every entry was skipped, stop/);
       assert.match(act, /The person's own words stay available/);
       assert.match(act, /person's words unchanged in place of `<answer>`/);
       assert.match(act, /That command is the only post/);

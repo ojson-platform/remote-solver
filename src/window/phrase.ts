@@ -2,7 +2,7 @@ import type {Decision} from '../machine/decide/policy.ts';
 import type {AgentAction} from '../machine/decide/route.ts';
 import type {Phase} from '../machine/phase/phase.ts';
 
-import {NO_OPEN_PULL} from '../machine/decide/pulls.ts';
+import {readReason, tasksGap} from '../machine/decide/reason.ts';
 
 const CONFIRM_PHASES = new Set(['proposing', 'specifying', 'designing']);
 
@@ -20,22 +20,22 @@ export function focusTail(
   if (decision.gate && CONFIRM_PHASES.has(decision.gate.from)) {
     return CONFIRM_TAIL;
   }
-  if (decision.reason.includes('Open questions') && questions > 0) {
+  const read = readReason(decision.reason);
+  if (read.questions && questions > 0) {
     return countSentence(questions, 'вопрос', 'вопроса', 'вопросов', 'Ответь на него.', 'Ответь на них.');
   }
-  if (decision.reason.includes('open decision') && decisions > 0) {
+  if (read.decisions && decisions > 0) {
     return countSentence(decisions, 'решение', 'решения', 'решений', 'Закрой его.', 'Закрой их.');
   }
-  const mergeId = decision.reason.match(/^wait for merge of PR #(\d+)/)?.[1];
-  if (mergeId !== undefined) {
-    return `Архив записан локально. Отправь его и смержи #${mergeId}.`;
+  if (read.anchoredMerge !== undefined) {
+    return `Архив записан локально. Отправь его и смержи #${read.anchoredMerge}.`;
   }
   return undefined;
 }
 
 /** The missing-pull-request wait is the only page. */
 export function exclusivePage(decision: Decision | undefined): boolean {
-  return decision?.kind === 'wait' && decision.reason === NO_OPEN_PULL;
+  return decision?.kind === 'wait' && readReason(decision.reason).kind === 'no-open-pull';
 }
 
 /** The tail is painted only when the open page is already the written focus. */
@@ -79,16 +79,17 @@ export function pageSentence(decision: Decision, openCount = 0): string | undefi
   if (decision.kind === 'wait') {
     return waitSentence(decision.reason, openCount);
   }
-  if (decision.kind === 'done' && decision.reason === 'cancelled') {
+  if (decision.kind === 'done' && readReason(decision.reason).kind === 'cancelled') {
     return 'Задача отменена.';
   }
   return undefined;
 }
 
 function agentSentence(action: AgentAction, reason: string): string {
+  const read = readReason(reason);
   switch (action) {
     case 'create-proposal':
-      return reason.startsWith('publish proposal')
+      return read.kind === 'publish-proposal'
         ? 'Публикую план в пул-реквест.'
         : 'Пишу план и открываю пул-реквест.';
     case 'improve-proposal':
@@ -96,7 +97,7 @@ function agentSentence(action: AgentAction, reason: string): string {
     case 'create-initial-specs':
       return 'Пишу спеки.';
     case 'improve-specs':
-      return reason === 'the proposal revision is not the stamp'
+      return read.kind === 'proposal-stamp'
         ? 'Обновляю спеки под новую ревизию плана.'
         : 'Правлю спеки по замечанию.';
     case 'restore-baseline':
@@ -112,9 +113,7 @@ function agentSentence(action: AgentAction, reason: string): string {
     case 'implement-next-task':
       return 'Делаю следующую задачу.';
     case 'fix-implementation':
-      return reason === 'rebase onto the base'
-        ? 'Перекладываю ветку на базу.'
-        : 'Чиню код по замечанию.';
+      return read.kind === 'rebase' ? 'Перекладываю ветку на базу.' : 'Чиню код по замечанию.';
     case 'classify-failures':
       return 'Разбираю красные проверки.';
     case 'classify-comments':
@@ -129,85 +128,74 @@ function agentSentence(action: AgentAction, reason: string): string {
 }
 
 function advanceSentence(reason: string, to: Phase): string | undefined {
-  if (reason === 'review thread sent the change back') {
+  const read = readReason(reason);
+  if (read.kind === 'sent-back') {
     return `Замечание вернуло задачу на ${LAYER_NAME[to] ?? to}.`;
   }
-  if (reason === 'pull request conflicts with the base') {
+  if (read.kind === 'conflict') {
     return 'Пул-реквест конфликтует с базой. Возвращаю на Code.';
   }
-  if (reason === 'proposal.md is missing') {
+  if (read.kind === 'missing-proposal') {
     return 'Нет плана. Возвращаю на Plan.';
   }
-  if (reason === 'delta spec is missing') {
+  if (read.kind === 'missing-delta') {
     return 'Нет спеки. Возвращаю на Specify.';
   }
-  if (reason === 'design.md is missing') {
+  if (read.kind === 'missing-design') {
     return 'Нет дизайна. Возвращаю на Design.';
   }
-  if (
-    reason === 'tasks.md is missing' ||
-    reason.startsWith('the delta revision is not the card') ||
-    reason.startsWith('no card for ') ||
-    reason.startsWith('no task for ')
-  ) {
+  if (tasksGap(read)) {
     return 'Задачи не покрывают сценарий. Возвращаю на Tasks.';
   }
-  if (reason === 'return the delta to the change') {
+  if (read.kind === 'return-delta') {
     return 'Возвращаю дельту из архива в изменение.';
   }
-  if (reason === 'enter the cycle') {
+  if (read.kind === 'enter-cycle') {
     return 'Фазы нет. Возвращаю на Plan.';
   }
-  if (reason === 'the change is not archived') {
+  if (read.kind === 'not-archived') {
     return 'Изменение не в архиве.';
   }
   return undefined;
 }
 
 function waitSentence(reason: string, openCount: number): string | undefined {
-  if (reason === NO_OPEN_PULL) {
+  const read = readReason(reason);
+  if (read.kind === 'no-open-pull') {
     return 'На этой фазе нет открытого пул-реквеста.';
   }
-  if (reason === 'Too many mechanical transitions') {
+  if (read.kind === 'too-many') {
     return 'Слишком много механических переходов.';
   }
-  if (reason.startsWith('service is ')) {
+  if (read.kind === 'wrong-service') {
     return 'Опрос идёт не в том каталоге сервиса.';
   }
-  const mergeId = reason.match(/merge of PR #(\d+)/)?.[1];
-  if (reason.startsWith('wait for green checks before merge of PR #') && mergeId) {
-    return `Перед мержем #${mergeId} проверки ещё не зелёные.`;
+  if (read.kind === 'green-merge' && read.mergePull !== undefined) {
+    return `Перед мержем #${read.mergePull} проверки ещё не зелёные.`;
   }
-  if (reason.startsWith('wait for merge of PR #') && mergeId) {
-    return `Архив записан локально. Отправь его и смержи #${mergeId}.`;
+  if (read.kind === 'merge-wait' && read.mergePull !== undefined) {
+    return `Архив записан локально. Отправь его и смержи #${read.mergePull}.`;
   }
-  if (reason.startsWith('checks are ') && reason !== 'checks are red' && reason !== 'checks are green') {
+  if (read.kind === 'checks-running') {
     return 'Проверки ещё идут.';
   }
-  const keys = keysIn(reason);
-  if (reason.startsWith('wait for children') && keys.length > 0) {
-    return keys.length === 1
-      ? `Жду, пока #${keys[0]} будет принята.`
-      : `Жду, пока ${joinListed(keys)} будут приняты.`;
+  if (read.kind === 'children' && read.issues.length > 0) {
+    return read.issues.length === 1
+      ? `Жду, пока #${read.issues[0]} будет принята.`
+      : `Жду, пока ${joinListed(read.issues)} будут приняты.`;
   }
-  if (reason.startsWith('wait for blockers') && keys.length > 0) {
-    return keys.length === 1
-      ? `Жду блокер #${keys[0]}.`
-      : `Жду блокеры ${joinListed(keys)}.`;
+  if (read.kind === 'blockers' && read.issues.length > 0) {
+    return read.issues.length === 1
+      ? `Жду блокер #${read.issues[0]}.`
+      : `Жду блокеры ${joinListed(read.issues)}.`;
   }
-  if (reason.startsWith('cycle stopped until one open PR remains')) {
-    const ids = (reason.split(':')[1] ?? '')
-      .split(',')
-      .map(id => id.trim().replace(/^#/, ''))
-      .filter(id => id !== '');
-    if (ids.length > 0) {
-      return `Открыты ${joinListed(ids)}. Оставь один.`;
-    }
+  if (read.kind === 'several-pulls' && read.pullIds.length > 0) {
+    return `Открыты ${joinListed(read.pullIds)}. Оставь один.`;
   }
-  if (reason.includes('Open questions') && openCount > 0) {
+  if (read.questions && openCount > 0) {
     return countSentence(openCount, 'вопрос', 'вопроса', 'вопросов', 'Ответь на него.', 'Ответь на них.');
   }
-  if (reason.includes('open decision') && openCount > 0) {
+  if (read.decisions && openCount > 0) {
     return countSentence(openCount, 'решение', 'решения', 'решений', 'Закрой его.', 'Закрой их.');
   }
   return undefined;
@@ -219,17 +207,6 @@ function joinListed(ids: readonly string[]): string {
     return named.join(' и ');
   }
   return `${named.slice(0, -1).join(', ')} и ${named.at(-1)}`;
-}
-
-function keysIn(reason: string): string[] {
-  const keys: string[] = [];
-  for (const match of reason.matchAll(/#(\d+)/g)) {
-    const key = match[1];
-    if (key !== undefined && !keys.includes(key)) {
-      keys.push(key);
-    }
-  }
-  return keys;
 }
 
 function countSentence(

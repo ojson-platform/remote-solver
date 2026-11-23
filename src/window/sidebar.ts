@@ -1,6 +1,7 @@
 import type {Decision} from '../machine/decide/policy.ts';
 
 import {parseMarker} from '../machine/mark/marker.ts';
+import {readReason} from '../machine/decide/reason.ts';
 import {phaseOf} from '../machine/phase/phase.ts';
 import {hookPoint} from '../machine/skill/hook.ts';
 
@@ -211,10 +212,11 @@ function liveOpenCount(
   }
   const newest = written.find(block => block.kind === 'focus');
   const marker = newest?.kind === 'focus' ? newest.marker : undefined;
-  if (decision.reason.includes('Open questions') && marker !== 'sdd:focus:plan') {
+  const read = readReason(decision.reason);
+  if (read.questions && marker !== 'sdd:focus:plan') {
     return facts.questions;
   }
-  if (decision.reason.includes('open decision') && marker !== 'sdd:focus:design') {
+  if (read.decisions && marker !== 'sdd:focus:design') {
     return facts.decisions;
   }
   return 0;

@@ -1,7 +1,7 @@
 import type {Decision} from '../machine/decide/policy.ts';
 import type {Phase} from '../machine/phase/phase.ts';
 
-import {NO_OPEN_PULL} from '../machine/decide/pulls.ts';
+import {readReason, type ReasonRead} from '../machine/decide/reason.ts';
 
 import {turnAction, type BoardTurn, type ColumnName, type PhaseRow} from './types.ts';
 
@@ -85,17 +85,6 @@ function joinKeys(ids: readonly string[]): string {
   return `${named.slice(0, -1).join(', ')} и ${named.at(-1)}`;
 }
 
-function keysIn(reason: string): string[] {
-  const keys: string[] = [];
-  for (const match of reason.matchAll(/#(\d+)/g)) {
-    const key = match[1];
-    if (key !== undefined && !keys.includes(key)) {
-      keys.push(key);
-    }
-  }
-  return keys;
-}
-
 function breakLine(reason: string | undefined): string | undefined {
   if (!reason) {
     return undefined;
@@ -108,23 +97,18 @@ function isCode(input: PlaqueInput): boolean {
   return input.station === 'implementing' || input.phase === 'implementing';
 }
 
-function archiveRefusal(reason: string): boolean {
-  return (
-    reason.startsWith('archive refused:') ||
-    reason.startsWith('the rebuilt spec would have no requirement') ||
-    reason.startsWith('refused archive:')
-  );
+function archiveRefusal(read: ReasonRead): boolean {
+  return read.archiveMark || read.baselineMark || read.refusedArchive;
 }
 
-function refusalLine(reason: string): string | undefined {
-  if (reason.startsWith('refused archive:')) {
+function refusalLine(read: ReasonRead): string | undefined {
+  if (read.refusedArchive) {
     return 'Архив отказал';
   }
-  const action = /^refused ([a-z-]+):/.exec(reason)?.[1];
-  if (!action) {
+  if (read.action === undefined) {
     return undefined;
   }
-  return REFUSAL[action] ?? 'Повторный отказ';
+  return REFUSAL[read.action] ?? 'Повторный отказ';
 }
 
 function gateLine(from: string): string | undefined {
@@ -156,60 +140,49 @@ function back(to: string): string {
   return `Назад на ${LAYER[to as Phase] ?? to}`;
 }
 
-function advanceLines(reason: string, to: string): string[] | undefined {
-  if (reason === 'review thread sent the change back') {
+function advanceLines(read: ReasonRead, to: string): string[] | undefined {
+  if (read.kind === 'sent-back') {
     return [back(to)];
   }
-  if (reason === 'pull request conflicts with the base') {
+  if (read.kind === 'conflict') {
     return ['Конфликт с базой', back(to)];
   }
-  if (reason === 'proposal.md is missing') {
+  if (read.kind === 'missing-proposal') {
     return ['Нет плана', back(to)];
   }
-  if (reason === 'delta spec is missing') {
+  if (read.kind === 'missing-delta') {
     return ['Нет спеки', back(to)];
   }
-  if (reason === 'design.md is missing') {
+  if (read.kind === 'missing-design') {
     return ['Нет дизайна', back(to)];
   }
-  if (reason === 'tasks.md is missing') {
+  if (read.kind === 'missing-tasks') {
     return ['Нет задач', back(to)];
   }
-  if (
-    reason.startsWith('the delta revision is not the card') ||
-    reason.startsWith('no card for ') ||
-    reason.startsWith('no task for ')
-  ) {
+  if (read.kind === 'card-revision' || read.kind === 'no-card' || read.kind === 'no-task') {
     return ['Задачи не покрывают сценарий', back(to)];
   }
-  if (reason === 'return the delta to the change') {
+  if (read.kind === 'return-delta') {
     return ['Возвращаю дельту из архива'];
   }
-  if (reason === 'enter the cycle') {
+  if (read.kind === 'enter-cycle') {
     return ['Фазы нет', 'Назад на Plan'];
   }
-  if (reason === 'the change is not archived') {
+  if (read.kind === 'not-archived') {
     return ['Не в архиве'];
   }
   return undefined;
 }
 
-function pullIds(reason: string): string[] {
-  return (reason.split(':')[1] ?? '')
-    .split(',')
-    .map(id => id.trim().replace(/^#/, ''))
-    .filter(id => id !== '');
-}
-
-function leaveOne(reason: string): string {
-  const ids = pullIds(reason);
+function leaveOne(ids: readonly string[]): string {
   return ids.length > 0 ? `Оставь один: ${joinKeys(ids)}` : 'Оставь один';
 }
 
 function severalLine(input: PlaqueInput): string | undefined {
   const reason = input.decision?.kind === 'wait' ? input.decision.reason : '';
-  if (reason.startsWith('cycle stopped until one open PR remains')) {
-    return leaveOne(reason);
+  const read = readReason(reason);
+  if (read.kind === 'several-pulls') {
+    return leaveOne(read.pullIds);
   }
   if (input.reason?.includes('несколько pull request')) {
     return 'Оставь один';
@@ -255,19 +228,16 @@ function actionOf(input: PlaqueInput): {action: string; reason: string} | undefi
 }
 
 function actionLines(action: string, reason: string, input: PlaqueInput): string[] | undefined {
+  const read = readReason(reason);
   switch (action) {
     case 'create-proposal':
-      return [reason.startsWith('publish proposal') ? 'Публикую план' : 'Пишу план'];
+      return [read.kind === 'publish-proposal' ? 'Публикую план' : 'Пишу план'];
     case 'improve-proposal':
       return ['Правлю план по замечанию'];
     case 'create-initial-specs':
       return ['Пишу спеки'];
     case 'improve-specs':
-      return [
-        reason === 'the proposal revision is not the stamp'
-          ? 'Обновляю спеки под план'
-          : 'Правлю спеки по замечанию',
-      ];
+      return [read.kind === 'proposal-stamp' ? 'Обновляю спеки под план' : 'Правлю спеки по замечанию'];
     case 'restore-baseline':
       return ['Восстанавливаю базовую спеку'];
     case 'create-design':
@@ -283,7 +253,7 @@ function actionLines(action: string, reason: string, input: PlaqueInput): string
       return lines.length > 0 ? lines : undefined;
     }
     case 'fix-implementation':
-      return [reason === 'rebase onto the base' ? 'Перекладываю ветку на базу' : 'Чиню код по замечанию'];
+      return [read.kind === 'rebase' ? 'Перекладываю ветку на базу' : 'Чиню код по замечанию'];
     case 'classify-failures':
       return ['Разбираю красные проверки'];
     case 'classify-comments':
@@ -310,8 +280,8 @@ function countLine(count: number, station: string | undefined, phase: string | n
   return undefined;
 }
 
-function waitLines(reason: string, input: PlaqueInput): string[] | undefined {
-  if (reason === NO_OPEN_PULL) {
+function waitLines(read: ReasonRead, input: PlaqueInput): string[] | undefined {
+  if (read.kind === 'no-open-pull') {
     if (isCode(input)) {
       const lines = codeLines(input);
       if (lines.length > 0) {
@@ -320,54 +290,51 @@ function waitLines(reason: string, input: PlaqueInput): string[] | undefined {
     }
     return ['Нет открытого пул-реквеста'];
   }
-  if (reason.startsWith('cycle stopped until one open PR remains')) {
-    const line = leaveOne(reason);
+  if (read.kind === 'several-pulls') {
+    const line = leaveOne(read.pullIds);
     if (isCode(input)) {
       const lines = codeLines(input, line);
       return lines.length > 0 ? lines : [line];
     }
     return [line];
   }
-  if (reason === 'Too many mechanical transitions') {
+  if (read.kind === 'too-many') {
     return ['Слишком много механических переходов'];
   }
-  if (reason.startsWith('service is ')) {
+  if (read.kind === 'wrong-service') {
     return ['Опрос идёт не в том каталоге сервиса'];
   }
-  const mergeId = reason.match(/#(\d+)/)?.[1];
-  if (reason.startsWith('wait for green checks before merge of PR #') && mergeId) {
-    return [`#${mergeId} не зелёные`];
+  if (read.kind === 'green-merge' && read.issue !== undefined) {
+    return [`#${read.issue} не зелёные`];
   }
-  if (reason.startsWith('wait for merge of PR #') && mergeId) {
-    return [`Смержи #${mergeId}`];
+  if (read.kind === 'merge-wait' && read.issue !== undefined) {
+    return [`Смержи #${read.issue}`];
   }
-  if (reason.startsWith('checks are ') && reason !== 'checks are red' && reason !== 'checks are green') {
+  if (read.kind === 'checks-running') {
     return ['Проверки ещё идут'];
   }
-  if (reason.startsWith('wait for children')) {
-    const keys = keysIn(reason);
-    return keys.length > 0 ? [`Жду принятия ${joinKeys(keys)}`] : undefined;
+  if (read.kind === 'children') {
+    return read.issues.length > 0 ? [`Жду принятия ${joinKeys(read.issues)}`] : undefined;
   }
-  if (reason.startsWith('wait for blockers')) {
-    const keys = keysIn(reason);
-    if (keys.length === 1) {
-      return [`Жду блокер #${keys[0]}`];
+  if (read.kind === 'blockers') {
+    if (read.issues.length === 1) {
+      return [`Жду блокер #${read.issues[0]}`];
     }
-    return keys.length > 1 ? [`Жду блокеры ${joinKeys(keys)}`] : undefined;
+    return read.issues.length > 1 ? [`Жду блокеры ${joinKeys(read.issues)}`] : undefined;
   }
-  if (reason.startsWith('sdd:wait-human is set')) {
+  if (read.kind === 'wait-human') {
     return ['Метка ожидания стоит'];
   }
-  if (reason.startsWith('no task for ')) {
+  if (read.kind === 'no-task') {
     return ['Сценарий без задачи'];
   }
-  if (reason === 'the change is not archived') {
+  if (read.kind === 'not-archived') {
     return ['Не в архиве'];
   }
-  if (reason === 'accepted needs a merged pull request') {
+  if (read.kind === 'needs-merged') {
     return ['Нет смерженного пул-реквеста'];
   }
-  if (reason.includes('Open questions') || reason.includes('open decision')) {
+  if (read.questions || read.decisions) {
     const count = typeof input.phaseRow === 'number' ? input.phaseRow : 0;
     const line = countLine(count, input.station, input.phase);
     return line ? [line] : undefined;
@@ -409,11 +376,12 @@ function pick(input: PlaqueInput): string[] {
   }
   const decision = input.decision;
   const reason = decision?.reason ?? '';
-  if (archiveRefusal(reason)) {
+  const read = readReason(reason);
+  if (archiveRefusal(read)) {
     return ['Архив отказал'];
   }
-  if (reason.startsWith('refused ')) {
-    const line = refusalLine(reason);
+  if (read.refusedMark) {
+    const line = refusalLine(read);
     if (line) {
       return [line];
     }
@@ -441,13 +409,13 @@ function pick(input: PlaqueInput): string[] {
     }
   }
   if (decision?.kind === 'advance') {
-    const moved = advanceLines(decision.reason, decision.to);
+    const moved = advanceLines(read, decision.to);
     if (moved) {
       return moved;
     }
   }
   if (decision?.kind === 'wait') {
-    const waited = waitLines(reason, input);
+    const waited = waitLines(read, input);
     if (waited) {
       return waited;
     }

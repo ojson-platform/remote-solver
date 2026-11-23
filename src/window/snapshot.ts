@@ -2,6 +2,7 @@
 import type {Decision} from '../machine/decide/policy.ts';
 
 import {specsReady} from '../machine/change/change.ts';
+import {readReason} from '../machine/decide/reason.ts';
 
 import type {Screen} from './desk.ts';
 import {plaqueLines} from './board.ts';
@@ -531,10 +532,11 @@ function openCycle(
 
 /** The open page is a refusal the label `sdd:refused` is holding. */
 export function refusalHold(decision: Decision | undefined): boolean {
-  return (
-    decision?.kind === 'wait' &&
-    (decision.reason.startsWith('refused ') || decision.reason.startsWith('archive refused:'))
-  );
+  if (decision?.kind !== 'wait') {
+    return false;
+  }
+  const read = readReason(decision.reason);
+  return read.refusedMark || read.archiveMark;
 }
 
 /** «Продолжить» clears `sdd:wait-human`, or `sdd:refused` when that label holds the page. */

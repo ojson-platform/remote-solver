@@ -3,7 +3,7 @@ import type {BoardTurn, WindowComment} from './types.ts';
 import type {Decision} from '../machine/decide/policy.ts';
 
 
-import {NO_OPEN_PULL} from '../machine/decide/pulls.ts';
+import {readReason, type ReasonRead} from '../machine/decide/reason.ts';
 import {firstFocusSentence, FOCUS_LAYERS, latestFocusComment} from '../machine/mark/focus.ts';
 import {
   focusMarkerLine,
@@ -54,31 +54,21 @@ function plainWaitHuman(decision: Decision | undefined): boolean {
   return (
     decision?.kind === 'wait' &&
     decision.gate === undefined &&
-    decision.reason.startsWith('sdd:wait-human is set')
+    readReason(decision.reason).kind === 'wait-human'
   );
 }
 
 /** Accepting keeps the written focus except for the pages the plan names on their own. */
-function acceptingKeepsFocus(reason: string): boolean {
-  if (reason.startsWith('wait for merge of PR #')) {
-    return false;
-  }
-  if (reason.startsWith('sdd:wait-human is set')) {
-    return false;
-  }
-  if (reason.startsWith('wait for green checks before merge of PR #')) {
-    return false;
-  }
-  if (reason === NO_OPEN_PULL) {
-    return false;
-  }
-  if (reason.startsWith('refused ')) {
-    return false;
-  }
-  if (reason.startsWith('archive refused:')) {
-    return false;
-  }
-  if (reason.startsWith('the rebuilt spec would have no requirement')) {
+function acceptingKeepsFocus(read: ReasonRead): boolean {
+  if (
+    read.kind === 'merge-wait' ||
+    read.kind === 'wait-human' ||
+    read.kind === 'green-merge' ||
+    read.kind === 'no-open-pull' ||
+    read.refusedMark ||
+    read.archiveMark ||
+    read.baselineMark
+  ) {
     return false;
   }
   return true;
@@ -91,51 +81,38 @@ export function liveFocusReviewGate(input: LiveFocusInput): boolean {
     return reviewGateForPhase(decision.gate.from) !== undefined;
   }
   if (input.phase === 'accepting' && decision?.kind === 'wait') {
-    if (decision.reason.startsWith('wait for merge of PR #')) {
+    const read = readReason(decision.reason);
+    if (read.kind === 'merge-wait') {
       return input.hasAcceptFocus === true;
     }
-    return acceptingKeepsFocus(decision.reason);
+    return acceptingKeepsFocus(read);
   }
   return false;
 }
 
 function waitLiveSentence(reason: string): string | undefined {
-  if (!reason.startsWith('wait for children') && !reason.startsWith('wait for blockers')) {
+  const read = readReason(reason);
+  if (read.kind !== 'children' && read.kind !== 'blockers') {
     return undefined;
   }
-  const keys: string[] = [];
-  for (const match of reason.matchAll(/#(\d+)/g)) {
-    const key = match[1];
-    if (key !== undefined && !keys.includes(key)) {
-      keys.push(key);
-    }
-  }
-  if (keys.length === 0) {
+  if (read.issues.length === 0) {
     return undefined;
   }
-  let until: string | undefined;
-  if (reason.includes('specified')) {
-    until = 'specified';
-  } else if (reason.includes('accepted')) {
-    until = 'accepted';
-  }
-  const named = keys.join(', ');
+  const until = read.specified ? 'specified' : read.accepted ? 'accepted' : undefined;
+  const named = read.issues.join(', ');
   return until === undefined ? named : `${named} until ${until}`;
 }
-
-const ARCHIVE_REFUSED = 'archive refused: ';
-const EMPTY_BASELINE = 'the rebuilt spec would have no requirement:';
 
 /** What a refused archive said. Accepting hides every other wait behind the written focus. */
 function archiveSentence(decision: LiveFocusInput['decision']): string | undefined {
   if (decision?.kind !== 'wait') {
     return undefined;
   }
-  if (decision.reason.startsWith(ARCHIVE_REFUSED)) {
-    const text = decision.reason.slice(ARCHIVE_REFUSED.length).trim();
-    return text === '' ? undefined : text;
+  const read = readReason(decision.reason);
+  if (read.archiveTail !== undefined) {
+    return read.archiveTail === '' ? undefined : read.archiveTail;
   }
-  if (decision.reason.startsWith(EMPTY_BASELINE)) {
+  if (read.baselineColon) {
     return decision.reason;
   }
   return undefined;
@@ -147,7 +124,7 @@ export function liveFocus(input: LiveFocusInput): LiveFocus | undefined {
   if (archive !== undefined) {
     return {badge: 'archive', text: archive};
   }
-  if (input.decision?.kind === 'wait' && input.decision.reason.startsWith('refused ')) {
+  if (input.decision?.kind === 'wait' && readReason(input.decision.reason).refusedMark) {
     return {badge: 'waiting', text: input.decision.reason};
   }
   if (liveFocusReviewGate(input)) {
@@ -175,9 +152,8 @@ export function liveFocus(input: LiveFocusInput): LiveFocus | undefined {
   }
   const spoken = decision ? pageSentence(decision, input.openCount ?? 0) : undefined;
   if (spoken !== undefined && decision) {
-    const linked =
-      decision.kind === 'wait' &&
-      (decision.reason.startsWith('wait for children') || decision.reason.startsWith('wait for blockers'));
+    const waited = readReason(decision.reason);
+    const linked = decision.kind === 'wait' && (waited.kind === 'children' || waited.kind === 'blockers');
     const working = decision.kind === 'agent';
     return {badge: working ? 'working' : linked ? 'waiting on an issue' : 'waiting', text: spoken};
   }

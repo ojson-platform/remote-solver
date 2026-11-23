@@ -1,4 +1,4 @@
-import {commandExits, traceHas} from '../../../src/eval/trace.ts';
+import {commandExits, lineCarries, traceHas} from '../../../src/eval/trace.ts';
 
 import type {Attempt, AttemptVerdict} from '../../../src/eval/score.ts';
 
@@ -14,5 +14,5 @@ export function noScenarioHandsToSpec(attempt: Attempt): AttemptVerdict {
   ) {
     return 'forbidden';
   }
-  return traceHas(attempt.trace, 'sdd:layer=spec → specifying') ? 'pass' : 'fail';
+  return lineCarries(attempt.trace, 'sdd:layer=spec → specifying') ? 'pass' : 'fail';
 }

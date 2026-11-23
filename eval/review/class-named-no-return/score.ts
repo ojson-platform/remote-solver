@@ -3,7 +3,7 @@ import {findings, type Attempt, type AttemptVerdict} from '../../../src/eval/sco
 /** A named class whose own example holds is not a return. Naming the paint file is forbidden. */
 export function classNamedNoReturn(attempt: Attempt): AttemptVerdict {
   if (attempt.edited.length > 0) {
-    return 'fail';
+    return 'forbidden';
   }
   const parsed = findings(attempt.text);
   if (parsed === undefined) {

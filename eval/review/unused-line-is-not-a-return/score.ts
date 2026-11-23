@@ -6,7 +6,7 @@ const promise = 'A covered line shows the node value.';
 /** The class is unnamed, so the return is one spec gap. A code return of the unused line is forbidden. */
 export function unusedLineIsNotAReturn(attempt: Attempt): AttemptVerdict {
   if (attempt.edited.length > 0) {
-    return 'fail';
+    return 'forbidden';
   }
   const parsed = findings(attempt.text);
   if (parsed === undefined) {

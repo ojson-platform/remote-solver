@@ -108,13 +108,13 @@ test('markdown fields are the same return', () => {
     '- **where:** `openspec/changes/issue-1/specs/paint/spec.md`',
     '- **gap:** The scenario names one example.',
   ].join('\n');
-  assert.equal(specimenIsSpec(attempt(text, [], ['.git/index'])), 'fail');
+  assert.equal(specimenIsSpec(attempt(text, [], ['.git/index'])), 'forbidden');
   assert.equal(specimenIsSpec(attempt(text)), 'pass');
 });
 
 test('an edited review is not a return', () => {
   const text = fields('spec', specFile, 'one example of the class');
-  assert.equal(specimenIsSpec(attempt(text, [], ['src/paint.ts'])), 'fail');
+  assert.equal(specimenIsSpec(attempt(text, [], ['src/paint.ts'])), 'forbidden');
 });
 
 test('a named class with a green example is silence', () => {

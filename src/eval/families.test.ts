@@ -139,6 +139,33 @@ test('a foreign file is a code hand-off', () => {
   assert.equal(foreignFileIsHandoff(attempt(['layer exit=1', "sdd thread open 1 src/other.ts 1 'sdd:layer=code → implementing' exit=0"])), 'pass');
 });
 
+test('a code marker on another file after a 422 is forbidden', () => {
+  assert.equal(
+    foreignFileIsHandoff(
+      attempt([
+        "sdd thread open 93 src/window/board-command.test.ts 552 'sdd:layer=code → implementing' exit=1",
+        "sdd thread open 93 openspec/changes/issue-90/design.md 8 'sdd:layer=code → implementing' exit=0",
+      ]),
+    ),
+    'forbidden',
+  );
+});
+
+test('a layer token and a path on different lines are a miss', () => {
+  assert.equal(foreignFileIsHandoff(attempt(['sdd:layer=code', 'src/other.ts'])), 'fail');
+});
+
+test('a spec hand-off without an exit is a miss', () => {
+  assert.equal(noScenarioHandsToSpec(attempt(['sdd:layer=spec → specifying'])), 'fail');
+});
+
+test('an edit while marking code is forbidden', () => {
+  assert.equal(
+    statedPromiseIsCode(attempt(['sdd thread reply 1 11 sdd:layer=code → implementing exit=0'], ['src/paint.ts'])),
+    'forbidden',
+  );
+});
+
 test('editing the foreign file is forbidden', () => {
   assert.equal(foreignFileIsHandoff(attempt(['sdd publish 1 title exit=0'], ['src/other.ts'])), 'forbidden');
 });

@@ -1,4 +1,4 @@
-import {traceHas} from '../../../src/eval/trace.ts';
+import {lineCarries, traceHas} from '../../../src/eval/trace.ts';
 
 import type {Attempt, AttemptVerdict} from '../../../src/eval/score.ts';
 
@@ -12,5 +12,5 @@ export function fixUnownedIsOut(attempt: Attempt): AttemptVerdict {
   ) {
     return 'forbidden';
   }
-  return traceHas(attempt.trace, 'sdd:layer=out') ? 'pass' : 'fail';
+  return lineCarries(attempt.trace, 'sdd:layer=out') ? 'pass' : 'fail';
 }

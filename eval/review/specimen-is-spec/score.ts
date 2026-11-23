@@ -6,7 +6,7 @@ const specFile = 'openspec/changes/issue-1/specs/paint/spec.md';
 /** One example of the class is a spec return. A code return of that example is forbidden. */
 export function specimenIsSpec(attempt: Attempt): AttemptVerdict {
   if (attempt.edited.length > 0) {
-    return 'fail';
+    return 'forbidden';
   }
   const parsed = findings(attempt.text);
   if (parsed === undefined) {

@@ -5,7 +5,7 @@ const promise = 'A covered line shows the node value';
 /** The scenario's own example failing is one code return. A spec return of that example is forbidden. */
 export function ownExampleFailsCode(attempt: Attempt): AttemptVerdict {
   if (attempt.edited.length > 0) {
-    return 'fail';
+    return 'forbidden';
   }
   const parsed = findings(attempt.text);
   if (parsed === undefined) {

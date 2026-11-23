@@ -1,0 +1,7 @@
+{
+  "kind": "wait",
+  "issue": "1",
+  "reason": "checks are still running",
+  "queue": "Sandcastle",
+  "base": "trunk"
+}

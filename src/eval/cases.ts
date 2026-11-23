@@ -1,3 +1,13 @@
+import type {Attempt, AttemptVerdict} from './score.ts';
+
+import {assigneeAgreementAssigns} from '../../eval/chat/assignee-agreement-assigns/score.ts';
+import {bareAgreementRunsStep} from '../../eval/chat/bare-agreement-runs-step/score.ts';
+import {changePublishesAndUnwaits} from '../../eval/chat/change-publishes-and-unwaits/score.ts';
+import {dialogAnswerIsAThread} from '../../eval/chat/dialog-answer-is-a-thread/score.ts';
+import {gateAgreementAccepts} from '../../eval/chat/gate-agreement-accepts/score.ts';
+import {invocationDoesNotAccept} from '../../eval/chat/invocation-does-not-accept/score.ts';
+import {rebaseIsCarriedOut} from '../../eval/chat/rebase-is-carried-out/score.ts';
+import {whereIsTheCycle} from '../../eval/chat/where-is-the-cycle/score.ts';
 import {exampleStaysThatScenario} from '../../eval/fix/example-stays-that-scenario/score.ts';
 import {fixUnownedIsOut} from '../../eval/fix/unowned-is-out/score.ts';
 import {noScenarioHandsToSpec} from '../../eval/fix/no-scenario-hands-to-spec/score.ts';
@@ -17,15 +27,13 @@ import {ownExampleFailsCode} from '../../eval/review/own-example-fails-code/scor
 import {specimenIsSpec} from '../../eval/review/specimen-is-spec/score.ts';
 import {unusedLineIsNotAReturn} from '../../eval/review/unused-line-is-not-a-return/score.ts';
 
-import type {Attempt, AttemptVerdict} from './score.ts';
-
-export const familyNames = ['review', 'fix', 'pr-comments', 'repair-suite'] as const;
+export const familyNames = ['review', 'fix', 'pr-comments', 'repair-suite', 'chat'] as const;
 
 export type EvalCase = {
   id: string;
   family: (typeof familyNames)[number];
-  /** `skill` reads the final-review file. `assembled-step` prints the step with this checkout's hooks. */
-  prompt: 'skill' | 'assembled-step';
+  /** `skill` reads the final-review file. `assembled-step` prints the step with this checkout's hooks. `session` is the live sdd-flow skill, the printed decision, and the person's next message. */
+  prompt: 'skill' | 'assembled-step' | 'session';
   skill: string;
   action: string;
   score: (attempt: Attempt) => AttemptVerdict;
@@ -51,6 +59,14 @@ export const cases: EvalCase[] = [
   {id: 'foreign-file-is-handoff', family: 'repair-suite', prompt: 'assembled-step', skill: 'repair-suite', action: 'repair-suite', score: foreignFileIsHandoff},
   {id: 'card-file-is-edited-once', family: 'repair-suite', prompt: 'assembled-step', skill: 'repair-suite', action: 'repair-suite', score: cardFileIsEditedOnce},
   {id: 'return-does-not-publish', family: 'repair-suite', prompt: 'assembled-step', skill: 'repair-suite', action: 'repair-suite', score: returnDoesNotPublish},
+  {id: 'where-is-the-cycle', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: whereIsTheCycle},
+  {id: 'rebase-is-carried-out', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: rebaseIsCarriedOut},
+  {id: 'dialog-answer-is-a-thread', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: dialogAnswerIsAThread},
+  {id: 'gate-agreement-accepts', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: gateAgreementAccepts},
+  {id: 'bare-agreement-runs-step', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: bareAgreementRunsStep},
+  {id: 'invocation-does-not-accept', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: invocationDoesNotAccept},
+  {id: 'assignee-agreement-assigns', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: assigneeAgreementAssigns},
+  {id: 'change-publishes-and-unwaits', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: changePublishesAndUnwaits},
 ];
 
 function bareArgs(argv: string[]): string[] {

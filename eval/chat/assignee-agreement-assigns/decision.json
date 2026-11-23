@@ -1,0 +1,7 @@
+{
+  "kind": "wait",
+  "issue": "1",
+  "reason": "assigned to other",
+  "queue": "Sandcastle",
+  "base": "trunk"
+}

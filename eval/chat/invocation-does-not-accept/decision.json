@@ -1,0 +1,8 @@
+{
+  "kind": "wait",
+  "issue": "1",
+  "reason": "Review the proposal and accept it",
+  "gate": {"artifact": "proposal", "from": "proposing", "to": "proposed"},
+  "queue": "Sandcastle",
+  "base": "trunk"
+}

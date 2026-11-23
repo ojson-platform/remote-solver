@@ -11,6 +11,7 @@ import {modelFor, skillMode} from '../machine/skill/mode.ts';
 
 import {cases, commandExit, familyNames, requestedFamily, requestedId, type EvalCase} from './cases.ts';
 import {aggregate, type Attempt} from './score.ts';
+import {prepareSession, sessionPrompt} from './session.ts';
 
 const attempts = 3;
 
@@ -76,6 +77,9 @@ function casePrompt(item: EvalCase, root: string): string {
     const skill = readFileSync(path.join(root, '.agents/skills/sdd-final-review/SKILL.md'), 'utf8');
     return `The finished change is this directory. The base is master. The issue key is 1.\n\n${skill}`;
   }
+  if (item.prompt === 'session') {
+    return sessionPrompt(item, root);
+  }
   return assembledStep({
     solverRoot: root,
     serviceRoot: root,
@@ -112,6 +116,9 @@ async function oneAttempt(item: EvalCase, root: string, prompt: string, index: n
   try {
     if (existsSync(source)) {
       cpSync(source, cwd, {recursive: true});
+    }
+    if (item.prompt === 'session') {
+      prepareSession(cwd, root, item);
     }
     ensureFixtureGit(cwd);
     if (item.family === 'repair-suite') {

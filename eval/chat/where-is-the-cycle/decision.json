@@ -1,0 +1,13 @@
+{
+  "kind": "wait",
+  "issue": "1",
+  "reason": "#1 still has open items under ## Open questions in openspec/changes/issue-1/proposal.md",
+  "queue": "Sandcastle",
+  "base": "trunk",
+  "dialog": [
+    {
+      "text": "Which name",
+      "record": "sdd thread open 9 openspec/changes/issue-1/proposal.md 5 'sdd:layer=proposal → proposing <answer>'"
+    }
+  ]
+}

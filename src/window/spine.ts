@@ -6,7 +6,13 @@ import type {FileSource} from '../machine/port.ts';
 import {createHash} from 'node:crypto';
 
 
-import {missingBaselineIds, namedCapabilities, readBranch, type BranchText} from '../machine/change/change.ts';
+import {
+  deltaScenarioNames,
+  missingBaselineIds,
+  namedCapabilities,
+  readBranch,
+  type BranchText,
+} from '../machine/change/change.ts';
 import {changeDir} from '../machine/change/naming.ts';
 import {firstFocusSentence} from '../machine/mark/focus.ts';
 import {focusMarkerLine, isFocusRecord} from '../machine/mark/marker.ts';
@@ -281,27 +287,6 @@ function questionsOf(proposal: string): SpineQuestion[] {
   return out;
 }
 
-function scenarioNames(delta: string): string[] {
-  const names: string[] = [];
-  let take = false;
-  for (const line of delta.split('\n')) {
-    if (line.startsWith('## ')) {
-      const title = line.slice(3);
-      take = title.startsWith('ADDED') || title.startsWith('MODIFIED');
-      continue;
-    }
-    if (!take || !line.startsWith('#### Scenario: ')) {
-      continue;
-    }
-    const name = line.slice('#### Scenario: '.length).trim();
-    if (name === '') {
-      continue;
-    }
-    names.push(name);
-  }
-  return names;
-}
-
 function taskNames(line: string): string[] {
   const quoted = [...line.matchAll(/«([^»]+)»/g)]
     .map(item => (item[1] ?? '').trim())
@@ -523,7 +508,7 @@ export function projectSpine(
   const owner = new Map<string, string>();
   if (!(kept?.tasks === sections.tasks && previous)) {
     for (const spec of text.specs) {
-      for (const name of scenarioNames(spec.delta)) {
+      for (const name of deltaScenarioNames(spec.delta)) {
         if (!owner.has(name)) {
           owner.set(name, spec.id);
         }

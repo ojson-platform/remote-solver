@@ -8,7 +8,7 @@ One chat drives one issue until the machine waits or the issue is done. The next
 
 ### Requirement: The chat runs until the machine waits
 
-A step that ends in Publish or Hand-off SHALL run `step` again. A printed `advance` SHALL run `step` again. A step that leaves no Publish, no Hand-off, and no Wait SHALL stop. A printed `wait` that carries `dialog` SHALL show those entries together in the client's question dialog and SHALL NOT stop. A ready answer SHALL be offered only when the entry's text already states that whole answer. The person's own words SHALL always be offered. Each answer SHALL be recorded by that entry's `record`, with the person's words unchanged in place of `<answer>`. The chat SHALL NOT edit the change. It SHALL then run `step` again. When that command exits non-zero, the chat SHALL stop and name the file and the exit. Dismissing SHALL record nothing and stop. A later message that answers these entries SHALL be recorded the same way. A message that does not answer them SHALL show the dialog again. A printed `wait` without `dialog`, or `done`, SHALL stop. The printed `step` SHALL carry the issue text, then the upstream block, then the action text with this service's hooks. The chat SHALL follow that text and SHALL NOT open the step file.
+A step that ends in Publish or Hand-off SHALL run `step` again. A printed `advance` SHALL run `step` again. A step that leaves no Publish, no Hand-off, and no Wait SHALL stop. A printed `wait` that carries `dialog` SHALL show those entries together in the client's question dialog and SHALL NOT stop. A ready answer SHALL be offered only when the entry's text already states that whole answer. The person's own words SHALL always be offered. Each answer SHALL be recorded by that entry's `record`, with the person's words unchanged in place of `<answer>`. The chat SHALL NOT edit the change. It SHALL then run `step` again. When that command exits non-zero, the chat SHALL stop and name the file and the exit. Dismissing SHALL record nothing and stop. A later message that answers these entries SHALL be recorded the same way. A printed `wait` without `dialog`, or `done`, SHALL stop. The printed `step` SHALL carry the issue text, then the upstream block, then the action text with this service's hooks. The chat SHALL follow that text and SHALL NOT open the step file.
 
 #### Scenario: A commit or a hand-off runs step again
 
@@ -31,7 +31,7 @@ A step that ends in Publish or Hand-off SHALL run `step` again. A printed `advan
 - **THEN** the chat shows every entry together in the client's question dialog, offers a ready answer only when the entry's text already states that whole answer, always leaves a place for the person's own words, records each answer by that entry's `record` with the person's words unchanged in place of `<answer>`, does not edit the change, and runs `step` again
 - **AND** dismissing records nothing and stops
 - **AND** a command that exits non-zero stops the chat and the message names the file and the exit
-- **AND** a later message that answers these entries is recorded the same way, and a message that does not answer them shows the dialog again
+- **AND** a later message that answers these entries is recorded the same way
 
 #### Scenario: A wait without a dialog stops the chat
 
@@ -54,7 +54,7 @@ The stop message SHALL say what the run finished, why it stopped, and the files 
 
 ### Requirement: The next message stays in the session
 
-The next message SHALL continue the same issue. The skill SHALL NOT ask for `/sdd-flow` again. Agreement on a gate SHALL accept and run `step`. Agreement after a stop with no signal SHALL run `step`. A request to change the artifact SHALL publish, unwait, and run `step`.
+The next message SHALL continue the same issue. The skill SHALL NOT ask for `/sdd-flow` again. Agreement on a gate SHALL accept and run `step`. Agreement after a stop with no signal SHALL run `step`. A request to change the artifact SHALL publish, unwait, and run `step`. A message that answers a printed `dialog` SHALL record those answers and run `step`. A message that only asks where the cycle is SHALL run `step` again and follow Act, and SHALL NOT describe the cycle from an earlier print. Any other request SHALL be carried out. When that work moves the branch or the change, the chat SHALL run `step` again and follow Act.
 
 #### Scenario: Agreement on a gate continues
 
@@ -80,3 +80,13 @@ The next message SHALL continue the same issue. The skill SHALL NOT ask for `/sd
 
 - **WHEN** the next message answers entries of a printed `dialog`
 - **THEN** the chat records each answer with that entry's `record` and the person's words unchanged, does not edit the change, and runs `step`
+
+#### Scenario: A question about the cycle runs step
+
+- **WHEN** the next message only asks where the cycle is
+- **THEN** the chat runs `step` again, follows Act, and does not describe the cycle from an earlier print
+
+#### Scenario: Another request is carried out
+
+- **WHEN** the next message asks for other work
+- **THEN** the chat carries out that request, and runs `step` again when the work moves the branch or the change

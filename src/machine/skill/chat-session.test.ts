@@ -47,7 +47,6 @@ spec('chat-session', () => {
       assert.match(act, /When that command exits non-zero, stop, and the message names the file and the exit/);
       assert.match(act, /Dismissing runs nothing and stops/);
       assert.match(act, /A later message that answers these entries is recorded the same way/);
-      assert.match(act, /A message that does not answer them shows the dialog again/);
     });
     scenario('A wait without a dialog stops the chat', () => {
       assert.match(section('Act'), /`wait` without `dialog`, or `done`: stop/);
@@ -105,7 +104,23 @@ spec('chat-session', () => {
       assert.match(next, /person's words unchanged in place of `<answer>`/);
       assert.match(next, /Do not edit the change/);
       assert.match(next, /Then Act from a fresh `step`/);
-      assert.match(next, /does not answer those entries shows the dialog again/);
+    });
+    scenario('A question about the cycle runs step', () => {
+      const next = section('The next message');
+      assert.match(
+        next,
+        /A message that only asks where the cycle is: run `sdd step <key>` again and follow Act/,
+      );
+      assert.match(next, /Do not describe the cycle from an earlier print/);
+      assert.doesNotMatch(next, /say what is still waited for/);
+    });
+    scenario('Another request is carried out', () => {
+      const next = section('The next message');
+      assert.match(next, /Any other request is carried out/);
+      assert.match(
+        next,
+        /When that work moves the branch or the change, run `sdd step <key>` again and follow Act/,
+      );
     });
   });
 });

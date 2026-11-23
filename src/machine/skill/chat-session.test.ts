@@ -35,17 +35,32 @@ spec('chat-session', () => {
     scenario('A dialog does not stop the chat', () => {
       const act = section('Act');
       assert.match(act, /`wait` with `dialog`: do not stop/);
+      assert.match(act, /The printed `text` is the question/);
+      assert.match(act, /Do not open the change to prepare the dialog/);
       assert.match(act, /Show every entry together in the client's question dialog/);
+      assert.match(act, /A choice is a whole answer the person can accept unchanged/);
       assert.match(
         act,
-        /Offer a ready answer only when that entry's text already states that whole answer/,
+        /Never offer a choice that sends the person to another field, skips the entry, or stops the cycle/,
       );
-      assert.match(act, /Always leave a place for the person's own words/);
+      assert.match(
+        act,
+        /When no whole answer is ready, or the dialog needs a second choice and only one is ready, ask in the message/,
+      );
+      assert.match(act, /The person's own words stay available/);
       assert.match(act, /person's words unchanged in place of `<answer>`/);
+      assert.match(act, /That command is the only post/);
       assert.match(act, /Do not edit the change/);
       assert.match(act, /Then run `sdd step <key>` and follow Act/);
       assert.match(act, /When that command exits non-zero, stop, and the message names the file and the exit/);
-      assert.match(act, /Dismissing runs nothing and stops/);
+      assert.match(
+        act,
+        /When the next step still lists an entry the person answered, stop, and say the record did not close it/,
+      );
+      assert.match(act, /Do not post the answer another way/);
+      assert.match(act, /Closing the dialog answers nothing and stops/);
+      assert.match(act, /An entry left unanswered stays open, and the next run asks it again/);
+      assert.match(act, /When the next step lists only entries the person left unanswered, stop/);
       assert.match(act, /A later message that answers these entries is recorded the same way/);
     });
     scenario('A wait without a dialog stops the chat', () => {
@@ -58,7 +73,13 @@ spec('chat-session', () => {
         /The printed decision's `step` carries the issue text, then the upstream block, then the action text with this service's hooks/,
       );
       assert.match(act, /Follow that text/);
-      assert.match(act, /Do not open the step file/);
+      assert.match(act, /Do not open the step file, the program, its adapters, or another skill's scripts/);
+      assert.match(act, /The printed text is the outcome/);
+      assert.match(
+        act,
+        /The printed path is the cwd for every edit, commit, and publish in this issue/,
+      );
+      assert.match(act, /Do not search the tree for that checkout, and do not use the directory the chat started from/);
     });
   });
 
@@ -102,8 +123,15 @@ spec('chat-session', () => {
       const next = section('The next message');
       assert.match(next, /answers entries of a printed `dialog`/);
       assert.match(next, /person's words unchanged in place of `<answer>`/);
+      assert.match(next, /That command is the only post/);
       assert.match(next, /Do not edit the change/);
       assert.match(next, /Then Act from a fresh `step`/);
+      assert.match(
+        next,
+        /When the next step still lists an entry the person answered, stop, and say the record did not close it/,
+      );
+      assert.match(next, /An entry left unanswered stays open, and the next run asks it again/);
+      assert.match(next, /Do not post the answer another way/);
     });
     scenario('A question about the cycle runs step', () => {
       const next = section('The next message');

@@ -8,7 +8,7 @@ One chat drives one issue until the machine waits or the issue is done. The next
 
 ### Requirement: The chat runs until the machine waits
 
-A step that ends in Publish or Hand-off SHALL run `step` again. A printed `advance` SHALL run `step` again. A step that leaves no Publish, no Hand-off, and no Wait SHALL stop. A printed `wait` that carries `dialog` SHALL show those entries together in the client's question dialog and SHALL NOT stop. A ready answer SHALL be offered only when the entry's text already states that whole answer. The person's own words SHALL always be offered. Each answer SHALL be recorded by that entry's `record`, with the person's words unchanged in place of `<answer>`. The chat SHALL NOT edit the change. It SHALL then run `step` again. When that command exits non-zero, the chat SHALL stop and name the file and the exit. Dismissing SHALL record nothing and stop. A later message that answers these entries SHALL be recorded the same way. A printed `wait` without `dialog`, or `done`, SHALL stop. The printed `step` SHALL carry the issue text, then the upstream block, then the action text with this service's hooks. The chat SHALL follow that text and SHALL NOT open the step file.
+A step that ends in Publish or Hand-off SHALL run `step` again. A printed `advance` SHALL run `step` again. A step that leaves no Publish, no Hand-off, and no Wait SHALL stop. A printed `wait` that carries `dialog` SHALL show those entries together in the client's question dialog and SHALL NOT stop. The printed text SHALL be the question, and the chat SHALL NOT open the change to prepare the dialog. A choice SHALL be a whole answer the person can accept unchanged, one the issue and the entry support. A choice that sends the person to another field, skips the entry, or stops the cycle SHALL NOT be offered. When no whole answer is ready, or the dialog needs a second choice and only one is ready, the chat SHALL ask in the message. The person's own words SHALL stay available. Each answer SHALL be recorded by that entry's `record`, with the person's words unchanged in place of `<answer>`. That command SHALL be the only post. The chat SHALL NOT edit the change. It SHALL then run `step` again. When that command exits non-zero, the chat SHALL stop and name the file and the exit. When the next step still lists an entry the person answered, the chat SHALL stop, say the record did not close it, and SHALL NOT post the answer another way. Closing the dialog SHALL answer nothing and stop. An entry left unanswered SHALL stay open, and the next run SHALL ask it again. When the next step lists only entries the person left unanswered, the chat SHALL stop. A later message that answers these entries SHALL be recorded the same way. A printed `wait` without `dialog`, or `done`, SHALL stop. The printed `step` SHALL carry the issue text, then the upstream block, then the action text with this service's hooks. The chat SHALL follow that text and SHALL NOT open the step file, the program, its adapters, or another skill's scripts. The printed path of `sdd worktree` SHALL be the cwd for every edit, commit, and publish. The chat SHALL NOT search the tree for that checkout and SHALL NOT use the directory the chat started from.
 
 #### Scenario: A commit or a hand-off runs step again
 
@@ -28,9 +28,11 @@ A step that ends in Publish or Hand-off SHALL run `step` again. A printed `advan
 #### Scenario: A dialog does not stop the chat
 
 - **WHEN** `step` prints `wait` with `dialog`
-- **THEN** the chat shows every entry together in the client's question dialog, offers a ready answer only when the entry's text already states that whole answer, always leaves a place for the person's own words, records each answer by that entry's `record` with the person's words unchanged in place of `<answer>`, does not edit the change, and runs `step` again
-- **AND** dismissing records nothing and stops
+- **THEN** the chat shows every entry together in the client's question dialog, treats the printed text as the question, does not open the change to prepare the dialog, offers a choice that is a whole answer the person can accept unchanged, never offers a choice that sends the person to another field, skips the entry, or stops the cycle, asks in the message when no whole answer is ready or a second choice is required and only one is ready, keeps the person's own words available, records each answer by that entry's `record` with the person's words unchanged in place of `<answer>`, posts only by that command, does not edit the change, and runs `step` again
+- **AND** closing the dialog answers nothing and stops, an entry left unanswered stays open, and the next run asks it again
 - **AND** a command that exits non-zero stops the chat and the message names the file and the exit
+- **AND** when the next step still lists an entry the person answered, the chat stops, says the record did not close it, and does not post the answer another way
+- **AND** when the next step lists only entries the person left unanswered, the chat stops
 - **AND** a later message that answers these entries is recorded the same way
 
 #### Scenario: A wait without a dialog stops the chat
@@ -41,7 +43,7 @@ A step that ends in Publish or Hand-off SHALL run `step` again. A printed `advan
 #### Scenario: The chat follows the printed step
 
 - **WHEN** `step` prints an agent decision
-- **THEN** the chat follows that decision's `step` text and does not open the step file
+- **THEN** the chat follows that decision's `step` text, does not open the step file, the program, its adapters, or another skill's scripts, and edits, commits, and publishes in the directory `sdd worktree` prints
 
 ### Requirement: The stop tells the person what happened
 

@@ -214,5 +214,5 @@ export function stepPrompt(
   }
   const steps = headingIndex(file.split('\n'), '## Steps');
   const placed = place(file, steps >= 0 ? '## Steps' : `## ${action}`, before, after);
-  return placed ?? file;
+  return placed ?? '';
 }

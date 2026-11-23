@@ -255,6 +255,11 @@ test('a missing service list adds no blank line before the cycle paragraph', () 
   );
 });
 
+test('a step file without a heading is not a finished prompt', () => {
+  const result = stepPrompt('1. go\n', 'repair-suite', {'repair-suite': {after: ['review before Publish']}}, {});
+  assert.equal(result, '');
+});
+
 test('a service paragraph does not cancel the cycle paragraph', () => {
   const result = stepPrompt(
     '## Steps\n\n1. go\n',

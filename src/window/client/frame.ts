@@ -1,5 +1,6 @@
 import type {LayerAct, SnapshotRow, WindowSnapshot} from '../snapshot.ts';
-import {layerForStation, type Spine, type SpineLayer} from '../spine.ts';
+import {layerForStation} from '../phrase.ts';
+import type {Spine, SpineLayer} from '../spine.ts';
 import type {GateStation, SidebarBlock} from '../types.ts';
 
 import {GATE_STATIONS, isGateStation} from '../types.ts';

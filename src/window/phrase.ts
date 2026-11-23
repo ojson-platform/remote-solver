@@ -61,6 +61,32 @@ export const WRITING_LAYER = {
   implementing: 'Code',
 } as const;
 
+/** The spine row a station or a review gate opens. Any other station opens Change. */
+export function layerForStation(station: string | undefined) {
+  switch (station) {
+    case 'proposing':
+    case 'proposed':
+      return WRITING_LAYER.proposing;
+    case 'specifying':
+    case 'specified':
+      return WRITING_LAYER.specifying;
+    case 'designing':
+    case 'designed':
+      return WRITING_LAYER.designing;
+    case 'tasking':
+      return WRITING_LAYER.tasking;
+    case 'implementing':
+      return WRITING_LAYER.implementing;
+    case 'verifying':
+      return 'Code';
+    case 'accepting':
+    case 'accepted':
+      return 'Accept';
+    default:
+      return 'Change';
+  }
+}
+
 function writingName(phase: Phase): string | undefined {
   switch (phase) {
     case 'proposing':

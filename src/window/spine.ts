@@ -19,7 +19,9 @@ import {focusMarkerLine, isFocusRecord} from '../machine/mark/marker.ts';
 
 import {strictChangeFiles, strictContentChangeFiles} from './change-files.ts';
 import {scanFocusComments} from './focus.ts';
-import {WRITING_LAYER} from './phrase.ts';
+import {layerForStation} from './phrase.ts';
+
+export {layerForStation};
 import {specDiff} from './spec-diff.ts';
 
 
@@ -232,31 +234,6 @@ export function reviewGateForPhase(phase: string | null | undefined): ReviewGate
 /** The review label of a spine layer. Plan, Specify, and Design have one. */
 export function reviewGateForLayer(layer: SpineLayer): ReviewGate | undefined {
   return REVIEW_GATES.find(row => row.layer === layer)?.gate;
-}
-
-export function layerForStation(station: string | undefined): SpineLayer {
-  switch (station) {
-    case 'proposing':
-    case 'proposed':
-      return WRITING_LAYER.proposing;
-    case 'specifying':
-    case 'specified':
-      return WRITING_LAYER.specifying;
-    case 'designing':
-    case 'designed':
-      return WRITING_LAYER.designing;
-    case 'tasking':
-      return WRITING_LAYER.tasking;
-    case 'implementing':
-      return WRITING_LAYER.implementing;
-    case 'verifying':
-      return 'Code';
-    case 'accepting':
-    case 'accepted':
-      return 'Accept';
-    default:
-      return 'Change';
-  }
 }
 
 function checksLine(checks: string | undefined): string | undefined {

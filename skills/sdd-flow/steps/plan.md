@@ -25,7 +25,7 @@ Records why and the scope. Zoom is context, not implementation. The commit and t
 - Unresolved questions are `- [ ]` items
 - No signatures and no implementation in the proposal
 - The PR title starts with `#<issue>:`
-- Each id is one rule, not a screen, a file, or a module. Both lists empty is a finished cut when no rule changes, not a missing id. A rule the issue treats as already seen is under `### Modified` on this first cut. This step does not Wait on the shelf
+- Each id is one rule, not a screen, a file, or a module. Both lists empty is a finished cut when no rule changes, not a missing id. A rule the issue treats as already seen is under `### Modified` on this first cut.
 - The proposal commit is on the open PR
 
 ## Stop

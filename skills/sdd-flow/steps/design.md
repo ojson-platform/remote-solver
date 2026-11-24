@@ -22,8 +22,8 @@ Writes the technical decision for this change.
    When the service describes its architecture, record the seams of this change in the service model.
 4. No decision yet: an open decision item. Do not Wait for it. The phase paints the count. Leave it open.
 5. `improve-design`: Fix thread (`CONTEXT.md`), layer `design`.
-6. An approach sentence that names an observation no scenario names is a Hand-off to `spec` on that sentence. When that thread is already open, do not open another. Do not publish and do not move `sdd-absorbed`. Publish (`CONTEXT.md`) only when every such sentence is named by a scenario. When `design.md` is in the commit, focus with marker `sdd:focus:design`. Mirror: `Design`. Open decisions do not delay the push.
-7. An open decision remains in `design.md`. Do not Wait for it. The phase paints the count.
+6. An approach sentence that names an observation no scenario names is a Hand-off to `spec` on that sentence. When that thread is already open, do not open another. Do not publish and do not move `sdd-absorbed`. Publish (`CONTEXT.md`) only when every such sentence is named by a scenario. When `design.md` is in the commit, focus with marker `sdd:focus:design`. Mirror: `Design`.
+7. An open decision remains in `design.md`. The phase paints the count.
 
 ## Check
 
@@ -34,7 +34,7 @@ Writes the technical decision for this change.
 
 ## Stop
 
-- Publish. The machine opens the review gate. An open decision stays in the file. This step does not Wait for it. The phase paints the count.
+- Publish. The machine opens the review gate. An open decision stays in the file. The phase paints the count.
 - `Open questions:` in the init block: each question is an unchecked item under `## Open decisions`. Do not publish. The next poll waits on that item.
 - No one-file command, or no layer command, in the repository: one unchecked item under `## Open decisions` names the missing command. Do not publish. The person fills the missing command in the init block.
 - An approach sentence names an observation no scenario names: Hand-off to `spec` on that sentence and do not publish. The approach contradicts a scenario: Hand-off to `spec` on that scenario and do not move `sdd-absorbed`.

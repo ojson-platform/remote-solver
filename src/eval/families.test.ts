@@ -3,6 +3,7 @@ import {test} from 'vitest';
 
 import {openDecisionStaysThatItem} from '../../eval/design/open-decision-stays-that-item/score.ts';
 import {missingDesignIsWritten} from '../../eval/design/missing-design-is-written/score.ts';
+import {openDecisionsStayUnchecked} from '../../eval/design/open-decisions-stay-unchecked/score.ts';
 import {openTaskStaysThatItem} from '../../eval/tasks/open-task-stays-that-item/score.ts';
 import {exampleStaysThatScenario} from '../../eval/fix/example-stays-that-scenario/score.ts';
 import {fixUnownedIsOut} from '../../eval/fix/unowned-is-out/score.ts';
@@ -537,6 +538,95 @@ test('a missing design that skips the scenario misses', () => {
       ),
     ),
     'fail',
+  );
+});
+
+const openDesign = `## Verification boundary
+
+card
+
+## Approach
+
+The card shows one name.
+
+## Open decisions
+
+- [ ] Which name
+`;
+
+const designFocus = [
+  'sdd publish 1 "#1: one name" exit=0',
+  'sdd focus 1 sdd:focus:design',
+  'На карточке одно имя. exit=0',
+];
+
+test('open decisions stay unchecked through publish', () => {
+  assert.equal(
+    openDecisionsStayUnchecked(
+      attempt(designFocus, [], {'openspec/changes/issue-1/design.md': openDesign}),
+    ),
+    'pass',
+  );
+});
+
+test('a checked decision misses', () => {
+  assert.equal(
+    openDecisionsStayUnchecked(
+      attempt(designFocus, [], {
+        'openspec/changes/issue-1/design.md': openDesign.replace('[ ]', '[x]'),
+      }),
+    ),
+    'fail',
+  );
+});
+
+test('waiting on an open decision misses', () => {
+  assert.equal(
+    openDecisionsStayUnchecked(
+      attempt(
+        [...designFocus, 'sdd wait 1 "which name" exit=0'],
+        [],
+        {'openspec/changes/issue-1/design.md': openDesign},
+      ),
+    ),
+    'fail',
+  );
+});
+
+test('setting the design gate label misses', () => {
+  assert.equal(
+    openDecisionsStayUnchecked(
+      attempt(
+        [...designFocus, 'sdd label 1 sdd:designed exit=0'],
+        [],
+        {'openspec/changes/issue-1/design.md': openDesign},
+      ),
+    ),
+    'fail',
+  );
+});
+
+test('a second design publish misses', () => {
+  assert.equal(
+    openDecisionsStayUnchecked(
+      attempt(
+        ['sdd publish 1 "#1: one name" exit=0', ...designFocus],
+        [],
+        {'openspec/changes/issue-1/design.md': openDesign},
+      ),
+    ),
+    'fail',
+  );
+});
+
+test('editing the spec while leaving a decision is forbidden', () => {
+  assert.equal(
+    openDecisionsStayUnchecked(
+      attempt(designFocus, ['openspec/changes/issue-1/design.md', 'openspec/changes/issue-1/specs/card/spec.md'], {
+        'openspec/changes/issue-1/design.md': openDesign,
+      }),
+    ),
+    'forbidden',
   );
 });
 

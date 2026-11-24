@@ -12,8 +12,6 @@ Writes the technical decision for this change.
 
 ## Steps
 
-An open thread of layer `design`: steps 1–4 do not write `design.md` again. Step 5 still records an open decision in the same commit.
-
 1. § Upstream says the stamp matches and `threads <pull> --layer design` is empty: go to step 6. An open design thread does not write `design.md` in this step. Otherwise the block names the edit. Do not judge `design.md` already right from the whole spec.
 2. When `threads <pull> --layer design` is not empty, steps 2–4 do not write `design.md`. Go to step 5. Write `design.md` by `CONTEXT.md` § Artifacts. When the block names an input revision, edit the existing design for those facts and do not replace the rest from a fresh reading of the whole spec. The file does not exist yet: write it from the current specs. Move `sdd-absorbed:` to that revision only when the input is folded. Do not blank a section this file owns. The verification boundary names every capability, where its scenarios are observed, and the commands: a one-file command that contains `<test-file>`, and the layer command. When the trace line names `@ojson/spec-coverage`, the one-file command also contains `<titles>`. A fast suite is included when the init block names one, otherwise `none`. The last line of the section is the type check, once for the change, or `none`.
    The block between `<!-- sdd:init:begin -->` and `<!-- sdd:init:end -->` in `AGENTS.md` contains `Open questions:`: write each question as an unchecked item under `## Open decisions` in `design.md`. Do not publish. Do not search for commands.
@@ -23,7 +21,7 @@ An open thread of layer `design`: steps 1–4 do not write `design.md` again. St
 3. **Write the approach.** `## Approach` says how this change is built: module boundaries, risks, rejected alternatives. `none` when there is nothing to say. Leave the three required sections as step 2 wrote them.
    When the service describes its architecture, record the seams of this change in the service model.
 4. No decision yet: an open decision item. Do not Wait for it. The phase paints the count. Leave it open.
-5. `improve-design`: Fix thread (`CONTEXT.md`), layer `design`. A thread on an open decision writes that choice on the item and checks it, and leaves the rest of the file, in the same commit, before a hand-off or `thread fix`. The hand-off is a new thread on the other layer's file.
+5. `improve-design`: Fix thread (`CONTEXT.md`), layer `design`.
 6. An approach sentence that names an observation no scenario names is a Hand-off to `spec` on that sentence. When that thread is already open, do not open another. Do not publish and do not move `sdd-absorbed`. Publish (`CONTEXT.md`) only when every such sentence is named by a scenario. When `design.md` is in the commit, focus with marker `sdd:focus:design`. Mirror: `Design`. Open decisions do not delay the push.
 7. An open decision remains in `design.md`. Do not Wait for it. The phase paints the count.
 

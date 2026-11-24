@@ -1,0 +1,17 @@
+#!/bin/sh
+name=$(basename "$0")
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+trace=${EVAL_TRACE:-/dev/null}
+code=0
+
+if [ "$name" = sdd ] && [ "${1:-}" = threads ]; then
+  cat "$root/threads.md"
+fi
+if [ "$name" = sdd ] && [ "${1:-}" = worktree ]; then
+  printf '%s\n' "$root"
+fi
+
+printf '%s' "$name" >> "$trace"
+printf ' %s' "$@" >> "$trace"
+printf ' exit=%s\n' "$code" >> "$trace"
+exit "$code"

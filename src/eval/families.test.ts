@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
+import {openDecisionStaysThatItem} from '../../eval/design/open-decision-stays-that-item/score.ts';
+import {openTaskStaysThatItem} from '../../eval/tasks/open-task-stays-that-item/score.ts';
 import {exampleStaysThatScenario} from '../../eval/fix/example-stays-that-scenario/score.ts';
 import {fixUnownedIsOut} from '../../eval/fix/unowned-is-out/score.ts';
 import {noScenarioHandsToSpec} from '../../eval/fix/no-scenario-hands-to-spec/score.ts';
@@ -301,4 +303,115 @@ test('editing another change file is forbidden', () => {
 
 test('handing a card file to code is forbidden', () => {
   assert.equal(cardFileIsEditedOnce(attempt(['sdd:layer=code → implementing exit=0'], ['src/paint.ts'])), 'forbidden');
+});
+
+const design = 'openspec/changes/issue-1/design.md';
+const decided = `## Approach
+
+none
+
+## Verification boundary
+
+one-file: the card test
+
+## Open decisions
+
+- [x] Which name
+  The name is distance.
+`;
+
+test('an open decision is checked on its item', () => {
+  assert.equal(
+    openDecisionStaysThatItem(
+      attempt(
+        ['sdd commit 1 "#1: the name" exit=0', 'sdd thread fix 1 1 T1 exit=0'],
+        [design],
+        {[design]: decided},
+      ),
+    ),
+    'pass',
+  );
+});
+
+test('an unchecked decision misses', () => {
+  assert.equal(
+    openDecisionStaysThatItem(
+      attempt(
+        ['sdd commit 1 "#1: the name" exit=0', 'sdd thread fix 1 1 T1 exit=0'],
+        [design],
+        {[design]: decided.replace('[x]', '[ ]')},
+      ),
+    ),
+    'fail',
+  );
+});
+
+const taskList = 'openspec/changes/issue-1/tasks.md';
+const card = `## Source
+
+\`src/card.ts\`
+`;
+const listed = `- [x] \`card\` Which name
+  The name is distance.
+`;
+
+test('an open task item is checked in place', () => {
+  assert.equal(
+    openTaskStaysThatItem(
+      attempt(
+        ['sdd commit 1 "#1: the name" exit=0', 'sdd thread fix 1 1 T1 exit=0'],
+        [taskList],
+        {
+          [taskList]: listed,
+          'openspec/changes/issue-1/tasks/card.md': `- The card shows one name\nsdd-delta: rev-1\n\n${card}`,
+        },
+      ),
+    ),
+    'pass',
+  );
+});
+
+test('an unchecked task item misses', () => {
+  assert.equal(
+    openTaskStaysThatItem(
+      attempt(
+        ['sdd commit 1 "#1: the name" exit=0', 'sdd thread fix 1 1 T1 exit=0'],
+        [taskList],
+        {
+          [taskList]: listed.replace('[x]', '[ ]'),
+          'openspec/changes/issue-1/tasks/card.md': `- The card shows one name\nsdd-delta: rev-1\n\n${card}`,
+        },
+      ),
+    ),
+    'fail',
+  );
+});
+
+test('editing the task card is forbidden', () => {
+  assert.equal(
+    openTaskStaysThatItem(
+      attempt(
+        ['sdd commit 1 "#1: the name" exit=0', 'sdd thread fix 1 1 T1 exit=0'],
+        [taskList, 'openspec/changes/issue-1/tasks/card.md'],
+        {
+          [taskList]: listed,
+          'openspec/changes/issue-1/tasks/card.md': `- The card shows one name\nsdd-delta: rev-1\n\n${card}`,
+        },
+      ),
+    ),
+    'forbidden',
+  );
+});
+
+test('editing the proposal while deciding is forbidden', () => {
+  assert.equal(
+    openDecisionStaysThatItem(
+      attempt(
+        ['sdd commit 1 "#1: the name" exit=0', 'sdd thread fix 1 1 T1 exit=0'],
+        [design, 'openspec/changes/issue-1/proposal.md'],
+        {[design]: decided},
+      ),
+    ),
+    'forbidden',
+  );
 });

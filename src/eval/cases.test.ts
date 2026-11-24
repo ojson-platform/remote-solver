@@ -5,7 +5,7 @@ import {commandExit, familyNames, requestedFamily, requestedId} from './cases.ts
 
 test('a missing family names the families and is not a pass', () => {
   assert.equal(requestedFamily([]), undefined);
-  assert.deepEqual(familyNames, ['review', 'fix', 'plan', 'pr-comments', 'repair-suite', 'chat']);
+  assert.deepEqual(familyNames, ['review', 'fix', 'plan', 'design', 'tasks', 'pr-comments', 'repair-suite', 'chat']);
 });
 
 test('the family is the first bare argument', () => {

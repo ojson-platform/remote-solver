@@ -18,6 +18,8 @@ import {fixUnownedIsOut} from '../../eval/fix/unowned-is-out/score.ts';
 import {noScenarioHandsToSpec} from '../../eval/fix/no-scenario-hands-to-spec/score.ts';
 import {openQuestionStaysThatItem} from '../../eval/plan/open-question-stays-that-item/score.ts';
 import {openQuestionsStayUnchecked} from '../../eval/plan/open-questions-stay-unchecked/score.ts';
+import {planFocusNamesTheRefusal} from '../../eval/plan/plan-focus-names-the-refusal/score.ts';
+import {planFocusSkipsTheOldRefusal} from '../../eval/plan/plan-focus-skips-the-old-refusal/score.ts';
 import {openTaskStaysThatItem} from '../../eval/tasks/open-task-stays-that-item/score.ts';
 import {commentsUnownedIsOut} from '../../eval/pr-comments/unowned-is-out/score.ts';
 import {laterPhaseIsNote} from '../../eval/pr-comments/later-phase-is-note/score.ts';
@@ -58,6 +60,8 @@ export const cases: EvalCase[] = [
   {id: 'unowned-is-out', family: 'fix', prompt: 'assembled-step', skill: 'fix', action: 'fix', score: fixUnownedIsOut},
   {id: 'open-question-stays-that-item', family: 'plan', prompt: 'assembled-step', skill: 'plan', action: 'improve-proposal', score: openQuestionStaysThatItem},
   {id: 'open-questions-stay-unchecked', family: 'plan', prompt: 'assembled-step', skill: 'plan', action: 'create-proposal', score: openQuestionsStayUnchecked},
+  {id: 'plan-focus-names-the-refusal', family: 'plan', prompt: 'assembled-step', skill: 'plan', action: 'create-proposal', score: planFocusNamesTheRefusal},
+  {id: 'plan-focus-skips-the-old-refusal', family: 'plan', prompt: 'assembled-step', skill: 'plan', action: 'improve-proposal', score: planFocusSkipsTheOldRefusal},
   {id: 'open-decision-stays-that-item', family: 'design', prompt: 'assembled-step', skill: 'design', action: 'improve-design', score: openDecisionStaysThatItem},
   {id: 'missing-design-is-written', family: 'design', prompt: 'assembled-step', skill: 'design', action: 'create-design', score: missingDesignIsWritten},
   {id: 'open-task-stays-that-item', family: 'tasks', prompt: 'assembled-step', skill: 'tasks', action: 'improve-tasks', score: openTaskStaysThatItem},

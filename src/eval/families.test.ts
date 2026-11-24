@@ -9,6 +9,8 @@ import {fixUnownedIsOut} from '../../eval/fix/unowned-is-out/score.ts';
 import {noScenarioHandsToSpec} from '../../eval/fix/no-scenario-hands-to-spec/score.ts';
 import {openQuestionStaysThatItem} from '../../eval/plan/open-question-stays-that-item/score.ts';
 import {openQuestionsStayUnchecked} from '../../eval/plan/open-questions-stay-unchecked/score.ts';
+import {planFocusNamesTheRefusal} from '../../eval/plan/plan-focus-names-the-refusal/score.ts';
+import {planFocusSkipsTheOldRefusal} from '../../eval/plan/plan-focus-skips-the-old-refusal/score.ts';
 import {commentsUnownedIsOut} from '../../eval/pr-comments/unowned-is-out/score.ts';
 import {laterPhaseIsNote} from '../../eval/pr-comments/later-phase-is-note/score.ts';
 import {openDecisionIsDesign} from '../../eval/pr-comments/open-decision-is-design/score.ts';
@@ -548,5 +550,82 @@ test('editing the spec while writing the design is forbidden', () => {
       ),
     ),
     'forbidden',
+  );
+});
+
+const refused = `The caller cannot tell two names apart.
+One name is shown.
+The name on the card.
+
+## Out of scope
+
+Отказались вести ledger.
+
+## Open questions
+
+- [ ] Which name
+
+## Shelf
+`;
+
+const firstFocus = [
+  'sdd publish 1 "#1: one name" exit=0',
+  'sdd focus 1 sdd:focus:plan',
+  'Читатель тикета видит одно имя на карточке. Отказались вести ledger. exit=0',
+];
+
+test('a first plan visit names the refusal', () => {
+  assert.equal(
+    planFocusNamesTheRefusal(attempt(firstFocus, [], {'openspec/changes/issue-1/proposal.md': refused})),
+    'pass',
+  );
+});
+
+test('a first plan visit that skips the refusal misses', () => {
+  assert.equal(
+    planFocusNamesTheRefusal(
+      attempt(
+        [
+          'sdd publish 1 "#1: one name" exit=0',
+          'sdd focus 1 sdd:focus:plan',
+          'Читатель тикета видит одно имя на карточке. exit=0',
+        ],
+        [],
+        {'openspec/changes/issue-1/proposal.md': refused},
+      ),
+    ),
+    'fail',
+  );
+});
+
+const answeredProposal = refused.replace('- [ ] Which name', '- [x] Which name\n  The name is distance.');
+
+const laterFocus = [
+  'sdd thread fix 1 1 T1 exit=0',
+  'sdd focus 1 sdd:focus:plan',
+  'В этом коммите на карточке имя distance. exit=0',
+];
+
+test('a later plan visit leaves the old refusal', () => {
+  assert.equal(
+    planFocusSkipsTheOldRefusal(attempt(laterFocus, [], {'openspec/changes/issue-1/proposal.md': answeredProposal})),
+    'pass',
+  );
+});
+
+test('a later plan visit that repeats the old refusal misses', () => {
+  assert.equal(
+    planFocusSkipsTheOldRefusal(
+      attempt(
+        [
+          'sdd thread fix 1 1 T1 exit=0',
+          'sdd focus 1 sdd:focus:plan',
+          'В этом коммите имя distance. Отказались вести ledger. exit=0',
+        ],
+        [],
+        {'openspec/changes/issue-1/proposal.md': answeredProposal},
+      ),
+    ),
+    'fail',
   );
 });

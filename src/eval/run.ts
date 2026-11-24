@@ -38,12 +38,27 @@ export async function main(argv: string[], root: string): Promise<number> {
   return commandExit(verdicts);
 }
 
+function resultDir(root: string, item: EvalCase, index?: number): string {
+  const label = process.env.EVAL_LABEL?.trim();
+  const parts = [root, 'eval-results', item.family, item.id];
+  if (label) {
+    parts.push(label);
+  }
+  if (index !== undefined) {
+    parts.push(String(index));
+  }
+  return path.join(...parts);
+}
+
 function keep(root: string, item: EvalCase, index: number, attempt: Attempt): void {
-  const dest = path.join(root, 'eval-results', item.family, item.id, String(index));
+  const dest = resultDir(root, item, index);
   mkdirSync(dest, {recursive: true});
   writeFileSync(path.join(dest, 'answer.txt'), attempt.text);
   writeFileSync(path.join(dest, 'trace.txt'), attempt.trace.join('\n'));
   writeFileSync(path.join(dest, 'edited.txt'), attempt.edited.join('\n'));
+  if (attempt.log !== undefined) {
+    writeFileSync(path.join(dest, 'log.txt'), attempt.log);
+  }
 }
 
 function known(family: string): boolean {
@@ -52,6 +67,9 @@ function known(family: string): boolean {
 
 async function runCase(item: EvalCase, root: string): Promise<'pass' | 'fail' | 'inconclusive'> {
   const prompt = casePrompt(item, root);
+  const promptDir = resultDir(root, item);
+  mkdirSync(promptDir, {recursive: true});
+  writeFileSync(path.join(promptDir, 'prompt.txt'), prompt);
   const verdicts = [];
   for (let index = 1; index <= attempts; index += 1) {
     let attempt: Attempt;
@@ -63,9 +81,7 @@ async function runCase(item: EvalCase, root: string): Promise<'pass' | 'fail' | 
     const verdict = item.score(attempt);
     verdicts.push(verdict);
     process.stdout.write(`${item.family}\t${item.id}\t${index}\t${verdict}\n`);
-    if (verdict !== 'pass') {
-      keep(root, item, index, attempt);
-    }
+    keep(root, item, index, attempt);
   }
   const score = aggregate(verdicts);
   process.stdout.write(`${item.family}\t${item.id}\tcase\t${score.verdict}\t${score.because}\n`);
@@ -131,6 +147,7 @@ async function oneAttempt(item: EvalCase, root: string, prompt: string, index: n
     const bin = path.join(cwd, 'bin');
     mkdirSync(bin, {recursive: true});
     const before = snapshot(cwd);
+    const logPath = path.join(cwd, `attempt-${index}.log`);
     const answer = await runAgent({
       cwd,
       hostCwd: root,
@@ -145,9 +162,10 @@ async function oneAttempt(item: EvalCase, root: string, prompt: string, index: n
       prompt,
       promptFile: path.join(root, '.agents/skills/sdd-final-review/SKILL.md'),
       promptArgs: {},
-      logPath: path.join(cwd, `attempt-${index}.log`),
+      logPath,
     });
-    return {text: answer.text, trace: readTrace(trace), edited: changed(before, cwd), files: texts(cwd)};
+    const log = existsSync(logPath) ? readFileSync(logPath, 'utf8') : '';
+    return {text: answer.text, trace: readTrace(trace), edited: changed(before, cwd), files: texts(cwd), log};
   } finally {
     rmSync(cwd, {recursive: true, force: true});
   }

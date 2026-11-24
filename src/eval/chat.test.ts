@@ -10,9 +10,11 @@ import {assigneeAgreementAssigns} from '../../eval/chat/assignee-agreement-assig
 import {bareAgreementRunsStep} from '../../eval/chat/bare-agreement-runs-step/score.ts';
 import {changePublishesAndUnwaits} from '../../eval/chat/change-publishes-and-unwaits/score.ts';
 import {dialogAnswerIsAThread} from '../../eval/chat/dialog-answer-is-a-thread/score.ts';
+import {dialogCloseStops} from '../../eval/chat/dialog-close-stops/score.ts';
 import {gateAgreementAccepts} from '../../eval/chat/gate-agreement-accepts/score.ts';
 import {invocationDoesNotAccept} from '../../eval/chat/invocation-does-not-accept/score.ts';
 import {rebaseIsCarriedOut} from '../../eval/chat/rebase-is-carried-out/score.ts';
+import {recordDidNotClose} from '../../eval/chat/record-did-not-close/score.ts';
 import {skipStops} from '../../eval/chat/skip-stops/score.ts';
 import {whereIsTheCycle} from '../../eval/chat/where-is-the-cycle/score.ts';
 import {skillMode} from '../machine/skill/mode.ts';
@@ -194,6 +196,119 @@ test('recording a skip misses', () => {
 
 test('editing the change on a skip is forbidden', () => {
   assert.equal(skipStops({text: 'Skipped.', trace: [], edited: [proposal], files: {}}), 'forbidden');
+});
+
+test('closing the dialog records nothing', () => {
+  assert.equal(dialogCloseStops({text: 'Closed.', trace: [], edited: [], files: {}}), 'pass');
+});
+
+test('a silent close is not a stop', () => {
+  assert.equal(dialogCloseStops(attempt([])), 'fail');
+});
+
+test('recording a closed dialog misses', () => {
+  assert.equal(dialogCloseStops({text: 'Closed.', trace: [opened], edited: [], files: {}}), 'fail');
+});
+
+test('stepping after a closed dialog misses', () => {
+  assert.equal(
+    dialogCloseStops({text: 'Closed.', trace: ['sdd step 1 exit=0'], edited: [], files: {}}),
+    'fail',
+  );
+});
+
+test('editing the change when the dialog is closed is forbidden', () => {
+  assert.equal(
+    dialogCloseStops({text: 'Closed.', trace: [], edited: [proposal], files: {}}),
+    'forbidden',
+  );
+});
+
+test('one record and a step that still lists the entry stops', () => {
+  assert.equal(
+    recordDidNotClose({
+      text: 'The record did not close it.',
+      trace: [opened, 'sdd step 1 exit=0'],
+      edited: [],
+      files: {},
+    }),
+    'pass',
+  );
+});
+
+test('the stub trace without quotes stops when the entry stays', () => {
+  const line = `sdd thread open 9 ${proposal} 5 sdd:layer=proposal → proposing The name is distance exit=0`;
+  assert.equal(
+    recordDidNotClose({
+      text: 'The record did not close it.',
+      trace: [line, 'sdd step 1 exit=0'],
+      edited: [],
+      files: {},
+    }),
+    'pass',
+  );
+});
+
+test('a second record misses when the entry stays', () => {
+  assert.equal(
+    recordDidNotClose({
+      text: 'The record did not close it.',
+      trace: [opened, 'sdd step 1 exit=0', opened],
+      edited: [],
+      files: {},
+    }),
+    'fail',
+  );
+});
+
+test('posting the answer another way misses', () => {
+  assert.equal(
+    recordDidNotClose({
+      text: 'The record did not close it.',
+      trace: [opened, 'sdd step 1 exit=0', 'sdd thread say 9 still open exit=0'],
+      edited: [],
+      files: {},
+    }),
+    'fail',
+  );
+});
+
+test('stopping before the step misses', () => {
+  assert.equal(
+    recordDidNotClose({text: 'The record did not close it.', trace: [opened], edited: [], files: {}}),
+    'fail',
+  );
+});
+
+test('a silent record is not the stop', () => {
+  assert.equal(recordDidNotClose(attempt([opened, 'sdd step 1 exit=0'])), 'fail');
+});
+
+test('editing the change when the entry stays is forbidden', () => {
+  assert.equal(
+    recordDidNotClose({
+      text: 'The record did not close it.',
+      trace: [opened, 'sdd step 1 exit=0'],
+      edited: [proposal],
+      files: {},
+    }),
+    'forbidden',
+  );
+});
+
+test('a step after the record still prints the question when no later decision is copied', () => {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'eval-still-open-'));
+  try {
+    prepareSession(cwd, root, sessionCase('record-did-not-close', recordDidNotClose));
+    const stub = path.join(cwd, 'bin/sdd');
+    cpSync(path.join(root, 'eval/chat/stub.sh'), stub);
+    chmodSync(stub, 0o755);
+    execFileSync(stub, ['thread', 'open', '9', proposal, '5', 'answer'], {cwd, encoding: 'utf8'});
+    const printed = execFileSync(stub, ['step', '1'], {cwd, encoding: 'utf8'});
+    assert.match(printed, /Which name/);
+  } finally {
+    rmSync(cwd, {recursive: true, force: true});
+  }
 });
 
 test('agreement on a gate accepts and then runs step', () => {

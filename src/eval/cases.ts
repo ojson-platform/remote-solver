@@ -4,9 +4,11 @@ import {assigneeAgreementAssigns} from '../../eval/chat/assignee-agreement-assig
 import {bareAgreementRunsStep} from '../../eval/chat/bare-agreement-runs-step/score.ts';
 import {changePublishesAndUnwaits} from '../../eval/chat/change-publishes-and-unwaits/score.ts';
 import {dialogAnswerIsAThread} from '../../eval/chat/dialog-answer-is-a-thread/score.ts';
+import {dialogCloseStops} from '../../eval/chat/dialog-close-stops/score.ts';
 import {gateAgreementAccepts} from '../../eval/chat/gate-agreement-accepts/score.ts';
 import {invocationDoesNotAccept} from '../../eval/chat/invocation-does-not-accept/score.ts';
 import {rebaseIsCarriedOut} from '../../eval/chat/rebase-is-carried-out/score.ts';
+import {recordDidNotClose} from '../../eval/chat/record-did-not-close/score.ts';
 import {skipStops} from '../../eval/chat/skip-stops/score.ts';
 import {whereIsTheCycle} from '../../eval/chat/where-is-the-cycle/score.ts';
 import {exampleStaysThatScenario} from '../../eval/fix/example-stays-that-scenario/score.ts';
@@ -64,6 +66,8 @@ export const cases: EvalCase[] = [
   {id: 'rebase-is-carried-out', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: rebaseIsCarriedOut},
   {id: 'dialog-answer-is-a-thread', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: dialogAnswerIsAThread},
   {id: 'skip-stops', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: skipStops},
+  {id: 'dialog-close-stops', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: dialogCloseStops},
+  {id: 'record-did-not-close', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: recordDidNotClose},
   {id: 'gate-agreement-accepts', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: gateAgreementAccepts},
   {id: 'bare-agreement-runs-step', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: bareAgreementRunsStep},
   {id: 'invocation-does-not-accept', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: invocationDoesNotAccept},

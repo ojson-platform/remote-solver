@@ -18,6 +18,8 @@ export type Attempt = {
   edited: string[];
   /** Final fixture texts. Absent on canned attempts that do not read a file. */
   files?: Record<string, string>;
+  /** Raw agent stream. Absent on canned attempts. */
+  log?: string;
 };
 
 export type AttemptVerdict = 'pass' | 'fail' | 'forbidden' | 'inconclusive';

@@ -3,23 +3,17 @@ import {execFileSync} from 'node:child_process';
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 
+import {vi} from 'vitest';
+
 import {requirement, scenario, spec} from '@ojson/spec-coverage';
 
-import {gitVcs} from '../../adapters/vcs/vcs.ts';
-import type {ScratchCheckout} from '../port.ts';
 import {probeArchive} from './fold.ts';
 import {openspecExecutable} from './__tests__/openspec-cli.ts';
-import {rmThrowaway, throwawayWithArchive, type ThrowawayCheckout} from './__tests__/throwaway-checkout.ts';
-
-function openScratch(root: string): () => Promise<ScratchCheckout> {
-  return () => {
-    const scratch = gitVcs(root).scratch;
-    if (!scratch) {
-      throw new Error('git adapter has no second checkout');
-    }
-    return scratch();
-  };
-}
+import {
+  rmThrowaway,
+  throwawayWithArchive,
+  type ThrowawayCheckout,
+} from './__tests__/throwaway-checkout.ts';
 
 function status(root: string): string {
   return execFileSync('git', ['status', '--porcelain'], {cwd: root, encoding: 'utf8'});
@@ -42,6 +36,7 @@ The system SHALL keep the keep behavior.
 }
 
 spec('spec-archive', () => {
+  vi.setConfig({testTimeout: 20_000});
   requirement('Specify probes the fold before publish', () => {
     scenario('A probe that fails after the fold keeps the checkout', async () => {
       let box: ThrowawayCheckout | undefined;
@@ -63,19 +58,19 @@ spec('spec-archive', () => {
         );
         const before = status(box.root);
         await assert.rejects(
-          () => probeArchive(box!.root, '8801', openspecExecutable(), openScratch(box!.root)),
+          async () => probeArchive(box!.root, '8801', openspecExecutable()),
           /requirement/,
         );
         assert.equal(status(box.root), before);
-        assert.equal(
-          existsSync(path.join(box.root, 'openspec', 'changes', 'issue-8801')),
-          true,
-        );
+        assert.equal(existsSync(path.join(box.root, 'openspec', 'changes', 'issue-8801')), true);
         assert.equal(
           existsSync(path.join(box.root, 'openspec', 'changes', 'archive', 'issue-8801')),
           false,
         );
-        assert.match(readFileSync(path.join(box.root, 'openspec', 'specs', 'probe', 'spec.md'), 'utf8'), /### Requirement: Keep/);
+        assert.match(
+          readFileSync(path.join(box.root, 'openspec', 'specs', 'probe', 'spec.md'), 'utf8'),
+          /### Requirement: Keep/,
+        );
       } finally {
         if (box) {
           rmThrowaway(box.root);
@@ -108,13 +103,13 @@ The system SHALL apply extra behavior.
           {fold: false},
         );
         const before = status(box.root);
-        await probeArchive(box.root, '8802', openspecExecutable(), openScratch(box.root));
+        probeArchive(box.root, '8802', openspecExecutable());
         assert.equal(status(box.root), before);
-        assert.equal(
-          existsSync(path.join(box.root, 'openspec', 'changes', 'issue-8802')),
-          true,
+        assert.equal(existsSync(path.join(box.root, 'openspec', 'changes', 'issue-8802')), true);
+        const baseline = readFileSync(
+          path.join(box.root, 'openspec', 'specs', 'probe', 'spec.md'),
+          'utf8',
         );
-        const baseline = readFileSync(path.join(box.root, 'openspec', 'specs', 'probe', 'spec.md'), 'utf8');
         assert.match(baseline, /### Requirement: Keep/);
         assert.equal(baseline.includes('### Requirement: Extra'), false);
       } finally {

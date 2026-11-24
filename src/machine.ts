@@ -36,7 +36,6 @@ export type {
   ReviewNote,
   Runtime,
   RuntimeAsk,
-  ScratchCheckout,
   SkillRun,
   Thread,
   ThreadRecord,

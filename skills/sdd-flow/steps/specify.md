@@ -21,7 +21,7 @@ An open thread of layer `spec`: steps 1–3 do not write the delta again.
 3. When the block names an input revision: edit the requirements and scenarios that text changes, including ones it no longer names.
 4. `improve-specs`: Fix thread (`CONTEXT.md`), layer `spec`. A thread that drops a requirement or scenario writes that drop in the delta. `proposal.md` stays. An answer that says what a named capability does rewrites that capability's scenario.
 5. Run `openspec validate --all --strict --no-interactive`. A non-zero exit is § Delta.
-6. Run `sdd probe <issue>`. The verb archives the change in a throwaway checkout, runs `openspec validate --all --strict --no-interactive` there, and deletes that checkout. This checkout stays as it was, committed and uncommitted. A non-zero exit is § Delta. Do not publish that archive.
+6. Run `sdd probe <issue>`. The verb copies `openspec` into a throwaway directory, archives the change there, runs `openspec validate --all --strict --no-interactive`, and deletes the directory. This checkout stays as it was, committed and uncommitted. A non-zero exit is § Delta. Do not publish that archive.
 7. Publish (`CONTEXT.md`). When a delta spec is in the commit, focus with marker `sdd:focus:spec`. Mirror: `Specify`.
 
 ## Check

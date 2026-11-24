@@ -225,7 +225,7 @@ When the fold reports a conflict with a baseline, the machine SHALL open one thr
 
 ### Requirement: Specify probes the fold before publish
 
-The specify step SHALL archive the change in a throwaway checkout and SHALL run `openspec validate --all --strict --no-interactive` there before publish. It SHALL delete that checkout. The working tree SHALL stay, committed and uncommitted. A refusal SHALL stay on the specify step.
+The specify step SHALL copy `openspec` into a throwaway directory, archive the change there, and SHALL run `openspec validate --all --strict --no-interactive` there before publish. It SHALL delete that directory. The working tree SHALL stay, committed and uncommitted. A refusal SHALL stay on the specify step.
 
 #### Scenario: A probe that fails after the fold keeps the checkout
 

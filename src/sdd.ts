@@ -525,11 +525,8 @@ async function commitCommand(box: Machine, rest: string[]): Promise<void> {
 /** The specify step's throwaway archive. A refusal stays on that step. The poll does not run this. */
 async function probeCommand(box: Machine, rest: string[]): Promise<void> {
   const key = oneKey(rest);
-  if (!box.vcs.scratch) {
-    fail('this vcs has no second checkout');
-  }
   try {
-    await probeArchive(process.cwd(), key, box.openspec(), () => box.vcs.scratch!());
+    probeArchive(process.cwd(), key, box.openspec());
   } catch (error) {
     fail(error instanceof Error ? error.message : 'probe failed');
   }

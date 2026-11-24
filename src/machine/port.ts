@@ -159,12 +159,6 @@ export type FileSource = {
 /** A path in this package, linked as `.sandcastle/<to>` inside a checkout. */
 export type Link = {from: string; to: string};
 
-/** A second checkout of the current tip. `release` drops it. The caller's checkout stays. */
-export type ScratchCheckout = {
-  root: string;
-  release(): Promise<void>;
-};
-
 export type PathChange = {
   path: string;
   kind: 'added' | 'modified' | 'deleted' | 'renamed';
@@ -223,12 +217,6 @@ export type Vcs = {
   dirty(): Promise<string[]>;
   /** Paths `git status` reports in the issue worktree. Absent means the caller treats the tree as clean. */
   issueDirty?(key: IssueKey): Promise<string[]>;
-  /**
-   * A second checkout of the current tip.
-   * The caller may change it. `release` drops it. This checkout stays.
-   * Absent when this adapter has no second checkout.
-   */
-  scratch?(): Promise<ScratchCheckout>;
   tree?(root: string): Tree;
   /**
    * Rebase the issue checkout onto `base`.

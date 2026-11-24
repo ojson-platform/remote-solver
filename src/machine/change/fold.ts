@@ -1,8 +1,18 @@
-import {execFileSync} from 'node:child_process';
-import {cpSync, existsSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync} from 'node:fs';
-import path from 'node:path';
+import type {Tree} from '../port.ts';
 
-import type {ScratchCheckout, Tree} from '../port.ts';
+import {execFileSync} from 'node:child_process';
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
 
 const DATED_ARCHIVE_DIR = /^\d{4}-\d{2}-\d{2}-issue-\d+$/;
 const PLACEHOLDER_PURPOSE = /TBD - created by archiving change/;
@@ -176,27 +186,20 @@ function archiveAndValidate(root: string, key: string, executable: string): void
 }
 
 /**
- * Archive the change in a second checkout and validate there.
- * The adapter opens and drops that checkout. This checkout stays as it was.
+ * Archive the change in a copy of `openspec` and validate there.
+ * The copy is a directory, not a checkout. This checkout stays as it was.
  * A refusal is the command text.
  */
-export async function probeArchive(
-  root: string,
-  key: string,
-  executable: string,
-  openScratch: () => Promise<ScratchCheckout>,
-): Promise<void> {
-  const scratch = await openScratch();
+export function probeArchive(root: string, key: string, executable: string): void {
+  const probe = mkdtempSync(path.join(tmpdir(), 'sdd-probe-'));
   try {
     const source = path.join(root, 'openspec');
-    const dest = path.join(scratch.root, 'openspec');
-    rmSync(dest, {recursive: true, force: true});
     if (existsSync(source)) {
-      cpSync(source, dest, {recursive: true});
+      cpSync(source, path.join(probe, 'openspec'), {recursive: true, dereference: true});
     }
-    archiveAndValidate(scratch.root, key, executable);
+    archiveAndValidate(probe, key, executable);
   } finally {
-    await scratch.release();
+    rmSync(probe, {recursive: true, force: true});
   }
 }
 

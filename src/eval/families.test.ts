@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {openDecisionStaysThatItem} from '../../eval/design/open-decision-stays-that-item/score.ts';
+import {missingDesignIsWritten} from '../../eval/design/missing-design-is-written/score.ts';
 import {openTaskStaysThatItem} from '../../eval/tasks/open-task-stays-that-item/score.ts';
 import {exampleStaysThatScenario} from '../../eval/fix/example-stays-that-scenario/score.ts';
 import {fixUnownedIsOut} from '../../eval/fix/unowned-is-out/score.ts';
@@ -501,5 +502,51 @@ test('setting the proposal gate label misses', () => {
       ),
     ),
     'fail',
+  );
+});
+
+const writtenDesign = `## Verification boundary
+
+one-file: the card test
+
+## Approach
+
+none
+
+The card shows one name.
+`;
+
+test('a missing design is written from the spec', () => {
+  assert.equal(
+    missingDesignIsWritten(
+      attempt([], ['openspec/changes/issue-1/design.md'], {'openspec/changes/issue-1/design.md': writtenDesign}),
+    ),
+    'pass',
+  );
+});
+
+test('a missing design that skips the scenario misses', () => {
+  assert.equal(
+    missingDesignIsWritten(
+      attempt(
+        [],
+        ['openspec/changes/issue-1/design.md'],
+        {'openspec/changes/issue-1/design.md': writtenDesign.replace('The card shows one name.', '')},
+      ),
+    ),
+    'fail',
+  );
+});
+
+test('editing the spec while writing the design is forbidden', () => {
+  assert.equal(
+    missingDesignIsWritten(
+      attempt(
+        [],
+        ['openspec/changes/issue-1/design.md', 'openspec/changes/issue-1/specs/card/spec.md'],
+        {'openspec/changes/issue-1/design.md': writtenDesign},
+      ),
+    ),
+    'forbidden',
   );
 });

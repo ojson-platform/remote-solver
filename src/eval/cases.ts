@@ -12,6 +12,7 @@ import {recordDidNotClose} from '../../eval/chat/record-did-not-close/score.ts';
 import {skipStops} from '../../eval/chat/skip-stops/score.ts';
 import {whereIsTheCycle} from '../../eval/chat/where-is-the-cycle/score.ts';
 import {openDecisionStaysThatItem} from '../../eval/design/open-decision-stays-that-item/score.ts';
+import {missingDesignIsWritten} from '../../eval/design/missing-design-is-written/score.ts';
 import {exampleStaysThatScenario} from '../../eval/fix/example-stays-that-scenario/score.ts';
 import {fixUnownedIsOut} from '../../eval/fix/unowned-is-out/score.ts';
 import {noScenarioHandsToSpec} from '../../eval/fix/no-scenario-hands-to-spec/score.ts';
@@ -58,6 +59,7 @@ export const cases: EvalCase[] = [
   {id: 'open-question-stays-that-item', family: 'plan', prompt: 'assembled-step', skill: 'plan', action: 'improve-proposal', score: openQuestionStaysThatItem},
   {id: 'open-questions-stay-unchecked', family: 'plan', prompt: 'assembled-step', skill: 'plan', action: 'create-proposal', score: openQuestionsStayUnchecked},
   {id: 'open-decision-stays-that-item', family: 'design', prompt: 'assembled-step', skill: 'design', action: 'improve-design', score: openDecisionStaysThatItem},
+  {id: 'missing-design-is-written', family: 'design', prompt: 'assembled-step', skill: 'design', action: 'create-design', score: missingDesignIsWritten},
   {id: 'open-task-stays-that-item', family: 'tasks', prompt: 'assembled-step', skill: 'tasks', action: 'improve-tasks', score: openTaskStaysThatItem},
   {id: 'stated-promise-is-code', family: 'pr-comments', prompt: 'assembled-step', skill: 'pr-comments', action: 'pr-comments', score: statedPromiseIsCode},
   {id: 'unnamed-observation-is-spec', family: 'pr-comments', prompt: 'assembled-step', skill: 'pr-comments', action: 'pr-comments', score: unnamedObservationIsSpec},

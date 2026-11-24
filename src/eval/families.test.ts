@@ -4,6 +4,7 @@ import {test} from 'vitest';
 import {exampleStaysThatScenario} from '../../eval/fix/example-stays-that-scenario/score.ts';
 import {fixUnownedIsOut} from '../../eval/fix/unowned-is-out/score.ts';
 import {noScenarioHandsToSpec} from '../../eval/fix/no-scenario-hands-to-spec/score.ts';
+import {openQuestionStaysThatItem} from '../../eval/plan/open-question-stays-that-item/score.ts';
 import {commentsUnownedIsOut} from '../../eval/pr-comments/unowned-is-out/score.ts';
 import {laterPhaseIsNote} from '../../eval/pr-comments/later-phase-is-note/score.ts';
 import {openDecisionIsDesign} from '../../eval/pr-comments/open-decision-is-design/score.ts';
@@ -193,6 +194,107 @@ test('silence on an unnamed class misses', () => {
 test('a code return of the unused line is forbidden', () => {
   assert.equal(
     unusedLineIsNotAReturn(attempt([], [], {}, 'lens: code\npromise: A covered line shows the node value.\nwhere: src/paint.ts\ngap: the indent')),
+    'forbidden',
+  );
+});
+
+const proposal = 'openspec/changes/issue-1/proposal.md';
+const answered = `## Problem
+
+The caller cannot tell two names apart.
+
+## Outcome
+
+One name is shown.
+
+## Scope
+
+The name on the card.
+
+## Out of scope
+
+none
+
+## Open questions
+
+- [x] Which name
+  The name is distance.
+`;
+
+test('an open question is checked on its item', () => {
+  assert.equal(
+    openQuestionStaysThatItem(
+      attempt(
+        ['sdd commit 1 "#1: the name" exit=0', 'sdd thread fix 1 1 T1 exit=0'],
+        [proposal],
+        {[proposal]: answered},
+      ),
+    ),
+    'pass',
+  );
+});
+
+test('an unchecked question misses', () => {
+  assert.equal(
+    openQuestionStaysThatItem(
+      attempt(
+        ['sdd commit 1 "#1: the name" exit=0', 'sdd thread fix 1 1 T1 exit=0'],
+        [proposal],
+        {[proposal]: answered.replace('[x]', '[ ]')},
+      ),
+    ),
+    'fail',
+  );
+});
+
+test('a rewritten outcome misses', () => {
+  assert.equal(
+    openQuestionStaysThatItem(
+      attempt(
+        ['sdd commit 1 "#1: the name" exit=0', 'sdd thread fix 1 1 T1 exit=0'],
+        [proposal],
+        {[proposal]: answered.replace('One name is shown.', 'Two names are shown.')},
+      ),
+    ),
+    'fail',
+  );
+});
+
+test('a second commit misses', () => {
+  assert.equal(
+    openQuestionStaysThatItem(
+      attempt(
+        ['sdd commit 1 "#1: the name" exit=0', 'sdd commit 1 "#1: again" exit=0', 'sdd thread fix 1 1 T1 exit=0'],
+        [proposal],
+        {[proposal]: answered},
+      ),
+    ),
+    'fail',
+  );
+});
+
+test('a fix before the commit misses', () => {
+  assert.equal(
+    openQuestionStaysThatItem(
+      attempt(
+        ['sdd thread fix 1 1 T1 exit=0', 'sdd commit 1 "#1: the name" exit=0'],
+        [proposal],
+        {[proposal]: answered},
+      ),
+    ),
+    'fail',
+  );
+});
+
+test('editing another change file is forbidden', () => {
+  assert.equal(
+    openQuestionStaysThatItem(
+      attempt(
+        ['sdd commit 1 "#1: the name" exit=0', 'sdd thread fix 1 1 T1 exit=0'],
+        [proposal, 'openspec/changes/issue-1/design.md'],
+        {[proposal]: answered},
+      ),
+    ),
     'forbidden',
   );
 });

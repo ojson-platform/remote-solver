@@ -14,6 +14,7 @@ import {whereIsTheCycle} from '../../eval/chat/where-is-the-cycle/score.ts';
 import {exampleStaysThatScenario} from '../../eval/fix/example-stays-that-scenario/score.ts';
 import {fixUnownedIsOut} from '../../eval/fix/unowned-is-out/score.ts';
 import {noScenarioHandsToSpec} from '../../eval/fix/no-scenario-hands-to-spec/score.ts';
+import {openQuestionStaysThatItem} from '../../eval/plan/open-question-stays-that-item/score.ts';
 import {commentsUnownedIsOut} from '../../eval/pr-comments/unowned-is-out/score.ts';
 import {laterPhaseIsNote} from '../../eval/pr-comments/later-phase-is-note/score.ts';
 import {openDecisionIsDesign} from '../../eval/pr-comments/open-decision-is-design/score.ts';
@@ -30,7 +31,7 @@ import {ownExampleFailsCode} from '../../eval/review/own-example-fails-code/scor
 import {specimenIsSpec} from '../../eval/review/specimen-is-spec/score.ts';
 import {unusedLineIsNotAReturn} from '../../eval/review/unused-line-is-not-a-return/score.ts';
 
-export const familyNames = ['review', 'fix', 'pr-comments', 'repair-suite', 'chat'] as const;
+export const familyNames = ['review', 'fix', 'plan', 'pr-comments', 'repair-suite', 'chat'] as const;
 
 export type EvalCase = {
   id: string;
@@ -51,6 +52,7 @@ export const cases: EvalCase[] = [
   {id: 'example-stays-that-scenario', family: 'fix', prompt: 'assembled-step', skill: 'fix', action: 'fix', score: exampleStaysThatScenario},
   {id: 'no-scenario-hands-to-spec', family: 'fix', prompt: 'assembled-step', skill: 'fix', action: 'fix', score: noScenarioHandsToSpec},
   {id: 'unowned-is-out', family: 'fix', prompt: 'assembled-step', skill: 'fix', action: 'fix', score: fixUnownedIsOut},
+  {id: 'open-question-stays-that-item', family: 'plan', prompt: 'assembled-step', skill: 'plan', action: 'improve-proposal', score: openQuestionStaysThatItem},
   {id: 'stated-promise-is-code', family: 'pr-comments', prompt: 'assembled-step', skill: 'pr-comments', action: 'pr-comments', score: statedPromiseIsCode},
   {id: 'unnamed-observation-is-spec', family: 'pr-comments', prompt: 'assembled-step', skill: 'pr-comments', action: 'pr-comments', score: unnamedObservationIsSpec},
   {id: 'unowned-is-out', family: 'pr-comments', prompt: 'assembled-step', skill: 'pr-comments', action: 'pr-comments', score: commentsUnownedIsOut},

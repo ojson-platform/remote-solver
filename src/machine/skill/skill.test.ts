@@ -211,7 +211,7 @@ test('an instruction is a thread of this phase, and a note asks for nothing', ()
   assert.match(comments, /Step 3 Waited: leave `sdd:wait-human` set/);
   assert.doesNotMatch(comments, /rebase or a merge conflict is `code`/);
   assert.doesNotMatch(comments, /are `code`/);
-  assert.match(context, /do not write that file again/);
+  assert.match(context, /The numbered steps before it do not write the file/);
   assert.match(context, /Publish is this step's own Publish, once/);
   assert.match(context, /does not invent `code`/);
   assert.match(context, /### Onto the base/);

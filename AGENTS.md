@@ -24,6 +24,10 @@ A file inside a subject holds one concern of it. A function does one thing a rea
 
 The name says what a file or a function returns. A comment says why a branch exists. A new concern joins the subject it belongs to. A concern that is none of those subjects is a new directory.
 
+## Commits
+
+The subject is one English sentence and says why the change is made. A second sentence is the body when the subject does not hold the reason. The subject has no ticket prefix.
+
 <!-- OJSON_INFRA_AGENTS:BEGIN -->
 
 ## Important

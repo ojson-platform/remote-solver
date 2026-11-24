@@ -17,7 +17,7 @@ Records why and the scope. Zoom is context, not implementation. The commit and t
 2. § Upstream. Leave `proposal.md` only when every caller-visible sentence of the issue text that it has never stated is already in it. A sentence it already replaced is not copied back.
 3. A question below the context zoom stays out of the proposal.
 4. `improve-proposal`: Fix thread (`CONTEXT.md`), layer `proposal`.
-5. Publish (`CONTEXT.md`). When `proposal.md` is in the commit, focus with marker `sdd:focus:plan`. Mirror: `Change` and `Plan`. Open questions do not delay the pull request. The focus does not count them and does not call Wait for them. The phase paints the count.
+5. Publish (`CONTEXT.md`). When `proposal.md` is in the commit, focus with marker `sdd:focus:plan`. The focus does not count open questions. Mirror: `Change` and `Plan`.
 
 ## Check
 
@@ -30,4 +30,4 @@ Records why and the scope. Zoom is context, not implementation. The commit and t
 
 ## Stop
 
-- Publish. The machine opens the review gate. Leave `sdd:proposed` unset. Open questions stay in the file. This step does not Wait for them.
+- Publish. The machine opens the review gate. Leave `sdd:proposed` unset. Open questions stay in the file. The phase paints their count.

@@ -82,7 +82,7 @@ spec('spec-archive', () => {
       let box: ThrowawayCheckout | undefined;
       try {
         box = throwawayWithArchive(
-          '8802',
+          'LAVKAOPSCORE-8802',
           {
             baselines: {probe: keptBaseline()},
             change: {
@@ -103,9 +103,12 @@ The system SHALL apply extra behavior.
           {fold: false},
         );
         const before = status(box.root);
-        probeArchive(box.root, '8802', openspecExecutable());
+        probeArchive(box.root, 'LAVKAOPSCORE-8802', openspecExecutable());
         assert.equal(status(box.root), before);
-        assert.equal(existsSync(path.join(box.root, 'openspec', 'changes', 'issue-8802')), true);
+        assert.equal(
+          existsSync(path.join(box.root, 'openspec', 'changes', 'issue-LAVKAOPSCORE-8802')),
+          true,
+        );
         const baseline = readFileSync(
           path.join(box.root, 'openspec', 'specs', 'probe', 'spec.md'),
           'utf8',

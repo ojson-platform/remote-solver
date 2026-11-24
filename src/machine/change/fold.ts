@@ -14,17 +14,21 @@ import {
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 
-const DATED_ARCHIVE_DIR = /^\d{4}-\d{2}-\d{2}-issue-\d+$/;
 const PLACEHOLDER_PURPOSE = /TBD - created by archiving change/;
+
+/** A tracker key contains letters, so the dated name is the whole `issue-<key>`. */
+function datedArchiveDir(key: string): RegExp {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^\\d{4}-\\d{2}-\\d{2}-issue-${escaped}$`);
+}
 
 function findDatedArchiveDir(root: string, key: string): string | undefined {
   const archiveRoot = path.join(root, 'openspec', 'changes', 'archive');
   if (!existsSync(archiveRoot)) {
     return undefined;
   }
-  return readdirSync(archiveRoot).find(
-    name => DATED_ARCHIVE_DIR.test(name) && name.endsWith(`issue-${key}`),
-  );
+  const dated = datedArchiveDir(key);
+  return readdirSync(archiveRoot).find(name => dated.test(name));
 }
 
 function purposeLine(specText: string): string {

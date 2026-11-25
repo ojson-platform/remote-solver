@@ -17,7 +17,14 @@ import {
 } from './machine/decide/policy.ts';
 import {waitDialog} from './machine/flow/dialog.ts';
 import {applyLabels, pick, resolveCycle, serviceWait} from './machine/flow/flow.ts';
-import {rememberRepairCommit, takeRepairCommit} from './machine/flow/suite-commit.ts';
+import {
+  clearSuiteDue,
+  rememberRepairCommit,
+  rememberSuiteDue,
+  repairCommitWaiting,
+  suiteDue,
+  takeRepairCommit,
+} from './machine/flow/suite-commit.ts';
 import {reportFoldFailure} from './machine/flow/step.ts';
 import {proveCodeFix} from './machine/mark/code-fix.ts';
 import {postFocusComment, validateFocusBody} from './machine/mark/focus.ts';
@@ -352,8 +359,39 @@ async function step(box: Machine, rest: string[]): Promise<void> {
   if (args.labels.length) {
     await box.tracker.editLabels(args.key, args.labels, []);
   }
+  let decision = await turn(box, args.key);
+  decision = await settleRepair(box, args.key, decision);
   const labels = (await box.tracker.issue(args.key)).labels;
-  await printStep(await turn(box, args.key), box, labels);
+  await printStep(decision, box, labels);
+}
+
+/** A repeated clean suite step leaves implementing. The first one still runs the suite. */
+async function settleRepair(box: Machine, key: string, decision: Decision): Promise<Decision> {
+  if (decision.kind !== 'agent' || decision.action !== 'repair-suite') {
+    return decision;
+  }
+  if (repairCommitWaiting(box.root, key)) {
+    return decision;
+  }
+  if (suiteDue(box.root, key) && (await publishedClean(box, key))) {
+    clearSuiteDue(box.root, key);
+    const record = await box.tracker.issue(key);
+    const next = labelsAfterAdvance(record.labels, 'verifying');
+    await applyLabels(box.tracker, key, record.labels, next);
+    console.log(`#${key} advance → verifying: suite is green`);
+    return turn(box, key);
+  }
+  rememberSuiteDue(box.root, key);
+  return decision;
+}
+
+/** The repair left nothing unpushed. A dirty tree or an unpublished tip still runs the suite. */
+async function publishedClean(box: Machine, key: string): Promise<boolean> {
+  if ((await box.vcs.dirty()).length > 0) {
+    return false;
+  }
+  const head = await box.vcs.head(key);
+  return box.vcs.published(key, head);
 }
 
 /** `queue` is the queue of the issue being driven. The prompt placeholder `QUEUE` is the first configured queue, the one a new child issue is filed in. */
@@ -524,6 +562,7 @@ async function commitCommand(box: Machine, rest: string[]): Promise<void> {
   const decision = await turn(box, key);
   if (decision.kind === 'agent' && decision.action === 'repair-suite') {
     rememberRepairCommit(box.root, key);
+    clearSuiteDue(box.root, key);
   }
 }
 
@@ -602,6 +641,7 @@ async function publishCommand(box: Machine, rest: string[]): Promise<void> {
     const record = await box.tracker.issue(key);
     const next = labelsAfterAdvance(record.labels, 'verifying');
     await applyLabels(box.tracker, key, record.labels, next);
+    clearSuiteDue(box.root, key);
     console.log(`#${key} advance → verifying: suite is green`);
   }
 }

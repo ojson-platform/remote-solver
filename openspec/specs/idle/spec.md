@@ -43,7 +43,7 @@ When one worker runs a later turn and that turn produces no commit, the refusal 
 
 ### Requirement: A clean suite run moves the phase
 
-A clean `repair-suite` with no commit, no marker, and a clean tree SHALL move the issue to `verifying` and SHALL NOT set `sdd:refused`. `sdd publish` while the decision is `repair-suite` SHALL make that move when this repair did not commit. A publish after `sdd commit` in that decision SHALL stay on `implementing`.
+A clean `repair-suite` with no commit, no marker, and a clean tree SHALL move the issue to `verifying` and SHALL NOT set `sdd:refused`. `sdd publish` while the decision is `repair-suite` SHALL make that move when this repair did not commit. A publish after `sdd commit` in that decision SHALL stay on `implementing`. The next `sdd step`, once an earlier step named `repair-suite`, SHALL make that move when the tree is clean and the tip is published. A step while a repair commit is waiting SHALL stay on the suite.
 
 #### Scenario: A clean suite run moves to verifying
 
@@ -59,6 +59,16 @@ A clean `repair-suite` with no commit, no marker, and a clean tree SHALL move th
 
 - **WHEN** `sdd commit` runs while the decision is `repair-suite` and the next command is `sdd publish`
 - **THEN** the issue stays `implementing`, and the next `sdd publish` with no new commit moves it to `verifying`
+
+#### Scenario: A second step after a clean repair moves to verifying
+
+- **WHEN** one `sdd step` has already named `repair-suite` and the tree is clean and the tip is published
+- **THEN** the next `sdd step` moves the issue to `verifying`
+
+#### Scenario: A step while a repair commit is waiting stays on the suite
+
+- **WHEN** `sdd commit` runs while the decision is `repair-suite` and the next command is `sdd step`
+- **THEN** the step still names `repair-suite` and the issue stays `implementing`
 
 ### Requirement: A running issue and the parallel cap are left alone
 

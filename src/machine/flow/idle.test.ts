@@ -791,8 +791,44 @@ spec('idle', () => {
       assert.ok(moved.includes('sdd:verifying'));
       assert.equal(moved.includes('sdd:implementing'), false);
     });
+    scenario('A second step after a clean repair moves to verifying', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-suite-step-'));
+      const box = doneSuite(root);
+      const first = await logged(() => runSdd(['step', '8'], box));
+      assert.match(first, /"action": "repair-suite"/);
+      assert.ok((await box.tracker.labels('8')).includes('sdd:implementing'));
+      await runSdd(['step', '8'], box);
+      const labels = await box.tracker.labels('8');
+      assert.ok(labels.includes('sdd:verifying'));
+      assert.equal(labels.includes('sdd:implementing'), false);
+    });
+    scenario('A step while a repair commit is waiting stays on the suite', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-suite-step-commit-'));
+      const box = doneSuite(root);
+      await runSdd(['step', '8'], box);
+      await runSdd(['commit', '8', '#8: mock the route'], box);
+      const again = await logged(() => runSdd(['step', '8'], box));
+      assert.match(again, /"action": "repair-suite"/);
+      const labels = await box.tracker.labels('8');
+      assert.ok(labels.includes('sdd:implementing'));
+      assert.equal(labels.includes('sdd:verifying'), false);
+    });
   });
 });
+
+async function logged(run: () => Promise<void>): Promise<string> {
+  const lines: string[] = [];
+  const write = console.log;
+  console.log = (...args: unknown[]) => {
+    lines.push(args.map(item => String(item)).join(' '));
+  };
+  try {
+    await run();
+  } finally {
+    console.log = write;
+  }
+  return lines.join('\n');
+}
 
 function emptyVcs(): Vcs {
   return {

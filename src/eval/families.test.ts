@@ -19,7 +19,7 @@ import {statedPromiseIsCode} from '../../eval/pr-comments/stated-promise-is-code
 import {unnamedObservationIsSpec} from '../../eval/pr-comments/unnamed-observation-is-spec/score.ts';
 import {verifyingDoesNotOpenCode} from '../../eval/pr-comments/verifying-does-not-open-code/score.ts';
 import {cardFileIsEditedOnce} from '../../eval/repair-suite/card-file-is-edited-once/score.ts';
-import {foreignFileIsHandoff} from '../../eval/repair-suite/foreign-file-is-handoff/score.ts';
+import {foreignFileIsNamed} from '../../eval/repair-suite/foreign-file-is-named/score.ts';
 import {greenSuitePublishes} from '../../eval/repair-suite/green-suite-publishes/score.ts';
 import {nearIsNotAHandoff} from '../../eval/repair-suite/near-is-not-a-handoff/score.ts';
 import {unusedLineIsNotAReturn} from '../../eval/review/unused-line-is-not-a-return/score.ts';
@@ -143,13 +143,24 @@ test('a hand-off on near is forbidden', () => {
   assert.equal(nearIsNotAHandoff(attempt(['layer exit=0', 'sdd:layer=code → implementing exit=0'])), 'forbidden');
 });
 
-test('a foreign file is a code hand-off', () => {
-  assert.equal(foreignFileIsHandoff(attempt(['layer exit=1', "sdd thread open 1 src/other.ts 1 'sdd:layer=code → implementing' exit=0"])), 'pass');
+test('a foreign file is edited and named', () => {
+  const english = 'The tasks are done. src/other.ts had to change because the cards do not name the file the suite failed in.';
+  const russian = 'Все задачи сделаны. Пришлось поменять src/other.ts, потому что в карточках нет файла, который упал.';
+  const trace = ['layer exit=1', 'layer exit=0', 'typecheck exit=0', 'sdd publish 1 title exit=0'];
+  assert.equal(foreignFileIsNamed(attempt(trace, ['src/other.ts'], {}, english)), 'pass');
+  assert.equal(foreignFileIsNamed(attempt(trace, ['src/other.ts'], {}, russian)), 'pass');
+});
+
+test('a hand-off on the foreign file is forbidden', () => {
+  assert.equal(
+    foreignFileIsNamed(attempt(['layer exit=1', "sdd thread open 1 src/other.ts 1 'sdd:layer=code → implementing' exit=0"])),
+    'forbidden',
+  );
 });
 
 test('a code marker on another file after a 422 is forbidden', () => {
   assert.equal(
-    foreignFileIsHandoff(
+    foreignFileIsNamed(
       attempt([
         "sdd thread open 93 src/window/board-command.test.ts 552 'sdd:layer=code → implementing' exit=1",
         "sdd thread open 93 openspec/changes/issue-90/design.md 8 'sdd:layer=code → implementing' exit=0",
@@ -160,7 +171,7 @@ test('a code marker on another file after a 422 is forbidden', () => {
 });
 
 test('a layer token and a path on different lines are a miss', () => {
-  assert.equal(foreignFileIsHandoff(attempt(['sdd:layer=code', 'src/other.ts'])), 'fail');
+  assert.equal(foreignFileIsNamed(attempt(['sdd:layer=code', 'src/other.ts'])), 'fail');
 });
 
 test('a spec hand-off without an exit is a miss', () => {
@@ -174,8 +185,11 @@ test('an edit while marking code is forbidden', () => {
   );
 });
 
-test('editing the foreign file is forbidden', () => {
-  assert.equal(foreignFileIsHandoff(attempt(['sdd publish 1 title exit=0'], ['src/other.ts'])), 'forbidden');
+test('publishing the foreign file without saying why is a miss', () => {
+  assert.equal(
+    foreignFileIsNamed(attempt(['layer exit=1', 'layer exit=0', 'sdd publish 1 title exit=0'], ['src/other.ts'])),
+    'fail',
+  );
 });
 
 test('a card file is edited once', () => {

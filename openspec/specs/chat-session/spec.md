@@ -47,12 +47,17 @@ A step that ends in Publish or Hand-off SHALL run `step` again. A printed `advan
 
 ### Requirement: The stop tells the person what happened
 
-The stop message SHALL say what the run finished, why it stopped, and the files that matter for this stop as links. The printed reason SHALL be a fact in that message. The message SHALL NOT reuse a fixed wording.
+The stop message SHALL say what the run finished, why it stopped, and the files that matter for this stop as links. The printed reason SHALL be a fact in that message. The message SHALL NOT reuse a fixed wording. When the run changed a file no card names, the message SHALL say the tasks are done, name each such file, and say why it had to change.
 
 #### Scenario: The stop names the work, the cause, and the files
 
 - **WHEN** the chat stops
 - **THEN** the message says what the run finished, why it stopped, and names the files that matter as links, and the printed reason is a fact in that message rather than the whole message
+
+#### Scenario: A file no card names is named with why it changed
+
+- **WHEN** the run changed a file no card names
+- **THEN** the message says the tasks are done, names each such file, and says why it had to change
 
 ### Requirement: The next message stays in the session
 

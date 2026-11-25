@@ -6,8 +6,7 @@ trace=${EVAL_TRACE:-/dev/null}
 
 layer_code() {
   case "$mode" in
-    repair-foreign) printf '%s' 1 ;;
-    repair-card)
+    repair-foreign|repair-card)
       n=$(grep -c '^layer ' "$trace" 2>/dev/null || true)
       if [ "$n" = 0 ]; then printf '%s' 1; else printf '%s' 0; fi
       ;;
@@ -61,7 +60,9 @@ fi
 if [ "$name" = layer ]; then
   case "$mode" in
     repair-near) printf '%s\n' 'near paint A covered line shows the node value' ;;
-    repair-foreign) printf '%s\n' 'fail src/other.ts' ;;
+    repair-foreign)
+      if [ "$code" = 1 ]; then printf '%s\n' 'fail src/other.ts'; else printf '%s\n' ok; fi
+      ;;
     repair-card)
       if [ "$code" = 1 ]; then printf '%s\n' 'fail src/paint.ts'; else printf '%s\n' ok; fi
       ;;

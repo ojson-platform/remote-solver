@@ -184,4 +184,21 @@ spec('step-handoff', () => {
       assert.match(body, /A coverage gap outside this task is not a success and is not fixed in this step/);
     });
   });
+
+  requirement('A red file no card names is edited and named', () => {
+    scenario('The file the run names is edited, including one no card names', () => {
+      const body = step('repair-suite.md');
+      assert.match(body, /one edit of the file the run named, including a file no card names/);
+      assert.match(body, /one edit of the file the type error names, including a file no card names/);
+      assert.match(body, /A file the red run did not name/);
+    });
+    scenario('The stop message names each such file and why it had to change', () => {
+      const body = step('repair-suite.md');
+      assert.match(
+        body,
+        /When that commit contains a file no card names, the message says the tasks are done, names each such file, and says why it had to change/,
+      );
+      assert.match(body, /An edited file no card names is named in the message, with why it had to change/);
+    });
+  });
 });

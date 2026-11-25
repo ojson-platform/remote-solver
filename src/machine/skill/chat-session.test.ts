@@ -107,6 +107,13 @@ spec('chat-session', () => {
       assert.match(stop, /The printed reason is a fact in that message, not the whole message/);
       assert.match(stop, /Do not reuse a fixed wording/);
     });
+    scenario('A file no card names is named with why it changed', () => {
+      const stop = section('Stop');
+      assert.match(
+        stop,
+        /When this run changed a file no card names, the message says the tasks are done, names each such file, and says why it had to change/,
+      );
+    });
   });
 
   requirement('The next message stays in the session', () => {

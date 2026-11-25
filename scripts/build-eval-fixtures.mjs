@@ -382,7 +382,7 @@ repair('eval/repair-suite/near-is-not-a-handoff/fixture', 'repair-near', {
   'src/paint.test.ts': classTest,
 });
 
-repair('eval/repair-suite/foreign-file-is-handoff/fixture', 'repair-foreign', {
+repair('eval/repair-suite/foreign-file-is-named/fixture', 'repair-foreign', {
   'src/paint.ts': greenPaint,
   'src/paint.test.ts': classTest,
   'src/other.ts': '/** A file no task card names. */\nexport const other = 1;\n',

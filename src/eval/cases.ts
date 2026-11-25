@@ -29,7 +29,7 @@ import {statedPromiseIsCode} from '../../eval/pr-comments/stated-promise-is-code
 import {unnamedObservationIsSpec} from '../../eval/pr-comments/unnamed-observation-is-spec/score.ts';
 import {verifyingDoesNotOpenCode} from '../../eval/pr-comments/verifying-does-not-open-code/score.ts';
 import {cardFileIsEditedOnce} from '../../eval/repair-suite/card-file-is-edited-once/score.ts';
-import {foreignFileIsHandoff} from '../../eval/repair-suite/foreign-file-is-handoff/score.ts';
+import {foreignFileIsNamed} from '../../eval/repair-suite/foreign-file-is-named/score.ts';
 import {greenSuitePublishes} from '../../eval/repair-suite/green-suite-publishes/score.ts';
 import {nearIsNotAHandoff} from '../../eval/repair-suite/near-is-not-a-handoff/score.ts';
 import {returnDoesNotPublish} from '../../eval/repair-suite/return-does-not-publish/score.ts';
@@ -75,7 +75,7 @@ export const cases: EvalCase[] = [
   {id: 'open-decision-is-design', family: 'pr-comments', prompt: 'assembled-step', skill: 'pr-comments', action: 'pr-comments', score: openDecisionIsDesign},
   {id: 'green-suite-publishes', family: 'repair-suite', prompt: 'assembled-step', skill: 'repair-suite', action: 'repair-suite', score: greenSuitePublishes},
   {id: 'near-is-not-a-handoff', family: 'repair-suite', prompt: 'assembled-step', skill: 'repair-suite', action: 'repair-suite', score: nearIsNotAHandoff},
-  {id: 'foreign-file-is-handoff', family: 'repair-suite', prompt: 'assembled-step', skill: 'repair-suite', action: 'repair-suite', score: foreignFileIsHandoff},
+  {id: 'foreign-file-is-named', family: 'repair-suite', prompt: 'assembled-step', skill: 'repair-suite', action: 'repair-suite', score: foreignFileIsNamed},
   {id: 'card-file-is-edited-once', family: 'repair-suite', prompt: 'assembled-step', skill: 'repair-suite', action: 'repair-suite', score: cardFileIsEditedOnce},
   {id: 'return-does-not-publish', family: 'repair-suite', prompt: 'assembled-step', skill: 'repair-suite', action: 'repair-suite', score: returnDoesNotPublish},
   {id: 'where-is-the-cycle', family: 'chat', prompt: 'session', skill: 'sdd-flow', action: 'chat', score: whereIsTheCycle},

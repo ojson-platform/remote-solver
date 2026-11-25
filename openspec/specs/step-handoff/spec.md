@@ -173,3 +173,17 @@ A red baseline trace SHALL be a Hand-off to `spec` on that scenario line. The ru
 
 - **WHEN** a slice sees a coverage gap outside its task
 - **THEN** the slice does not fix that gap and does not treat it as success
+
+### Requirement: A red file no card names is edited and named
+
+A red layer command SHALL be one edit of the file the run named, including a file no card names. A red type check SHALL be one edit of the file the type error names, including a file no card names. A file the red run did not name SHALL stay out of the run. When the commit contains a file no card names, the message SHALL say the tasks are done, name each such file, and say why it had to change.
+
+#### Scenario: The file the run names is edited, including one no card names
+
+- **WHEN** the layer command or the type check names a file, and no card names that file
+- **THEN** repair-suite edits that file, and a file the red run did not name stays out of the run
+
+#### Scenario: The stop message names each such file and why it had to change
+
+- **WHEN** the commit contains a file no card names
+- **THEN** the message says the tasks are done, names each such file, and says why it had to change

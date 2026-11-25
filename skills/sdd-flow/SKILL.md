@@ -39,7 +39,7 @@ The issue's service directory, when set, names where the specs live. A value tha
 
 ## Stop
 
-When Act stops, write one message in the language of this chat. Say what this run finished. Say why it stopped. Name the files that matter for this stop as links the person can open. The printed reason is a fact in that message, not the whole message. Do not reuse a fixed wording.
+When Act stops, write one message in the language of this chat. Say what this run finished. Say why it stopped. Name the files that matter for this stop as links the person can open. The printed reason is a fact in that message, not the whole message. Do not reuse a fixed wording. When this run changed a file no card names, the message says the tasks are done, names each such file, and says why it had to change.
 
 ## The next message
 

@@ -17,6 +17,7 @@ import type {Decision} from '../decide/policy.ts';
 import {loadCycle, type CycleSnapshot} from '../spy/snapshot.ts';
 import {exited, tick, type State} from '../spy/scheduler.ts';
 import {driveIssue} from '../../main.ts';
+import {runSdd} from '../../sdd.ts';
 import {laterTurn} from '../../window/__tests__/live.harness.ts';
 
 spec('idle', () => {
@@ -769,6 +770,27 @@ spec('idle', () => {
       assert.equal(labels.includes('sdd:refused'), false);
       assert.deepEqual(seen, ['repair-suite']);
     });
+    scenario('A publish with no repair commit moves to verifying', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-suite-publish-'));
+      const box = doneSuite(root);
+      await runSdd(['publish', '8', '#8: title'], box);
+      const labels = await box.tracker.labels('8');
+      assert.ok(labels.includes('sdd:verifying'));
+      assert.equal(labels.includes('sdd:implementing'), false);
+    });
+    scenario('A publish after a repair commit stays implementing', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-suite-commit-'));
+      const box = doneSuite(root);
+      await runSdd(['commit', '8', '#8: mock the route'], box);
+      await runSdd(['publish', '8', '#8: title'], box);
+      const stayed = await box.tracker.labels('8');
+      assert.ok(stayed.includes('sdd:implementing'));
+      assert.equal(stayed.includes('sdd:verifying'), false);
+      await runSdd(['publish', '8', '#8: title'], box);
+      const moved = await box.tracker.labels('8');
+      assert.ok(moved.includes('sdd:verifying'));
+      assert.equal(moved.includes('sdd:implementing'), false);
+    });
   });
 });
 
@@ -783,6 +805,41 @@ function emptyVcs(): Vcs {
     published: async () => true,
     dirty: async () => [],
   };
+}
+
+function doneSuite(root: string): Machine {
+  const tasks = path.join('openspec', 'changes', 'issue-8', 'tasks.md');
+  const {tracker, review} = memoryPorts({
+    issues: [
+      {
+        key: '8',
+        title: '#8: title',
+        body: '',
+        state: 'OPEN',
+        labels: ['remote-solver', 'sdd:cycle', 'sdd:implementing'],
+      },
+    ],
+    pulls: {8: [{id: '80', title: '#8: title', state: 'OPEN'}]},
+  });
+  return machine(root, {
+    config: {
+      queues: [{name: 'remote-solver'}],
+      base: 'master',
+      branchScope: 'sdd',
+      ignoreComments: [],
+    },
+    tracker,
+    review,
+    vcs: {
+      ...emptyVcs(),
+      filesAt: () => ({
+        exists: rel => rel === tasks,
+        read: rel => (rel === tasks ? '- [x] one\n' : ''),
+        list: () => [],
+      }),
+      commit: async () => undefined,
+    },
+  });
 }
 
 function implementing(root: string, runtime: Runtime): Machine {

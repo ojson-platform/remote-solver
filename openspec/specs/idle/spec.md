@@ -43,12 +43,22 @@ When one worker runs a later turn and that turn produces no commit, the refusal 
 
 ### Requirement: A clean suite run moves the phase
 
-A clean `repair-suite` with no commit, no marker, and a clean tree SHALL move the issue to `verifying` and SHALL NOT set `sdd:refused`.
+A clean `repair-suite` with no commit, no marker, and a clean tree SHALL move the issue to `verifying` and SHALL NOT set `sdd:refused`. `sdd publish` while the decision is `repair-suite` SHALL make that move when this repair did not commit. A publish after `sdd commit` in that decision SHALL stay on `implementing`.
 
 #### Scenario: A clean suite run moves to verifying
 
 - **WHEN** `repair-suite` produces no commit, no marker, and a clean tree
 - **THEN** the issue moves to `verifying` and does not carry `sdd:refused`
+
+#### Scenario: A publish with no repair commit moves to verifying
+
+- **WHEN** the tasks are done and `sdd publish` runs with no repair commit waiting
+- **THEN** the issue moves to `verifying`
+
+#### Scenario: A publish after a repair commit stays implementing
+
+- **WHEN** `sdd commit` runs while the decision is `repair-suite` and the next command is `sdd publish`
+- **THEN** the issue stays `implementing`, and the next `sdd publish` with no new commit moves it to `verifying`
 
 ### Requirement: A running issue and the parallel cap are left alone
 

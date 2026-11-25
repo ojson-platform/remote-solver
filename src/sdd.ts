@@ -17,6 +17,7 @@ import {
 } from './machine/decide/policy.ts';
 import {waitDialog} from './machine/flow/dialog.ts';
 import {applyLabels, pick, resolveCycle, serviceWait} from './machine/flow/flow.ts';
+import {rememberRepairCommit, takeRepairCommit} from './machine/flow/suite-commit.ts';
 import {reportFoldFailure} from './machine/flow/step.ts';
 import {proveCodeFix} from './machine/mark/code-fix.ts';
 import {postFocusComment, validateFocusBody} from './machine/mark/focus.ts';
@@ -520,6 +521,10 @@ async function commitCommand(box: Machine, rest: string[]): Promise<void> {
     fail('this host has no commit');
   }
   await box.vcs.commit(key, subject, `#${key}`);
+  const decision = await turn(box, key);
+  if (decision.kind === 'agent' && decision.action === 'repair-suite') {
+    rememberRepairCommit(box.root, key);
+  }
 }
 
 /** The specify step's throwaway archive. A refusal stays on that step. The poll does not run this. */
@@ -589,6 +594,16 @@ async function publishCommand(box: Machine, rest: string[]): Promise<void> {
     fail(usage);
   }
   console.log(await publish({key, title}, box));
+  if (takeRepairCommit(box.root, key)) {
+    return;
+  }
+  const decision = await turn(box, key);
+  if (decision.kind === 'agent' && decision.action === 'repair-suite') {
+    const record = await box.tracker.issue(key);
+    const next = labelsAfterAdvance(record.labels, 'verifying');
+    await applyLabels(box.tracker, key, record.labels, next);
+    console.log(`#${key} advance → verifying: suite is green`);
+  }
 }
 
 /** `focus <key> "<body>"`. Body is the marker line plus prose. */

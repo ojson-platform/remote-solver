@@ -28,6 +28,20 @@ The name says what a file or a function returns. A comment says why a branch exi
 
 The subject is one English sentence and says why the change is made. A second sentence is the body when the subject does not hold the reason. The subject has no ticket prefix.
 
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub issues on `ojson-platform/remote-solver`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical roles, each label string equal to its name: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `CONTEXT.md`, module glossaries via `CONTEXT-MAP.md`, decisions in `docs/adr/`. See `docs/agents/domain.md`.
+
 <!-- OJSON_INFRA_AGENTS:BEGIN -->
 
 ## Important

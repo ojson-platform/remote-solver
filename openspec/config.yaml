@@ -12,14 +12,3 @@ sdd:
   queues:
     - name: remote-solver
       description: Cycles in this repository
-  hooks:
-    repair-suite:
-      after:
-        - |
-          When the layer command and the type check are green, make the final review of sdd flow before Publish.
-
-          Post a thread only for a return. A leave is not a thread.
-
-          For each return, `thread open <pull> <file> <line> '<body>'`. When no scenario names the promise, the lens is `spec`, the file is the delta spec that should name it, and the body starts with `sdd:layer=spec → specifying`, then the gap and the promise. Otherwise the file is that return's `where`, the line is a changed line of that file, and the body carries no marker. When the gap's line is outside the diff, use the nearest changed line in the same file. The rest of the body is plain English: the gap, then the promise.
-
-          When a thread was opened, do not Publish. Stop. When there is no return, Publish.

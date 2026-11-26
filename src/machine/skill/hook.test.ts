@@ -557,13 +557,18 @@ test('a step beside the script is the assembled text', () => {
 
 test('the final review stands at the end of repair-suite', () => {
   const root = path.join(import.meta.dirname, '..', '..', '..');
+  const phrase = 'make the final review of sdd flow before Publish';
+  const step = readFileSync(path.join(root, 'skills/sdd-flow/steps/repair-suite.md'), 'utf8');
+  const config = readFileSync(path.join(root, 'openspec/config.yaml'), 'utf8');
+  const steps = step.indexOf('## Steps');
+  const review = step.indexOf(phrase);
+  const check = step.indexOf('## Check');
+  assert.ok(steps !== -1 && review !== -1 && check !== -1 && steps < review && review < check);
+  assert.equal(config.includes(phrase), false);
   const input = {solverRoot: root, serviceRoot: root, sddHooks: undefined};
   const suite = assembledStep({...input, skill: 'repair-suite', action: 'repair-suite'});
   const archive = assembledStep({...input, skill: 'accept', action: 'archive'});
-  const review = suite.indexOf('make the final review of sdd flow before Publish');
-  const steps = suite.indexOf('## Steps');
-  const check = suite.indexOf('## Check');
-  assert.ok(steps !== -1 && review !== -1 && check !== -1 && steps < review && review < check);
+  assert.equal(suite.split(phrase).length - 1, 1);
   assert.match(suite, /When a thread was opened, do not Publish/);
   assert.equal(archive.includes('final review'), false);
 });

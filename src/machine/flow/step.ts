@@ -81,6 +81,8 @@ type IssueRead = {
   root?: string;
   /** When set, a cycle reaches the decision only when this login holds it. */
   login?: string;
+  /** Labels this command already wrote. The walk decides from them before either read. */
+  labels?: readonly string[];
 };
 
 /** The service field names another directory. The verb and the poll share this wait. */
@@ -114,7 +116,7 @@ type WalkCache = {
   change: ChangeView | undefined;
   tip: string | undefined;
   pulls: PullSnapshot[] | undefined;
-  /** Labels this walk already wrote. The next step uses them instead of the list. */
+  /** Labels this command wrote. The next step uses them instead of either read. */
   labels?: string[];
 };
 
@@ -340,8 +342,7 @@ async function stepIssue(key: string, options: IssueRead, cache: WalkCache): Pro
   const given = options.issues;
   const open = given ?? (await options.tracker.listOpen());
   const found = cycleRecordOf(open, key, options);
-  const record =
-    given && found && cache.labels !== undefined ? {...found, labels: [...cache.labels]} : found;
+  const record = found ? await drivenRecord(key, found, options, cache) : undefined;
   if (!record) {
     return {stop: {kind: 'done', issue: key, reason: 'not in the open cycle'}};
   }
@@ -371,12 +372,10 @@ async function stepIssue(key: string, options: IssueRead, cache: WalkCache): Pro
   const decision = decide(record, others, loaded, view, cycle);
   const moved = nextLabels(record.labels, decision);
   await applyLabels(options.tracker, key, record.labels, moved);
-  if (given) {
-    if (found) {
-      found.labels = moved;
-    }
-    cache = {...cache, labels: moved};
+  if (given && found) {
+    found.labels = moved;
   }
+  cache = {...cache, labels: moved};
   if (decision.kind === 'advance' || decision.kind === 'done') {
     const closed = await writeAdvance(key, options, decision);
     if (closed) {
@@ -404,9 +403,31 @@ async function stepIssue(key: string, options: IssueRead, cache: WalkCache): Pro
   return performEffect(key, options, decision, cache);
 }
 
+/** The issue this command drives. A label this command wrote stays ahead of both reads. */
+async function drivenRecord(
+  key: string,
+  found: IssueRecord,
+  options: IssueRead,
+  cache: WalkCache,
+): Promise<IssueRecord> {
+  if (cache.labels !== undefined) {
+    return {...found, labels: [...cache.labels]};
+  }
+  // A snapshot is the spy's one read. The chat takes the phase from the issue itself.
+  if (options.issues) {
+    return found;
+  }
+  return options.tracker.issue(key);
+}
+
 /** One effect, written, then the issue is read again. Twelve effects is the stop. */
 export async function walk(key: string, options: IssueRead): Promise<Decision> {
-  let cache: WalkCache = {change: options.change, tip: options.tip, pulls: options.pulls};
+  let cache: WalkCache = {
+    change: options.change,
+    tip: options.tip,
+    pulls: options.pulls,
+    ...(options.labels ? {labels: [...options.labels]} : {}),
+  };
   for (let step = 0; step < 12; step += 1) {
     const result = await stepIssue(key, options, cache);
     if ('stop' in result) {

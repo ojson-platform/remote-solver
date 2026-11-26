@@ -16,7 +16,7 @@ import {changeDir} from '../change/naming.ts';
 import {itemDialog} from './dialog.ts';
 import {pauseAdvance} from './step.ts';
 import type {Decision} from '../decide/policy.ts';
-import type {FileSource, ThreadRecord} from '../port.ts';
+import type {FileSource, ThreadRecord, Tracker} from '../port.ts';
 
 type Printed = Decision & {
   step?: string;
@@ -50,13 +50,16 @@ async function runStep(
   base?: string,
   root = process.cwd(),
   threads: Record<string, ThreadRecord[]> = {},
+  wrap?: (tracker: Tracker) => Tracker,
 ): Promise<{printed: Printed; labels: (key: string) => Promise<string[]>; calls: string[]}> {
-  const {tracker, review, calls} = memoryPorts({
+  const built = memoryPorts({
     issues,
     pulls,
     checks: {'9': {checks: 'green'}},
     threadList: threads,
   });
+  const tracker = wrap ? wrap(built.tracker) : built.tracker;
+  const {review, calls} = built;
   const box = machine(root, {
     config: base === undefined ? {queues} : {queues, base},
     tracker,
@@ -489,6 +492,37 @@ spec('step', () => {
         assert.equal(printed.action, 'improve-proposal');
       }
       assert.equal(printed.dialog, undefined);
+    });
+  });
+
+  requirement("The driven issue's phase comes from that issue", () => {
+    scenario('An open list behind the issue does not keep the old phase', async () => {
+      const {printed} = await runStep(
+        ['step', '1'],
+        [planIssue('1', ['Sandcastle', 'sdd:cycle', 'sdd:verifying'])],
+        planFiles,
+        {'1': [{id: '80', title: '#1: title', state: 'OPEN'}]},
+        [{name: 'Sandcastle'}],
+        undefined,
+        process.cwd(),
+        {},
+        tracker => ({
+          ...tracker,
+          async listOpen() {
+            const open = await tracker.listOpen();
+            return open.map(issue => ({
+              ...issue,
+              labels: issue.labels.map(label =>
+                label === 'sdd:verifying' ? 'sdd:implementing' : label,
+              ),
+            }));
+          },
+        }),
+      );
+      assert.equal(printed.kind, 'wait');
+      if (printed.kind === 'wait') {
+        assert.equal(printed.reason, 'checks are none');
+      }
     });
   });
 });

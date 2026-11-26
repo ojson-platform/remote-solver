@@ -100,6 +100,8 @@ export async function performIssue(
     openspec?: Openspec;
     root?: string;
     login?: string;
+    /** Labels this command already wrote. The settlement decides from them. */
+    labels?: readonly string[];
   },
 ): Promise<Decision> {
   const decision = await walk(key, {...options, perform: true});

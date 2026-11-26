@@ -87,7 +87,11 @@ export function machine(root = process.cwd(), options: MachineOptions = {}): Mac
 }
 
 /** One settlement of one issue. The reading performs a merge and settles again. */
-export function turn(box: Machine, key: string): ReturnType<typeof performIssue> {
+export function turn(
+  box: Machine,
+  key: string,
+  labels?: readonly string[],
+): ReturnType<typeof performIssue> {
   const pending = box.vcs.tipMessage ? box.vcs.tipMessage(key) : Promise.resolve(undefined);
   return pending.then(async tip =>
     performIssue(key, {
@@ -98,6 +102,7 @@ export function turn(box: Machine, key: string): ReturnType<typeof performIssue>
       root: box.root,
       login: await box.tracker.login(),
       tip,
+      ...(labels ? {labels} : {}),
       checkout: () =>
         box.vcs.prepare(key, {worktreesDir: '.worktrees', links: packageLinks(solverRoot())}),
       readTip: () => (box.vcs.tipMessage ? box.vcs.tipMessage(key) : Promise.resolve(undefined)),

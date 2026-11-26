@@ -43,7 +43,7 @@ When one worker runs a later turn and that turn produces no commit, the refusal 
 
 ### Requirement: A clean suite run moves the phase
 
-A clean `repair-suite` with no commit, no marker, and a clean tree SHALL move the issue to `verifying` and SHALL NOT set `sdd:refused`. `sdd publish` while the decision is `repair-suite` SHALL make that move when this repair did not commit. A publish after `sdd commit` in that decision SHALL stay on `implementing`. The next `sdd step`, once an earlier step named `repair-suite`, SHALL make that move when the tree is clean and the tip is published. A step while a repair commit is waiting SHALL stay on the suite.
+A clean `repair-suite` with no commit, no marker, and a clean tree SHALL move the issue to `verifying` and SHALL NOT set `sdd:refused`. `sdd publish` while the decision is `repair-suite` SHALL make that move when this repair did not commit. A publish after `sdd commit` in that decision SHALL stay on `implementing`. The next `sdd step`, once an earlier step named `repair-suite`, SHALL make that move when the tree is clean and the tip is published. That step SHALL print the decision of `verifying`. An open list and a later issue read that still show `implementing` SHALL NOT keep that decision on the suite. A step while a repair commit is waiting SHALL stay on the suite.
 
 #### Scenario: A clean suite run moves to verifying
 
@@ -64,6 +64,11 @@ A clean `repair-suite` with no commit, no marker, and a clean tree SHALL move th
 
 - **WHEN** one `sdd step` has already named `repair-suite` and the tree is clean and the tip is published
 - **THEN** the next `sdd step` moves the issue to `verifying`
+
+#### Scenario: A move prints verifying while the reads stay on implementing
+
+- **WHEN** one `sdd step` has already named `repair-suite` and the next `sdd step` moves the issue to `verifying` while the open list and a later issue read still show `implementing`
+- **THEN** the printed decision is the verifying decision
 
 #### Scenario: A step while a repair commit is waiting stays on the suite
 

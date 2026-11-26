@@ -379,7 +379,7 @@ async function settleRepair(box: Machine, key: string, decision: Decision): Prom
     const next = labelsAfterAdvance(record.labels, 'verifying');
     await applyLabels(box.tracker, key, record.labels, next);
     console.log(`#${key} advance → verifying: suite is green`);
-    return turn(box, key);
+    return turn(box, key, next);
   }
   rememberSuiteDue(box.root, key);
   return decision;

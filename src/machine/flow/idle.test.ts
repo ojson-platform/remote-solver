@@ -12,7 +12,7 @@ import {readChat, rememberChat} from '../../adapters/runtime/session.ts';
 import {resolveCycle} from './flow.ts';
 import {change, files} from '../__tests__/harness.ts';
 import {emptyReview} from '../mark/review.ts';
-import type {Runtime, Vcs} from '../port.ts';
+import type {IssueRecord, Runtime, Tracker, Vcs} from '../port.ts';
 import type {Decision} from '../decide/policy.ts';
 import {loadCycle, type CycleSnapshot} from '../spy/snapshot.ts';
 import {exited, tick, type State} from '../spy/scheduler.ts';
@@ -802,6 +802,21 @@ spec('idle', () => {
       assert.ok(labels.includes('sdd:verifying'));
       assert.equal(labels.includes('sdd:implementing'), false);
     });
+    scenario('A move prints verifying while the reads stay on implementing', async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'sdd-suite-stale-'));
+      const box = doneSuite(root, readsStayBehind);
+      await runSdd(['step', '8'], box);
+      const printed = await logged(() => runSdd(['step', '8'], box));
+      const decision = JSON.parse(printed.slice(printed.lastIndexOf('{'))) as {
+        kind: string;
+        reason?: string;
+      };
+      assert.equal(decision.kind, 'wait');
+      assert.equal(decision.reason, 'checks are none');
+      const labels = await box.tracker.labels('8');
+      assert.ok(labels.includes('sdd:verifying'));
+      assert.equal(labels.includes('sdd:implementing'), false);
+    });
     scenario('A step while a repair commit is waiting stays on the suite', async () => {
       const root = mkdtempSync(path.join(tmpdir(), 'sdd-suite-step-commit-'));
       const box = doneSuite(root);
@@ -843,7 +858,41 @@ function emptyVcs(): Vcs {
   };
 }
 
-function doneSuite(root: string): Machine {
+/** The first open-list read and the first issue read stay, including after a later write. */
+function readsStayBehind(tracker: Tracker): Tracker {
+  let open: IssueRecord[] | undefined;
+  const issues = new Map<string, IssueRecord>();
+  return {
+    ...tracker,
+    async listOpen() {
+      if (!open) {
+        open = (await tracker.listOpen()).map(copyRecord);
+      }
+      return open.map(copyRecord);
+    },
+    async issue(key) {
+      const saved = issues.get(key);
+      if (saved) {
+        return copyRecord(saved);
+      }
+      const live = copyRecord(await tracker.issue(key));
+      issues.set(key, live);
+      return copyRecord(live);
+    },
+  };
+}
+
+function copyRecord(issue: IssueRecord): IssueRecord {
+  return {
+    ...issue,
+    labels: [...issue.labels],
+    dependsOn: [...issue.dependsOn],
+    blockedBy: [...issue.blockedBy],
+    blocks: [...issue.blocks],
+  };
+}
+
+function doneSuite(root: string, wrap?: (tracker: Tracker) => Tracker): Machine {
   const tasks = path.join('openspec', 'changes', 'issue-8', 'tasks.md');
   const {tracker, review} = memoryPorts({
     issues: [
@@ -864,7 +913,7 @@ function doneSuite(root: string): Machine {
       branchScope: 'sdd',
       ignoreComments: [],
     },
-    tracker,
+    tracker: wrap ? wrap(tracker) : tracker,
     review,
     vcs: {
       ...emptyVcs(),

@@ -77,6 +77,15 @@ Text in the issue body SHALL NOT name the service.
 - **WHEN** the issue body contains `Service:` naming another directory and the service field is empty
 - **THEN** `step` does not wait because of that line
 
+### Requirement: The driven issue's phase comes from that issue
+
+`step` SHALL take the phase of the issue it drives from that issue's own read. The open list SHALL supply the other open issues. A label this command wrote SHALL be the phase for the rest of the command, including when the open list and a later issue read still show the previous phase.
+
+#### Scenario: An open list behind the issue does not keep the old phase
+
+- **WHEN** the issue read shows `verifying` and the open list still shows `implementing`
+- **THEN** the printed decision is that verifying decision
+
 ### Requirement: Auto tags are written only inside the cycle
 
 When `step` is given `--auto-plan`, `--auto-spec`, or `--auto-design`, it SHALL add `sdd:auto-plan`, `sdd:auto-spec`, or `sdd:auto-design` before settling, and only when the issue is in the open cycle. Outside the cycle it SHALL print `done` and add nothing.
